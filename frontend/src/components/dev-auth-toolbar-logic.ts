@@ -1,4 +1,4 @@
-import { getAccessToken } from "../lib/api/client.ts";
+import { getAccessToken } from "../lib/api/client";
 
 export const TOKEN_STORAGE_KEY = "workdrive_access_token";
 export type DevAuthStatus = "loading" | "authenticated" | "unauthenticated";
@@ -7,9 +7,10 @@ export function isDevelopment(): boolean {
   return process.env.NODE_ENV !== "production";
 }
 
-export function readDevAuthStatus(): Exclude<DevAuthStatus, "loading"> {
+export async function readDevAuthStatus(): Promise<Exclude<DevAuthStatus, "loading">> {
   try {
-    return getAccessToken() ? "authenticated" : "unauthenticated";
+    const token = await getAccessToken();
+    return token ? "authenticated" : "unauthenticated";
   } catch {
     return "unauthenticated";
   }
@@ -18,9 +19,16 @@ export function readDevAuthStatus(): Exclude<DevAuthStatus, "loading"> {
 export function setDevAuthToken(value: string): void {
   const token = value.trim();
   if (!token) throw new Error("TOKEN_REQUIRED");
-  window.localStorage.setItem(TOKEN_STORAGE_KEY, token);
+  if (typeof window !== "undefined") {
+    window.localStorage.setItem(TOKEN_STORAGE_KEY, token);
+    const isSecure = window.location.protocol === "https:" ? "; Secure" : "";
+    document.cookie = `${TOKEN_STORAGE_KEY}=${token}; path=/; max-age=28800; SameSite=Lax${isSecure}`;
+  }
 }
 
 export function clearDevAuthToken(): void {
-  window.localStorage.removeItem(TOKEN_STORAGE_KEY);
+  if (typeof window !== "undefined") {
+    window.localStorage.removeItem(TOKEN_STORAGE_KEY);
+    document.cookie = `${TOKEN_STORAGE_KEY}=; path=/; max-age=0; SameSite=Lax;`;
+  }
 }

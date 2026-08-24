@@ -67,10 +67,10 @@ export default function TeamFoldersPage() {
             <input
               value={newFolderTitle}
               onChange={(event) => setNewFolderTitle(event.target.value)}
-              className="border border-[color:var(--imkan-color-muted)] bg-background px-2 py-1"
+              className="imkan-input"
             />
           </label>
-          <button type="submit">{label("files.createFolder")}</button>
+          <button type="submit" className="imkan-button">{label("files.createFolder")}</button>
         </form>
       </div>
       {error ? <AlertBanner message={error} action={<button type="button" className="imkan-button-secondary" onClick={() => void load()}>{label("feedback.retry")}</button>} /> : null}

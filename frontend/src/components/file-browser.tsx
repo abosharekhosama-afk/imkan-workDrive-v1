@@ -292,7 +292,8 @@ export function FileBrowser({
               <input
                 value={newFolderName}
                 onChange={(event) => setNewFolderName(event.target.value)}
-                className="border border-[color:var(--imkan-color-muted)] bg-background px-2 py-1"
+                placeholder={label("files.newFolderPlaceholder")}
+                className="imkan-input"
                 ref={newFolderInputRef}
               />
             </label>
@@ -306,7 +307,8 @@ export function FileBrowser({
             <input
               value={searchInput}
               onChange={(event) => setSearchInput(event.target.value)}
-              className="border border-[color:var(--imkan-color-muted)] bg-background px-2 py-1"
+              placeholder={label("files.searchPlaceholder")}
+              className="imkan-input"
             />
           </label>
           <button type="submit" className="imkan-button-secondary">{label("files.search")}</button>

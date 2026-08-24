@@ -151,7 +151,34 @@ export class AuthService {
     }
     return this.issue(user);
   }
+private async issue(user: { id: string; name: string | null; email: string; orgId: string; role: string }): Promise<AuthResult> {
+  const secret = this.config.get<string>('JWT_SECRET');
+  if (!secret) throw new UnauthorizedException('JWT is not configured');
+  
+  const sessionId = randomBytes(16).toString('hex');
+  const expiresAt = new Date(Date.now() + 8 * 60 * 60 * 1000);
+  
+  // jti مضاف هنا بالفعل
+  const payload: AccessTokenPayload = { sub: user.id, org_id: user.orgId, email: user.email, role: user.role, jti: sessionId };
+  
+  // تم إزالة jwtid من كائن الخيارات لمنع التعارض
+  const accessToken = jwt.sign(payload, secret, { expiresIn: '8h' });
+  
+  await this.prisma.session.create({ data: { id: sessionId, orgId: user.orgId, userId: user.id, tokenHash: this.hashToken(accessToken), expiresAt } });
+  
+  return {
+    access_token: accessToken,
+    user: {
+      id: user.id,
+      name: user.name,
+      email: user.email,
+      org_id: user.orgId,
+      role: user.role,
+    },
+  };
+}
 
+/*
   private async issue(user: { id: string; name: string | null; email: string; orgId: string; role: string }): Promise<AuthResult> {
     const secret = this.config.get<string>('JWT_SECRET');
     if (!secret) throw new UnauthorizedException('JWT is not configured');
@@ -171,6 +198,7 @@ export class AuthService {
       },
     };
   }
+  */
 
   private hashToken(value: string): string { return createHash('sha256').update(value).digest('hex'); }
 

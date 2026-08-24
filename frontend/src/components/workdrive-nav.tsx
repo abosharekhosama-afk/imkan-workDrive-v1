@@ -11,12 +11,12 @@ const icons: Record<string,string> = {
 
 export function WorkdriveNav(){
   const {label}=useLocale(); const pathname=usePathname();
-  return <nav className="zoho-sidebar-nav" aria-label="Workspace navigation">
-    <div className="zoho-nav-section-title">WORKSPACE</div>
+  return <nav className="zoho-sidebar-nav" aria-label={label("nav.workspace")}>
+    <div className="zoho-nav-section-title">{label("nav.workspace")}</div>
     {workspaceNavItems().map(item=><Link key={item.href} href={item.href} className={isWorkspaceHref(pathname,item.href)?"zoho-side-link active":"zoho-side-link"}>
       <span className="zoho-side-icon" aria-hidden="true">{icons[item.labelKey] ?? "•"}</span><span>{label(item.labelKey)}</span>
     </Link>)}
     <div className="zoho-sidebar-spacer" />
     <Link href="/settings" className={pathname==="/settings"?"zoho-side-link active":"zoho-side-link"}><span className="zoho-side-icon">⚙</span><span>{label("nav.settings")}</span></Link>
-  </nav>
+  </nav>;
 }

@@ -75,9 +75,10 @@ export function FileTable({
   }
 
   return (
-    <div className="overflow-x-auto">
-      <table className="imkan-table min-w-[42rem] w-full table-auto">
-        <thead>
+    <div className="relative">
+      <div className="overflow-x-auto">
+        <table className="imkan-table min-w-[42rem] w-full table-auto">
+          <thead>
           <tr className="imkan-table-row">
             <th scope="col" className="px-3 py-2 text-start font-medium w-10">
               <input
@@ -169,7 +170,8 @@ export function FileTable({
             </tr>
           ))}
         </tbody>
-      </table>
+        </table>
+      </div>
     </div>
   );
 }

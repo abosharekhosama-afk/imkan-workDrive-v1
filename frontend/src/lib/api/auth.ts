@@ -4,7 +4,11 @@ export type AuthUser = { id: string; name: string | null; email: string; org_id:
 export type AuthResult = { access_token: string; user: AuthUser };
 
 async function request<T>(path: string, body?: unknown): Promise<T> {
-  const response = await fetch(`${getApiBaseUrl()}${path}`, { method: body === undefined ? 'GET' : 'POST', headers: body === undefined ? undefined : { 'Content-Type': 'application/json' }, body: body === undefined ? undefined : JSON.stringify(body) });
+  const response = await fetch(`${getApiBaseUrl()}${path}`, {
+    method: body === undefined ? 'GET' : 'POST',
+    headers: body === undefined ? undefined : { 'Content-Type': 'application/json' },
+    body: body === undefined ? undefined : JSON.stringify(body),
+  });
   if (!response.ok) {
     const raw = await response.text();
     let message = "";
@@ -27,8 +31,27 @@ export async function me(token: string) {
   if (!response.ok) throw new Error('Session expired');
   return response.json() as Promise<AuthUser>;
 }
-export function saveSession(result: AuthResult) { localStorage.setItem('workdrive_access_token', result.access_token); localStorage.setItem('workdrive_user', JSON.stringify(result.user)); }
-export function clearSession() { localStorage.removeItem('workdrive_access_token'); localStorage.removeItem('workdrive_user'); }
+
+export function saveSession(result: AuthResult) { 
+  if (typeof window !== 'undefined') {
+    localStorage.setItem('workdrive_access_token', result.access_token); 
+    localStorage.setItem('workdrive_user', JSON.stringify(result.user)); 
+
+    // حفظ التوكن في الكوكي ليتسنى للسيرفر قراءته أثناء الـ SSR
+    const isSecure = window.location.protocol === 'https:' ? '; Secure' : '';
+    document.cookie = `workdrive_access_token=${result.access_token}; path=/; max-age=28800; SameSite=Lax${isSecure}`;
+  }
+}
+
+export function clearSession() { 
+  if (typeof window !== 'undefined') {
+    localStorage.removeItem('workdrive_access_token'); 
+    localStorage.removeItem('workdrive_user'); 
+
+    // مسح الكوكي عند تسجيل الخروج
+    document.cookie = 'workdrive_access_token=; path=/; max-age=0; SameSite=Lax;';
+  }
+}
 
 export function forgotPassword(email: string) { return request<{ok:boolean;reset_token?:string}>('/auth/forgot-password',{email}); }
 export function resetPassword(token:string,password:string) { return request<{ok:boolean}>('/auth/reset-password',{token,password}); }

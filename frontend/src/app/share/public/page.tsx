@@ -34,7 +34,7 @@ function PublicShareForm() {
           <input
             value={token}
             onChange={(event) => setToken(event.target.value)}
-            className="border border-[color:var(--imkan-color-muted)] bg-background px-2 py-1"
+            className="imkan-input"
           />
         </label>
         <label className="flex flex-col gap-1 text-[length:var(--imkan-font-size-secondary)]">
@@ -43,10 +43,10 @@ function PublicShareForm() {
             type="password"
             value={password}
             onChange={(event) => setPassword(event.target.value)}
-            className="border border-[color:var(--imkan-color-muted)] bg-background px-2 py-1"
+            className="imkan-input"
           />
         </label>
-        <button type="submit">{label("share.verify")}</button>
+        <button type="submit" className="imkan-button">{label("share.verify")}</button>
       </form>
       {error ? <p className="mt-3">{error}</p> : null}
       {result ? (
