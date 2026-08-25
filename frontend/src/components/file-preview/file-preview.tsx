@@ -122,7 +122,7 @@ export function FilePreview({
   const { label } = useLocale();
   const category = getPreviewMimeCategory(mimeType);
   
-  const { objectUrl, blobError, blobLoading, retry: onBlobRetry } = useBlobPreview(previewUrl, mimeType);
+  const { objectUrl, error: blobError, isLoading: blobLoading, retry: onBlobRetry } = useBlobPreview(previewUrl, mimeType);
 
   const renderPreview = (): ReactNode => {
     switch (category) {

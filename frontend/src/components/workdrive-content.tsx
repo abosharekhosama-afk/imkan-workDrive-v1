@@ -44,6 +44,8 @@ export function WorkdriveContent({ children }: { children: ReactNode }) {
   const initials = (userName || "U").split(/\s+/).map((x) => x[0]).join("").slice(0, 2).toUpperCase();
   function toggleLocale() { setLocale(locale === "en" ? "ar" : "en"); }
   const isRTL = locale === "ar";
+  const localeBtnLabel = locale === "en" ? "locale.arabic" : "locale.english";
+  const localeBtnText = locale === "en" ? "ع" : "En";
 
   return (
     <div className="zoho-app-shell">
@@ -58,7 +60,7 @@ export function WorkdriveContent({ children }: { children: ReactNode }) {
           <div className="zoho-top-actions">
             {isRTL && (
               <>
-                <button className="zoho-icon-btn imkan-locale-btn" onClick={toggleLocale} aria-label={label(locale === "en" ? "locale.arabic" : "locale.english")} title={label(locale === "en" ? "locale.arabic" : "locale.english")}>{locale === "en" ? "ع" : "En"}</button>
+                <button className="zoho-icon-btn imkan-locale-btn" onClick={toggleLocale} aria-label={label(localeBtnLabel)} title={label(localeBtnLabel)}>{localeBtnText}</button>
                 <Link className="zoho-icon-btn" aria-label={label("notifications.title")} href="/notifications">♧</Link>
                 <button className="zoho-icon-btn" aria-label="Help">?</button>
               </>
@@ -67,7 +69,7 @@ export function WorkdriveContent({ children }: { children: ReactNode }) {
               <>
                 <button className="zoho-icon-btn" aria-label="Help">?</button>
                 <Link className="zoho-icon-btn" aria-label={label("notifications.title")} href="/notifications">♧</Link>
-                <button className="zoho-icon-btn imkan-locale-btn" onClick={toggleLocale} aria-label={label(locale === "en" ? "locale.arabic" : "locale.english")} title={label(locale === "en" ? "locale.arabic" : "locale.english")}>{locale === "en" ? "ع" : "En"}</button>
+                <button className="zoho-icon-btn imkan-locale-btn" onClick={toggleLocale} aria-label={label(localeBtnLabel)} title={label(localeBtnLabel)}>{localeBtnText}</button>
               </>
             )}
             <button className="zoho-avatar" onClick={() => setOpen((v) => !v)} aria-expanded={open}>{initials}</button>

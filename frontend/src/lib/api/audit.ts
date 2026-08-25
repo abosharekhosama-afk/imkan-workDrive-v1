@@ -22,7 +22,7 @@ export function listAudit(): Promise<AuditRecord[]> {
   return apiRequest<AuditRecord[]>(auditPath());
 }
 
-export function formatAuditAction(record: AuditRecord, label: (key: string) => string): string {
+export function formatAuditAction(record: AuditRecord, label: <K extends string>(key: K) => string): string {
   const actorName = record.actor?.name ?? record.actor?.email ?? label("audit.unknownUser");
   const actionMap: Record<string, string> = {
     CREATE: label("audit.action.created"),

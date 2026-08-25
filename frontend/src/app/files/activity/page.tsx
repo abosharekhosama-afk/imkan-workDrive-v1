@@ -75,7 +75,7 @@ export default function AuditPage() {
                   <tr key={row.id}>
                     <td className="num" style={{ whiteSpace: "nowrap" }}>{formatDate(row.createdAt)}</td>
                     <td className="max-w-[400px] truncate" style={{ maxWidth: "400px" }}>
-                      {formatAuditAction(row, label)}
+                      {formatAuditAction(row, label as (key: string) => string)}
                     </td>
                     <td>
                       <div className="flex items-center gap-2">
