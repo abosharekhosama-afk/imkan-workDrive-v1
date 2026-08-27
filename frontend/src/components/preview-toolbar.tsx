@@ -3,7 +3,7 @@
 import { useLocale } from "./locale-provider";
 
 interface PreviewToolbarProps {
-  category: "pdf" | "image" | "video" | "text" | "unsupported";
+  category: "pdf" | "image" | "video" | "audio" | "text" | "unsupported";
   currentPage?: number;
   totalPages?: number;
   zoomLevel?: number;

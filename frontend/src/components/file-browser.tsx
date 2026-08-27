@@ -2,8 +2,10 @@
 
 import { useCallback, useEffect, useState, useRef, type FormEvent } from "react";
 import { useSearchParams } from "next/navigation";
+import { useRouter } from "next/navigation";
 import { Breadcrumbs } from "./breadcrumbs";
 import { FileTable } from "./file-table";
+import { FileGridView } from "./file-grid-view";
 import { ShareModal } from "./share-modal";
 import { UploadZone } from "./upload-zone";
 import { useLocale } from "./locale-provider";
@@ -22,6 +24,12 @@ import { getPreviewUrl, getPreviewMimeCategory } from "../lib/api/preview";
 import { resolveMimeType } from "../lib/api/mime";
 import { mapFileRecords, mapFolderRecords } from "../lib/api/table-mappers";
 
+import {
+  persistViewMode,
+  readStoredViewMode,
+  type ViewMode,
+} from "./view-mode-logic";
+
 import { canMutateContent, canShareContent } from "../lib/permissions";
 import { AlertBanner } from "./alert-banner";
 import { SkeletonLoader } from "./skeleton-loader";
@@ -38,6 +46,7 @@ export function FileBrowser({
 }) {
   const { label } = useLocale();
   const searchParams = useSearchParams();
+  const router = useRouter();
   const routeQuery = searchParams.get("query")?.trim() ?? "";
   const [folders, setFolders] = useState<FolderRecord[]>([]);
   const [files, setFiles] = useState<FileRecord[]>([]);
@@ -76,6 +85,8 @@ export function FileBrowser({
   const [searchActive, setSearchActive] = useState(false);
   const [loading, setLoading] = useState(true);
   const [favoriteIds, setFavoriteIds] = useState<Set<string>>(new Set());
+  // Dual view preference (list/table ↔ grid), persisted per browser.
+  const [viewMode, setViewMode] = useState<ViewMode>("list");
 
   // Selection State (Phase 5)
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -122,6 +133,16 @@ export function FileBrowser({
     window.addEventListener("workdrive:new-folder", focusNewFolder);
     return () => window.removeEventListener("workdrive:new-folder", focusNewFolder);
   }, []);
+
+  // Restore the persisted view preference after mount (SSR-safe).
+  useEffect(() => {
+    setViewMode(readStoredViewMode(typeof window === "undefined" ? null : window.localStorage));
+  }, []);
+
+  function switchViewMode(mode: ViewMode) {
+    setViewMode(mode);
+    persistViewMode(typeof window === "undefined" ? null : window.localStorage, mode);
+  }
 
   useEffect(() => {
     setSelectedIds(new Set());
@@ -255,6 +276,27 @@ export function FileBrowser({
         <h1 className="text-[length:var(--imkan-font-size-ui)] font-semibold">
           {label("files.heading")}
         </h1>
+        {/* Dual-mode view toggle: list/table ↔ grid (Zoho WorkDrive style). */}
+        <div className="zoho-view-toggle" role="group" aria-label={label("view.toggle")}>
+          <button
+            type="button"
+            className={`zoho-view-btn${viewMode === "list" ? " active" : ""}`}
+            aria-pressed={viewMode === "list"}
+            onClick={() => switchViewMode("list")}
+            title={label("view.list")}
+          >
+            ≣ {label("view.list")}
+          </button>
+          <button
+            type="button"
+            className={`zoho-view-btn${viewMode === "grid" ? " active" : ""}`}
+            aria-pressed={viewMode === "grid"}
+            onClick={() => switchViewMode("grid")}
+            title={label("view.grid")}
+          >
+            ▦ {label("view.grid")}
+          </button>
+        </div>
         {/* Contextual Toolbar Placeholder (Phase 6) */}
         {selectedIds.size > 0 && (
           <div className="imkan-toolbar flex items-center gap-2 bg-[color:var(--imkan-color-surface)] px-4 py-2 rounded-sm shadow-sm border border-[color:var(--imkan-color-border)]">
@@ -308,7 +350,20 @@ export function FileBrowser({
 
       {error? <AlertBanner message={error} action={<button type="button" className="imkan-button-secondary" onClick={() => void load()}>{label("feedback.retry")}</button>} /> : null}
 
-      {loading? <SkeletonLoader columns={6} /> : (
+      {loading ? <SkeletonLoader columns={6} /> : viewMode === "grid" ? (
+        <FileGridView
+          folders={folders}
+          files={files}
+          canMutate={canMutate}
+          canShare={canShare}
+          onOpenFolder={(folderId) => router.push(`/files/${folderId}`)}
+          onPreview={(file) => void onPreview("FILE", file.id, file.name, file.mimeType ?? undefined, file.size ?? undefined)}
+          onShare={(type, id) => setShareTarget({ type, id })}
+          onDownload={(fileId) => void onDownload(fileId)}
+          onRename={(type, id, name) => setRenameTarget({ type, id, name })}
+          onDelete={(type, id) => setDeleteTarget({ type, id })}
+        />
+      ) : (
         <FileTable
           folders={folders}
           files={files}

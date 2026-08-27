@@ -13,7 +13,8 @@ export interface BlobPreviewResult {
 
 export function useBlobPreview(
   previewUrl: string | undefined,
-  mimeType: string
+  mimeType: string,
+  enabled = true
 ): BlobPreviewResult {
   const [objectUrl, setObjectUrl] = useState<string | null>(null);
   const [blob, setBlob] = useState<Blob | null>(null);
@@ -22,9 +23,17 @@ export function useBlobPreview(
   const objectUrlRef = useRef<string | null>(null);
 
   const fetchBlob = useCallback(async () => {
-    if (!previewUrl) {
-      setError("Preview URL is not available");
-      setIsLoading(false);
+    if (!previewUrl || !enabled) {
+      if (!enabled) {
+        // Another loader (e.g. Range streaming) owns this resource — stay idle
+        // so we do not issue a second full-file download.
+        setError(null);
+        setIsLoading(false);
+      }
+      if (!previewUrl) {
+        setError("Preview URL is not available");
+        setIsLoading(false);
+      }
       return;
     }
 
@@ -75,6 +84,11 @@ export function useBlobPreview(
   }, [fetchBlob]);
 
   useEffect(() => {
+    if (!enabled) {
+      setIsLoading(false);
+      setError(null);
+      return;
+    }
     fetchBlob();
     return () => {
       if (objectUrlRef.current) {
@@ -82,7 +96,8 @@ export function useBlobPreview(
         objectUrlRef.current = null;
       }
     };
-  }, [fetchBlob]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- deps tracked below
+  }, [fetchBlob, enabled]);
 
   return { objectUrl, blob, error, isLoading, retry };
 }

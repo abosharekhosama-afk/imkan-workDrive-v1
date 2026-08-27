@@ -1,6 +1,6 @@
 import { apiRequest } from "./client.ts";
 
-export type PreviewMimeCategory = "pdf" | "image" | "video" | "text" | "unsupported";
+export type PreviewMimeCategory = "pdf" | "image" | "video" | "audio" | "text" | "unsupported";
 
 export type PreviewFileInfo = {
   fileId: string;
@@ -24,6 +24,7 @@ export function getPreviewMimeCategory(mimeType: string): PreviewMimeCategory {
   if (mimeType === "application/pdf") return "pdf";
   if (mimeType.startsWith("image/")) return "image";
   if (mimeType.startsWith("video/")) return "video";
+  if (mimeType.startsWith("audio/")) return "audio";
   if (
     mimeType.startsWith("text/") ||
     mimeType === "application/json" ||

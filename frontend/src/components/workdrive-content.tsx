@@ -1,163 +1,144 @@
 "use client";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { useLocale } from "./locale-provider";
 import { WorkdriveNav } from "./workdrive-nav";
-import { useEffect, useState, type FormEvent, type ReactNode } from "react";
-import { clearSession, logout as apiLogout, listMemberships, switchOrganization as apiSwitchOrganization, type OrganizationMembershipSummary } from "../lib/api/auth";
+import { OrgSwitcher } from "./org-switcher";
+import { GlobalSearch } from "./global-search";
+import { StorageIndicator } from "./storage-indicator";
+import { ThemeToggle } from "./theme-toggle";
+import { GlobalPreviewHost } from "./global-preview-host";
+import { clearSession, logout as apiLogout } from "../lib/api/auth";
 
+/** Enterprise shell: sticky top bar (brand, org switcher, instant search,
+ *  quick actions, account), collapsible sidebar, global full-screen previews. */
 export function WorkdriveContent({ children }: { children: ReactNode }) {
   const { label, locale, setLocale } = useLocale();
   const pathname = usePathname();
   const router = useRouter();
-  const [query, setQuery] = useState("");
-  const [open, setOpen] = useState(false);
+  const [accountOpen, setAccountOpen] = useState(false);
+  const [drawerOpen, setDrawerOpen] = useState(false);
   const [role, setRole] = useState("");
   const [userName, setUserName] = useState("");
-  const [orgName, setOrgName] = useState("IMKAN Workspace");
-  const [memberships, setMemberships] = useState<OrganizationMembershipSummary[]>([]);
-  const [switchingOrg, setSwitchingOrg] = useState(false);
+  const [orgName, setOrgName] = useState("");
+  const accountRef = useRef<HTMLDivElement | null>(null);
+
   useEffect(() => {
     try {
       const raw = localStorage.getItem("workdrive_user");
-      if (raw) {
-        const u = JSON.parse(raw);
-        setRole(u.role || "");
-        setUserName(u.name || u.email || "");
-        setOrgName(u.organizationName || "IMKAN Workspace");
-      }
-      const token = localStorage.getItem("workdrive_access_token");
-      if (token) {
-        listMemberships(token).then((items) => setMemberships(items)).catch(() => setMemberships([]));
-      }
-    } catch {}
+      if (!raw) return;
+      const u = JSON.parse(raw) as { role?: string; name?: string; email?: string; organizationName?: string };
+      setRole(u.role ?? "");
+      setUserName(u.name || u.email || "");
+      setOrgName(u.organizationName ?? "");
+    } catch {
+      // Corrupted session cache — defaults are safe.
+    }
   }, []);
+
+  useEffect(() => {
+    setAccountOpen(false);
+    setDrawerOpen(false);
+  }, [pathname]);
+
+  useEffect(() => {
+    if (!accountOpen) return;
+    const onPointerDown = (event: MouseEvent) => {
+      if (!accountRef.current?.contains(event.target as Node)) setAccountOpen(false);
+    };
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setAccountOpen(false);
+    };
+    document.addEventListener("mousedown", onPointerDown);
+    document.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.removeEventListener("mousedown", onPointerDown);
+      document.removeEventListener("keydown", onKeyDown);
+    };
+  }, [accountOpen]);
+
   if (pathname.startsWith("/auth/")) {
     return <>{children}</>;
-  }
-  function onSearch(e: FormEvent) {
-    e.preventDefault();
-    if (query.trim()) router.push(`/files?query=${encodeURIComponent(query.trim())}`);
-  }
-  async function switchOrg(organizationId: string) {
-    if (switchingOrg) return;
-    const token = localStorage.getItem("workdrive_access_token");
-    if (!token) return;
-    setSwitchingOrg(true);
-    try {
-      const result = await apiSwitchOrganization(token, organizationId);
-      localStorage.setItem("workdrive_access_token", result.access_token);
-      localStorage.setItem("workdrive_user", JSON.stringify(result.user));
-      const selected = memberships.find((m) => m.organizationId === organizationId);
-      setOrgName(selected?.organization.name || result.user.org_id);
-      window.location.reload();
-    } catch {
-      // Keep the current organization active if switching fails.
-    } finally {
-      setSwitchingOrg(false);
-    }
   }
 
   async function doLogout() {
     const token = localStorage.getItem("workdrive_access_token");
     try {
       if (token) await apiLogout(token);
-    } catch {}
-    finally {
+    } catch {
+      // Network errors must not trap the user in a dead session.
+    } finally {
       clearSession();
       router.replace("/auth/login");
     }
   }
-  const initials = (userName || "U").split(/\s+/).map((x) => x[0]).join("").slice(0, 2).toUpperCase();
-  function toggleLocale() { setLocale(locale === "en" ? "ar" : "en"); }
-  const isRTL = locale === "ar";
-  const localeBtnLabel = locale === "en" ? "locale.arabic" : "locale.english";
-  const localeBtnText = locale === "en" ? "ع" : "En";
+  function triggerUpload() {
+    window.dispatchEvent(new Event("workdrive:trigger-upload"));
+    setDrawerOpen(false);
+  }
+  function triggerNewFolder() {
+    window.dispatchEvent(new Event("workdrive:new-folder"));
+    setDrawerOpen(false);
+  }
+  function toggleLocale() {
+    setLocale(locale === "en" ? "ar" : "en");
+  }
+
+  const isAdmin = role === "ADMIN" || role === "SUPER_ADMIN";
+  const initials = (userName || "U").split(/\s+/).map((part) => part[0]).join("").slice(0, 2).toUpperCase();
 
   return (
-    <div className="zoho-app-shell">
+    <div className={`zoho-app-shell${drawerOpen ? " sidebar-open" : ""}`}>
       <header className="zoho-topbar">
-        <div className={`zoho-topbar-inner ${isRTL ? "rtl" : ""}`}>
-          {!isRTL && (
-            <Link href="/files" className="zoho-logo">
-              <span className="zoho-logo-mark">I</span>
-              <span>IMKAN</span>
-            </Link>
-          )}
+        <div className="zoho-topbar-inner">
+          <button type="button" className="zoho-icon-btn zoho-drawer-toggle" onClick={() => setDrawerOpen((value) => !value)} aria-expanded={drawerOpen} aria-controls="wd-sidebar" aria-label={label("nav.workspace")}>
+            ☰
+          </button>
+          <Link href="/files" className="zoho-logo">
+            <span className="zoho-logo-mark">I</span>
+            <span>IMKAN</span>
+          </Link>
+          <OrgSwitcher organizationName={orgName || label("brand.workspace")} userRole={role} />
+          <GlobalSearch />
           <div className="zoho-top-actions">
-            {isRTL && (
-              <>
-                <button className="zoho-icon-btn imkan-locale-btn" onClick={toggleLocale} aria-label={label(localeBtnLabel)} title={label(localeBtnLabel)}>{localeBtnText}</button>
-                <Link className="zoho-icon-btn" aria-label={label("notifications.title")} href="/notifications">♧</Link>
-                <button className="zoho-icon-btn" aria-label="Help">?</button>
-              </>
-            )}
-            {!isRTL && (
-              <>
-                <button className="zoho-icon-btn" aria-label="Help">?</button>
-                <Link className="zoho-icon-btn" aria-label={label("notifications.title")} href="/notifications">♧</Link>
-                <button className="zoho-icon-btn imkan-locale-btn" onClick={toggleLocale} aria-label={label(localeBtnLabel)} title={label(localeBtnLabel)}>{localeBtnText}</button>
-              </>
-            )}
-            {isRTL && <button className="zoho-avatar zoho-avatar-rtl" onClick={() => setOpen((v) => !v)} aria-expanded={open} aria-label={userName || "الحساب"}>{initials}</button>}
-            {open && (
-              <div className="zoho-profile-menu">
-                <div className="zoho-profile-name">{userName || "User"}</div>
-                <div className="zoho-profile-rule" />
-                <Link href="/settings">{label("nav.settings")}</Link>
-                <Link href="/notifications">{label("nav.notifications")}</Link>
-                {(role === "ADMIN" || role === "SUPER_ADMIN") ? <Link href="/admin">{label("nav.admin")}</Link> : null}
-                <button onClick={doLogout}>{label("nav.signOut")}</button>
-              </div>
-            )}
+            <button type="button" className="wd-btn wd-btn-primary zoho-quick-upload" onClick={triggerUpload} title={label("quick.upload")}>⬆ {label("quick.upload")}</button>
+            <button type="button" className="wd-btn wd-btn-ghost zoho-quick-new" onClick={triggerNewFolder} title={label("quick.new")}>＋ {label("quick.new")}</button>
+            <StorageIndicator />
+            <ThemeToggle />
+            <Link href="/notifications" className="zoho-icon-btn" aria-label={label("nav.notifications")} title={label("nav.notifications")}>♧</Link>
+            <button type="button" className="zoho-icon-btn imkan-locale-btn" onClick={toggleLocale} aria-label={label(locale === "en" ? "locale.arabic" : "locale.english")} title={label(locale === "en" ? "locale.arabic" : "locale.english")}>
+              {locale === "en" ? "ع" : "En"}
+            </button>
+            <div className="zoho-account" ref={accountRef}>
+              <button type="button" className="zoho-avatar" onClick={() => setAccountOpen((value) => !value)} aria-expanded={accountOpen} aria-haspopup="menu" aria-label={userName || label("brand.workspace")}>
+                {initials}
+              </button>
+              {accountOpen ? (
+                <div className="zoho-profile-menu" role="menu">
+                  <div className="zoho-profile-name">{userName || "User"}</div>
+                  <div className="zoho-profile-rule" />
+                  <Link role="menuitem" href="/settings" onClick={() => setAccountOpen(false)}>{label("nav.settings")}</Link>
+                  <Link role="menuitem" href="/notifications" onClick={() => setAccountOpen(false)}>{label("nav.notifications")}</Link>
+                  {isAdmin ? <Link role="menuitem" href="/admin" onClick={() => setAccountOpen(false)}>{label("nav.admin")}</Link> : null}
+                  <div className="zoho-profile-rule" />
+                  <button type="button" role="menuitem" onClick={() => void doLogout()}>{label("nav.signOut")}</button>
+                </div>
+              ) : null}
+            </div>
           </div>
-          {isRTL && (
-            <Link href="/files" className="zoho-logo">
-              <span className="zoho-logo-mark">I</span>
-              <span>IMKAN</span>
-            </Link>
-          )}
         </div>
       </header>
       <div className="zoho-main-shell">
-        <aside className="zoho-sidebar">
-          <div className="zoho-team-switch" style={{ position: "relative" }}>
-            <span className="zoho-team-avatar">{(orgName || "I").slice(0, 1).toUpperCase()}</span>
-            <span style={{ minWidth: 0 }}>
-              <strong style={{ display: "block", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{orgName}</strong>
-              <small>My WorkDrive</small>
-            </span>
-            <details style={{ marginInlineStart: "auto" }}>
-              <summary className="chevron" aria-label="Switch organization">⌄</summary>
-              <div className="zoho-profile-menu" style={{ top: "100%", insetInlineStart: 0, minWidth: 240 }}>
-                {memberships.map((m) => (
-                  <button key={m.id} disabled={switchingOrg} onClick={() => void switchOrg(m.organizationId)} style={{ display: "block", width: "100%", textAlign: "start", padding: "8px 10px", border: 0, background: "transparent", cursor: "pointer" }}>
-                    <strong>{m.organization.name}</strong><br /><small>{m.role}</small>
-                  </button>
-                ))}
-              </div>
-            </details>
-          </div>
-          <WorkdriveNav />
-          <div className="zoho-admin-link">Admin Console</div>
+        {drawerOpen ? <div className="zoho-drawer-backdrop" onClick={() => setDrawerOpen(false)} aria-hidden="true" /> : null}
+        <aside id="wd-sidebar" className="zoho-sidebar">
+          <WorkdriveNav onNavigate={() => setDrawerOpen(false)} />
         </aside>
         <main className="zoho-main">
-          <div className="zoho-commandbar">
-            <div className="zoho-command-search">
-              <span>⌕</span>
-              <form onSubmit={onSearch}>
-                <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search files and folders" aria-label="Search files and folders" />
-              </form>
-              <kbd>⌘ K</kbd>
-            </div>
-            <div className="zoho-command-actions">
-              <button className="zoho-ghost-btn" aria-label="Create" onClick={() => window.dispatchEvent(new Event("workdrive:new-folder"))}>＋ New</button>
-              <button className="zoho-icon-btn">⋮</button>
-            </div>
-          </div>
           <div className="zoho-content">{children}</div>
         </main>
       </div>
+      <GlobalPreviewHost />
     </div>
   );
 }
@@ -166,3 +147,4 @@ export function WorkdriveLocaleAnnouncer() {
   const { locale } = useLocale();
   return <span className="sr-only">{locale}</span>;
 }
+
