@@ -1,0 +1,35 @@
+{
+  "name": "frontend",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "eslint",
+    "typecheck": "tsc --noEmit",
+    "test": "node --test --experimental-strip-types src/i18n/i18n.spec.ts src/lib/api/client.spec.ts src/lib/api/api-error.spec.ts src/lib/api/mime.spec.ts src/lib/api/table-mappers.spec.ts src/lib/api/shares.spec.ts src/lib/api/team-folders.spec.ts src/lib/api/upload-file.spec.ts src/lib/api/search.spec.ts src/lib/workspace-routes.spec.ts src/components/viewer-controls.spec.ts src/components/dev-auth-toolbar-logic.spec.ts src/components/action-dropdown.spec.ts src/components/modal-logic.spec.ts src/components/members-modal-logic.spec.ts src/components/upload-queue-logic.spec.ts src/components/feedback-state-logic.spec.ts src/lib/api/preview.spec.ts src/lib/api/versions.spec.ts",
+    "test:e2e:browser": "playwright test",
+    "test:e2e:browser:gate": "npm run build && cd ../backend && npx nest build && cd ../frontend && playwright test"
+  },
+  "dependencies": {
+    "@radix-ui/react-popover": "^1.1.23",
+    "next": "16.3.1",
+    "pdfjs-dist": "^6.2.108",
+    "react": "19.2.8",
+    "react-dom": "19.2.8"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.55.0",
+    "@tailwindcss/postcss": "^4",
+    "@types/jsonwebtoken": "^9.0.10",
+    "@types/node": "^20.19.43",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "eslint": "^9",
+    "eslint-config-next": "16.3.1",
+    "jsonwebtoken": "^9.0.3",
+    "tailwindcss": "^4",
+    "typescript": "^5"
+  }
+}
