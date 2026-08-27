@@ -78,6 +78,44 @@ export class FoldersService {
   private async assertDestination(user:AccessTokenPayload,id:string,movingId:string){ if(id===movingId) throw new BadRequestException('Invalid destination'); const destination=await this.prisma.folder.findFirst({where:{id}}); if(!destination||destination.orgId!==user.org_id) throw new NotFoundException('Destination folder not found'); if(!(await this.canReadFolder(user,destination))||!this.permissions.canWrite(user,await this.toFolderAccessResource(user,destination))) throw new ForbiddenException('Not allowed to use destination folder'); let current=destination.parentId; while(current){ if(current===movingId) throw new BadRequestException('Cannot move a folder into its descendant'); const p=await this.prisma.folder.findFirst({where:{id:current},select:{parentId:true}}); current=p?.parentId??null; } }
   private async collectDescendantFiles(rootId:string){ const ids:string[]=[]; const walk=async(id:string)=>{ ids.push(id); const children=await this.prisma.folder.findMany({where:{parentId:id},select:{id:true}}); for(const c of children) await walk(c.id); }; await walk(rootId); return this.prisma.file.findMany({where:{folderId:{in:ids}},include:{versions:true}}); }
 
+  /**
+   * Aggregates subtree metrics for the given root folders: total active file
+   * size (recursive) and the latest contained-file updatedAt. Returned as two
+   * plain maps keyed by folder id so listings can show folder Size / Modified
+   * without mutating the `FolderRecord` shape used elsewhere.
+   */
+  private async folderTreeAggregates(rootIds:string[]):Promise<{ folderSizes:Record<string,number>; folderUpdatedAt:Record<string,string|null> }>{
+    const folderSizes:Record<string,number>={}; const folderUpdatedAt:Record<string,string|null>={};
+    if(rootIds.length===0) return { folderSizes, folderUpdatedAt };
+    const visited=new Set(rootIds); const parentOf=new Map<string,string|null>();
+    let frontier=[...rootIds];
+    while(frontier.length>0){
+      const children=await this.prisma.folder.findMany({where:{parentId:{in:frontier}},select:{id:true,parentId:true}});
+      const next:string[]=[];
+      for(const c of children){ if(visited.has(c.id)) continue; visited.add(c.id); parentOf.set(c.id,c.parentId); next.push(c.id); }
+      frontier=next;
+    }
+    const directSize=new Map<string,number>(); const directUpdated=new Map<string,string|null>();
+    if(visited.size>0){
+      const files=await this.prisma.file.findMany({where:{folderId:{in:[...visited]},deletedAt:null},select:{folderId:true,size:true,updatedAt:true}});
+      for(const f of files){
+        const folderId=f.folderId; if(!folderId) continue;
+        directSize.set(folderId,(directSize.get(folderId)??0)+Number(f.size??0));
+        const iso=typeof f.updatedAt==='string'?f.updatedAt:new Date(f.updatedAt).toISOString();
+        const prev=directUpdated.get(folderId) ?? null;
+        if(!prev||iso>prev) directUpdated.set(folderId,iso);
+      }
+    }
+    const total=new Map<string,number>(); const latest=new Map<string,string|null>();
+    for(const id of visited){ total.set(id,directSize.get(id)??0); latest.set(id,directUpdated.get(id)??null); }
+    const childrenByParent=new Map<string,string[]>();
+    for(const [child,parent] of parentOf){ if(!parent) continue; const arr=childrenByParent.get(parent)??[]; arr.push(child); childrenByParent.set(parent,arr); }
+    const merge=(id:string):void=>{ const kids=childrenByParent.get(id)??[]; for(const k of kids){ merge(k); const kSize=total.get(k)??0; total.set(id,(total.get(id)??0)+kSize); const kl=latest.get(k)??null; const il=latest.get(id)??null; if(kl&&(!il||kl>il)) latest.set(id,kl); } };
+    for(const id of rootIds) merge(id);
+    for(const id of rootIds){ folderSizes[id]=total.get(id)??0; folderUpdatedAt[id]=latest.get(id)??null; }
+    return { folderSizes, folderUpdatedAt };
+  }
+
   async create(user: AccessTokenPayload, input: CreateFolderInput) {
     const teamFolderId = await this.resolveCreateTeamFolderId(user, input);
     return this.prisma.folder.create({
@@ -135,7 +173,9 @@ export class FoldersService {
     for (const file of files) {
       if (await this.canReadFile(user, file)) visibleFiles.push(file);
     }
-    return { folders: visibleFolders, files: visibleFiles };
+    const roots = visibleFolders.map((folder) => folder.id);
+    const aggregates = await this.folderTreeAggregates(roots);
+    return { folders: visibleFolders, files: visibleFiles, ...aggregates };
   }
 
   async getById(user: AccessTokenPayload, id: string) {

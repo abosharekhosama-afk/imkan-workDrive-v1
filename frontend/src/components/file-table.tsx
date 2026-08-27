@@ -7,6 +7,8 @@ import { FileIcon } from "./file-icon";
 import { ActionDropdown } from "./action-dropdown";
 import { EmptyState } from "./empty-state";
 import type { FileRecord, FolderRecord } from "../lib/api/types";
+import { formatBytes } from "../lib/api/quota";
+import { formatDateLocalized, latestOf } from "../lib/localized";
 
 function compareText(a: string, b: string, direction: "asc" | "desc") {
   const result = a.localeCompare(b);
@@ -73,6 +75,10 @@ interface FileTableProps {
   onSelectAll?: (isSelected: boolean) => void;
   onPreview?: (resourceType: "FILE" | "FOLDER", resourceId: string, resourceName: string, mimeType?: string, size?: number) => void;
   onVersionHistory?: (resourceType: "FILE" | "FOLDER", resourceId: string, resourceName: string, mimeType?: string, size?: number) => void;
+  /** Aggregate active-file byte size per listed folder (recursive). */
+  folderSizes?: ReadonlyMap<string, number>;
+  /** Latest contained-file updatedAt per listed folder (recursive). */
+  folderUpdatedAt?: ReadonlyMap<string, string | null>;
 }
 
 export function FileTable({
@@ -93,14 +99,17 @@ export function FileTable({
   selectedIds = new Set(),
   onSelectRow,
   onSelectAll,
+  folderSizes,
+  folderUpdatedAt,
 }: FileTableProps) {
-  const { label } = useLocale();
+  const { label, locale } = useLocale();
   const [sort, setSort] = useState<{ key: "name" | "modified" | "size"; direction: "asc" | "desc" }>({ key: "name", direction: "asc" });
   const toggleSort = (key: "name" | "modified" | "size") => setSort((current) => current.key === key ? { key, direction: current.direction === "asc" ? "desc" : "asc" } : { key, direction: "asc" });
-  const sortedFolders = useMemo(() => [...folders].sort((a, b) => sort.key === "modified" ? compareDates(a.updatedAt, b.updatedAt, sort.direction) : compareText(a.name, b.name, sort.direction)), [folders, sort]);
+  const folderDate = (id: string) => latestOf(folders.find((f) => f.id === id)?.updatedAt, folderUpdatedAt?.get(id) ?? undefined);
+  const sortedFolders = useMemo(() => [...folders].sort((a, b) => sort.key === "modified" ? compareDates(folderSizes ? folderDate(a.id) : a.updatedAt, folderSizes ? folderDate(b.id) : b.updatedAt, sort.direction) : sort.key === "size" ? compareNumbers(folderSizes?.get(a.id), folderSizes?.get(b.id), sort.direction) : compareText(a.name, b.name, sort.direction)), [folders, sort, folderSizes, folderUpdatedAt]);
   const sortedFiles = useMemo(() => [...files].sort((a, b) => sort.key === "size" ? compareNumbers(a.size, b.size, sort.direction) : sort.key === "modified" ? compareDates(a.updatedAt, b.updatedAt, sort.direction) : compareText(a.name, b.name, sort.direction)), [files, sort]);
-  const formatDate = (value?: string | null) => value? new Intl.DateTimeFormat(undefined, { dateStyle: "medium" }).format(new Date(value)) : "—";
-  const formatSize = (value?: number | null) => value == null? "—" : `${Math.round(value / 1024)} KB`;
+  const formatDate = (value?: string | null) => formatDateLocalized(value, locale);
+  const formatSize = (value?: number | null) => value == null || value === 0 ? "—" : formatBytes(value);
 
   if (folders.length === 0 && files.length === 0) {
     return <EmptyState title={emptyTitle?? label("files.empty")} description={emptyDescription} />;
@@ -148,8 +157,8 @@ export function FileTable({
               <td className="px-3 py-2">
                 <OwnerCell ownerName={folder.ownerName} ownerEmail={folder.ownerEmail} ownerAvatar={folder.ownerAvatar} />
               </td>
-              <td className="imkan-muted px-3 py-2 text-[length:var(--imkan-font-size-secondary)]">{formatDate(folder.updatedAt)}</td>
-              <td className="imkan-muted px-3 py-2 text-[length:var(--imkan-font-size-secondary)]">—</td>
+              <td className="imkan-muted px-3 py-2 text-[length:var(--imkan-font-size-secondary)]">{formatDate(folderDate(folder.id))}</td>
+              <td className="imkan-muted px-3 py-2 text-[length:var(--imkan-font-size-secondary)]">{formatSize(folderSizes?.get(folder.id))}</td>
               <td className="px-3 py-2 text-end">
                 <ActionDropdown
                   label={label("files.actions")}

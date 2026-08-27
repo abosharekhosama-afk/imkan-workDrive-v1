@@ -87,6 +87,16 @@ export function FileBrowser({
   const [favoriteIds, setFavoriteIds] = useState<Set<string>>(new Set());
   // Dual view preference (list/table ↔ grid), persisted per browser.
   const [viewMode, setViewMode] = useState<ViewMode>("list");
+  // Folder aggregate metadata surfaced by the API (size / latest file update).
+  const [folderSizes, setFolderSizes] = useState<ReadonlyMap<string, number>>(new Map());
+  const [folderUpdatedAt, setFolderUpdatedAt] = useState<ReadonlyMap<string, string | null>>(new Map());
+
+  const applyContents = (contents: { folders: FolderRecord[]; files: FileRecord[]; folderSizes?: Record<string, number> | null; folderUpdatedAt?: Record<string, string | null> | null }) => {
+    setFolders(mapFolderRecords(contents.folders));
+    setFiles(mapFileRecords(contents.files));
+    setFolderSizes(new Map(Object.entries(contents.folderSizes ?? {})));
+    setFolderUpdatedAt(new Map(Object.entries(contents.folderUpdatedAt ?? {})));
+  };
 
   // Selection State (Phase 5)
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -104,18 +114,15 @@ export function FileBrowser({
       if (routeQuery) {
         const result = await searchNames(routeQuery);
         setFolderName(undefined);
-        setFolders(mapFolderRecords(result.folders));
-        setFiles(mapFileRecords(result.files));
+        applyContents(result);
       } else if (folderId) {
         const detail = await getFolder(folderId);
         setFolderName(detail.name);
-        setFolders(mapFolderRecords(detail.folders));
-        setFiles(mapFileRecords(detail.files));
+        applyContents(detail);
       } else {
         const contents = await listRootContents();
         setFolderName(undefined);
-        setFolders(mapFolderRecords(contents.folders));
-        setFiles(mapFileRecords(contents.files));
+        applyContents(contents);
       }
     } catch (cause) {
       setError(errorMessageForStatus(cause instanceof ApiError? cause.status : undefined, {
@@ -356,6 +363,8 @@ export function FileBrowser({
           files={files}
           canMutate={canMutate}
           canShare={canShare}
+          folderSizes={folderSizes}
+          folderUpdatedAt={folderUpdatedAt}
           onOpenFolder={(folderId) => router.push(`/files/${folderId}`)}
           onPreview={(file) => void onPreview("FILE", file.id, file.name, file.mimeType ?? undefined, file.size ?? undefined)}
           onShare={(type, id) => setShareTarget({ type, id })}
@@ -369,6 +378,8 @@ export function FileBrowser({
           files={files}
           canMutate={canMutate}
           canShare={canShare}
+          folderSizes={folderSizes}
+          folderUpdatedAt={folderUpdatedAt}
           onShare={(type, id) => setShareTarget({ type, id })}
           onDownload={onDownload}
           onPreview={onPreview}

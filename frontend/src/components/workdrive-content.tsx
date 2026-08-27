@@ -91,19 +91,17 @@ export function WorkdriveContent({ children }: { children: ReactNode }) {
   return (
     <div className={`zoho-app-shell${drawerOpen ? " sidebar-open" : ""}`}>
       <header className="zoho-topbar">
-        <div className="zoho-topbar-inner">
-          <button type="button" className="zoho-icon-btn zoho-drawer-toggle" onClick={() => setDrawerOpen((value) => !value)} aria-expanded={drawerOpen} aria-controls="wd-sidebar" aria-label={label("nav.workspace")}>
-            ☰
-          </button>
-          <Link href="/files" className="zoho-logo">
-            <span className="zoho-logo-mark">I</span>
-            <span>IMKAN</span>
-          </Link>
-          <OrgSwitcher organizationName={orgName || label("brand.workspace")} userRole={role} />
-          <GlobalSearch />
-          <div className="zoho-top-actions">
-            <button type="button" className="wd-btn wd-btn-primary zoho-quick-upload" onClick={triggerUpload} title={label("quick.upload")}>⬆ {label("quick.upload")}</button>
+        <div className="zoho-topbar-inner flex items-center justify-between">
+          <div className="zoho-topbar-start flex items-center gap-2 me-auto min-w-0">
+            <button type="button" className="zoho-icon-btn zoho-drawer-toggle" onClick={() => setDrawerOpen((value) => !value)} aria-expanded={drawerOpen} aria-controls="wd-sidebar" aria-label={label("nav.workspace")}>
+              ☰
+            </button>
+            <OrgSwitcher organizationName={orgName || label("brand.workspace")} userRole={role} />
+            <GlobalSearch />
+          </div>
+          <div className="zoho-top-actions ms-auto">
             <button type="button" className="wd-btn wd-btn-ghost zoho-quick-new" onClick={triggerNewFolder} title={label("quick.new")}>＋ {label("quick.new")}</button>
+            <button type="button" className="wd-btn wd-btn-primary zoho-quick-upload" onClick={triggerUpload} title={label("quick.upload")}>⬆ {label("quick.upload")}</button>
             <StorageIndicator />
             <ThemeToggle />
             <Link href="/notifications" className="zoho-icon-btn" aria-label={label("nav.notifications")} title={label("nav.notifications")}>♧</Link>

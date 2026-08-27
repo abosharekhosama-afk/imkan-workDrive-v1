@@ -5,13 +5,8 @@ import { FileIcon } from "./file-icon";
 import { OwnerCell } from "./owner-cell";
 import { ActionDropdown } from "./action-dropdown";
 import { formatBytes } from "../lib/api/quota";
+import { formatDateLocalized, latestOf } from "../lib/localized";
 import type { FileRecord, FolderRecord } from "../lib/api/types";
-
-function formatDate(value: string | null | undefined): string {
-  if (!value) return "—";
-  const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? "—" : date.toLocaleDateString();
-}
 
 export interface FileGridViewProps {
   folders: FolderRecord[];
@@ -24,6 +19,10 @@ export interface FileGridViewProps {
   onDownload?: (fileId: string) => void;
   onRename?: (resourceType: "FILE" | "FOLDER", resourceId: string, name: string) => void;
   onDelete?: (resourceType: "FILE" | "FOLDER", resourceId: string) => void;
+  /** Aggregate active-file byte size per listed folder (recursive). */
+  folderSizes?: ReadonlyMap<string, number>;
+  /** Latest contained-file updatedAt per listed folder (recursive). */
+  folderUpdatedAt?: ReadonlyMap<string, string | null>;
 }
 
 /**
@@ -41,8 +40,16 @@ export function FileGridView({
   onDownload,
   onRename,
   onDelete,
+  folderSizes,
+  folderUpdatedAt,
 }: FileGridViewProps) {
-  const { label } = useLocale();
+  const { label, locale } = useLocale();
+  const formatDate = (value?: string | null) => formatDateLocalized(value, locale);
+  const folderDate = (id: string) => latestOf(folders.find((f) => f.id === id)?.updatedAt, folderUpdatedAt?.get(id) ?? undefined);
+  const folderSize = (id: string) => {
+    const size = folderSizes?.get(id);
+    return size == null || size === 0 ? "—" : formatBytes(size);
+  };
 
   return (
     <div className="zoho-grid-view" role="list" aria-label={label("view.grid")}>
@@ -54,7 +61,8 @@ export function FileGridView({
           </button>
           <div className="zoho-grid-meta">
             <OwnerCell name={folder.ownerName} email={folder.ownerEmail} avatarUrl={folder.ownerAvatar} compact />
-            <span className="zoho-grid-date">{formatDate(folder.updatedAt)}</span>
+            <span className="zoho-grid-size">{folderSize(folder.id)}</span>
+            <span className="zoho-grid-date">{formatDate(folderDate(folder.id))}</span>
           </div>
           <div className="zoho-grid-actions">
             <ActionDropdown

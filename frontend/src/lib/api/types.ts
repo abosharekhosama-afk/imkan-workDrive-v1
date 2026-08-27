@@ -28,6 +28,10 @@ export type FolderRecord = {
 export type FolderContents = {
   folders: FolderRecord[];
   files: FileRecord[];
+  /** Aggregate active-file byte size per listed folder (recursive). */
+  folderSizes?: Record<string, number> | null;
+  /** Latest contained-file updatedAt per listed folder (recursive). */
+  folderUpdatedAt?: Record<string, string | null> | null;
 };
 
 export type FolderDetail = FolderRecord & FolderContents;
