@@ -23,6 +23,7 @@ export type FolderRecord = {
   ownerAvatar?: string | null;
   updatedAt?: string | null;
   teamFolderId?: string | null;
+  itemCount?: number | null; // <-- إضافة هذه الخاصية تنهي خطأ البناء في Vercel
 };
 
 export type FolderContents = {
