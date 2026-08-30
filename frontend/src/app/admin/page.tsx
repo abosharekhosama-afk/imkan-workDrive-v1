@@ -1,0 +1,28 @@
+"use client";
+import { useEffect, useState } from "react";
+import { useLocale } from "../../components/locale-provider";
+import { getAdminOverview, listAdminUsers, type AdminOverview, type AdminUser } from "../../lib/api/admin";
+import { getEnterpriseAudit, getEnterpriseDashboard, getExternalShares, getGroups, getRetentionPolicy, getSecurityPolicy, type EnterpriseDashboard } from "../../lib/api/enterprise";
+
+function bytes(value:number){ if(!Number.isFinite(value)||value<=0)return "0 B"; const u=["B","KB","MB","GB","TB"]; const i=Math.min(Math.floor(Math.log(value)/Math.log(1024)),u.length-1); return `${(value/Math.pow(1024,i)).toFixed(i?1:0)} ${u[i]}`; }
+
+export default function AdminPage(){
+  const {label}=useLocale();
+  const [o,setO]=useState<AdminOverview|null>(null); const [users,setUsers]=useState<AdminUser[]>([]); const [d,setD]=useState<EnterpriseDashboard|null>(null);
+  const [groups,setGroups]=useState<any[]>([]); const [policy,setPolicy]=useState<any>(null); const [retention,setRetention]=useState<any>(null); const [audit,setAudit]=useState<any[]>([]); const [shares,setShares]=useState<any[]>([]); const [error,setError]=useState("");
+  useEffect(()=>{ Promise.all([getAdminOverview(),listAdminUsers(),getEnterpriseDashboard(),getGroups(),getSecurityPolicy(),getRetentionPolicy(),getEnterpriseAudit(25),getExternalShares()]).then(([a,u,dd,g,p,r,au,sh])=>{setO(a);setUsers(u);setD(dd);setGroups(g);setPolicy(p);setRetention(r);setAudit(au);setShares(sh)}).catch(()=>setError(label("admin.denied"))); },[label]);
+  return <section className="imkan-page">
+    <header className="imkan-page-header"><div><p className="imkan-meta">IMKAN WorkDrive · Admin Console</p><h1 className="imkan-title">{label("admin.title")}</h1><p className="imkan-subtitle">Security, access, sharing and storage controls in one place.</p></div></header>
+    {error?<div className="imkan-alert imkan-alert-danger">{error}</div>:null}
+    {o&&<div className="imkan-stat-grid">{([[label("admin.users"),o.users],[label("admin.files"),o.files],[label("admin.folders"),o.folders],[label("admin.shares"),o.shares],[label("admin.teamFolders"),o.teamFolders],["External shares",d?.externalShares??0]] as [string,number][]).map(([k,v])=><div className="imkan-panel imkan-stat" key={k}><span>{k}</span><strong>{v}</strong></div>)}</div>}
+    {d&&<div className="imkan-admin-grid">
+      <section className="imkan-panel"><div className="imkan-panel-header"><h2>Storage & health</h2></div><div className="imkan-admin-metric"><span>Active users</span><strong>{d.users.active}</strong></div><div className="imkan-admin-metric"><span>Suspended users</span><strong>{d.users.suspended}</strong></div><div className="imkan-admin-metric"><span>Stored bytes</span><strong>{bytes(d.storage.usedBytes)}</strong></div><div className="imkan-admin-metric"><span>Files</span><strong>{d.storage.files}</strong></div></section>
+      <section className="imkan-panel"><div className="imkan-panel-header"><h2>Security policy</h2></div><p>MFA: <b>{policy?.requireMfa?"Required":"Optional"}</b></p><p>External sharing: <b>{policy?.allowExternalSharing?"Allowed":"Blocked"}</b></p><p>Public links: <b>{policy?.allowPublicLinks?"Allowed":"Blocked"}</b></p><p>Retention: <b>{retention?.trashDays} days trash</b> · <b>{retention?.deletedItemsDays} days deleted items</b></p></section>
+    </div>}
+    <section className="imkan-panel"><div className="imkan-panel-header"><h2>Groups</h2><span className="imkan-meta">{groups.length} groups</span></div><div className="imkan-chip-row">{groups.map(g=><span className="imkan-chip" key={g.id}>{g.name} · {g.memberCount}</span>)}{!groups.length?<span className="imkan-meta">No groups yet</span>:null}</div></section>
+    <div className="imkan-admin-grid"><section className="imkan-panel"><div className="imkan-panel-header"><h2>External shares</h2></div><div className="imkan-table-wrap"><table className="imkan-table"><thead><tr><th>File</th><th>Permission</th><th>Status</th><th>Expires</th></tr></thead><tbody>{shares.slice(0,10).map(s=><tr key={s.id}><td>{s.file?.name||s.fileId}</td><td>{s.permission}</td><td>{s.status}</td><td>{s.expiresAt?new Date(s.expiresAt).toLocaleString():"Never"}</td></tr>)}</tbody></table></div></section>
+    <section className="imkan-panel"><div className="imkan-panel-header"><h2>Largest files</h2></div><div className="imkan-table-wrap"><table className="imkan-table"><thead><tr><th>File</th><th>Size</th></tr></thead><tbody>{(d?.largeFiles||[]).map(f=><tr key={f.id}><td>{f.name}</td><td>{bytes(Number(f.size))}</td></tr>)}</tbody></table></div></section></div>
+    <section className="imkan-panel"><div className="imkan-panel-header"><h2>Audit trail</h2></div><div className="imkan-table-wrap"><table className="imkan-table"><thead><tr><th>Action</th><th>Resource</th><th>Actor</th><th>Time</th></tr></thead><tbody>{audit.map(a=><tr key={a.id}><td>{a.action}</td><td>{a.resourceType}</td><td>{a.actor?.name||a.actor?.email||a.actorId||"system"}</td><td>{new Date(a.createdAt).toLocaleString()}</td></tr>)}</tbody></table></div></section>
+    <section className="imkan-panel"><div className="imkan-panel-header"><h2>{label("admin.users")}</h2></div><div className="imkan-table-wrap"><table className="imkan-table"><thead><tr><th>{label("admin.user")}</th><th>{label("settings.email")}</th><th>{label("admin.role")}</th><th>Status</th><th>{label("admin.created")}</th></tr></thead><tbody>{users.map(u=><tr className="imkan-table-row" key={u.id}><td>{u.name||"—"}</td><td>{u.email}</td><td>{u.role}</td><td>{(u as any).status||"ACTIVE"}</td><td>{new Date(u.createdAt).toLocaleDateString()}</td></tr>)}</tbody></table></div></section>
+  </section>;
+}

@@ -1,0 +1,63 @@
+import { getApiBaseUrl } from './client';
+
+export type AuthUser = { id: string; name: string | null; email: string; org_id: string; role: string; membershipId?: string; membershipStatus?: string };
+export type OrganizationMembershipSummary = { id: string; organizationId: string; role: string; status: string; isPrimary: boolean; organization: { id: string; name: string } };
+
+export type AuthResult = { access_token: string; user: AuthUser };
+
+async function request<T>(path: string, body?: unknown): Promise<T> {
+  const response = await fetch(`${getApiBaseUrl()}${path}`, {
+    method: body === undefined ? 'GET' : 'POST',
+    headers: body === undefined ? undefined : { 'Content-Type': 'application/json' },
+    body: body === undefined ? undefined : JSON.stringify(body),
+  });
+  if (!response.ok) {
+    const raw = await response.text();
+    let message = "";
+    try {
+      const parsed = JSON.parse(raw) as { message?: string | string[]; error?: string };
+      message = Array.isArray(parsed.message) ? parsed.message.join(", ") : parsed.message || parsed.error || "";
+    } catch {
+      message = raw;
+    }
+    throw new Error(message || "Request failed");
+  }
+  return response.json() as Promise<T>;
+}
+
+export function login(email: string, password: string) { return request<AuthResult>('/auth/login', { email, password }); }
+export function signup(name: string, email: string, password: string, inviteToken?: string) { return request<AuthResult>('/auth/signup', { name, email, password, ...(inviteToken ? { inviteToken } : {}) }); }
+export async function googleUrl() { return request<{ url: string }>('/auth/google'); }
+export async function me(token: string) {
+  const response = await fetch(`${getApiBaseUrl()}/auth/me`, { headers: { Authorization: `Bearer ${token}` } });
+  if (!response.ok) throw new Error('Session expired');
+  return response.json() as Promise<AuthUser>;
+}
+
+export function saveSession(result: AuthResult) { 
+  if (typeof window !== 'undefined') {
+    localStorage.setItem('workdrive_access_token', result.access_token); 
+    localStorage.setItem('workdrive_user', JSON.stringify(result.user)); 
+
+    // حفظ التوكن في الكوكي ليتسنى للسيرفر قراءته أثناء الـ SSR
+    const isSecure = window.location.protocol === 'https:' ? '; Secure' : '';
+    document.cookie = `workdrive_access_token=${result.access_token}; path=/; max-age=28800; SameSite=Lax${isSecure}`;
+  }
+}
+
+export function clearSession() { 
+  if (typeof window !== 'undefined') {
+    localStorage.removeItem('workdrive_access_token'); 
+    localStorage.removeItem('workdrive_user'); 
+
+    // مسح الكوكي عند تسجيل الخروج
+    document.cookie = 'workdrive_access_token=; path=/; max-age=0; SameSite=Lax;';
+  }
+}
+
+export function forgotPassword(email: string) { return request<{ok:boolean;reset_token?:string}>('/auth/forgot-password',{email}); }
+export function resetPassword(token:string,password:string) { return request<{ok:boolean}>('/auth/reset-password',{token,password}); }
+export function logout(token:string) { return fetch(`${getApiBaseUrl()}/auth/logout`,{method:'POST',headers:{Authorization:`Bearer ${token}`}}); }
+export function logoutAll(token:string) { return fetch(`${getApiBaseUrl()}/auth/logout-all`,{method:'POST',headers:{Authorization:`Bearer ${token}`}}); }
+export function listMemberships(token?: string) { return token ? fetch(`${getApiBaseUrl()}/auth/memberships`, { headers: { Authorization: `Bearer ${token}` } }).then(async r => { if (!r.ok) throw new Error('Unable to load organizations'); return r.json() as Promise<OrganizationMembershipSummary[]>; }) : Promise.reject(new Error('Missing token')); }
+export function switchOrganization(token: string, organizationId: string) { return fetch(`${getApiBaseUrl()}/auth/organizations/switch`, { method: 'POST', headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ organizationId }) }).then(async r => { if (!r.ok) throw new Error(await r.text()); return r.json() as Promise<AuthResult>; }); }
