@@ -52,8 +52,23 @@ export function isUnauthorizedError(cause: unknown): cause is ApiError {
 }
 
 export function getApiBaseUrl(): string {
-  return process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:3001";
+  // 1. قراءة المتغير بكلتا الصيغتين (لتجنب أي اختلاف في المسميات)
+  const envUrl = process.env.NEXT_PUBLIC_API_BASE_URL || process.env.NEXT_PUBLIC_API_URL;
+
+  if (envUrl) {
+    // تنظيف الرابط من الشرطة المائلة النهائية إن وجدت
+    return envUrl.replace(/\/$/, "");
+  }
+
+  // 2. الرابط الاحتياطي المباشر لريندر بدلاً من localhost
+  return "https://imkan-workdrive-v1.onrender.com"; // 👈 ضع رابط Render الفعلي الخاص بك هنا
 }
+
+// للتطوير 
+/*
+export function getApiBaseUrl(): string {
+  return process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:3001";
+}*/
 
 export async function getAccessToken(): Promise<string | null> {
   // 1. إذا كان الكود يعمل في المتصفح (Client-side)
