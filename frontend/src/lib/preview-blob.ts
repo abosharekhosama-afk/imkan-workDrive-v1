@@ -18,7 +18,6 @@ async function describeHttpFailure(response: Response): Promise<string> {
     const text = await response.text();
     if (text) {
       try {
-        // NestJS error envelope: { statusCode, message }
         const parsed = JSON.parse(text) as { message?: unknown };
         if (typeof parsed.message === "string" && parsed.message.length > 0) {
           serverMessage = parsed.message;
@@ -32,7 +31,7 @@ async function describeHttpFailure(response: Response): Promise<string> {
       }
     }
   } catch {
-    // Body unreadable; fall back to the status-based message below.
+    // Body unreadable; fall back to status message
   }
 
   switch (response.status) {
@@ -68,13 +67,13 @@ export function useBlobPreview(
   const [blob, setBlob] = useState<Blob | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  
   const objectUrlRef = useRef<string | null>(null);
+  const abortControllerRef = useRef<AbortController | null>(null);
 
   const fetchBlob = useCallback(async () => {
     if (!previewUrl || !enabled) {
       if (!enabled) {
-        // Another loader (e.g. Range streaming) owns this resource — stay idle
-        // so we do not issue a second full-file download.
         setError(null);
         setIsLoading(false);
       }
@@ -85,30 +84,47 @@ export function useBlobPreview(
       return;
     }
 
+    // Cancel any ongoing fetch before initiating a new one
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+    }
+    const controller = new AbortController();
+    abortControllerRef.current = controller;
+
     setIsLoading(true);
     setError(null);
 
     try {
-      const token = await getAccessToken();
+      const isAbsolute = /^https?:\/\//i.test(previewUrl);
+      const isExternalS3OrR2 = isAbsolute && (
+        previewUrl.includes("cloudflarestorage.com") || 
+        previewUrl.includes("amazonaws.com") ||
+        previewUrl.includes("X-Amz-Algorithm")
+      );
+
+      const requestUrl = isAbsolute ? previewUrl : `${getApiBaseUrl()}${previewUrl}`;
       const headers = new Headers();
       headers.set("Accept", "*/*");
-      if (token) {
-        headers.set("Authorization", `Bearer ${token}`);
-      }
-      // Tenant isolation is enforced server-side from the `org_id` claim of
-      // the Bearer token, so no separate tenant header is required here.
 
-      const isAbsolute = /^https?:\/\//i.test(previewUrl);
-      const requestUrl = isAbsolute ? previewUrl : `${getApiBaseUrl()}${previewUrl}`;
+      // ONLY attach Auth headers if fetching from our own API.
+      // NEVER attach Bearer tokens to Presigned S3/R2 URLs.
+      if (!isExternalS3OrR2) {
+        const token = await getAccessToken();
+        if (token) {
+          headers.set("Authorization", `Bearer ${token}`);
+        }
+      }
 
       let response: Response;
       try {
-        response = await fetch(requestUrl, { headers });
-      } catch (cause) {
-        // Network-level failure: the server being offline, a DNS failure,
-        // a CORS rejection or a dropped connection all surface here as
-        // TypeError("Failed to fetch"). Translate it into something the
-        // preview error card can show instead of a raw TypeError message.
+        response = await fetch(requestUrl, { 
+          headers,
+          signal: controller.signal,
+        });
+      } catch (cause: any) {
+        if (cause?.name === "AbortError") {
+          return; // Silent return on user abort/unmount
+        }
         console.error("Blob preview network error:", cause);
         throw new Error(
           "Unable to reach the server. Please check your connection and try again."
@@ -135,7 +151,8 @@ export function useBlobPreview(
       setBlob(blobData);
       setObjectUrl(blobUrl);
       setError(null);
-    } catch (err) {
+    } catch (err: any) {
+      if (err?.name === "AbortError") return;
       console.error("Blob preview fetch error:", err);
       setError(err instanceof Error ? err.message : "Failed to load preview");
     } finally {
@@ -153,14 +170,21 @@ export function useBlobPreview(
       setError(null);
       return;
     }
+
     fetchBlob();
+
     return () => {
+      // Abort active fetch request on unmount or URL change
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+        abortControllerRef.current = null;
+      }
+      // Clean up local blob object URL
       if (objectUrlRef.current) {
         URL.revokeObjectURL(objectUrlRef.current);
         objectUrlRef.current = null;
       }
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- deps tracked below
   }, [fetchBlob, enabled]);
 
   return { objectUrl, blob, error, isLoading, retry };
