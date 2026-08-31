@@ -472,7 +472,7 @@ describe('FilesService', () => {
         folder: TF_FOLDER,
       });
       prisma.teamFolderMember.findFirst.mockResolvedValue(null);
-      await expect(service.restore(member, FILE_A)).rejects.toBeInstanceOf(
+            await expect(service.restore(member, FILE_A)).rejects.toBeInstanceOf(
         NotFoundException,
       );
       expect(prisma.file.update).not.toHaveBeenCalled();
@@ -490,6 +490,20 @@ describe('FilesService', () => {
       await expect(
         service.rename(member, FILE_A, 'hijacked.txt'),
       ).rejects.toBeInstanceOf(ForbiddenException);
+      expect(prisma.file.update).not.toHaveBeenCalled();
+    });
+
+    it('blocks an Org Admin from trashing a personal file owned by another member (privacy invariant)', async () => {
+      prisma.file.findFirst.mockResolvedValue({
+        id: FILE_A,
+        orgId: ORG_A,
+        ownerId: MEMBER_A,
+        deletedAt: null,
+        folder: PERSONAL_FOLDER,
+      });
+      await expect(service.trash(user, FILE_A)).rejects.toBeInstanceOf(
+        ForbiddenException,
+      );
       expect(prisma.file.update).not.toHaveBeenCalled();
     });
   });

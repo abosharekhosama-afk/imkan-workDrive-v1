@@ -980,11 +980,25 @@ export class FilesService {
   >(
     user: AccessTokenPayload,
     file: T | null,
-    deniedMessage: string,
+        deniedMessage: string,
   ): Promise<T> {
     if (!file || file.orgId !== user.org_id) {
       throw new NotFoundException('File not found');
     }
+
+    // Privacy invariant (P0): personal (non-team-folder) files are strictly
+    // owner-only. An org Admin / Super Admin must NOT mutate (trash / restore /
+    // rename / permanently delete) a personal file belonging to another user —
+    // they only act on files they explicitly own or that live in a shared
+    // (team-folder) workspace. Super-admins are granted an escape hatch for
+    // support operations but never silently cross into a user's private space.
+    const teamFolderId = file.folder?.teamFolderId ?? null;
+    if (!teamFolderId && user.role !== 'SUPER_ADMIN') {
+      if (file.ownerId !== user.sub) {
+        throw new ForbiddenException(deniedMessage);
+      }
+    }
+
     const resource = await this.toFileAccessResource(user, file);
     if (!this.permissions.canRead(user, resource)) {
       throw new NotFoundException('File not found');
