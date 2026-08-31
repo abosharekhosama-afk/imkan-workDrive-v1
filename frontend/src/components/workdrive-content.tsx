@@ -93,12 +93,20 @@ export function WorkdriveContent({ children }: { children: ReactNode }) {
       <header className="zoho-topbar">
         <div className="zoho-topbar-inner flex items-center justify-between">
           <div className="zoho-topbar-start flex items-center gap-2 me-auto min-w-0">
-            <Link href="/" className="zoho-logo" aria-label={label("brand.workspace")}>
-              <span className="zoho-logo-mark" aria-hidden="true">W</span>
-              <span className="zoho-logo-text">{label("brand.workspace")}</span>
-            </Link>
-            <button type="button" className="zoho-icon-btn zoho-drawer-toggle" onClick={() => setDrawerOpen((value) => !value)} aria-expanded={drawerOpen} aria-controls="wd-sidebar" aria-label={label("nav.workspace")}>
-              ☰
+            <button
+              type="button"
+              className="zoho-icon-btn zoho-drawer-toggle"
+              onClick={() => setDrawerOpen((value) => !value)}
+              aria-expanded={drawerOpen}
+              aria-controls="wd-sidebar"
+              aria-label={label("nav.workspace")}
+              title={label("nav.workspace")}
+            >
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
+                <line x1="3" y1="6" x2="21" y2="6" />
+                <line x1="3" y1="12" x2="21" y2="12" />
+                <line x1="3" y1="18" x2="21" y2="18" />
+              </svg>
             </button>
             <GlobalSearch />
           </div>

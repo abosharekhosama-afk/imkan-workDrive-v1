@@ -17,3 +17,9 @@ test("unknown extensions degrade to safe octet-stream", () => {
   assert.equal(resolveMimeType(null, "blob"), "application/octet-stream");
   assert.equal(resolveMimeType("garbage", "blob.bin"), "application/octet-stream");
 });
+
+test("dotfiles like .env resolve their extension and MIME", () => {
+  assert.equal(resolveMimeType("", ".env"), "text/plain");
+  assert.equal(resolveMimeType("application/octet-stream", ".env"), "text/plain");
+  assert.equal(resolveMimeType("", ".gitignore"), "text/plain");
+});

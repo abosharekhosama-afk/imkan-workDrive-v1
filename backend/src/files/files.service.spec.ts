@@ -288,6 +288,7 @@ describe('FilesService', () => {
         id: FILE_A,
         orgId: ORG_A,
         ownerId: USER_A,
+        name: 'contract.pdf',
         deletedAt: null,
         versions: [
           { id: VERSION_A, versionNumber: 1, mimeType: 'application/pdf' },
@@ -306,6 +307,8 @@ describe('FilesService', () => {
         versionId: VERSION_A,
         ownerOrgId: ORG_A,
         contentType: 'application/pdf',
+        disposition: 'attachment',
+        fileName: 'contract.pdf',
       });
       expect(prisma.auditLog.create).toHaveBeenCalledWith(
         expect.objectContaining({

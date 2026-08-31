@@ -46,6 +46,23 @@ test("getPreviewMimeCategory routes office and archive formats", () => {
   assert.equal(getPreviewMimeCategory("application/x-7z-compressed", "backup.7z"), "archive");
 });
 
+test("TypeScript files always preview as text, never as media", () => {
+  // Browsers report video/mp2t for .ts (MPEG Transport Stream) which used to
+  // trigger the infinite preview loop / "unsupported video format" error.
+  assert.equal(getPreviewMimeCategory("video/mp2t", "config.ts"), "text");
+  assert.equal(getPreviewMimeCategory("video/mp2t", "Component.tsx"), "text");
+  assert.equal(getPreviewMimeCategory("application/octet-stream", "types.mts"), "text");
+});
+
+test("dotfiles and extra text extensions resolve to the text viewer", () => {
+  assert.equal(getPreviewMimeCategory("text/plain", ".env"), "text");
+  assert.equal(getPreviewMimeCategory("application/octet-stream", "debug.log"), "text");
+  assert.equal(getPreviewMimeCategory("", "notes.md"), "text");
+  assert.equal(getPreviewMimeCategory("", "config.yaml"), "text");
+  assert.equal(getPreviewMimeCategory("", "data.json"), "text");
+  assert.equal(getPreviewMimeCategory("", "feed.xml"), "text");
+});
+
 test("getLanguageFromMime detects language from extension", () => {
   assert.equal(getLanguageFromMime("text/plain", "test.js"), "javascript");
   assert.equal(getLanguageFromMime("text/plain", "test.mjs"), "javascript");

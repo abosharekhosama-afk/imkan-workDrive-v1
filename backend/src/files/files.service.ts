@@ -296,6 +296,10 @@ export class FilesService {
       versionId: version.id,
       ownerOrgId: user.org_id,
       contentType: version.mimeType,
+      // Force a direct download: the signed URL carries an attachment
+      // disposition so browsers never render the bytes inline.
+      disposition: 'attachment',
+      fileName: file.name,
     });
 
     await this.prisma.file.update({
@@ -348,6 +352,8 @@ export class FilesService {
       versionId: version.id,
       ownerOrgId: user.org_id,
       contentType: version.mimeType,
+      disposition: 'attachment',
+      fileName: file.name,
     });
 
     await this.prisma.file.update({

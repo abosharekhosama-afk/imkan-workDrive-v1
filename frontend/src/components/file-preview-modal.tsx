@@ -15,6 +15,7 @@ import { resolveMimeType } from "../lib/api/mime";
 import { getPreviewMimeCategory, isBrowserRenderableImage } from "../lib/api/preview";
 import { formatBytes } from "../lib/api/quota";
 import { requestDownload } from "../lib/api/files";
+import { triggerDownload } from "../lib/api/download";
 import { buildCreateShareBody, createShare } from "../lib/api/shares";
 
 export interface FilePreviewModalTarget {
@@ -104,12 +105,7 @@ export function FilePreviewModal({ target, onClose, onPrevFile, onNextFile }: Fi
   const handleDownload = useCallback(async () => {
     if (!activeTarget) return;
     const result = await requestDownload(activeTarget.id);
-    const link = document.createElement("a");
-    link.href = result.download_url;
-    link.rel = "noopener";
-    document.body.appendChild(link);
-    link.click();
-    link.remove();
+    triggerDownload(result.download_url, activeTarget.name);
   }, [activeTarget]);
 
   const handleShare = useCallback(async () => {

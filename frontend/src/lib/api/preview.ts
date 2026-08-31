@@ -1,4 +1,5 @@
 import { apiRequest } from "./client.ts";
+import { getFileExtension } from "./mime.ts";
 
 export type PreviewMimeCategory =
   | "pdf"
@@ -60,13 +61,28 @@ const OFFICE_MIME_PREFIXES = [
 ];
 const ARCHIVE_EXTENSIONS = new Set(["zip", "rar", "7z", "tar", "gz", "gzip", "bz2", "xz", "iso", "dmg"]);
 
-export function getFileExtension(fileName: string): string {
-  const index = fileName.lastIndexOf(".");
-  return index > 0 && index < fileName.length - 1 ? fileName.slice(index + 1).toLowerCase() : "";
-}
+/**
+ * Code/text extensions are resolved FIRST and unconditionally — before any
+ * MIME-based routing. Browsers report `video/mp2t` for `.ts`/`.mts` files
+ * (MPEG Transport Stream), which used to route TypeScript sources into the
+ * media player ("unsupported video format" + preview reload loop). Text and
+ * code files must never be treated as media.
+ */
+const CODE_EXTENSIONS = new Set([
+  "ts", "tsx", "mts", "cts", "js", "mjs", "cjs", "jsx", "json", "jsonc",
+  "md", "markdown", "log", "env", "ini", "toml", "cfg", "conf", "properties",
+  "yaml", "yml", "xml", "html", "htm", "css", "scss", "less", "csv", "tsv",
+  "py", "pyw", "java", "kt", "kts", "cpp", "cc", "cxx", "c", "h", "hpp", "cs",
+  "php", "rb", "go", "rs", "swift", "sh", "bash", "zsh", "ps1", "bat", "cmd",
+  "sql", "gradle", "properties", "gitignore", "dockerfile", "makefile", "diff", "patch",
+]);
 
 export function getPreviewMimeCategory(mimeType: string, fileName = ""): PreviewMimeCategory {
   const extension = getFileExtension(fileName);
+  const baseName = fileName.split(/[\\/]/).pop()?.toLowerCase() ?? "";
+  // Extension match wins for dotfiles (.env) and code files; basename match
+  // catches extension-less convention files (Dockerfile, Makefile, Gemfile).
+  if (CODE_EXTENSIONS.has(extension) || CODE_EXTENSIONS.has(baseName)) return "text";
   if (OFFICE_EXTENSIONS.has(extension)) return "office";
   if (ARCHIVE_EXTENSIONS.has(extension)) return "archive";
   if (!mimeType) return "unsupported";
@@ -79,6 +95,7 @@ export function getPreviewMimeCategory(mimeType: string, fileName = ""): Preview
     mimeType === "application/json" ||
     mimeType === "application/javascript" ||
     mimeType === "application/typescript" ||
+    mimeType === "application/x-httpd-php" ||
     mimeType === "application/x-sh" ||
     mimeType === "application/sql" ||
     mimeType === "text/markdown" ||

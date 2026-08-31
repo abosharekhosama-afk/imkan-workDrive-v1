@@ -11,6 +11,7 @@ import { UploadZone } from "./upload-zone";
 import { useLocale } from "./locale-provider";
 import { bulkTrashFolders, createFolder, deleteFolder, getFolder, listRootContents, renameFolder, moveFolder } from "../lib/api/folders";
 import { bulkTrashFiles, renameFile, requestDownload, trashFile, moveFile } from "../lib/api/files";
+import { triggerDownload } from "../lib/api/download";
 import { addFavorite, listFavorites, removeFavorite } from "../lib/api/favorites";
 import { ApiError } from "../lib/api/client";
 import type { FileRecord, FolderRecord } from "../lib/api/types";
@@ -198,7 +199,7 @@ export function FileBrowser({
 
   async function onDownload(fileId: string) {
     const result = await requestDownload(fileId);
-    window.location.assign(result.download_url);
+    triggerDownload(result.download_url);
   }
 
   async function onPreview(type: "FILE" | "FOLDER", id: string, name: string, mimeType?: string, size?: number) {

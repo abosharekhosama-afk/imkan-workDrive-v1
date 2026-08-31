@@ -34,7 +34,8 @@ export function PdfViewer({ url, epoch, onLoadError }: PdfViewerProps) {
   const [error, setError] = useState<string | null>(null);
   const [searchOpen, setSearchOpen] = useState(false);
   const [query, setQuery] = useState("");
-  const [matches, setMatches] = useState<{ page: number; count: number }[]>([]);
+  const [matches, setMatches] = useState<number[]>([]);
+  const [matchIndex, setMatchIndex] = useState(0);
 
   // Load the document whenever the (fresh) URL changes.
   useEffect(() => {
@@ -114,23 +115,42 @@ export function PdfViewer({ url, epoch, onLoadError }: PdfViewerProps) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [page, zoom, loading, error]);
 
+  /** Flattens per-page occurrence counts into a navigable page sequence. */
   const runSearch = useCallback(async () => {
     const pdf = pdfRef.current;
     if (!pdf || !query.trim()) {
       setMatches([]);
+      setMatchIndex(0);
       return;
     }
     const needle = query.trim().toLowerCase();
-    const results: { page: number; count: number }[] = [];
+    const pages: number[] = [];
     for (let pageNumber = 1; pageNumber <= pdf.numPages; pageNumber += 1) {
       const textContent = await pdf.getPage(pageNumber).then((p: any) => p.getTextContent());
       const haystack = textContent.items.map((item: any) => item.str ?? "").join(" ").toLowerCase();
       const count = haystack.split(needle).length - 1;
-      if (count > 0) results.push({ page: pageNumber, count });
+      for (let hit = 0; hit < count; hit += 1) pages.push(pageNumber);
     }
-    setMatches(results);
-    if (results.length > 0) setPage(results[0].page);
+    setMatches(pages);
+    setMatchIndex(0);
+    if (pages.length > 0) setPage(pages[0]);
   }, [query]);
+
+  const stepMatch = useCallback((delta: number) => {
+    if (matches.length === 0) return;
+    setMatchIndex((current) => {
+      const next = (current + delta + matches.length) % matches.length;
+      setPage(matches[next]);
+      return next;
+    });
+  }, [matches]);
+
+  const closeSearch = useCallback(() => {
+    setSearchOpen(false);
+    setMatches([]);
+    setMatchIndex(0);
+    setQuery("");
+  }, []);
 
   return (
     <div className="zoho-viewer-root">
@@ -145,7 +165,7 @@ export function PdfViewer({ url, epoch, onLoadError }: PdfViewerProps) {
         <button
           type="button"
           className="zoho-ctl"
-          onClick={() => { setSearchOpen((open) => !open); if (searchOpen) { setMatches([]); setQuery(""); } }}
+          onClick={() => { if (searchOpen) closeSearch(); else setSearchOpen(true); }}
           aria-label={label("preview.search")}
         >
           {label("preview.search")}
@@ -158,18 +178,18 @@ export function PdfViewer({ url, epoch, onLoadError }: PdfViewerProps) {
             value={query}
             placeholder={label("preview.searchPlaceholder")}
             onChange={(event) => setQuery(event.target.value)}
-            onKeyDown={(event) => { if (event.key === "Enter") void runSearch(); }}
+            onKeyDown={(event) => {
+              if (event.key === "Enter") { event.preventDefault(); stepMatch(event.shiftKey ? -1 : 1); }
+              if (event.key === "Escape") closeSearch();
+            }}
           />
-          <button type="button" className="zoho-btn" onClick={() => void runSearch()}>{label("preview.search")}</button>
-          {matches.length > 0 ? (
-            <div className="zoho-pdf-hits">
-              {matches.slice(0, 20).map((match) => (
-                <button key={match.page} type="button" onClick={() => setPage(match.page)}>
-                  {label("preview.page").replace("{current}", String(match.page)).replace("{total}", String(pageCount))} · {match.count}
-                </button>
-              ))}
-            </div>
-          ) : null}
+          <span className="zoho-pdf-count" role="status" aria-live="polite">
+            {matches.length === 0 ? "0 / 0" : `${matchIndex + 1} / ${matches.length}`}
+          </span>
+          <button type="button" className="zoho-ctl" onClick={() => void runSearch()} aria-label={label("preview.search")}>🔍</button>
+          <button type="button" className="zoho-ctl" onClick={() => stepMatch(-1)} aria-label={label("preview.prevPage")} disabled={matches.length === 0}>↑</button>
+          <button type="button" className="zoho-ctl" onClick={() => stepMatch(1)} aria-label={label("preview.nextPage")} disabled={matches.length === 0}>↓</button>
+          <button type="button" className="zoho-ctl" onClick={closeSearch} aria-label={label("preview.close")}>✕</button>
         </div>
       ) : null}
       <div className="zoho-pdf-stage">

@@ -1,7 +1,0 @@
-PASS src/files/files.service.spec.ts
-
-Test Suites: 1 passed, 1 total
-Tests:       22 passed, 22 total
-Snapshots:   0 total
-Time:        2.737 s, estimated 133 s
-DONE 

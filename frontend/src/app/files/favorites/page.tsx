@@ -14,6 +14,7 @@ import { MoveModal } from "../../../components/move-modal";
 import { FileDetailsModal, type FileDetailsData } from "../../../components/file-details-modal";
 import { Toast } from "../../../components/toast";
 import { renameFile, trashFile, requestDownload, moveFile } from "../../../lib/api/files";
+import { triggerDownload } from "../../../lib/api/download";
 import { renameFolder, deleteFolder, moveFolder } from "../../../lib/api/folders";
 import { formatBytes } from "../../../lib/api/quota";
 import { WORKDRIVE_PREVIEW_EVENT, type PreviewEventDetail } from "../../../components/global-search";
@@ -176,7 +177,7 @@ export default function FavoritesPage() {
                           item.resourceType === "FILE"
                             ? async () => {
                                 const result = await requestDownload(item.resourceId);
-                                window.location.assign(result.download_url);
+                                triggerDownload(result.download_url);
                               }
                             : undefined,
                         onViewDetails: () =>

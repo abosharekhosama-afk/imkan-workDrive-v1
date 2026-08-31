@@ -82,7 +82,12 @@ const EXTENSION_MIME: Record<string, string> = {
   yaml: "application/x-yaml",
   toml: "text/plain",
   ini: "text/plain",
+  env: "text/plain",
   log: "text/plain",
+  lock: "text/plain",
+  gitignore: "text/plain",
+  dockerfile: "text/plain",
+  makefile: "text/plain",
   // Video
   mp4: "video/mp4",
   m4v: "video/x-m4v",
@@ -131,10 +136,25 @@ export function isTrustworthyMimeType(mimeType: string | null | undefined): bool
 }
 
 export function guessMimeFromName(fileName: string): string | null {
-  const extension = fileName.split(".").pop()?.toLowerCase() ?? "";
+  const extension = getFileExtension(fileName);
   return Object.prototype.hasOwnProperty.call(EXTENSION_MIME, extension)
     ? EXTENSION_MIME[extension]
     : null;
+}
+
+/**
+ * Extracts the lowercase extension, including dotfiles (`.env` → "env") which
+ * `String.lastIndexOf` alone would miss (index 0).
+ */
+export function getFileExtension(fileName: string): string {
+  const base = fileName.split(/[\\/]/).pop() ?? "";
+  const index = base.lastIndexOf(".");
+  if (index <= 0 || index === base.length - 1) {
+    // Dotfile like ".env": the whole name after the leading dot is the ext.
+    if (base.startsWith(".") && base.length > 1) return base.slice(1).toLowerCase();
+    return "";
+  }
+  return base.slice(index + 1).toLowerCase();
 }
 
 /** Preferred entry point: explicit browser type wins, otherwise sniff by name. */

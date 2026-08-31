@@ -45,11 +45,14 @@ export class PermissionService {
     if (!this.isSameTenant(user, resource)) {
       return false;
     }
-    if (this.isOrgSuperAdmin(user)) return true;
+    // Privacy invariant (P0): personal (non-team-folder) resources are strictly
+    // owner-only. Organization admins and super admins must NOT implicitly
+    // read them — they only gain visibility through explicit shares or team
+    // folder (workspace) membership.
     if (!this.isTeamFolderResource(resource)) {
       return user.sub === resource.ownerId;
     }
-    if (this.isOrgAdmin(user) && resource.teamFolderId) return true;
+    if (this.isOrgSuperAdmin(user) || this.isOrgAdmin(user)) return true;
     return this.resolveTeamFolderRole(user, resource) !== null;
   }
 
@@ -57,10 +60,12 @@ export class PermissionService {
     if (!this.isSameTenant(user, resource)) {
       return false;
     }
-    if (this.isOrgSuperAdmin(user)) return true;
+    // Personal resources are strictly owner-only (privacy invariant) — even
+    // super admins cannot modify them unless explicitly shared/team-foldered.
     if (!this.isTeamFolderResource(resource)) {
       return (user.role === OrgRole.MEMBER || user.role === OrgRole.ADMIN) && user.sub === resource.ownerId;
     }
+    if (this.isOrgSuperAdmin(user)) return true;
     if (this.isOrgAdmin(user)) return true;
     const role = this.resolveTeamFolderRole(user, resource);
     return (
@@ -72,8 +77,9 @@ export class PermissionService {
 
   canShare(user: AccessTokenPayload, resource: AccessibleResource): boolean {
     if (!this.isSameTenant(user, resource)) return false;
-    if (this.isOrgSuperAdmin(user)) return true;
+    // Personal resources: only the owner (non-VIEWER) may share.
     if (!this.isTeamFolderResource(resource)) return user.role !== 'VIEWER' && user.sub === resource.ownerId;
+    if (this.isOrgSuperAdmin(user)) return true;
     if (this.isOrgAdmin(user)) return true;
     const role = this.resolveTeamFolderRole(user, resource);
     return role === TeamFolderRole.ADMIN || role === TeamFolderRole.ORGANIZER || role === TeamFolderRole.EDITOR;

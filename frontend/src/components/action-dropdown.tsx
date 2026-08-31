@@ -97,7 +97,7 @@ export function ActionDropdown({ label, items, trigger }: ActionDropdownProps) {
         side="bottom"
         align="end"
         sideOffset={4}
-        className="imkan-popover z-50 w-56 p-1 shadow-xl bg-white rounded-lg border border-[color:var(--imkan-color-border)]"
+        className="imkan-popover z-[100] w-56 p-1 shadow-xl bg-white rounded-lg border border-[color:var(--imkan-color-border)]"
         style={{ minWidth: "224px" }}
       >
         {groupedItems.map((group, groupIndex) => (
@@ -107,17 +107,18 @@ export function ActionDropdown({ label, items, trigger }: ActionDropdownProps) {
                 <button
                   type="button"
                   role="menuitem"
-                  className={`w-full flex items-center gap-2 px-3 py-2 text-start text-[length:var(--imkan-font-size-secondary)] rounded-sm hover:bg-[color:var(--imkan-color-surface)] transition-colors ${
+                  className={`w-full flex items-center gap-2 px-3 py-2 text-start text-[length:var(--imkan-font-size-secondary)] rounded-sm transition-colors ${
                     item.destructive
-                      ? "text-[color:var(--imkan-color-error)] hover:bg-[color:var(--imkan-color-error)]/10"
-                      : "text-[color:var(--imkan-color-foreground)]"
+                      ? "text-[color:var(--imkan-color-error)] font-semibold hover:bg-[color:var(--imkan-color-error)]/10"
+                      : "text-[color:var(--imkan-color-foreground)] hover:bg-[color:var(--imkan-color-surface)]"
                   }`}
                   onClick={() => {
                     item.onSelect();
                   }}
                 >
                   {item.icon ?? getIconForLabel(item.label) ? (
-                    <span className="flex-shrink-0 w-5 h-5 flex items-center justify-center text-[color:var(--imkan-color-muted)]">
+                    // Inherit the button's currentColor so destructive icons tint red.
+                    <span className="flex-shrink-0 w-5 h-5 flex items-center justify-center text-current">
                       {item.icon ?? getIconForLabel(item.label)}
                     </span>
                   ) : (
