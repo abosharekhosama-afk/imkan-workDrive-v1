@@ -83,7 +83,7 @@ export default function SharedWithMePage() {
     window.dispatchEvent(new CustomEvent<PreviewEventDetail>(WORKDRIVE_PREVIEW_EVENT, { detail }));
   };
 
-  /** Double-click navigation: folders open in place, files open the preview. */
+  /** Single-click navigation: folders open in place, files open the preview. */
   const openSharedRow = (r: SharedItem) => {
     if (r.resourceType === "FOLDER") {
       router.push(`/files/${r.resourceId}`);
@@ -147,7 +147,7 @@ export default function SharedWithMePage() {
                 <tr
                   key={r.id}
                   className="wd-row-clickable"
-                  onDoubleClick={() => openSharedRow(r)}
+                  onClick={() => openSharedRow(r)}
                 >
                   <td>
                     <div className="wd-name-cell">
@@ -155,14 +155,14 @@ export default function SharedWithMePage() {
                         <FileTypeIcon size={18} kind={fileIconKind(r.resourceType === "FOLDER" ? "folder" : "file", r.mimeType ?? undefined, r.name ?? r.resourceId)} />
                       </span>
                       {r.resourceType === "FOLDER" ? (
-                        <Link href={`/files/${r.resourceId}`} className="wd-name-link">
+                        <Link href={`/files/${r.resourceId}`} className="wd-name-link" onClick={(event) => event.stopPropagation()}>
                           {r.name ?? r.resourceId}
                         </Link>
                       ) : (
                         <button
                           type="button"
                           className="wd-name-link imkan-focusable"
-                          onClick={() => dispatchPreview(r)}
+                          onClick={(event) => { event.stopPropagation(); dispatchPreview(r); }}
                         >
                           {r.name ?? r.resourceId}
                         </button>

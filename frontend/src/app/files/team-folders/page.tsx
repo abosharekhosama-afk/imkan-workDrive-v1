@@ -7,6 +7,7 @@ import { ApiError } from "../../../lib/api/client";
 import { createTeamFolder, listTeamFolders, type TeamFolderListItem } from "../../../lib/api/team-folders";
 import { formatBytes } from "../../../lib/api/quota";
 import { MembersModal } from "../../../components/members-modal";
+import { FileTypeIcon } from "../../../components/file-icon";
 import { AlertBanner } from "../../../components/alert-banner";
 import { EmptyState } from "../../../components/empty-state";
 import { SkeletonLoader } from "../../../components/skeleton-loader";
@@ -138,9 +139,9 @@ export default function TeamFoldersPage() {
                     </td>
                     <td className="max-w-[18rem] truncate px-3 py-2">
                       <div className="inline-flex max-w-full items-center truncate rounded-sm">
-                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="text-[color:var(--imkan-color-primary)] flex-shrink-0 mr-2" aria-hidden="true">
-                          <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" />
-                        </svg>
+                        <span className="flex-shrink-0 mr-2" aria-hidden="true">
+                          <FileTypeIcon kind="folder" size={20} />
+                        </span>
                         {tf.rootFolderId ? (
                           <Link href={`/files/${tf.rootFolderId}`} className="font-medium hover:underline truncate">
                             {tf.name}
@@ -155,9 +156,9 @@ export default function TeamFoldersPage() {
                     </td>
                     <td className="imkan-muted px-3 py-2 text-[length:var(--imkan-font-size-secondary)]">
                       <div className="flex items-center gap-2">
-                        <div className="w-6 h-6 rounded-full bg-[color:var(--imkan-color-primary)]/10 flex items-center justify-center text-[color:var(--imkan-color-primary)] text-xs font-medium">
-                          I
-                        </div>
+                        <span className="w-6 h-6 rounded-full flex items-center justify-center" style={{ background: "color-mix(in srgb, var(--wd-green) 14%, transparent)", color: "var(--wd-green)" }} aria-hidden="true">
+                          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6.5A1.5 1.5 0 0 1 4.5 5h4l1.7 2H19a1.5 1.5 0 0 1 1.5 1.5v9A1.5 1.5 0 0 1 19 19H4.5A1.5 1.5 0 0 1 3 17.5Z" /></svg>
+                        </span>
                         <span>IMKAN Workspace</span>
                       </div>
                     </td>

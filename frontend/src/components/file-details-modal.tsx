@@ -15,6 +15,8 @@ export interface FileDetailsData {
   ownerName?: string | null;
   ownerEmail?: string | null;
   permission?: string | null;
+  /** Folder path / parent location when the caller knows it (e.g. Recent). */
+  location?: string | null;
 }
 
 /**
@@ -45,6 +47,9 @@ export function FileDetailsModal({
   }
   if (data.permission) {
     facts.push({ term: label("shared.permission"), value: data.permission });
+  }
+  if (data.location) {
+    facts.push({ term: label("files.breadcrumb.root"), value: data.location });
   }
 
   return (

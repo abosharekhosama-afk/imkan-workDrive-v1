@@ -433,10 +433,11 @@
 body{background:var(--wd-canvas)!important;color:var(--wd-text)!important;font-family:Arial,system-ui,sans-serif!important}
 .zoho-app-shell{min-height:100vh;background:var(--wd-canvas)}
 .zoho-topbar{height:48px;background:#fff;border-bottom:1px solid var(--wd-line);display:flex;align-items:center;padding:0;gap:10px;position:sticky;top:0;z-index:30}
-/* No edge gutters: the control clusters sit flush against the screen edges. */
+/* Zero edge gutters: control clusters sit flush against the screen edges.
+   RTL: search cluster flush right — actions flush left. LTR: mirrored. */
 .zoho-topbar-inner{display:flex;align-items:center;justify-content:space-between;width:100%;gap:10px;padding-inline:0}
-.zoho-topbar-start{padding-inline-start:6px}
-.zoho-top-actions{padding-inline-end:6px}
+.zoho-topbar-start{padding-inline-start:0}
+.zoho-top-actions{padding-inline-end:0}
 .zoho-logo{display:flex;align-items:center;gap:8px;color:#252a31;text-decoration:none;font-weight:700;font-size:14px;min-width:118px}
 .zoho-logo-mark{width:27px;height:27px;border-radius:6px;background:var(--wd-green);color:#fff;display:grid;place-items:center;font-size:14px;font-weight:800}
 .zoho-top-actions{display:flex;align-items:center;gap:8px;margin-inline-start:auto;position:relative}
@@ -621,6 +622,20 @@ select.wd-input{appearance:auto;cursor:pointer}
 [dir="rtl"] .zoho-topbar-inner{direction:rtl}
 [dir="rtl"] .zoho-top-actions{order:0;margin-inline-start:0;margin-inline-end:auto;justify-content:flex-start;flex-direction:row}
 [dir="rtl"] .zoho-avatar-rtl{order:-1}
+/* Soft identity-consistent hover for every top-bar control (light+dark). */
+.zoho-top-actions .wd-btn,
+.zoho-top-actions .zoho-icon-btn,
+.zoho-topbar-start .zoho-icon-btn,
+.zoho-avatar{transition:background .15s ease,color .15s ease,transform .15s ease}
+.zoho-top-actions .wd-btn:hover,
+.zoho-top-actions .zoho-icon-btn:hover,
+.zoho-topbar-start .zoho-icon-btn:hover{background:color-mix(in srgb,var(--wd-green) 12%,transparent);color:#0b6b58}
+html[data-theme="dark"] .zoho-top-actions .wd-btn:hover,
+html[data-theme="dark"] .zoho-top-actions .zoho-icon-btn:hover,
+html[data-theme="dark"] .zoho-topbar-start .zoho-icon-btn:hover{background:var(--wd-hover);color:#dbeafe}
+html[data-theme="dark"] .zoho-top-actions .wd-btn-ghost,
+html[data-theme="dark"] .zoho-top-actions .wd-btn{background:transparent;border-color:var(--wd-line);color:var(--wd-text)}
+html[data-theme="dark"] .zoho-top-actions .wd-btn-primary{background:var(--wd-green);border-color:var(--wd-green);color:#fff}
 
 /* Enterprise admin console */
 .imkan-admin-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px;margin-bottom:14px}.imkan-admin-metric{display:flex;justify-content:space-between;align-items:center;padding:11px 0;border-bottom:1px solid var(--wd-line);font-size:11px}.imkan-admin-metric:last-child{border-bottom:0}.imkan-admin-metric strong{font-size:16px;color:#252a31}.imkan-chip-row{display:flex;flex-wrap:wrap;gap:7px}.imkan-chip{display:inline-flex;align-items:center;padding:6px 9px;border:1px solid #dfe4e8;border-radius:14px;background:#fafbfc;color:#424952;font-size:10px}.imkan-subtitle{margin:3px 0 0;color:#7c8590;font-size:11px}@media(max-width:800px){.imkan-admin-grid{grid-template-columns:1fr}}
@@ -983,6 +998,48 @@ html[data-theme="dark"] .wd-details-row{background:var(--wd-bg)}
 html[data-theme="dark"] .wd-details-row dt{color:var(--wd-sidebar-muted)}
 
 /* ── Members modal polish (roles, rows, dropdown) ─────────────────────── */
+/* Full Zoho WorkDrive-style member management surfaces (were previously
+   unstyled classes — this block defines every one of them). */
+.zoho-member-head{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 14px;margin-bottom:12px;border:1px solid var(--wd-line);border-radius:10px;background:linear-gradient(135deg,color-mix(in srgb,var(--wd-green) 7%,transparent),transparent 60%)}
+.zoho-member-head-text{display:flex;flex-direction:column;min-width:0}
+.zoho-member-title{margin:0;font-size:13.5px;font-weight:700;color:#24292f;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.zoho-member-subtitle{font-size:10.5px;color:#7b838e}
+.zoho-member-count{display:inline-flex;align-items:center;justify-content:center;min-width:26px;height:26px;padding:0 8px;border-radius:13px;background:#eef7f4;color:#087d67;font-size:11.5px;font-weight:700}
+.zoho-member-list{list-style:none;margin:0 0 4px;padding:0;display:flex;flex-direction:column;gap:4px;max-height:260px;overflow:auto}
+.zoho-member-avatar-wrap{position:relative;display:inline-flex;flex:0 0 auto}
+.zoho-member-avatar{display:grid;place-items:center;width:34px;height:34px;border-radius:50%;background:#e9f5f2;color:#087d67;font-size:11.5px;font-weight:800;overflow:hidden}
+.zoho-member-avatar.sm{width:26px;height:26px;font-size:9.5px}
+.zoho-member-avatar img{width:100%;height:100%;object-fit:cover}
+.zoho-member-status{position:absolute;inset-block-end:0;inset-inline-end:0;width:10px;height:10px;border-radius:50%;border:2px solid #fff;background:#9aa2ad}
+.zoho-member-status.active{background:#22c55e}
+.zoho-member-status.suspended{background:#f59e0b}
+.zoho-member-status.invited{background:#3b82f6}
+.zoho-member-info{display:flex;flex-direction:column;flex:1;min-width:0}
+.zoho-member-info strong{font-size:12.5px;font-weight:600;color:#24292f;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.zoho-member-info small{font-size:10.5px;color:#8a929d;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.zoho-role-select{height:32px;border:1px solid var(--wd-line);border-radius:7px;background:#fff;color:#252a31;font-size:11.5px;padding:0 8px;cursor:pointer}
+.zoho-role-select.sm{height:26px;font-size:10.5px}
+.zoho-role-select:focus-visible{outline:2px solid color-mix(in srgb,var(--wd-green) 45%,transparent);outline-offset:1px}
+.zoho-member-select{display:flex;align-items:center;gap:8px;width:100%;min-height:38px;padding:6px 10px;border:1px solid var(--wd-line);border-radius:8px;background:#fff;color:#252a31;font-size:12px;cursor:pointer;text-align:start}
+.zoho-member-select:hover{background:var(--wd-hover)}
+.zoho-member-dropdown{position:absolute;top:calc(100% + 4px);inset-inline:0;z-index:60;padding:6px;background:#fff;border:1px solid var(--wd-line);border-radius:9px;box-shadow:0 16px 40px rgba(15,25,35,.18);max-height:240px;overflow:auto}
+.zoho-member-remove{display:grid;place-items:center;width:28px;height:28px;flex:0 0 auto;border:0;border-radius:7px;background:transparent;color:#9aa2ad;cursor:pointer;transition:background .15s ease,color .15s ease}
+.zoho-member-remove:hover{background:#fdecec;color:#c02626}
+.zoho-member-add{display:flex;align-items:flex-end;gap:8px;flex-wrap:wrap}
+.sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
+html[data-theme="dark"] .zoho-member-head{background:linear-gradient(135deg,color-mix(in srgb,var(--wd-green) 14%,transparent),transparent 60%)}
+html[data-theme="dark"] .zoho-member-title{color:var(--wd-text)}
+html[data-theme="dark"] .zoho-member-subtitle{color:var(--wd-sidebar-muted)}
+html[data-theme="dark"] .zoho-member-count{background:color-mix(in srgb,var(--wd-green) 18%,transparent);color:#93c5fd}
+html[data-theme="dark"] .zoho-member-avatar{background:var(--wd-hover);color:#93c5fd}
+html[data-theme="dark"] .zoho-member-status{border-color:var(--wd-bg)}
+html[data-theme="dark"] .zoho-member-info strong{color:var(--wd-text)}
+html[data-theme="dark"] .zoho-member-info small{color:var(--wd-sidebar-muted)}
+html[data-theme="dark"] .zoho-role-select,
+html[data-theme="dark"] .zoho-member-select{background:var(--wd-canvas);border-color:var(--wd-line);color:var(--wd-text)}
+html[data-theme="dark"] .zoho-member-select:hover{background:var(--wd-hover)}
+html[data-theme="dark"] .zoho-member-dropdown{background:var(--wd-bg);border-color:var(--wd-line);box-shadow:0 16px 40px rgba(0,0,0,.5)}
+html[data-theme="dark"] .zoho-member-remove:hover{background:#3b1d23;color:#f87171}
 .zoho-member-row{border:1px solid transparent;border-radius:9px;padding:8px 10px;transition:background .15s ease,border-color .15s ease}
 .zoho-member-row:hover{background:var(--wd-hover);border-color:var(--wd-line)}
 .zoho-role-badge{display:inline-flex;align-items:center;gap:5px;height:22px;padding:0 10px;border-radius:11px;font-size:10.5px;font-weight:700;letter-spacing:.02em;border:1px solid transparent;white-space:nowrap}
@@ -1069,6 +1126,22 @@ html[data-theme="dark"] input.imkan-input,
 html[data-theme="dark"] .zoho-member-dropdown input{background:var(--wd-canvas);border-color:var(--wd-line);color:var(--wd-text)}
 html[data-theme="dark"] input.imkan-input::placeholder,
 html[data-theme="dark"] .imkan-input::placeholder{color:var(--wd-sidebar-muted)}
+
+/* ── Modal surfaces (were previously unstyled — caused washed-out dialogs
+   in dark mode) ─────────────────────────────────────────────────────────── */
+.imkan-modal-backdrop{position:fixed;inset:0;z-index:130;display:flex;align-items:center;justify-content:center;background:rgba(15,23,42,.55);backdrop-filter:blur(2px)}
+.imkan-modal-surface{width:min(520px,calc(100vw - 32px));background:#fff;border:1px solid var(--wd-line);border-radius:12px;box-shadow:0 24px 70px rgba(15,25,35,.28);color:#252a31}
+.imkan-modal-surface .imkan-heading{color:#24292f}
+html[data-theme="dark"] .imkan-modal-backdrop{background:rgba(6,10,18,.68)}
+html[data-theme="dark"] .imkan-modal-surface{background:var(--wd-bg);border-color:var(--wd-line);color:var(--wd-text);box-shadow:0 24px 70px rgba(0,0,0,.55)}
+html[data-theme="dark"] .imkan-modal-surface .imkan-heading{color:var(--wd-text)}
+html[data-theme="dark"] .imkan-modal-surface .border-\[color\:var\(--imkan-color-border\)\]{border-color:var(--wd-line)}
+html[data-theme="dark"] .imkan-modal-surface .imkan-button-secondary{background:var(--wd-hover);border-color:var(--wd-line);color:var(--wd-text)}
+html[data-theme="dark"] .imkan-modal-surface .imkan-button-secondary:hover{background:var(--wd-line)}
+html[data-theme="dark"] .imkan-modal-surface input,
+html[data-theme="dark"] .imkan-modal-surface select,
+html[data-theme="dark"] .imkan-modal-surface textarea{background:var(--wd-canvas);border-color:var(--wd-line);color:var(--wd-text)}
+html[data-theme="dark"] .imkan-modal-surface .imkan-muted{color:var(--wd-sidebar-muted)}
 
 
 
