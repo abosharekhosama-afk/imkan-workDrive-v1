@@ -62,8 +62,8 @@ export function MoveModal({ resourceName, onClose, onMove }: MoveModalProps) {
         </>}
       </fieldset>
       <div className="mb-3 rounded-lg border border-dashed border-[color:var(--imkan-color-border)] p-2">
-        <div className="mb-1 text-sm font-medium">Create New Folder & Move</div>
-        <div className="flex gap-2"><input className="imkan-input flex-1" value={newName} onChange={(e) => setNewName(e.target.value)} placeholder="New folder name" /><button type="button" className="imkan-button-secondary" disabled={creating || !newName.trim()} onClick={() => void createAndSelect()}>{creating ? "…" : "Create"}</button></div>
+        <div className="mb-1 text-sm font-medium">{label("move.createAndMove")}</div>
+        <div className="flex gap-2"><input className="imkan-input flex-1" value={newName} onChange={(e) => setNewName(e.target.value)} placeholder={label("files.folderName")} /><button type="button" className="imkan-button-secondary" disabled={creating || !newName.trim()} onClick={() => void createAndSelect()}>{creating ? "…" : label("common.create")}</button></div>
       </div>
       {error ? <p className="mb-3 text-red-600">{error}</p> : null}
       <div className="flex justify-end gap-2"><button type="button" className="imkan-button-secondary" onClick={onClose} disabled={submitting}>{label("share.cancel")}</button><button type="submit" className="imkan-button" disabled={submitting || options === null}>{label("files.moveHere")}</button></div>

@@ -56,7 +56,7 @@ export function WorkdriveNav({ onNavigate }: { onNavigate?: () => void }) {
       ))}
       <div className="zoho-sidebar-spacer" />
       <Link href="/organization" onClick={onNavigate} className={pathname === "/organization" ? "zoho-side-link active" : "zoho-side-link"}>
-        <span className="zoho-side-icon">◎</span><span>Organization</span>
+        <span className="zoho-side-icon">◎</span><span>{label("nav.organization")}</span>
       </Link>
       <Link href="/settings" onClick={onNavigate} className={pathname === "/settings" ? "zoho-side-link active" : "zoho-side-link"}>
         <span className="zoho-side-icon">⚙</span><span>{label("nav.settings")}</span>

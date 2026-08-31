@@ -35,7 +35,7 @@ interface OrgSwitcherProps {
  * tab reloads into the same context without logging out.
  */
 export function OrgSwitcher({ organizationName, userRole }: OrgSwitcherProps) {
-  const { label, locale } = useLocale();
+  const { label } = useLocale();
   const [open, setOpen] = useState(false);
   const [memberships, setMemberships] = useState<OrganizationMembershipSummary[]>([]);
   const [switchingId, setSwitchingId] = useState<string | null>(null);
@@ -117,11 +117,11 @@ export function OrgSwitcher({ organizationName, userRole }: OrgSwitcherProps) {
         <span className="zoho-team-avatar" aria-hidden="true">{orgInitials(organizationName)}</span>
         <span className="zoho-team-meta">
           <strong>{organizationName || label("brand.workspace")}</strong>
-          <small>{roleText || "My WorkDrive"}</small>
+          <small>{roleText || label("org.myWorkDrive")}</small>
         </span>
         <span className={`chevron${open ? " open" : ""}`} aria-hidden="true">⌄</span>
       </button>
-      {open ? <OrgMenu memberships={memberships} switchingId={switchingId} onSwitch={onSwitch} onClose={() => setOpen(false)} locale={locale} /> : null}
+      {open ? <OrgMenu memberships={memberships} switchingId={switchingId} onSwitch={onSwitch} onClose={() => setOpen(false)} /> : null}
     </div>
   );
 }
@@ -131,16 +131,15 @@ interface OrgMenuProps {
   switchingId: string | null;
   onSwitch: (organizationId: string) => Promise<void>;
   onClose: () => void;
-  locale: string;
 }
 
-function OrgMenu({ memberships, switchingId, onSwitch, onClose, locale }: OrgMenuProps) {
+function OrgMenu({ memberships, switchingId, onSwitch, onClose }: OrgMenuProps) {
   const { label } = useLocale();
   return (
     <div className="zoho-profile-menu zoho-org-menu" role="menu">
       <div className="zoho-profile-rule" />
       {memberships.length === 0 ? (
-        <div className="zoho-org-empty">{locale === "ar" ? "لا توجد منظمات أخرى" : "No other organizations"}</div>
+        <div className="zoho-org-empty">{label("org.noOtherOrgs")}</div>
       ) : null}
       {memberships.map((membership) => (
         <button

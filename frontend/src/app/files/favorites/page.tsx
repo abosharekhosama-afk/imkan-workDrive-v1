@@ -105,7 +105,7 @@ export default function FavoritesPage() {
               <span className="wd-skel-bar" style={{ width: 110 }} />
             </div>
           ))}
-          <span className="sr-only" role="status">Loading</span>
+          <span className="sr-only" role="status">{label("common.loading")}</span>
         </div>
       ) : items.length === 0 ? (
         <div className="wd-card">

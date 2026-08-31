@@ -117,7 +117,12 @@ export function FileTable({
   const sortedFolders = useMemo(() => [...folders].sort((a, b) => sort.key === "modified" ? compareDates(folderSizes ? folderDate(a.id) : a.updatedAt, folderSizes ? folderDate(b.id) : b.updatedAt, sort.direction) : sort.key === "size" ? compareNumbers(folderSizes?.get(a.id), folderSizes?.get(b.id), sort.direction) : compareText(a.name, b.name, sort.direction)), [folders, sort, folderSizes, folderUpdatedAt]);
   const sortedFiles = useMemo(() => [...files].sort((a, b) => sort.key === "size" ? compareNumbers(a.size, b.size, sort.direction) : sort.key === "modified" ? compareDates(a.updatedAt, b.updatedAt, sort.direction) : compareText(a.name, b.name, sort.direction)), [files, sort]);
   const formatDate = (value?: string | null) => formatDateLocalized(value, locale);
-  const formatSize = (value?: number | null, items?: number | null) => value != null && value > 0 ? formatBytes(value) : items != null ? `${items} items` : "0 B";
+  const formatSize = (value?: number | null, items?: number | null) =>
+    value != null && value > 0
+      ? formatBytes(value)
+      : items != null
+        ? label("files.itemsCount").replace("{count}", String(items))
+        : "0 B";
 
   if (folders.length === 0 && files.length === 0) {
     return <EmptyState title={emptyTitle?? label("files.empty")} description={emptyDescription} />;

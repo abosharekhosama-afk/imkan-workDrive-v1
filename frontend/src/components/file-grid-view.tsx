@@ -48,7 +48,9 @@ export function FileGridView({
   const folderDate = (id: string) => latestOf(folders.find((f) => f.id === id)?.updatedAt, folderUpdatedAt?.get(id) ?? undefined);
   const folderSize = (id: string) => {
     const size = folderSizes?.get(id);
-    return size != null && size > 0 ? formatBytes(size) : `${folders.find((f) => f.id === id)?.itemCount ?? 0} items`;
+    return size != null && size > 0
+      ? formatBytes(size)
+      : label("files.itemsCount").replace("{count}", String(folders.find((f) => f.id === id)?.itemCount ?? 0));
   };
 
   return (

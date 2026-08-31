@@ -132,7 +132,7 @@ export default function TrashPage() {
               <span className="wd-skel-bar" style={{ width: 140 }} />
             </div>
           ))}
-          <span className="sr-only" role="status">Loading</span>
+          <span className="sr-only" role="status">{label("common.loading")}</span>
         </div>
       ) : files.length === 0 ? (
         <div className="wd-card">

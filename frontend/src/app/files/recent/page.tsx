@@ -92,7 +92,7 @@ export default function RecentPage() {
               <span className="wd-skel-bar" style={{ width: 130 }} />
             </div>
           ))}
-          <span className="sr-only" role="status">Loading</span>
+          <span className="sr-only" role="status">{label("common.loading")}</span>
         </div>
       ) : items.length === 0 ? (
         <div className="wd-card">

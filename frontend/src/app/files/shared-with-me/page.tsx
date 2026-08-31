@@ -119,7 +119,7 @@ export default function SharedWithMePage() {
               <span className="wd-skel-bar" style={{ width: 110 }} />
             </div>
           ))}
-          <span className="sr-only" role="status">Loading</span>
+          <span className="sr-only" role="status">{label("common.loading")}</span>
         </div>
       ) : rows.length === 0 ? (
         <div className="wd-card">
