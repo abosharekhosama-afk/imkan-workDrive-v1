@@ -51,6 +51,19 @@ export class FilesController {
     return this.files.listTrash(user);
   }
 
+  @Get(':id/preview-url')
+  async getPreviewUrl(
+    @CurrentUser() user: AccessTokenPayload,
+    @Param('id', new ParseUUIDPipe({ version: '4' })) id: string,
+  ) {
+    const result = await this.files.createDownloadUrl(user, id);
+    void this.recent
+      .record(user, ResourceType.FILE, id, AccessAction.PREVIEW)
+      .catch(() => undefined);
+
+    return { url: result.url };
+  }
+
   @Get(':id/stream')
   async stream(
     @CurrentUser() user: AccessTokenPayload,
@@ -58,9 +71,6 @@ export class FilesController {
     @Res() response: Response,
     @Headers('range') range?: string,
   ) {
-    // Inline media streaming endpoint (PVW-02/03): correct Content-Type,
-    // RFC 6266 inline disposition, ETag validation and HTTP Range support so
-    // previews render instead of downloading raw binaries.
     await this.files.streamFile(user, id, response, range);
     void this.recent
       .record(user, ResourceType.FILE, id, AccessAction.PREVIEW)
@@ -102,17 +112,28 @@ export class FilesController {
   }
 
   @Patch(':id/move')
-  move(@CurrentUser() user: AccessTokenPayload, @Param('id', new ParseUUIDPipe({ version: '4' })) id: string, @Body() body: unknown) {
+  move(
+    @CurrentUser() user: AccessTokenPayload,
+    @Param('id', new ParseUUIDPipe({ version: '4' })) id: string,
+    @Body() body: unknown,
+  ) {
     return this.files.move(user, id, parseMoveCopy(body));
   }
 
   @Post(':id/copy')
-  copy(@CurrentUser() user: AccessTokenPayload, @Param('id', new ParseUUIDPipe({ version: '4' })) id: string, @Body() body: unknown) {
+  copy(
+    @CurrentUser() user: AccessTokenPayload,
+    @Param('id', new ParseUUIDPipe({ version: '4' })) id: string,
+    @Body() body: unknown,
+  ) {
     return this.files.copy(user, id, parseMoveCopy(body));
   }
 
   @Delete(':id/permanent')
-  permanentDelete(@CurrentUser() user: AccessTokenPayload, @Param('id', new ParseUUIDPipe({ version: '4' })) id: string) {
+  permanentDelete(
+    @CurrentUser() user: AccessTokenPayload,
+    @Param('id', new ParseUUIDPipe({ version: '4' })) id: string,
+  ) {
     return this.files.permanentDelete(user, id);
   }
 

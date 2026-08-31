@@ -11,7 +11,6 @@ export interface BlobPreviewResult {
   retry: () => void;
 }
 
-/** Extracts a user-friendly message from a non-2xx preview response. */
 async function describeHttpFailure(response: Response): Promise<string> {
   let serverMessage: string | null = null;
   try {
@@ -31,7 +30,7 @@ async function describeHttpFailure(response: Response): Promise<string> {
       }
     }
   } catch {
-    // Body unreadable; fall back to status message
+    // Body unreadable
   }
 
   switch (response.status) {
@@ -67,7 +66,7 @@ export function useBlobPreview(
   const [blob, setBlob] = useState<Blob | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-  
+
   const objectUrlRef = useRef<string | null>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
 
@@ -84,7 +83,6 @@ export function useBlobPreview(
       return;
     }
 
-    // Cancel any ongoing fetch before initiating a new one
     if (abortControllerRef.current) {
       abortControllerRef.current.abort();
     }
@@ -96,18 +94,18 @@ export function useBlobPreview(
 
     try {
       const isAbsolute = /^https?:\/\//i.test(previewUrl);
-      const isExternalS3OrR2 = isAbsolute && (
-        previewUrl.includes("cloudflarestorage.com") || 
-        previewUrl.includes("amazonaws.com") ||
-        previewUrl.includes("X-Amz-Algorithm")
-      );
+      const isExternalS3OrR2 =
+        isAbsolute &&
+        (previewUrl.includes("cloudflarestorage.com") ||
+          previewUrl.includes("amazonaws.com") ||
+          previewUrl.includes("X-Amz-Algorithm"));
 
-      const requestUrl = isAbsolute ? previewUrl : `${getApiBaseUrl()}${previewUrl}`;
+      const requestUrl = isAbsolute
+        ? previewUrl
+        : `${getApiBaseUrl()}${previewUrl}`;
       const headers = new Headers();
       headers.set("Accept", "*/*");
 
-      // ONLY attach Auth headers if fetching from our own API.
-      // NEVER attach Bearer tokens to Presigned S3/R2 URLs.
       if (!isExternalS3OrR2) {
         const token = await getAccessToken();
         if (token) {
@@ -117,14 +115,12 @@ export function useBlobPreview(
 
       let response: Response;
       try {
-        response = await fetch(requestUrl, { 
+        response = await fetch(requestUrl, {
           headers,
           signal: controller.signal,
         });
       } catch (cause: any) {
-        if (cause?.name === "AbortError") {
-          return; // Silent return on user abort/unmount
-        }
+        if (cause?.name === "AbortError") return;
         console.error("Blob preview network error:", cause);
         throw new Error(
           "Unable to reach the server. Please check your connection and try again."
@@ -135,19 +131,51 @@ export function useBlobPreview(
         throw new Error(await describeHttpFailure(response));
       }
 
+      const contentType = response.headers.get("content-type") || "";
+
+      // التعامل مع Presigned URL المرسل كـ JSON
+      if (contentType.includes("application/json")) {
+        const json = await response.json();
+        const directR2Url = json.url || json.presignedUrl;
+
+        if (!directR2Url) {
+          throw new Error("Invalid preview URL response from server");
+        }
+
+        // fetch مباشر لـ R2 بدون Authorization Header لتجنب مشكلة CORS
+        const r2Response = await fetch(directR2Url, {
+          signal: controller.signal,
+        });
+
+        if (!r2Response.ok) {
+          throw new Error(await describeHttpFailure(r2Response));
+        }
+
+        const blobData = await r2Response.blob();
+        if (blobData.size === 0) throw new Error("Empty file content");
+
+        const blobUrl = URL.createObjectURL(blobData);
+        if (objectUrlRef.current) URL.revokeObjectURL(objectUrlRef.current);
+        objectUrlRef.current = blobUrl;
+
+        setBlob(blobData);
+        setObjectUrl(blobUrl);
+        setError(null);
+        return;
+      }
+
+      // إذا كانت الاستجابة مباشرة عبارة عن binary blob
       const blobData = await response.blob();
-      
       if (blobData.size === 0) {
         throw new Error("Empty file content");
       }
 
       const blobUrl = URL.createObjectURL(blobData);
-      
       if (objectUrlRef.current) {
         URL.revokeObjectURL(objectUrlRef.current);
       }
       objectUrlRef.current = blobUrl;
-      
+
       setBlob(blobData);
       setObjectUrl(blobUrl);
       setError(null);
@@ -174,12 +202,10 @@ export function useBlobPreview(
     fetchBlob();
 
     return () => {
-      // Abort active fetch request on unmount or URL change
       if (abortControllerRef.current) {
         abortControllerRef.current.abort();
         abortControllerRef.current = null;
       }
-      // Clean up local blob object URL
       if (objectUrlRef.current) {
         URL.revokeObjectURL(objectUrlRef.current);
         objectUrlRef.current = null;
