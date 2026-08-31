@@ -266,19 +266,23 @@ return (
                   </span>
                   {canManage ? (
                     <>
-                      <select
-                        aria-label={label("teamFolders.members.heading")}
-                        value={m.role}
-                        disabled={pendingRole === m.userId}
-                        onChange={(e) => void onChangeRole(m.userId, e.target.value as TeamFolderRole)}
-                        className="zoho-role-select sm"
-                      >
-                        {ROLE_ORDER.map((role) => (
-                          <option key={role} value={role}>{roleLabel(role)}</option>
-                        ))}
-                      </select>
-                      <button type="button" className="zoho-member-remove" onClick={() => void onRemove(m.userId)} disabled={pendingRole === m.userId} aria-label={`${label("teamFolders.member.remove")}: ${displayName}`}>
-                        ✕
+                      <span className={ROLE_BADGES[m.role]} title={roleLabel(m.role)}>
+                        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M12 19V5M5 12l7-7 7 7" /></svg>
+                        {roleLabel(m.role)}
+                        <select
+                          aria-label={`${label("teamFolders.member.role")}: ${displayName}`}
+                          value={m.role}
+                          disabled={pendingRole === m.userId}
+                          onChange={(e) => void onChangeRole(m.userId, e.target.value as TeamFolderRole)}
+                          className="zoho-role-select sr-only"
+                        >
+                          {ROLE_ORDER.map((role) => (
+                            <option key={role} value={role}>{roleLabel(role)}</option>
+                          ))}
+                        </select>
+                      </span>
+                      <button type="button" className="zoho-member-remove" onClick={() => void onRemove(m.userId)} disabled={pendingRole === m.userId} aria-label={`${label("teamFolders.member.remove")}: ${displayName}`} title={label("teamFolders.member.remove")}>
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><polyline points="3 6 5 6 21 6" /><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" /></svg>
                       </button>
                     </>
                   ) : (
@@ -369,7 +373,8 @@ return (
                 ))}
               </select>
             </label>
-            <button type="submit" disabled={!selected || submitting} className="imkan-button disabled:opacity-50">
+            <button type="submit" disabled={!selected || submitting} className="imkan-button disabled:opacity-50 inline-flex items-center gap-1.5">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14" /></svg>
               {label("teamFolders.member.add")}
             </button>
           </form>

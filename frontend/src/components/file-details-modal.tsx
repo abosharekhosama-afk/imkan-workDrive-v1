@@ -2,7 +2,7 @@
 
 import { useLocale } from "./locale-provider";
 import { Modal } from "./modal";
-import { FileIcon } from "./file-icon";
+import { fileIconKind, FileTypeIcon } from "./file-icon";
 import { formatBytes } from "../lib/api/quota";
 import { formatDateLocalized } from "../lib/localized";
 
@@ -18,8 +18,9 @@ export interface FileDetailsData {
 }
 
 /**
- * Compact metadata sheet ("View details") shown from any row actions menu.
- * Non-destructive read-only summary used by Shared, Favorites and Main views.
+ * Zoho WorkDrive-style metadata sheet ("View details") shown from any row
+ * actions menu: icon header card + a two-column fact grid. The size row is
+ * always rendered (formatted `1.5 MB` / `420 KB`) — never hidden or "N/A".
  */
 export function FileDetailsModal({
   data,
@@ -29,55 +30,47 @@ export function FileDetailsModal({
   onClose: () => void;
 }) {
   const { label, locale } = useLocale();
+  const isFolder = data.resourceType === "FOLDER";
+  const kind = fileIconKind(isFolder ? "folder" : "file", data.mimeType, data.name);
 
-  const rows: Array<[string, string]> = [
-    [label("files.column.name"), data.name],
-    [
-      label("files.column.type"),
-      data.resourceType === "FOLDER"
-        ? label("files.type.folder")
-        : label("files.type.file"),
-    ],
+  const facts: Array<{ term: string; value: string; mono?: boolean }> = [
+    { term: label("files.column.type"), value: isFolder ? label("files.type.folder") : label("files.type.file") },
+    { term: label("files.column.size"), value: formatBytes(data.size ?? null) },
   ];
-  if (typeof data.size === "number" && data.size > 0) {
-    rows.push([label("files.column.size"), formatBytes(data.size)]);
-  }
   if (data.updatedAt) {
-    rows.push([label("files.column.updated"), formatDateLocalized(data.updatedAt, locale)]);
+    facts.push({ term: label("files.column.updated"), value: formatDateLocalized(data.updatedAt, locale) });
   }
   if (data.ownerName || data.ownerEmail) {
-    rows.push([label("shared.owner"), data.ownerName || data.ownerEmail || "—"]);
+    facts.push({ term: label("shared.owner"), value: data.ownerName || data.ownerEmail || "—" });
   }
   if (data.permission) {
-    rows.push([label("shared.permission"), data.permission]);
+    facts.push({ term: label("shared.permission"), value: data.permission });
   }
 
   return (
     <Modal title={label("files.details")} onClose={onClose}>
-      <div className="mb-3 flex items-center gap-3">
-        <FileIcon
-          kind={data.resourceType === "FOLDER" ? "folder" : "file"}
-          mimeType={data.mimeType ?? undefined}
-          name={data.name}
-          label={label("files.type.file")}
-        />
-        <span className="truncate font-medium">{data.name}</span>
-      </div>
-      <dl className="flex flex-col gap-2 text-[length:var(--imkan-font-size-secondary)]">
-        {rows.map(([term, value]) => (
-          <div
-            key={term}
-            className="flex justify-between gap-4 border-b border-[color:var(--imkan-color-border)] pb-1"
-          >
-            <dt className="imkan-muted">{term}</dt>
-            <dd className="max-w-[60%] truncate text-end">{value}</dd>
-          </div>
-        ))}
-      </dl>
-      <div className="mt-4 flex justify-end gap-2">
-        <button type="button" className="imkan-button-secondary" onClick={onClose}>
-          {label("share.cancel")}
-        </button>
+      <div className="wd-details">
+        <div className="wd-details-head">
+          <span className="wd-details-thumb" aria-hidden="true">
+            <FileTypeIcon kind={kind} size={34} />
+          </span>
+          <span className="wd-details-title" title={data.name}>{data.name}</span>
+        </div>
+
+        <dl className="wd-details-grid">
+          {facts.map(({ term, value, mono }) => (
+            <div key={term} className="wd-details-row">
+              <dt>{term}</dt>
+              <dd className={mono ? "wd-details-mono" : undefined} title={value}>{value}</dd>
+            </div>
+          ))}
+        </dl>
+
+        <div className="wd-details-actions">
+          <button type="button" className="imkan-button-secondary" onClick={onClose}>
+            {label("share.cancel")}
+          </button>
+        </div>
       </div>
     </Modal>
   );

@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useLocale } from "../../../components/locale-provider";
 import { listFavorites, removeFavorite, type FavoriteRecord } from "../../../lib/api/favorites";
-import { fileIconSymbol } from "../../../components/file-icon-logic";
+import { fileIconKind, FileTypeIcon } from "../../../components/file-icon";
 import { FileActionsMenu } from "../../../components/file-actions-menu";
 import { ShareModal } from "../../../components/share-modal";
 import { RenameModal } from "../../../components/rename-modal";
@@ -136,7 +136,7 @@ export default function FavoritesPage() {
                   <td>
                     <div className="wd-name-cell">
                       <span className="icon" aria-hidden="true">
-                        {fileIconSymbol(item.resourceType === "FOLDER" ? "folder" : "file", undefined, item.name)}
+                        <FileTypeIcon size={18} kind={fileIconKind(item.resourceType === "FOLDER" ? "folder" : "file", undefined, item.name)} />
                       </span>
                       {item.resourceType === "FOLDER" ? (
                         <Link href={`/files/${item.resourceId}`} className="wd-name-link">{item.name}</Link>

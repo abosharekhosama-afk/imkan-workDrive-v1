@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import { useLocale } from "../../../components/locale-provider";
 import { listRecent, type RecentRecord } from "../../../lib/api/recent";
-import { fileIconSymbol } from "../../../components/file-icon-logic";
+import { fileIconKind, FileTypeIcon } from "../../../components/file-icon";
 
 function formatDateTime(value: string): string {
   return new Intl.DateTimeFormat(undefined, {
@@ -128,7 +128,7 @@ export default function RecentPage() {
                     <td>
                       <div className="wd-name-cell">
                         <span className="icon" aria-hidden="true">
-                          {fileIconSymbol(isFolder ? "folder" : "file", item.mimeType ?? undefined, item.name)}
+                          <FileTypeIcon size={18} kind={fileIconKind(isFolder ? "folder" : "file", item.mimeType ?? undefined, item.name)} />
                         </span>
                         <span>
                           <Link href={targetHref} className="wd-name-link">{item.name}</Link>

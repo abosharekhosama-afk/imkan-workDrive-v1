@@ -6,7 +6,7 @@ import { ApiError } from "../../../lib/api/client";
 import { emptyTrash, permanentDeleteFile } from "../../../lib/api/files";
 import { listTrash, restoreFile } from "../../../lib/api/trash";
 import type { FileRecord } from "../../../lib/api/types";
-import { fileIconSymbol } from "../../../components/file-icon-logic";
+import { fileIconKind, FileTypeIcon } from "../../../components/file-icon";
 import { errorMessageForStatus } from "../../../components/feedback-state-logic";
 
 function formatDate(value?: string | null): string {
@@ -163,7 +163,7 @@ export default function TrashPage() {
                   <td>
                     <div className="wd-name-cell">
                       <span className="icon" aria-hidden="true">
-                        {fileIconSymbol("file", file.mimeType ?? undefined, file.name)}
+                        <FileTypeIcon size={18} kind={fileIconKind("file", file.mimeType ?? undefined, file.name)} />
                       </span>
                       <span className="wd-name-link" title={file.name}>{file.name}</span>
                     </div>

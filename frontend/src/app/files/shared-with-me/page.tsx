@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useLocale } from "../../../components/locale-provider";
 import { listSharedWithMe, type SharedItem } from "../../../lib/api/shared";
-import { fileIconSymbol } from "../../../components/file-icon-logic";
+import { fileIconKind, FileTypeIcon } from "../../../components/file-icon";
 import { FileActionsMenu } from "../../../components/file-actions-menu";
 import { permissionAllowsEdit } from "../../../components/file-row-actions-logic";
 import { RenameModal } from "../../../components/rename-modal";
@@ -152,7 +152,7 @@ export default function SharedWithMePage() {
                   <td>
                     <div className="wd-name-cell">
                       <span className="icon" aria-hidden="true">
-                        {fileIconSymbol(r.resourceType === "FOLDER" ? "folder" : "file")}
+                        <FileTypeIcon size={18} kind={fileIconKind(r.resourceType === "FOLDER" ? "folder" : "file", r.mimeType ?? undefined, r.name ?? r.resourceId)} />
                       </span>
                       {r.resourceType === "FOLDER" ? (
                         <Link href={`/files/${r.resourceId}`} className="wd-name-link">
