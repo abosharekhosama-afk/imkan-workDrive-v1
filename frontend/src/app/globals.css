@@ -432,12 +432,25 @@
 }
 body{background:var(--wd-canvas)!important;color:var(--wd-text)!important;font-family:Arial,system-ui,sans-serif!important}
 .zoho-app-shell{min-height:100vh;background:var(--wd-canvas)}
-.zoho-topbar{height:48px;background:#fff;border-bottom:1px solid var(--wd-line);display:flex;align-items:center;padding:0;gap:10px;position:sticky;top:0;z-index:30}
-/* Zero edge gutters: control clusters sit flush against the screen edges.
-   RTL: search cluster flush right — actions flush left. LTR: mirrored. */
+.zoho-topbar{height:48px;background:#fff;border-bottom:1px solid var(--wd-line);display:flex;align-items:center;padding:0 16px;gap:10px;position:sticky;top:0;z-index:30;margin:0}
+/* Safe edge padding: a slim 16px inset on each side keeps the search/buttons
+   from touching the very edge of the screen while external margin stays 0. */
 .zoho-topbar-inner{display:flex;align-items:center;justify-content:space-between;width:100%;gap:10px;padding-inline:0}
 .zoho-topbar-start{padding-inline-start:0}
 .zoho-top-actions{padding-inline-end:0}
+
+/* Directional distribution: the actions cluster is a compact, non-growing
+   flex row pushed to the physical far end (left in RTL, right in LTR);
+   only the search box expands to consume the middle slack. */
+.zoho-top-actions{display:flex;align-items:center;gap:8px;flex:0 1 auto;min-width:0;min-height:32px;position:relative;margin-inline-start:auto;padding-inline-end:0}
+.zoho-top-actions .wd-btn,
+.zoho-top-actions .zoho-icon-btn,
+.zoho-top-actions .zoho-account,
+.zoho-top-actions .zoho-avatar{flex-shrink:0}
+[dir="ltr"] .zoho-top-actions{margin-inline-start:auto;margin-inline-end:0}
+[dir="rtl"] .zoho-top-actions{margin-inline-start:0;margin-inline-end:auto;order:0;justify-content:flex-start;flex-direction:row}
+[dir="rtl"] .zoho-topbar-start .zoho-global-search,
+[dir="ltr"] .zoho-topbar-start .zoho-global-search{flex:1 1 auto;min-width:0;width:100%;max-width:560px}
 /* Sidebar drawer toggle: hidden on desktop, visible on tablets & phones only.
    Explicit min-width guard guarantees it can never appear on large screens. */
 .mobile-sidebar-toggle{display:none}
@@ -623,11 +636,9 @@ select.wd-input{appearance:auto;cursor:pointer}
 [dir="rtl"] .wd-table thead th,[dir="rtl"] .wd-table tbody td{text-align:start}
 
 /* Refined RTL top bar: account cluster stays on the physical left. */
-.zoho-top-actions{position:relative;min-height:32px}
 .zoho-avatar{box-shadow:0 0 0 1px rgba(8,125,103,.08);transition:transform .15s ease,box-shadow .15s ease}
 .zoho-avatar:hover{transform:translateY(-1px);box-shadow:0 3px 10px rgba(20,30,40,.12)}
 [dir="rtl"] .zoho-topbar-inner{direction:rtl}
-[dir="rtl"] .zoho-top-actions{order:0;margin-inline-start:0;margin-inline-end:auto;justify-content:flex-start;flex-direction:row}
 [dir="rtl"] .zoho-avatar-rtl{order:-1}
 /* Soft identity-consistent hover for every top-bar control (light+dark). */
 .zoho-top-actions .wd-btn,
@@ -1005,18 +1016,21 @@ html[data-theme="dark"] .wd-details-row dt{color:var(--wd-sidebar-muted)}
 .zoho-member-title{margin:0;font-size:13.5px;font-weight:700;color:#24292f;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .zoho-member-subtitle{font-size:10.5px;color:#7b838e}
 .zoho-member-count{display:inline-flex;align-items:center;justify-content:center;min-width:26px;height:26px;padding:0 8px;border-radius:13px;background:#eef7f4;color:#087d67;font-size:11.5px;font-weight:700}
-.zoho-member-list{list-style:none;margin:0 0 4px;padding:0;display:flex;flex-direction:column;gap:4px;max-height:260px;overflow:auto}
+.zoho-member-list{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:4px;max-height:260px;overflow:auto}
+.zoho-member-row{display:flex;align-items:center;gap:10px;padding:6px 10px;border:1px solid transparent;border-radius:9px;transition:background .15s ease,border-color .15s ease}
+.zoho-member-row:hover{background:var(--wd-hover);border-color:var(--wd-line)}
 .zoho-member-avatar-wrap{position:relative;display:inline-flex;flex:0 0 auto}
-.zoho-member-avatar{display:grid;place-items:center;width:34px;height:34px;border-radius:50%;background:#e9f5f2;color:#087d67;font-size:11.5px;font-weight:800;overflow:hidden}
+.zoho-member-avatar{display:grid;place-items:center;width:32px;height:32px;border-radius:50%;background:#e9f5f2;color:#087d67;font-size:11px;font-weight:800;overflow:hidden}
 .zoho-member-avatar.sm{width:26px;height:26px;font-size:9.5px}
-.zoho-member-avatar img{width:100%;height:100%;object-fit:cover}
-.zoho-member-status{position:absolute;inset-block-end:0;inset-inline-end:0;width:10px;height:10px;border-radius:50%;border:2px solid #fff;background:#9aa2ad}
+.zoho-member-status{position:absolute;inset-block-end:0;inset-inline-end:0;width:9px;height:9px;border-radius:50%;border:2px solid #fff;background:#9aa2ad}
 .zoho-member-status.active{background:#22c55e}
 .zoho-member-status.suspended{background:#f59e0b}
 .zoho-member-status.invited{background:#3b82f6}
 .zoho-member-info{display:flex;flex-direction:column;flex:1;min-width:0}
-.zoho-member-info strong{font-size:12.5px;font-weight:600;color:#24292f;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.zoho-member-info small{font-size:10.5px;color:#8a929d;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.zoho-member-info strong{font-size:12px;font-weight:600;color:#24292f;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.zoho-member-info small{font-size:10px;color:#8a929d;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.zoho-role-badge{flex-shrink:0}
+.zoho-member-remove{flex-shrink:0}
 .zoho-role-select{height:32px;border:1px solid var(--wd-line);border-radius:7px;background:#fff;color:#252a31;font-size:11.5px;padding:0 8px;cursor:pointer}
 .zoho-role-select.sm{height:26px;font-size:10.5px}
 .zoho-role-select:focus-visible{outline:2px solid color-mix(in srgb,var(--wd-green) 45%,transparent);outline-offset:1px}
@@ -1040,8 +1054,7 @@ html[data-theme="dark"] .zoho-member-select{background:var(--wd-canvas);border-c
 html[data-theme="dark"] .zoho-member-select:hover{background:var(--wd-hover)}
 html[data-theme="dark"] .zoho-member-dropdown{background:var(--wd-bg);border-color:var(--wd-line);box-shadow:0 16px 40px rgba(0,0,0,.5)}
 html[data-theme="dark"] .zoho-member-remove:hover{background:#3b1d23;color:#f87171}
-.zoho-member-row{border:1px solid transparent;border-radius:9px;padding:8px 10px;transition:background .15s ease,border-color .15s ease}
-.zoho-member-row:hover{background:var(--wd-hover);border-color:var(--wd-line)}
+.zoho-member-avatar img{width:100%;height:100%;object-fit:cover}
 .zoho-role-badge{display:inline-flex;align-items:center;gap:5px;height:22px;padding:0 10px;border-radius:11px;font-size:10.5px;font-weight:700;letter-spacing:.02em;border:1px solid transparent;white-space:nowrap}
 .zoho-role-badge.admin{background:#edf4fd;color:#2160ac;border-color:#d4e4f7}
 .zoho-role-badge.organizer{background:#e8f6f2;color:#087d67;border-color:#cdeee5}

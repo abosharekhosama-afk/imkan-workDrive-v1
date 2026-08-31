@@ -92,10 +92,10 @@ export function WorkdriveContent({ children }: { children: ReactNode }) {
     <div className={`zoho-app-shell${drawerOpen ? " sidebar-open" : ""}`}>
       <header className="zoho-topbar">
         <div className="zoho-topbar-inner flex items-center justify-between w-full px-0">
-          <div className="zoho-topbar-start flex items-center gap-2 me-auto min-w-0">
+          <div className="zoho-topbar-start flex items-center gap-2 me-auto min-w-0 flex-1">
             <button
               type="button"
-              className="zoho-icon-btn zoho-drawer-toggle mobile-sidebar-toggle"
+              className="zoho-icon-btn zoho-drawer-toggle mobile-sidebar-toggle shrink-0"
               onClick={() => setDrawerOpen((value) => !value)}
               aria-expanded={drawerOpen}
               aria-controls="wd-sidebar"
@@ -108,9 +108,9 @@ export function WorkdriveContent({ children }: { children: ReactNode }) {
                 <line x1="3" y1="18" x2="21" y2="18" />
               </svg>
             </button>
-            <GlobalSearch />
+            <div className="flex-1 min-w-0"><GlobalSearch /></div>
           </div>
-          <div className="zoho-top-actions ms-auto">
+          <div className="zoho-top-actions ms-auto shrink-0 items-center gap-2">
             <button type="button" className="wd-btn wd-btn-ghost zoho-quick-new" onClick={triggerNewFolder} title={label("quick.new")}>＋ {label("quick.new")}</button>
             <button type="button" className="wd-btn wd-btn-primary zoho-quick-upload" onClick={triggerUpload} title={label("quick.upload")}>⬆ {label("quick.upload")}</button>
             <StorageIndicator />
