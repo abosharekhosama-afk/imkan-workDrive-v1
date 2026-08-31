@@ -438,6 +438,13 @@ body{background:var(--wd-canvas)!important;color:var(--wd-text)!important;font-f
 .zoho-topbar-inner{display:flex;align-items:center;justify-content:space-between;width:100%;gap:10px;padding-inline:0}
 .zoho-topbar-start{padding-inline-start:0}
 .zoho-top-actions{padding-inline-end:0}
+/* Sidebar drawer toggle: hidden on desktop, visible on tablets & phones only.
+   Explicit min-width guard guarantees it can never appear on large screens. */
+.mobile-sidebar-toggle{display:none}
+@media (min-width:1024px){.mobile-sidebar-toggle{display:none!important}}
+@media (max-width:1023.98px){.mobile-sidebar-toggle{display:grid}}
+.mobile-sidebar-toggle:hover{background:color-mix(in srgb,var(--wd-green) 12%,transparent);color:#0b6b58}
+html[data-theme="dark"] .mobile-sidebar-toggle:hover{background:var(--wd-hover);color:#dbeafe}
 .zoho-logo{display:flex;align-items:center;gap:8px;color:#252a31;text-decoration:none;font-weight:700;font-size:14px;min-width:118px}
 .zoho-logo-mark{width:27px;height:27px;border-radius:6px;background:var(--wd-green);color:#fff;display:grid;place-items:center;font-size:14px;font-weight:800}
 .zoho-top-actions{display:flex;align-items:center;gap:8px;margin-inline-start:auto;position:relative}
@@ -715,14 +722,7 @@ button.wd-name-link{background:none;border:0;padding:0;font:inherit;color:inheri
 .zoho-member-invite-title{font-size:12px;font-weight:700;margin-bottom:10px;color:var(--imkan-color-fg)}
 
 /* ── Top bar layout ───────────────────────────────────────────────────── */
-.zoho-topbar-inner{gap:10px;padding-inline-start:14px}
-/* Sidebar drawer toggle: hidden on desktop, visible on tablets & phones only. */
-.zoho-drawer-toggle{display:none}
-@media (max-width:1024px){
-  .zoho-drawer-toggle{display:grid}
-  .zoho-drawer-toggle:hover{background:color-mix(in srgb,var(--wd-green) 12%,transparent);color:#0b6b58}
-  html[data-theme="dark"] .zoho-drawer-toggle:hover{background:var(--wd-hover);color:#dbeafe}
-}
+.zoho-topbar-inner{gap:10px;padding-inline-start:0}
 .zoho-account{position:relative;display:inline-flex}
 .zoho-account .zoho-avatar{cursor:pointer;font-size:11px;font-weight:700;background:#e9f5f2;color:#087d67;border:0}
 

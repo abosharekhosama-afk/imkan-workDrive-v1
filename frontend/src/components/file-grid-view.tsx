@@ -4,7 +4,7 @@ import { useLocale } from "./locale-provider";
 import { FileIcon } from "./file-icon";
 import { OwnerCell } from "./owner-cell";
 import { ActionDropdown } from "./action-dropdown";
-import { formatBytes } from "../lib/api/quota";
+import { formatBytes, resolveItemSize } from "../lib/api/quota";
 import { formatDateLocalized, latestOf } from "../lib/localized";
 import type { FileRecord, FolderRecord } from "../lib/api/types";
 
@@ -93,7 +93,7 @@ export function FileGridView({
           </button>
           <div className="zoho-grid-meta">
             <OwnerCell name={file.ownerName} email={file.ownerEmail} avatarUrl={file.ownerAvatar} compact />
-            <span className="zoho-grid-size">{formatBytes(file.size ?? 0)}</span>
+            <span className="zoho-grid-size">{formatBytes(resolveItemSize(file) ?? 0)}</span>
             <span className="zoho-grid-date">{formatDate(file.updatedAt)}</span>
           </div>
           <div className="zoho-grid-actions">

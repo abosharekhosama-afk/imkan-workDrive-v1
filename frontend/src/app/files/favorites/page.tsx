@@ -16,7 +16,7 @@ import { Toast } from "../../../components/toast";
 import { renameFile, trashFile, requestDownload, moveFile } from "../../../lib/api/files";
 import { triggerDownload } from "../../../lib/api/download";
 import { renameFolder, deleteFolder, moveFolder } from "../../../lib/api/folders";
-import { formatBytes } from "../../../lib/api/quota";
+import { formatBytes, resolveItemSize } from "../../../lib/api/quota";
 import { WORKDRIVE_PREVIEW_EVENT, type PreviewEventDetail } from "../../../components/global-search";
 
 type Target = { type: "FILE" | "FOLDER"; id: string; name: string };
@@ -156,7 +156,7 @@ export default function FavoritesPage() {
                       {item.resourceType === "FOLDER" ? label("files.type.folder") : label("files.type.file")}
                     </span>
                   </td>
-                  <td className="num imkan-muted">{formatBytes(item.size)}</td>
+                  <td className="num imkan-muted">{item.resourceType === "FOLDER" ? "—" : formatBytes(resolveItemSize(item) ?? 0)}</td>
                   <td className="num">
                     <FileActionsMenu
                       context={{

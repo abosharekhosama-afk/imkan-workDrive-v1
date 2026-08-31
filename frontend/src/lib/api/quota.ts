@@ -38,6 +38,21 @@ function toNumber(value: number | string | null | undefined): number | null {
   return Number.isFinite(parsed) ? parsed : null;
 }
 
+/**
+ * Reads every size field name the API may ship for a row (`size`, `byteSize`,
+ * `bytes`) and returns a safe non-negative byte count, or null when unknown.
+ * File rows fall back to `0 B` at the call site; folder rows render `—`.
+ */
+export function resolveItemSize(
+  item: { size?: number | null; byteSize?: number | null; bytes?: number | null } | null | undefined,
+): number | null {
+  if (!item) return null;
+  const value = item.size ?? item.byteSize ?? item.bytes ?? null;
+  if (value === null || value === undefined) return null;
+  const parsed = typeof value === "string" ? Number(value) : value;
+  return Number.isFinite(parsed) && parsed >= 0 ? parsed : null;
+}
+
 function normalizeBucket(raw: RawQuotaRecord | undefined): QuotaBucketUsage {
   return {
     usedBytes: toNumber(raw?.usedBytes) ?? 0,

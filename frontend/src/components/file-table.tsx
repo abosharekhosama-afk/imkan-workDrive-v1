@@ -7,7 +7,7 @@ import { FileIcon } from "./file-icon";
 import { FileActionsMenu } from "./file-actions-menu";
 import { EmptyState } from "./empty-state";
 import type { FileRecord, FolderRecord } from "../lib/api/types";
-import { formatBytes } from "../lib/api/quota";
+import { formatBytes, resolveItemSize } from "../lib/api/quota";
 import { formatDateLocalized, latestOf } from "../lib/localized";
 
 function compareText(a: string, b: string, direction: "asc" | "desc") {
@@ -117,12 +117,7 @@ export function FileTable({
   const sortedFolders = useMemo(() => [...folders].sort((a, b) => sort.key === "modified" ? compareDates(folderSizes ? folderDate(a.id) : a.updatedAt, folderSizes ? folderDate(b.id) : b.updatedAt, sort.direction) : sort.key === "size" ? compareNumbers(folderSizes?.get(a.id), folderSizes?.get(b.id), sort.direction) : compareText(a.name, b.name, sort.direction)), [folders, sort, folderSizes, folderUpdatedAt]);
   const sortedFiles = useMemo(() => [...files].sort((a, b) => sort.key === "size" ? compareNumbers(a.size, b.size, sort.direction) : sort.key === "modified" ? compareDates(a.updatedAt, b.updatedAt, sort.direction) : compareText(a.name, b.name, sort.direction)), [files, sort]);
   const formatDate = (value?: string | null) => formatDateLocalized(value, locale);
-  const formatSize = (value?: number | null, items?: number | null) =>
-    value != null && value > 0
-      ? formatBytes(value)
-      : items != null
-        ? label("files.itemsCount").replace("{count}", String(items))
-        : "0 B";
+  const formatSize = (value?: number | null) => formatBytes(value ?? 0);
 
   if (folders.length === 0 && files.length === 0) {
     return <EmptyState title={emptyTitle?? label("files.empty")} description={emptyDescription} />;
@@ -171,7 +166,7 @@ export function FileTable({
                 <OwnerCell ownerName={folder.ownerName} ownerEmail={folder.ownerEmail} ownerAvatar={folder.ownerAvatar} />
               </td>
               <td className="imkan-muted px-3 py-2 text-[length:var(--imkan-font-size-secondary)]">{formatDate(folderDate(folder.id))}</td>
-              <td className="imkan-muted px-3 py-2 text-[length:var(--imkan-font-size-secondary)]">{formatSize(folderSizes?.get(folder.id), folder.itemCount ?? null)}</td>
+              <td className="imkan-muted px-3 py-2 text-[length:var(--imkan-font-size-secondary)]">{folderSizes?.get(folder.id) != null && (folderSizes.get(folder.id) ?? 0) > 0 ? formatBytes(folderSizes.get(folder.id)) : "—"}</td>
               <td className="px-3 py-2 text-end">
                 <FileActionsMenu
                   context={{
@@ -214,7 +209,7 @@ export function FileTable({
                 <OwnerCell ownerName={file.ownerName} ownerEmail={file.ownerEmail} ownerAvatar={file.ownerAvatar} />
               </td>
               <td className="imkan-muted px-3 py-2 text-[length:var(--imkan-font-size-secondary)]">{formatDate(file.updatedAt)}</td>
-              <td className="imkan-muted px-3 py-2 text-[length:var(--imkan-font-size-secondary)]">{formatSize(file.size)}</td>
+              <td className="imkan-muted px-3 py-2 text-[length:var(--imkan-font-size-secondary)]">{formatSize(resolveItemSize(file))}</td>
               <td className="px-3 py-2 text-end">
                 <FileActionsMenu
                   context={{

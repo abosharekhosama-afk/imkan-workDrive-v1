@@ -8,17 +8,11 @@ import { listTrash, restoreFile } from "../../../lib/api/trash";
 import type { FileRecord } from "../../../lib/api/types";
 import { fileIconKind, FileTypeIcon } from "../../../components/file-icon";
 import { errorMessageForStatus } from "../../../components/feedback-state-logic";
+import { formatBytes, resolveItemSize } from "../../../lib/api/quota";
 
 function formatDate(value?: string | null): string {
   if (!value) return "—";
   return new Intl.DateTimeFormat(undefined, { dateStyle: "medium", timeStyle: "short" }).format(new Date(value));
-}
-
-function formatSize(value?: number | null): string {
-  if (value == null) return "—";
-  const kb = value / 1024;
-  if (kb < 1024) return `${Math.max(1, Math.round(kb))} KB`;
-  return `${(kb / 1024).toFixed(1)} MB`;
 }
 
 export default function TrashPage() {
@@ -104,7 +98,7 @@ export default function TrashPage() {
             {files.length > 0 ? <span className="wd-count-pill ms-2 align-middle">{files.length}</span> : null}
           </h1>
           <p>
-            {files.length > 0 ? `${formatSize(totalSize)}` : ""}
+            {files.length > 0 ? `${formatBytes(totalSize)}` : ""}
           </p>
         </div>
         <div className="wd-page-head-actions">
@@ -170,7 +164,7 @@ export default function TrashPage() {
                   </td>
                   <td className="imkan-muted">{file.folderName ?? label("files.breadcrumb.root")}</td>
                   <td className="imkan-muted">{formatDate(file.deletedAt)}</td>
-                  <td className="num imkan-muted">{formatSize(file.size)}</td>
+                  <td className="num imkan-muted">{formatBytes(resolveItemSize(file) ?? 0)}</td>
                   <td className="num">
                     <div style={{ display: "inline-flex", gap: 6 }}>
                       <button

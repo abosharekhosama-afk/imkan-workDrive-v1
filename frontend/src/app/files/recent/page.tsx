@@ -5,19 +5,13 @@ import { useCallback, useEffect, useState } from "react";
 import { useLocale } from "../../../components/locale-provider";
 import { listRecent, type RecentRecord } from "../../../lib/api/recent";
 import { fileIconKind, FileTypeIcon } from "../../../components/file-icon";
+import { formatBytes, resolveItemSize } from "../../../lib/api/quota";
 
 function formatDateTime(value: string): string {
   return new Intl.DateTimeFormat(undefined, {
     dateStyle: "medium",
     timeStyle: "short",
   }).format(new Date(value));
-}
-
-function formatSize(size: number | null | undefined): string {
-  if (size == null) return "—";
-  const kb = Number(size) / 1024;
-  if (kb < 1024) return `${Math.max(1, Math.round(kb))} KB`;
-  return `${(kb / 1024).toFixed(1)} MB`;
 }
 
 export default function RecentPage() {
@@ -137,7 +131,7 @@ export default function RecentPage() {
                       </div>
                     </td>
                     <td className="num imkan-muted">
-                      {isFolder ? "—" : formatSize(item.size)}
+                      {isFolder ? "—" : formatBytes(resolveItemSize(item) ?? 0)}
                     </td>
                     <td className="imkan-muted">
                       {item.location ?? label("files.breadcrumb.root")}

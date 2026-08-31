@@ -91,11 +91,11 @@ export function WorkdriveContent({ children }: { children: ReactNode }) {
   return (
     <div className={`zoho-app-shell${drawerOpen ? " sidebar-open" : ""}`}>
       <header className="zoho-topbar">
-        <div className="zoho-topbar-inner flex items-center justify-between">
+        <div className="zoho-topbar-inner flex items-center justify-between w-full px-0">
           <div className="zoho-topbar-start flex items-center gap-2 me-auto min-w-0">
             <button
               type="button"
-              className="zoho-icon-btn zoho-drawer-toggle"
+              className="zoho-icon-btn zoho-drawer-toggle mobile-sidebar-toggle"
               onClick={() => setDrawerOpen((value) => !value)}
               aria-expanded={drawerOpen}
               aria-controls="wd-sidebar"

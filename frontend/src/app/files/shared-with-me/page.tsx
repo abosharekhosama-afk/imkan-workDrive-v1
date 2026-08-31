@@ -16,7 +16,7 @@ import { Toast } from "../../../components/toast";
 import { renameFile, trashFile, requestDownload, moveFile } from "../../../lib/api/files";
 import { triggerDownload } from "../../../lib/api/download";
 import { renameFolder, deleteFolder, moveFolder } from "../../../lib/api/folders";
-import { formatBytes } from "../../../lib/api/quota";
+import { formatBytes, resolveItemSize } from "../../../lib/api/quota";
 import { WORKDRIVE_PREVIEW_EVENT, type PreviewEventDetail } from "../../../components/global-search";
 
 type Target = { type: "FILE" | "FOLDER"; id: string; name: string };
@@ -173,7 +173,7 @@ export default function SharedWithMePage() {
                   <td>
                     <span className={permissionBadge(r.permission)}>{r.permission ?? "VIEW"}</span>
                   </td>
-                  <td className="num imkan-muted">{formatBytes(r.size)}</td>
+                  <td className="num imkan-muted">{r.resourceType === "FOLDER" ? "—" : formatBytes(resolveItemSize(r) ?? 0)}</td>
                   <td className="imkan-muted">
                     {r.expiresAt ? new Date(r.expiresAt).toLocaleDateString() : "—"}
                   </td>
