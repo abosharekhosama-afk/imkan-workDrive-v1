@@ -955,7 +955,9 @@ export class FilesService {
       if (externalRefs > 0) {
         continue;
       }
-      const object = await this.prisma.storageObject.findUnique({ where: { id: objectId } });
+      const object = await this.prisma.storageObject.findFirst({
+        where: { id: objectId, orgId: user.org_id },
+      });
       if (!object) continue;
       await this.storage.deleteStoredObject(object.storageKey);
     }
