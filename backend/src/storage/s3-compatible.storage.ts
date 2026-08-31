@@ -16,6 +16,7 @@ import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { Inject } from '@nestjs/common';
 import { getTenantStore } from '../auth/tenant-context';
 import { buildTenantObjectKey, parseTenantObjectKey } from './object-key';
+import { contentDispositionInline } from '../common/content-disposition';
 import {
   S3_CLIENT,
   S3_PRESIGNER,
@@ -76,6 +77,19 @@ export class S3CompatibleStorageAdapter implements StorageService {
     const command = new GetObjectCommand({
       Bucket: this.bucket(),
       Key: objectKey,
+      // Inline previews must serve the stored content type and an inline
+      // disposition, otherwise R2/S3 replays the upload-time headers and
+      // browsers download the asset instead of rendering it (403/CORS class
+      // of preview failures). These response overrides are part of the
+      // signature, so they cannot be tampered with.
+      ...(request.disposition === 'inline'
+        ? {
+            ResponseContentType: request.contentType,
+            ResponseContentDisposition: contentDispositionInline(
+              request.fileName ?? 'preview',
+            ),
+          }
+        : {}),
     });
     const url = await this.presign(this.client, command, {
       expiresIn: expiresInSeconds,

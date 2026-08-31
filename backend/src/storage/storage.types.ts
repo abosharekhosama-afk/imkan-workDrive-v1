@@ -15,6 +15,13 @@ export type StorageObjectRequest = {
   /** Server-side resource owner. Never taken from client orgId. */
   ownerOrgId: string;
   contentType?: string;
+  /**
+   * Download links default to `attachment`. Pass `inline` for preview URLs so
+   * browsers render the bytes in-place instead of forcing a download.
+   */
+  disposition?: 'inline' | 'attachment';
+  /** Original file name used to build a RFC 6266 compliant disposition. */
+  fileName?: string;
 };
 
 export interface StorageService {

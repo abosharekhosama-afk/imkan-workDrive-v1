@@ -56,6 +56,27 @@ export type VersionDownloadResponse = {
   version_number: number;
 };
 
+/** Response contract for `GET /files/:id/preview-url` (PVW-04). */
+export type FilePreviewUrlResponse = {
+  /** Directly renderable presigned URL (inline disposition). */
+  preview_url: string;
+  expires_in_seconds: number;
+  file_id: string;
+  file_name: string;
+  mime_type: string;
+  size: number;
+  version_number: number;
+  updated_at: string | null;
+};
+
+export type FileActivityEntry = {
+  id: string;
+  action: string;
+  user_id: string | null;
+  created_at: string;
+  metadata: Record<string, unknown> | null;
+};
+
 export type RestoreVersionResponse = {
   fileId: string;
   newVersionNumber: number;
@@ -350,6 +371,105 @@ export class FilesService {
       file_id: file.id,
       version_number: version.versionNumber,
     };
+  }
+
+  /**
+   * Fast inline preview URL (PVW-04): same ACL/malware gating as downloads
+   * but deliberately free of the heavy audit side effects (no lastAccessedAt
+   * write, no FILE_DOWNLOAD audit row) so preview refreshes stay cheap. The
+   * signed URL carries an inline content disposition and the stored content
+   * type so browsers render the asset instead of downloading it — this is the
+   * fix for the 403/CORS/attachment-download class of preview failures.
+   */
+  async createPreviewUrl(
+    user: AccessTokenPayload,
+    fileId: string,
+  ): Promise<FilePreviewUrlResponse> {
+    const file = await this.prisma.file.findFirst({
+      where: { id: fileId, deletedAt: null },
+      include: {
+        versions: {
+          where: { status: VersionStatus.ACTIVE },
+          orderBy: { versionNumber: 'desc' },
+          take: 1,
+        },
+        folder: { select: { teamFolderId: true } },
+      },
+    });
+    if (!file || file.orgId !== user.org_id || file.versions.length === 0) {
+      throw new NotFoundException('File not found');
+    }
+    if (!(await this.canReadFile(user, file))) {
+      throw new NotFoundException('File not found');
+    }
+    const scan = await this.prisma
+      .$queryRawUnsafe<any[]>(
+        `SELECT status FROM malware_scans WHERE org_id=? AND file_id=? ORDER BY created_at DESC LIMIT 1`,
+        user.org_id,
+        file.id,
+      )
+      .catch(() => []);
+    if (scan[0]?.status === 'INFECTED') {
+      throw new NotFoundException('File is unavailable');
+    }
+
+    const version = file.versions[0];
+    const signed = await this.storage.createDownloadUrl({
+      fileId: file.id,
+      versionId: version.id,
+      ownerOrgId: user.org_id,
+      contentType: version.mimeType,
+      disposition: 'inline',
+      fileName: file.name,
+    });
+
+    return {
+      preview_url: signed.url,
+      expires_in_seconds: signed.expiresInSeconds,
+      file_id: file.id,
+      file_name: file.name,
+      mime_type: version.mimeType,
+      size: Number(version.size ?? file.size ?? 0),
+      version_number: version.versionNumber,
+      updated_at: version.createdAt?.toISOString() ?? null,
+    };
+  }
+
+  /** Recent activity log entries for the preview sidebar drawer. */
+  async listActivities(
+    user: AccessTokenPayload,
+    fileId: string,
+    limit = 20,
+  ): Promise<FileActivityEntry[]> {
+    const file = await this.prisma.file.findFirst({
+      where: { id: fileId, deletedAt: null },
+      select: { id: true, orgId: true, ownerId: true, folder: { select: { teamFolderId: true } } },
+    });
+    if (!file || file.orgId !== user.org_id) {
+      throw new NotFoundException('File not found');
+    }
+    if (!(await this.canReadFile(user, file))) {
+      throw new NotFoundException('File not found');
+    }
+    const rows = await this.prisma.fileActivity.findMany({
+      where: { orgId: user.org_id, fileId },
+      orderBy: { createdAt: 'desc' },
+      take: Math.min(Math.max(limit, 1), 100),
+      select: {
+        id: true,
+        action: true,
+        userId: true,
+        createdAt: true,
+        metadata: true,
+      },
+    });
+    return rows.map((row) => ({
+      id: row.id,
+      action: row.action,
+      user_id: row.userId,
+      created_at: row.createdAt.toISOString(),
+      metadata: (row.metadata as Record<string, unknown> | null) ?? null,
+    }));
   }
 
   async restoreVersion(

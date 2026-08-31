@@ -19,10 +19,8 @@ import { DeleteModal } from "./delete-modal";
 import { RenameModal } from "./rename-modal";
 import { MoveModal } from "./move-modal";
 import { FileDetailsModal, type FileDetailsData } from "./file-details-modal";
-import { PreviewModal } from "./preview-modal";
+import { FilePreviewModal } from "./file-preview-modal";
 import { VersionHistoryPanel } from "./version-history-panel";
-import { FilePreview } from "./file-preview/file-preview";
-import { getPreviewUrl, getPreviewMimeCategory } from "../lib/api/preview";
 import { resolveMimeType } from "../lib/api/mime";
 import { mapFileRecords, mapFolderRecords } from "../lib/api/table-mappers";
 
@@ -217,12 +215,9 @@ export function FileBrowser({
     });
   }
 
-  const getPreviewableFiles = useCallback((): FileRecord[] => {
-    return files.filter((f) => {
-      const category = getPreviewMimeCategory(resolveMimeType(f.mimeType ?? "", f.name));
-      return category !== "unsupported";
-    });
-  }, [files]);
+  // Universal preview navigation: every file can be walked through with the
+  // arrow keys; unsupported types get an elegant download card in the viewer.
+  const getPreviewableFiles = useCallback((): FileRecord[] => files, [files]);
 
   const findFileIndex = useCallback((fileId: string) => {
     const previewableFiles = getPreviewableFiles();
@@ -496,37 +491,18 @@ export function FileBrowser({
           }}
         />
       ) : null}
-      {previewTarget? (
-        <PreviewModal
-          isOpen={!!previewTarget}
+      {previewTarget ? (
+        <FilePreviewModal
+          target={previewTarget.type === "FILE" ? {
+            id: previewTarget.id,
+            name: previewTarget.name,
+            mimeType: previewTarget.mimeType,
+            size: previewTarget.size,
+          } : null}
           onClose={() => setPreviewTarget(null)}
-          title={label("preview.title")}
-          fileName={previewTarget.name}
-          mimeType={previewTarget.mimeType}
-          size={previewTarget.size}
-          onDownload={async () => {
-            const result = await requestDownload(previewTarget.id);
-            window.location.assign(result.download_url);
-          }}
-          onOpenInNewTab={() => window.open(`/files/${previewTarget.id}/download`, "_blank")}
-          canDownload={true}
           onPrevFile={handlePrevFile}
           onNextFile={handleNextFile}
-        >
-          <FilePreview
-            fileId={previewTarget.id}
-            fileName={previewTarget.name}
-            mimeType={resolveMimeType(previewTarget.mimeType, previewTarget.name)}
-            size={previewTarget.size ?? 0}
-            previewUrl={`/files/${previewTarget.id}/stream`}
-            onDownload={async () => {
-              const result = await requestDownload(previewTarget.id);
-              window.location.assign(result.download_url);
-            }}
-            onOpenInNewTab={() => window.open(`/files/${previewTarget.id}/download`, "_blank")}
-            canDownload={true}
-          />
-        </PreviewModal>
+        />
       ) : null}
       {versionHistoryTarget? (
         <VersionHistoryPanel
@@ -540,7 +516,9 @@ export function FileBrowser({
           canWrite={canMutate}
           role={role}
           onPreviewVersion={async (versionNumber) => {
-            const previewUrl = await getPreviewUrl(versionHistoryTarget.id);
+            // The preview modal resolves the active version URL itself via
+            // GET /files/:id/preview-url; we only need to open it.
+            void versionNumber;
             setPreviewTarget({
               type: "FILE",
               id: versionHistoryTarget.id,

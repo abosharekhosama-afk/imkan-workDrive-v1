@@ -68,6 +68,8 @@ export class LocalDiskStorageAdapter implements StorageService {
       objectKey,
       exp: Math.floor(Date.now() / 1000) + expiresInSeconds,
       contentType: request.contentType,
+      disposition: request.disposition,
+      fileName: request.fileName,
     });
     return {
       url: `${this.publicBaseUrl()}/storage/objects?token=${encodeURIComponent(token)}`,
@@ -118,7 +120,12 @@ export class LocalDiskStorageAdapter implements StorageService {
 
   async getObjectFromToken(
     token: string,
-  ): Promise<{ bytes: Buffer; contentType: string }> {
+  ): Promise<{
+    bytes: Buffer;
+    contentType: string;
+    disposition: 'inline' | 'attachment';
+    fileName?: string;
+  }> {
     const payload = verifyObjectAccess(this.signingSecret(), token, 'GET');
     const path = this.resolveObjectPath(payload.objectKey);
     try {
@@ -126,6 +133,8 @@ export class LocalDiskStorageAdapter implements StorageService {
       return {
         bytes,
         contentType: payload.contentType ?? 'application/octet-stream',
+        disposition: payload.disposition ?? 'attachment',
+        fileName: payload.fileName,
       };
     } catch {
       // A valid token whose bytes are gone from the disk is a client-visible
@@ -136,6 +145,15 @@ export class LocalDiskStorageAdapter implements StorageService {
 
   verifyToken(token: string, method: ObjectAccessMethod) {
     return verifyObjectAccess(this.signingSecret(), token, method);
+  }
+
+  /**
+   * Resolves the physical path for an already-verified token. Only used by the
+   * storage controller to stream Range windows off the local disk.
+   */
+  resolvePathForToken(token: string): string {
+    const payload = verifyObjectAccess(this.signingSecret(), token, 'GET');
+    return this.resolveObjectPath(payload.objectKey);
   }
 
   resolveObjectPath(objectKey: string): string {

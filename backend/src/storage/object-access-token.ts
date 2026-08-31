@@ -9,6 +9,8 @@ export type ObjectAccessPayload = {
   objectKey: string;
   exp: number;
   contentType?: string;
+  disposition?: 'inline' | 'attachment';
+  fileName?: string;
 };
 
 type TokenBody = {
@@ -16,6 +18,8 @@ type TokenBody = {
   k: string;
   exp: number;
   ct?: string;
+  d?: 'inline' | 'attachment';
+  fn?: string;
 };
 
 export function signObjectAccess(
@@ -30,6 +34,12 @@ export function signObjectAccess(
   };
   if (payload.contentType) {
     body.ct = payload.contentType;
+  }
+  if (payload.disposition) {
+    body.d = payload.disposition;
+  }
+  if (payload.fileName) {
+    body.fn = payload.fileName;
   }
   const encoded = Buffer.from(JSON.stringify(body), 'utf8').toString(
     'base64url',
@@ -83,5 +93,7 @@ export function verifyObjectAccess(
     objectKey: body.k,
     exp: body.exp,
     contentType: body.ct,
+    disposition: body.d,
+    fileName: body.fn,
   };
 }

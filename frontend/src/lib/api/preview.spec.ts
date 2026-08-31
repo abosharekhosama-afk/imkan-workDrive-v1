@@ -35,9 +35,15 @@ test("getPreviewMimeCategory returns correct category for text/code", () => {
 
 test("getPreviewMimeCategory returns unsupported for unknown types", () => {
   assert.equal(getPreviewMimeCategory("application/octet-stream"), "unsupported");
-  assert.equal(getPreviewMimeCategory("application/zip"), "unsupported");
   assert.equal(getPreviewMimeCategory(""), "unsupported");
   assert.equal(getPreviewMimeCategory("unknown/type"), "unsupported");
+});
+
+test("getPreviewMimeCategory routes office and archive formats", () => {
+  assert.equal(getPreviewMimeCategory("", "report.docx"), "office");
+  assert.equal(getPreviewMimeCategory("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"), "office");
+  assert.equal(getPreviewMimeCategory("application/zip"), "archive");
+  assert.equal(getPreviewMimeCategory("application/x-7z-compressed", "backup.7z"), "archive");
 });
 
 test("getLanguageFromMime detects language from extension", () => {

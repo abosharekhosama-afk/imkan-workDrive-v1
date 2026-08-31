@@ -9,6 +9,7 @@ import {
   ParseUUIDPipe,
   Patch,
   Post,
+  Query,
   Res,
 } from '@nestjs/common';
 import type { Response } from 'express';
@@ -56,12 +57,22 @@ export class FilesController {
     @CurrentUser() user: AccessTokenPayload,
     @Param('id', new ParseUUIDPipe({ version: '4' })) id: string,
   ) {
-    const result = await this.files.createDownloadUrl(user, id);
+    const result = await this.files.createPreviewUrl(user, id);
     void this.recent
       .record(user, ResourceType.FILE, id, AccessAction.PREVIEW)
       .catch(() => undefined);
 
     return result;
+  }
+
+  @Get(':id/activities')
+  listActivities(
+    @CurrentUser() user: AccessTokenPayload,
+    @Param('id', new ParseUUIDPipe({ version: '4' })) id: string,
+    @Query('limit') limit?: string,
+  ) {
+    const parsed = limit ? Number(limit) : undefined;
+    return this.files.listActivities(user, id, Number.isFinite(parsed) ? parsed : 20);
   }
 
   @Get(':id/stream')
