@@ -61,7 +61,7 @@ export class FilesController {
       .record(user, ResourceType.FILE, id, AccessAction.PREVIEW)
       .catch(() => undefined);
 
-    return { url: result.url };
+    return result;
   }
 
   @Get(':id/stream')
