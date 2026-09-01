@@ -377,7 +377,7 @@ model Folder {
 
   organization Organization       @relation(fields: [orgId], references: [id])
   teamFolder   TeamFolder?        @relation(fields: [teamFolderId], references: [id])
-  parent       Folder?            @relation("FolderTree", fields: [parentId], references: [id])
+  parent       Folder?            @relation("FolderTree", fields: [parentId], references: [id], onDelete: Cascade)
   children     Folder[]           @relation("FolderTree")
   owner        User               @relation("FolderOwner", fields: [ownerId], references: [id])
   personalFolderOf OrganizationMembership? @relation("PersonalFolderOwner")
@@ -414,7 +414,7 @@ model File {
   lastAccessedAt DateTime?      @map("last_accessed_at")
 
   organization   Organization    @relation(fields: [orgId], references: [id])
-  folder         Folder?         @relation(fields: [folderId], references: [id])
+  folder         Folder?         @relation(fields: [folderId], references: [id], onDelete: Cascade)
   owner          User            @relation("FileOwner", fields: [ownerId], references: [id])
   versions       FileVersion[]
   comments       Comment[]
@@ -456,9 +456,6 @@ model FileMetadata {
 }
 
 /// Physical object stored in object storage (S3/MinIO/local disk).
-/// Ownership is soft: several files/versions can reference one physical
-/// object (copy/restore), so the owning file link is nullable and set to
-/// NULL when the creating file is purged while other references remain.
 model StorageObject {
   id         String              @id @default(uuid()) @db.Char(36)
   orgId      String              @map("org_id") @db.Char(36)
@@ -497,7 +494,7 @@ model FileVersion {
   createdAt       DateTime      @default(now()) @map("created_at")
 
   organization  Organization  @relation(fields: [orgId], references: [id])
-  file          File          @relation(fields: [fileId], references: [id])
+  file          File          @relation(fields: [fileId], references: [id], onDelete: Cascade)
   uploadedBy    User          @relation("VersionUploader", fields: [uploadedById], references: [id])
   storageObject StorageObject @relation(fields: [storageObjectId], references: [id])
 
@@ -522,7 +519,7 @@ model TrashEntry {
 
   organization Organization @relation(fields: [orgId], references: [id])
   file         File?        @relation(fields: [fileId], references: [id], onDelete: Cascade)
-  folder       Folder?      @relation(fields: [folderId], references: [id])
+  folder       Folder?      @relation(fields: [folderId], references: [id], onDelete: Cascade)
   deletedBy    User         @relation("TrashEntryDeletedBy", fields: [deletedById], references: [id])
   restoredBy   User?        @relation("TrashEntryRestoredBy", fields: [restoredById], references: [id])
 

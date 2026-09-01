@@ -415,6 +415,12 @@ export function FileBrowser({
           onDownload={(fileId) => void onDownload(fileId)}
           onRename={(type, id, name) => setRenameTarget({ type, id, name })}
           onDelete={(type, id) => setDeleteTarget({ type, id })}
+          onMove={(type, id, name) => setMoveTarget({ type, id, name })}
+          onFavorite={handleFavorite}
+          onVersionHistory={onVersionHistory}
+          onViewDetails={handleViewDetails}
+          favoriteIds={favoriteIds}
+          canFavorite={true}
         />
       ) : (
         <FileTable
