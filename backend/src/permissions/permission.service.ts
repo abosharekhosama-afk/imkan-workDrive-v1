@@ -56,6 +56,36 @@ export class PermissionService {
     return this.resolveTeamFolderRole(user, resource) !== null;
   }
 
+
+
+
+  canWrite(user: AccessTokenPayload, resource: AccessibleResource): boolean {
+  if (!this.isSameTenant(user, resource)) {
+    return false;
+  }
+
+  // 1. الملفات الشخصية: المالك يملك صلاحية التعديل والحذف دائماً مهما كانت رتبته
+  if (!this.isTeamFolderResource(resource)) {
+    return user.sub === resource.ownerId;
+  }
+
+  // 2. ملفات الفرق: الأدمنز والسوبر أدمنز يملكون الصلاحية دائماً
+  if (this.isOrgSuperAdmin(user) || this.isOrgAdmin(user)) {
+    return true;
+  }
+
+  // 3. باقي الأعضاء في مجلدات الفرق حسب الأدوار المحددة
+  const role = this.resolveTeamFolderRole(user, resource);
+  return (
+    role === TeamFolderRole.ADMIN ||
+    role === TeamFolderRole.ORGANIZER ||
+    role === TeamFolderRole.EDITOR
+  );
+}
+
+
+  
+  /*
   canWrite(user: AccessTokenPayload, resource: AccessibleResource): boolean {
     if (!this.isSameTenant(user, resource)) {
       return false;
@@ -73,7 +103,7 @@ export class PermissionService {
       role === TeamFolderRole.ORGANIZER ||
       role === TeamFolderRole.EDITOR
     );
-  }
+  }*/
 
   canShare(user: AccessTokenPayload, resource: AccessibleResource): boolean {
     if (!this.isSameTenant(user, resource)) return false;
