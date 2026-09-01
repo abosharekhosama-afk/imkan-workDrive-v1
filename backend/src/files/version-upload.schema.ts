@@ -53,20 +53,29 @@ export function parseVersionUploadFile(file: unknown): VersionUploadFile {
   if (!Buffer.isBuffer(buffer) || buffer.length === 0) {
     throw new BadRequestException('Uploaded file is empty');
   }
-  if (typeof record.originalName !== 'string' || record.originalName.trim().length < 1 || record.originalName.trim().length > 191) {
+
+  // ✅ التعديل هنا: قراءة originalname من Express/Multer أو originalName
+  const rawOriginalName = (record.originalname ?? record.originalName) as unknown;
+  const rawMimeType = (record.mimetype ?? record.mimeType) as unknown;
+
+  if (typeof rawOriginalName !== 'string' || rawOriginalName.trim().length < 1 || rawOriginalName.trim().length > 191) {
     throw new BadRequestException('Invalid file name');
   }
-  const originalName = record.originalName.trim();
+  
+  const originalName = rawOriginalName.trim();
+  
   if (extractSafeExtension(originalName) === null) {
     throw new BadRequestException('Invalid file extension');
   }
-  if (typeof record.mimeType !== 'string' || !MIME_TYPE_RE.test(record.mimeType)) {
+  
+  if (typeof rawMimeType !== 'string' || !MIME_TYPE_RE.test(rawMimeType)) {
     throw new BadRequestException('Invalid mime_type');
   }
+  
   return {
     buffer,
     originalName,
-    mimeType: record.mimeType,
+    mimeType: rawMimeType,
     size: buffer.length,
   };
 }
