@@ -535,6 +535,9 @@ export function FileBrowser({
           onRestored={async () => {
             await load();
           }}
+          onUploaded={async () => {
+            await load();
+          }}
         />
       ) : null}
     {detailsTarget ? <FileDetailsModal data={detailsTarget} onClose={() => setDetailsTarget(null)} /> : null}

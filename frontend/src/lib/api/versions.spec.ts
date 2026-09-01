@@ -7,6 +7,7 @@ import {
   getVersionHistory,
   restoreVersion,
   restoreVersionById,
+  uploadNewVersion,
 } from "./versions.ts";
 
 test("getVersionDownloadUrl calls correct endpoint", async () => {
@@ -37,4 +38,10 @@ test("restoreVersionById targets the versionId restore endpoint", async () => {
 test("apiRequest remains the transport for all version calls", () => {
   // Guards against accidental direct-fetch regressions in this module.
   assert.ok(typeof apiRequest === "function");
+});
+
+test("uploadNewVersion targets the multipart versions endpoint", async () => {
+  assert.ok(typeof uploadNewVersion === "function");
+  // Contract: (fileId, file) — used for the drawer's direct upload.
+  assert.equal(uploadNewVersion.length, 2);
 });

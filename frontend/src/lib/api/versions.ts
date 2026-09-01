@@ -54,3 +54,26 @@ export function restoreVersionById(fileId: string, versionId: string): Promise<R
     method: "POST",
   });
 }
+
+export type UploadNewVersionResponse = {
+  file_id: string;
+  version_id: string;
+  version_number: number;
+  size: number;
+  checksum: string;
+  status: "complete";
+};
+
+/**
+ * Direct multipart version upload (`POST /files/:fileId/versions`). The server
+ * computes the authoritative SHA-256 checksum and rejects MIME/extension
+ * mismatches with 400 — surfaced gracefully by the version drawer.
+ */
+export function uploadNewVersion(fileId: string, file: File): Promise<UploadNewVersionResponse> {
+  const form = new FormData();
+  form.append("file", file, file.name);
+  return apiRequest<UploadNewVersionResponse>(`/files/${fileId}/versions`, {
+    method: "POST",
+    body: form,
+  });
+}
