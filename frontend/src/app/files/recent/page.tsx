@@ -97,7 +97,7 @@ export default function RecentPage() {
           </div>
         </div>
       ) : (
-        <div className="wd-card overflow-x-auto">
+        <div className="wd-card overflow-x-auto w-full max-w-full">
           <table className="wd-table min-w-[46rem]">
             <thead>
               <tr>

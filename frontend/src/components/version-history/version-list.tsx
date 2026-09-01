@@ -45,7 +45,7 @@ export function VersionList({
         <span>{label("versionHistory.totalVersions").replace("{count}", String(versions.length))}</span>
         <span className="imkan-badge">{label("versionHistory.current").replace("{version}", String(currentVersion))}</span>
       </div>
-      <div className="overflow-x-auto">
+      <div className="overflow-x-auto w-full max-w-full">
         <table className="imkan-table min-w-full w-full">
           <thead>
             <tr className="imkan-table-row">

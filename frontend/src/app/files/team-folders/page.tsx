@@ -106,8 +106,8 @@ export default function TeamFoldersPage() {
       ) : teamFolders.length === 0 ? (
         <EmptyState title={label("teamFolders.empty")} description={label("teamFolders.emptyDescription")} />
       ) : (
-        <div className="relative">
-          <div className="overflow-x-auto">
+        <div className="relative w-full max-w-full overflow-x-hidden">
+          <div className="overflow-x-auto w-full max-w-full">
             <table className="imkan-table min-w-[42rem] w-full table-auto">
               <thead>
                 <tr className="imkan-table-row">

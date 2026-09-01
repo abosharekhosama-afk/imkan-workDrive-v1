@@ -384,7 +384,7 @@ export class FilesService {
    * but deliberately free of the heavy audit side effects (no lastAccessedAt
    * write, no FILE_DOWNLOAD audit row) so preview refreshes stay cheap. The
    * signed URL carries an inline content disposition and the stored content
-   * type so browsers render the asset instead of downloading it — this is the
+   * type so browsers render the asset instead of downloading it Ã¢â‚¬â€ this is the
    * fix for the 403/CORS/attachment-download class of preview failures.
    */
   async createPreviewUrl(
@@ -980,32 +980,60 @@ export class FilesService {
   >(
     user: AccessTokenPayload,
     file: T | null,
-        deniedMessage: string,
+    deniedMessage: string,
   ): Promise<T> {
     if (!file || file.orgId !== user.org_id) {
+      this.logger.warn(
+        `[FileAccess] File not found - org mismatch: fileOrgId=${file?.orgId}, userOrgId=${user.org_id}, fileId=${file?.id}`,
+      );
       throw new NotFoundException('File not found');
     }
 
-    // Privacy invariant (P0): personal (non-team-folder) files are strictly
-    // owner-only. An org Admin / Super Admin must NOT mutate (trash / restore /
-    // rename / permanently delete) a personal file belonging to another user —
-    // they only act on files they explicitly own or that live in a shared
-    // (team-folder) workspace. Super-admins are granted an escape hatch for
-    // support operations but never silently cross into a user's private space.
     const teamFolderId = file.folder?.teamFolderId ?? null;
-    if (!teamFolderId && user.role !== 'SUPER_ADMIN') {
-      if (file.ownerId !== user.sub) {
+    const isPersonalFile = !teamFolderId;
+    const isOwner = file.ownerId === user.sub;
+    const isSuperAdmin = user.role === 'SUPER_ADMIN';
+
+    this.logger.debug(
+      `[FileAccess] Checking mutable access: fileId=${file.id}, isPersonalFile=${isPersonalFile}, isOwner=${isOwner}, userRole=${user.role}, userId=${user.sub}, fileOwnerId=${file.ownerId}, teamFolderId=${teamFolderId}`,
+    );
+
+    if (isPersonalFile && !isSuperAdmin) {
+      if (!isOwner) {
+        this.logger.warn(
+          `[FileAccess] 403 Forbidden (Personal File - Not Owner): userId=${user.sub}, userRole=${user.role}, fileOwnerId=${file.ownerId}, fileId=${file.id}`,
+        );
         throw new ForbiddenException(deniedMessage);
       }
     }
 
     const resource = await this.toFileAccessResource(user, file);
+    this.logger.debug(
+      `[FileAccess] Resource created: fileId=${file.id}, resource.orgId=${resource.orgId}, resource.teamFolderId=${resource.teamFolderId}`,
+    );
+
     if (!this.permissions.canRead(user, resource)) {
+      this.logger.warn(
+        `[FileAccess] 404 Not Found (canRead=false): fileId=${file.id}, userId=${user.sub}, userRole=${user.role}, resourceOrgId=${resource.orgId}`,
+      );
       throw new NotFoundException('File not found');
     }
-    if (!this.permissions.canWrite(user, resource)) {
+
+    const canWriteResult = this.permissions.canWrite(user, resource);
+    this.logger.debug(
+      `[FileAccess] canWrite check: fileId=${file.id}, userId=${user.sub}, userRole=${user.role}, isPersonalFile=${isPersonalFile}, isOwner=${isOwner}, result=${canWriteResult}`,
+    );
+
+    if (!canWriteResult) {
+      this.logger.warn(
+        `[FileAccess] 403 Forbidden (canWrite=false): fileId=${file.id}, userId=${user.sub}, userRole=${user.role}, isPersonalFile=${isPersonalFile}, isOwner=${isOwner}`,
+      );
       throw new ForbiddenException(deniedMessage);
     }
+
+    this.logger.debug(
+      `[FileAccess] Access granted: fileId=${file.id}, userId=${user.sub}, userRole=${user.role}`,
+    );
     return file;
   }
 

@@ -322,7 +322,7 @@ export function FileBrowser({
   };
 
   return (
-    <section className="flex flex-col gap-4">
+    <section className="flex flex-col gap-4 w-full max-w-full overflow-x-hidden">
       <div className="flex items-center justify-between">
         <h1 className="text-[length:var(--imkan-font-size-ui)] font-semibold">
           {label("files.heading")}

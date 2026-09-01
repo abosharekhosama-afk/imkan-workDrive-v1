@@ -386,7 +386,7 @@ export default function OrganizationPage() {
             </h2>
           </div>
         </div>
-        <div className="overflow-x-auto">
+        <div className="overflow-x-auto w-full max-w-full">
           <table className="wd-table min-w-[40rem]">
             <thead>
               <tr>
@@ -473,7 +473,7 @@ export default function OrganizationPage() {
             </h2>
           </div>
         </div>
-        <div className="overflow-x-auto">
+        <div className="overflow-x-auto w-full max-w-full">
           <table className="wd-table min-w-[42rem]">
             <thead>
               <tr>
