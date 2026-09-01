@@ -60,6 +60,7 @@ describe('SharesService', () => {
     assertObjectExists: jest.fn(),
     deleteObject: jest.fn(),
     deleteStoredObject: jest.fn(),
+    storeObject: jest.fn(async () => undefined),
   };
   const config = {
     get: () => 'https://workdrive.example',

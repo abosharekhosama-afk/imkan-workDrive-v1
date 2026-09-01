@@ -118,6 +118,19 @@ export class LocalDiskStorageAdapter implements StorageService {
     await writeFile(path, bytes);
   }
 
+  /** Server-side ingestion for direct multipart uploads (version upload). */
+  async storeObject(request: StorageObjectRequest, bytes: Buffer): Promise<void> {
+    const orgId = this.authorize(request);
+    const objectKey = buildTenantObjectKey(
+      orgId,
+      request.fileId,
+      request.versionId,
+    );
+    const path = this.resolveObjectPath(objectKey);
+    await mkdir(dirname(path), { recursive: true });
+    await writeFile(path, bytes);
+  }
+
   async getObjectFromToken(
     token: string,
   ): Promise<{

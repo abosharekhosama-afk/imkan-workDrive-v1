@@ -1,9 +1,10 @@
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { createReadStream, type ReadStream } from 'node:fs';
 import { stat } from 'node:fs/promises';
 import type { Response } from 'express';
 import {
   BadRequestException,
+  ConflictException,
   ForbiddenException,
   Inject,
   Injectable,
@@ -28,6 +29,10 @@ import { STORAGE_SERVICE, type StorageService } from '../storage/storage.types';
 import { contentDispositionInline } from '../common/content-disposition';
 import type { UploadRequestInput } from './upload-request.schema';
 import type { BulkFileOperationInput, MoveCopyInput } from './operation.schema';
+import {
+  extractSafeExtension,
+  parseVersionUploadFile,
+} from './version-upload.schema';
 import { QuotaService } from '../quota/quota.service';
 import { classifyFileType, extractExtension } from '../common/file-classification';
 
@@ -81,6 +86,34 @@ export type RestoreVersionResponse = {
   fileId: string;
   newVersionNumber: number;
   restoredFromVersion: number;
+};
+
+/** Response contract for `POST /files/:id/versions` (multipart version upload). */
+export type UploadNewVersionResponse = {
+  file_id: string;
+  version_id: string;
+  version_number: number;
+  size: number;
+  checksum: string;
+  status: 'complete';
+};
+
+/** Entry contract for `GET /files/:id/versions` (version history drawer). */
+export type VersionHistoryEntry = {
+  id: string;
+  versionNumber: number;
+  status: VersionStatus;
+  size: number;
+  mimeType: string;
+  sha256Hash: string;
+  uploadedBy: {
+    id: string;
+    name: string | null;
+    email: string;
+    avatarUrl: string | null;
+  } | null;
+  createdAt: string;
+  isCurrent: boolean;
 };
 
 const TRASH_RETENTION_DAYS = 30;
@@ -380,6 +413,238 @@ export class FilesService {
   }
 
   /**
+   * Version download addressed by `versionId` (UUID) instead of the numeric
+   * `versionNumber`. Same ACL/malware/audit contract as the numeric variant.
+   */
+  async createVersionDownloadUrlById(
+    user: AccessTokenPayload,
+    fileId: string,
+    versionId: string,
+  ): Promise<VersionDownloadResponse> {
+    const file = await this.prisma.file.findFirst({
+      where: { id: fileId, deletedAt: null },
+      include: {
+        versions: { where: { id: versionId }, take: 1 },
+        folder: { select: { teamFolderId: true } },
+      },
+    });
+    if (!file || file.orgId !== user.org_id || file.versions.length === 0) {
+      throw new NotFoundException('File or version not found');
+    }
+    if (!(await this.canReadFile(user, file))) {
+      throw new NotFoundException('File not found');
+    }
+
+    const version = file.versions[0];
+    const signed = await this.storage.createDownloadUrl({
+      fileId: file.id,
+      versionId: version.id,
+      ownerOrgId: user.org_id,
+      contentType: version.mimeType,
+      disposition: 'attachment',
+      fileName: file.name,
+    });
+
+    await this.prisma.file.update({
+      where: { id: file.id },
+      data: { lastAccessedAt: new Date() },
+    });
+    await this.recordDownloadActivity(user, file.id, version.versionNumber);
+    await this.prisma.auditLog.create({
+      data: {
+        orgId: user.org_id,
+        actorId: user.sub,
+        action: 'FILE_VERSION_DOWNLOAD',
+        resourceType: 'FILE',
+        resourceId: file.id,
+      },
+    });
+
+    return {
+      download_url: signed.url,
+      expires_in_seconds: signed.expiresInSeconds,
+      file_id: file.id,
+      version_number: version.versionNumber,
+    };
+  }
+
+  /**
+   * Direct multipart version upload (`POST /files/:fileId/versions`).
+   *
+   * Security contract (zero-trust):
+   * - tenant isolation first: a cross-org `fileId` is a 404, never a 403;
+   * - `canRead` → 404, `canWrite` → 403 (viewers can never create versions);
+   * - the server computes the SHA-256 checksum itself — client-supplied
+   *   hashes are never trusted for deduplication/integrity.
+   *
+   * Atomicity contract:
+   * - bytes are written to storage first, then the whole database mutation
+   *   (version N+1, ACTIVE→SUPERSEDED flip, parent file refresh, quota,
+   *   FileActivity + AuditLog) runs inside one `prisma.$transaction`;
+   * - a transaction failure triggers a compensating delete of the stored
+   *   object so no orphaned bytes or half-applied rows survive.
+   */
+  async uploadNewVersion(
+    user: AccessTokenPayload,
+    fileId: string,
+    rawUpload: unknown,
+  ): Promise<UploadNewVersionResponse> {
+    const upload = parseVersionUploadFile(rawUpload);
+    const file = await this.prisma.file.findFirst({
+      where: { id: fileId, deletedAt: null },
+      include: { folder: { select: { teamFolderId: true } } },
+    });
+    if (!file || file.orgId !== user.org_id) {
+      throw new NotFoundException('File not found');
+    }
+    const resource = await this.toFileAccessResource(user, file);
+    if (!this.permissions.canRead(user, resource)) {
+      throw new NotFoundException('File not found');
+    }
+    if (!this.permissions.canWrite(user, resource)) {
+      throw new ForbiddenException(
+        'Not allowed to upload a new version of this file',
+      );
+    }
+
+    // A version must stay the same file type as the entity it versions.
+    const parentExtension = file.extension ? file.extension.toLowerCase() : null;
+    const uploadExtension = extractSafeExtension(upload.originalName);
+    if (uploadExtension === null) {
+      throw new BadRequestException('Invalid file extension');
+    }
+    if (parentExtension && uploadExtension !== parentExtension) {
+      throw new BadRequestException(
+        `Version uploads must keep the .${parentExtension} file type`,
+      );
+    }
+    await this.quota.assertAvailable(user, BigInt(upload.size));
+
+    // Server-side SHA-256: authoritative checksum for deduplication and
+    // integrity verification, independent of any client-provided value.
+    const checksum = createHash('sha256').update(upload.buffer).digest('hex');
+    const versionId = randomUUID();
+    const storageObjectId = randomUUID();
+    const objectKey = this.storage.buildObjectKey(fileId, versionId);
+    const { bucket, region } = this.storageLocation();
+    const size = BigInt(upload.size);
+
+    await this.storage.storeObject(
+      {
+        fileId,
+        versionId,
+        ownerOrgId: user.org_id,
+        contentType: upload.mimeType,
+      },
+      upload.buffer,
+    );
+    let newVersionNumber = 0;
+    try {
+      await this.prisma.$transaction(async (tx) => {
+        // Read-modify-write of the version counter happens inside the
+        // transaction; the @@unique([fileId, versionNumber]) constraint
+        // backstops concurrent uploads (P2002 → 409 below).
+        const latest = await tx.fileVersion.findFirst({
+          where: { fileId },
+          orderBy: { versionNumber: 'desc' },
+          select: { versionNumber: true },
+        });
+        newVersionNumber = (latest?.versionNumber ?? 0) + 1;
+
+        await tx.fileVersion.updateMany({
+          where: { fileId, status: VersionStatus.ACTIVE },
+          data: { status: VersionStatus.SUPERSEDED },
+        });
+        await tx.storageObject.create({
+          data: {
+            id: storageObjectId,
+            orgId: user.org_id,
+            fileId,
+            storageKey: objectKey,
+            bucket,
+            region,
+            size,
+            checksum,
+          },
+        });
+        await tx.fileVersion.create({
+          data: {
+            id: versionId,
+            orgId: user.org_id,
+            fileId,
+            versionNumber: newVersionNumber,
+            storageObjectId,
+            size,
+            mimeType: upload.mimeType,
+            extension: uploadExtension,
+            sha256Hash: checksum,
+            uploadedById: user.sub,
+            status: VersionStatus.ACTIVE,
+          },
+        });
+        await tx.file.update({
+          where: { id: fileId },
+          data: {
+            size,
+            mimeType: upload.mimeType,
+            extension: uploadExtension,
+            sha256Hash: checksum,
+            fileType: classifyFileType(upload.mimeType),
+            updatedAt: new Date(),
+          },
+        });
+        await tx.fileActivity.create({
+          data: {
+            orgId: user.org_id,
+            fileId,
+            userId: user.sub,
+            action: AuditAction.UPLOAD_VERSION,
+            metadata: {
+              versionNumber: newVersionNumber,
+              size: upload.size,
+              checksum,
+              originalName: upload.originalName,
+            },
+          },
+        });
+        await tx.storageQuota.upsert({
+          where: { orgId: user.org_id },
+          create: { orgId: user.org_id, quotaBytes: 10737418240n, usedBytes: size },
+          update: { usedBytes: { increment: size } },
+        });
+        await tx.auditLog.create({
+          data: {
+            orgId: user.org_id,
+            actorId: user.sub,
+            action: 'FILE_VERSION_UPLOADED',
+            resourceType: 'FILE',
+            resourceId: fileId,
+            metadata: { versionNumber: newVersionNumber, checksum },
+          },
+        });
+      });
+    } catch (error) {
+      // Compensating action: a rolled-back transaction must not leak bytes.
+      await this.storage.deleteStoredObject(objectKey).catch(() => undefined);
+      if ((error as { code?: string }).code === 'P2002') {
+        throw new ConflictException(
+          'A concurrent upload created a newer version; please retry',
+        );
+      }
+      throw error;
+    }
+
+    return {
+      file_id: fileId,
+      version_id: versionId,
+      version_number: newVersionNumber,
+      size: upload.size,
+      checksum,
+      status: 'complete',
+    };
+  }
+
+  /**
    * Fast inline preview URL (PVW-04): same ACL/malware gating as downloads
    * but deliberately free of the heavy audit side effects (no lastAccessedAt
    * write, no FILE_DOWNLOAD audit row) so preview refreshes stay cheap. The
@@ -478,6 +743,53 @@ export class FilesService {
     }));
   }
 
+  /**
+   * Complete version history for a file, newest first. Tenant-scoped by
+   * `orgId` and read-gated: cross-tenant or unreadable files are a 404.
+   */
+  async getVersionHistory(
+    user: AccessTokenPayload,
+    fileId: string,
+  ): Promise<VersionHistoryEntry[]> {
+    const file = await this.prisma.file.findFirst({
+      where: { id: fileId, deletedAt: null },
+      select: {
+        id: true,
+        orgId: true,
+        ownerId: true,
+        folder: { select: { teamFolderId: true } },
+      },
+    });
+    if (!file || file.orgId !== user.org_id) {
+      throw new NotFoundException('File not found');
+    }
+    if (!(await this.canReadFile(user, file))) {
+      throw new NotFoundException('File not found');
+    }
+
+    const versions = await this.prisma.fileVersion.findMany({
+      where: { fileId, orgId: user.org_id },
+      orderBy: { versionNumber: 'desc' },
+      include: {
+        uploadedBy: {
+          select: { id: true, name: true, email: true, avatarUrl: true },
+        },
+      },
+    });
+    const currentVersionNumber = versions[0]?.versionNumber ?? 0;
+    return versions.map((version) => ({
+      id: version.id,
+      versionNumber: version.versionNumber,
+      status: version.status,
+      size: Number(version.size),
+      mimeType: version.mimeType,
+      sha256Hash: version.sha256Hash,
+      uploadedBy: version.uploadedBy,
+      createdAt: version.createdAt.toISOString(),
+      isCurrent: version.versionNumber === currentVersionNumber,
+    }));
+  }
+
   async restoreVersion(
     user: AccessTokenPayload,
     fileId: string,
@@ -515,6 +827,71 @@ export class FilesService {
     }
 
     const sourceVersion = file.versions[0];
+    return this.applyVersionRestore(user, fileId, sourceVersion, versionNumber);
+  }
+
+  /**
+   * Restore addressed by `versionId` (UUID) instead of `versionNumber`.
+   * The new version re-points at the historical version's storage object —
+   * zero data duplication — and is stamped `RESTORED` for the audit trail.
+   */
+  async restoreVersionById(
+    user: AccessTokenPayload,
+    fileId: string,
+    versionId: string,
+  ): Promise<RestoreVersionResponse> {
+    const file = await this.prisma.file.findFirst({
+      where: { id: fileId, deletedAt: null },
+      include: {
+        versions: { where: { id: versionId }, take: 1 },
+        folder: { select: { teamFolderId: true } },
+      },
+    });
+    if (!file || file.orgId !== user.org_id || file.versions.length === 0) {
+      throw new NotFoundException('File or version not found');
+    }
+    const resource = await this.toFileAccessResource(user, file);
+    if (!this.permissions.canRead(user, resource)) {
+      throw new NotFoundException('File not found');
+    }
+    if (!this.permissions.canWrite(user, resource)) {
+      throw new ForbiddenException('Not allowed to restore this file version');
+    }
+    const targetVersion = file.versions[0];
+    const maxVersion = await this.prisma.fileVersion.findFirst({
+      where: { fileId },
+      orderBy: { versionNumber: 'desc' },
+    });
+    if (maxVersion && maxVersion.id === versionId) {
+      throw new BadRequestException('Cannot restore the current version');
+    }
+    return this.applyVersionRestore(
+      user,
+      fileId,
+      targetVersion,
+      targetVersion.versionNumber,
+    );
+  }
+
+  /**
+   * Shared restore transaction: creates version `CurrentMax + 1` pointing at
+   * the historical version's storage object (no bytes are copied), supersedes
+   * the previously ACTIVE version, refreshes the parent file, and appends a
+   * user-facing FileActivity plus a security AuditLog — all atomically. Any
+   * failure rolls back every database modification.
+   */
+  private async applyVersionRestore(
+    user: AccessTokenPayload,
+    fileId: string,
+    sourceVersion: {
+      storageObjectId: string;
+      size: bigint;
+      mimeType: string;
+      extension: string | null;
+      sha256Hash: string;
+    },
+    restoredFromVersion: number,
+  ): Promise<RestoreVersionResponse> {
     const maxVersion = await this.prisma.fileVersion.findFirst({
       where: { fileId },
       orderBy: { versionNumber: 'desc' },
@@ -562,7 +939,7 @@ export class FilesService {
           userId: user.sub,
           action: AuditAction.RESTORE_VERSION,
           metadata: {
-            restoredFromVersion: versionNumber,
+            restoredFromVersion,
             newVersionNumber,
           },
         },
@@ -581,7 +958,7 @@ export class FilesService {
     return {
       fileId,
       newVersionNumber,
-      restoredFromVersion: versionNumber,
+      restoredFromVersion,
     };
   }
 

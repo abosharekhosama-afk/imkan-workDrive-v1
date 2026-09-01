@@ -108,6 +108,24 @@ export class S3CompatibleStorageAdapter implements StorageService {
     await this.client.send(new DeleteObjectCommand({ Bucket: this.bucket(), Key: storageKey }));
   }
 
+  /** Server-side ingestion for direct multipart uploads (version upload). */
+  async storeObject(request: StorageObjectRequest, bytes: Buffer): Promise<void> {
+    const orgId = this.authorize(request);
+    const objectKey = buildTenantObjectKey(
+      orgId,
+      request.fileId,
+      request.versionId,
+    );
+    await this.client.send(
+      new PutObjectCommand({
+        Bucket: this.bucket(),
+        Key: objectKey,
+        ContentType: request.contentType,
+        Body: bytes,
+      }),
+    );
+  }
+
   async assertObjectExists(request: StorageObjectRequest): Promise<void> {
     const orgId = this.authorize(request);
     const objectKey = buildTenantObjectKey(

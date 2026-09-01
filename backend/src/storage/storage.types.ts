@@ -38,4 +38,10 @@ export interface StorageService {
    * When absent, the caller falls back to a 302 redirect from a signed URL.
    */
   resolveObjectPath?(objectKey: string): string;
+  /**
+   * Server-side byte ingestion used by direct (multipart) uploads such as
+   * `POST /files/:fileId/versions`. Both drivers implement it; the tenant
+   * context and `ownerOrgId` are validated before any bytes are written.
+   */
+  storeObject(request: StorageObjectRequest, bytes: Buffer): Promise<void>;
 }

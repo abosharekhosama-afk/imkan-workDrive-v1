@@ -19,6 +19,7 @@ describe('FilesService trash restore', () => {
     assertObjectExists: jest.fn(),
     deleteObject: jest.fn(),
     deleteStoredObject: jest.fn(),
+    storeObject: jest.fn(async () => undefined),
   };
   const prisma = {
     file: { findMany: jest.fn(), findFirst: jest.fn(), update: jest.fn() },

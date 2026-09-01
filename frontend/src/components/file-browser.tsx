@@ -21,7 +21,7 @@ import { RenameModal } from "./rename-modal";
 import { MoveModal } from "./move-modal";
 import { FileDetailsModal, type FileDetailsData } from "./file-details-modal";
 import { FilePreviewModal } from "./file-preview-modal";
-import { VersionHistoryPanel } from "./version-history-panel";
+import { VersionHistoryDrawer } from "./files/version-history-drawer";
 import { resolveMimeType } from "../lib/api/mime";
 import { mapFileRecords, mapFolderRecords } from "../lib/api/table-mappers";
 
@@ -512,20 +512,18 @@ export function FileBrowser({
         />
       ) : null}
       {versionHistoryTarget? (
-        <VersionHistoryPanel
+        <VersionHistoryDrawer
           isOpen={!!versionHistoryTarget}
           onClose={() => setVersionHistoryTarget(null)}
           fileId={versionHistoryTarget.id}
           fileName={versionHistoryTarget.name}
           mimeType={versionHistoryTarget.mimeType ?? ""}
           size={versionHistoryTarget.size ?? 0}
-          canRead={true}
           canWrite={canMutate}
-          role={role}
-          onPreviewVersion={async (versionNumber) => {
+          onPreviewVersion={(version) => {
             // The preview modal resolves the active version URL itself via
             // GET /files/:id/preview-url; we only need to open it.
-            void versionNumber;
+            void version;
             setPreviewTarget({
               type: "FILE",
               id: versionHistoryTarget.id,
@@ -534,12 +532,9 @@ export function FileBrowser({
               size: versionHistoryTarget.size,
             });
           }}
-          onRestoreVersion={async (versionNumber) => {
-            // This will be handled by the VersionHistoryPanel's internal logic
-            // We just need to trigger a reload after restore
+          onRestored={async () => {
             await load();
           }}
-          versions={[]} // This will be populated by the panel from file detail
         />
       ) : null}
     {detailsTarget ? <FileDetailsModal data={detailsTarget} onClose={() => setDetailsTarget(null)} /> : null}

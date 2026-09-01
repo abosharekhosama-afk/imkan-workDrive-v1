@@ -1,17 +1,20 @@
 import {
+  BadRequestException,
   Body,
   Controller,
   Delete,
   Get,
   Headers,
   Param,
-  ParseIntPipe,
   ParseUUIDPipe,
   Patch,
   Post,
   Query,
   Res,
+  UploadedFile,
+  UseInterceptors,
 } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
 import type { Response } from 'express';
 import { AccessAction, ResourceType } from '@prisma/client';
 import { CurrentUser } from '../auth/current-user.decorator';
@@ -30,6 +33,14 @@ export class FilesController {
     private readonly files: FilesService,
     private readonly recent: RecentService,
   ) {}
+
+  /**
+   * The version reference in `GET /files/:id/versions/:versionRef/download`
+   * may be either a numeric `versionNumber` or a UUID `versionId`; dispatch
+   * on shape so both addressing schemes share one route.
+   */
+  private static readonly UUID_REF_RE =
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
   @Post('upload-request')
   requestUpload(
@@ -100,13 +111,47 @@ export class FilesController {
     return result;
   }
 
-  @Get(':id/versions/:versionNumber/download')
+  @Get(':id/versions')
+  getVersionHistory(
+    @CurrentUser() user: AccessTokenPayload,
+    @Param('id', new ParseUUIDPipe({ version: '4' })) id: string,
+  ) {
+    return this.files.getVersionHistory(user, id);
+  }
+
+  @Post(':id/versions')
+  @UseInterceptors(FileInterceptor('file'))
+  uploadNewVersion(
+    @CurrentUser() user: AccessTokenPayload,
+    @Param('id', new ParseUUIDPipe({ version: '4' })) id: string,
+    @UploadedFile() file: unknown,
+  ) {
+    return this.files.uploadNewVersion(user, id, file);
+  }
+
+  @Post(':id/versions/:versionId/restore')
+  restoreVersionById(
+    @CurrentUser() user: AccessTokenPayload,
+    @Param('id', new ParseUUIDPipe({ version: '4' })) id: string,
+    @Param('versionId', new ParseUUIDPipe({ version: '4' })) versionId: string,
+  ) {
+    return this.files.restoreVersionById(user, id, versionId);
+  }
+
+  @Get(':id/versions/:versionRef/download')
   async downloadVersion(
     @CurrentUser() user: AccessTokenPayload,
     @Param('id', new ParseUUIDPipe({ version: '4' })) id: string,
-    @Param('versionNumber', new ParseIntPipe()) versionNumber: number,
+    @Param('versionRef') versionRef: string,
   ) {
-    const result = await this.files.createVersionDownloadUrl(user, id, versionNumber);
+    const isUuid = FilesController.UUID_REF_RE.test(versionRef);
+    const versionNumber = Number(versionRef);
+    if (!isUuid && (!Number.isInteger(versionNumber) || versionNumber < 1)) {
+      throw new BadRequestException('Invalid version reference');
+    }
+    const result = isUuid
+      ? await this.files.createVersionDownloadUrlById(user, id, versionRef)
+      : await this.files.createVersionDownloadUrl(user, id, versionNumber);
     void this.recent
       .record(user, ResourceType.FILE, id, AccessAction.DOWNLOAD)
       .catch(() => undefined);
