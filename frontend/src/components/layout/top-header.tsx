@@ -55,7 +55,7 @@ export function TopHeader() {
   }, [team]);
   const unread = notes.filter((n) => !n.readAt).length;
   return (
-    <header className="flex h-14 shrink-0 items-center gap-2 border-b border-[color:var(--imkan-color-border)] bg-white px-3">
+    <header className="flex h-12 shrink-0 items-center gap-2 border-b border-[color:var(--imkan-color-border)] bg-white px-3">
       <button type="button" className="rounded-md p-2 text-slate-600 hover:bg-slate-100 md:hidden" onClick={() => setMobileNavOpen(true)} aria-label={label("nav.workspace")}>
         <Icons.menu size={18} />
       </button>
@@ -63,7 +63,7 @@ export function TopHeader() {
         <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-[#E8EFFD] text-[#1B66EA]" aria-hidden="true">
           <Icons.folder size={18} />
         </span>
-        <span className="max-w-[30vw] truncate text-[14px] font-semibold text-slate-900" title={scope.folderName ?? label("files.breadcrumb.root")}>
+        <span className="max-w-[30vw] truncate text-[14px] font-semibold text-[#212121]" title={scope.folderName ?? label("files.breadcrumb.root")}>
           {scope.folderName ?? label("files.breadcrumb.root")}
         </span>
         <button id="hdr-manage-btn" type="button" onClick={() => setManageOpen((v) => !v)} aria-expanded={manageOpen} aria-haspopup="menu"

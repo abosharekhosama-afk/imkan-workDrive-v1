@@ -12,3 +12,14 @@ Thumbs.db
 .aider*
 frontend/test-results/
 playwright-report/
+
+e2e/.auth/
+frontend/e2e/.auth/
+*.auth/user.json
+zoho-*.mjs
+zoho-*.json
+zoho-*.png
+accounts-state-*.png
+login-*.log
+ui-check.mjs
+ui-mini.mjs
