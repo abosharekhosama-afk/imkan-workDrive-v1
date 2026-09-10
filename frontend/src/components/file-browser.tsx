@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState, useRef, type FormEvent } from "react"
 import { useSearchParams } from "next/navigation";
 import { useRouter } from "next/navigation";
 import { Breadcrumbs } from "./breadcrumbs";
+import { ActionToolbar, type SortDir } from "./layout/action-toolbar";
 import { FileTable } from "./file-table";
 import { FileGridView } from "./file-grid-view";
 import { ShareModal } from "./share-modal";
@@ -30,6 +31,7 @@ import {
   readStoredViewMode,
   type ViewMode,
 } from "./view-mode-logic";
+import { openInspector } from "./layout/shell-context";
 
 import { canMutateContent, canShareContent } from "../lib/permissions";
 import { AlertBanner } from "./alert-banner";
@@ -94,6 +96,7 @@ export function FileBrowser({
   const [favoriteIds, setFavoriteIds] = useState<Set<string>>(new Set());
   // Dual view preference (list/table ↔ grid), persisted per browser.
   const [viewMode, setViewMode] = useState<ViewMode>("list");
+  const [sortDir, setSortDir] = useState<SortDir>("desc");
   // Folder aggregate metadata surfaced by the API (size / latest file update).
   const [folderSizes, setFolderSizes] = useState<ReadonlyMap<string, number>>(new Map());
   const [folderUpdatedAt, setFolderUpdatedAt] = useState<ReadonlyMap<string, string | null>>(new Map());
@@ -147,6 +150,19 @@ export function FileBrowser({
     window.addEventListener("workdrive:new-folder", focusNewFolder);
     return () => window.removeEventListener("workdrive:new-folder", focusNewFolder);
   }, []);
+
+  // Inspector deep-link: "Version history" inside the details pane opens the drawer.
+  useEffect(() => {
+    const onVersion = (event: Event) => {
+      const fileId = (event as CustomEvent<{ fileId: string }>).detail?.fileId;
+      if (!fileId) return;
+      const file = files.find((f) => f.id === fileId);
+      if (!file) return;
+      onVersionHistory("FILE", file.id, file.name, file.mimeType ?? undefined, file.size ?? undefined);
+    };
+    window.addEventListener("workdrive:version-history", onVersion);
+    return () => window.removeEventListener("workdrive:version-history", onVersion);
+  });
 
   // Restore the persisted view preference after mount (SSR-safe).
   useEffect(() => {
@@ -287,6 +303,7 @@ export function FileBrowser({
   const handleViewDetails = (type: "FILE" | "FOLDER", id: string, name: string, mimeType?: string, size?: number) => {
     if (type === "FOLDER") {
       const folder = folders.find((f) => f.id === id);
+      if (folder) openInspector({ kind: "FOLDER", folder });
       setDetailsTarget({
         resourceType: "FOLDER",
         name,
@@ -299,6 +316,7 @@ export function FileBrowser({
       });
     } else {
       const file = files.find((f) => f.id === id);
+      if (file) openInspector({ kind: "FILE", file });
       setDetailsTarget({
         resourceType: "FILE",
         name,
@@ -322,32 +340,12 @@ export function FileBrowser({
   };
 
   return (
-    <section className="flex flex-col gap-4 w-full max-w-full overflow-x-hidden">
-      <div className="flex items-center justify-between">
-        <h1 className="text-[length:var(--imkan-font-size-ui)] font-semibold">
+    <section className="flex min-h-0 flex-1 flex-col w-full max-w-full overflow-x-hidden">
+      <ActionToolbar view={viewMode} onView={(v) => switchViewMode(v)} sort={sortDir} onSort={setSortDir} />
+      <div className="flex shrink-0 items-center justify-between gap-2 bg-white px-3 py-1.5">
+        <h1 className="truncate text-[13.5px] font-semibold text-slate-900">
           {label("files.heading")}
         </h1>
-        {/* Dual-mode view toggle: list/table ↔ grid (Zoho WorkDrive style). */}
-        <div className="zoho-view-toggle" role="group" aria-label={label("view.toggle")}>
-          <button
-            type="button"
-            className={`zoho-view-btn${viewMode === "list" ? " active" : ""}`}
-            aria-pressed={viewMode === "list"}
-            onClick={() => switchViewMode("list")}
-            title={label("view.list")}
-          >
-            ≣ {label("view.list")}
-          </button>
-          <button
-            type="button"
-            className={`zoho-view-btn${viewMode === "grid" ? " active" : ""}`}
-            aria-pressed={viewMode === "grid"}
-            onClick={() => switchViewMode("grid")}
-            title={label("view.grid")}
-          >
-            ▦ {label("view.grid")}
-          </button>
-        </div>
         {/* Contextual Toolbar Placeholder (Phase 6) */}
         {selectedIds.size > 0 && (
           <div className="imkan-toolbar flex items-center gap-2 bg-[color:var(--imkan-color-surface)] px-4 py-2 rounded-sm shadow-sm border border-[color:var(--imkan-color-border)]">
@@ -401,6 +399,7 @@ export function FileBrowser({
 
       {error? <AlertBanner message={error} action={<button type="button" className="imkan-button-secondary" onClick={() => void load()}>{label("feedback.retry")}</button>} /> : null}
 
+      <div className="min-h-0 flex-1 overflow-y-auto bg-slate-100 p-3">
       {loading ? <SkeletonLoader columns={6} /> : viewMode === "grid" ? (
         <FileGridView
           folders={folders}
@@ -449,6 +448,7 @@ export function FileBrowser({
           onSelectAll={handleSelectAll}
         />
       )}
+      </div>
 
       {shareTarget? (
         <ShareModal

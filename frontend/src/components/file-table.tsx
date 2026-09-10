@@ -136,17 +136,14 @@ export function FileTable({
                 onChange={(e) => onSelectAll?.(e.target.checked)}
               />
             </th>
-            <th scope="col" className="px-3 py-2 text-start font-medium"><button type="button" className="imkan-focusable rounded-sm" onClick={() => toggleSort("name")}>{label("files.column.name")} {sort.key === "name" ? (sort.direction === "asc" ? "↑" : "↓") : ""}</button></th>
-            <th scope="col" className="px-3 py-2 text-start font-medium">{label("files.column.type")}</th>
-            <th scope="col" className="px-3 py-2 text-start font-medium">{label("files.column.owner")}</th>
-            <th scope="col" className="px-3 py-2 text-start font-medium"><button type="button" className="imkan-focusable rounded-sm" onClick={() => toggleSort("modified")}>{label("files.column.modified")} {sort.key === "modified" ? (sort.direction === "asc" ? "↑" : "↓") : ""}</button></th>
-            <th scope="col" className="px-3 py-2 text-start font-medium"><button type="button" className="imkan-focusable rounded-sm" onClick={() => toggleSort("size")}>{label("files.column.size")} {sort.key === "size" ? (sort.direction === "asc" ? "↑" : "↓") : ""}</button></th>
+            <th scope="col" className="px-3 py-2 text-start font-medium">{label("files.column.name")}</th>
+            <th scope="col" className="px-3 py-2 text-start font-medium"><button type="button" className="imkan-focusable rounded-sm" onClick={() => toggleSort("modified")}>{label("files.column.modified")} {sort.key === "modified" ? (sort.direction === "asc" ? "↑" : "↓") : "↓"}</button></th>
             <th scope="col" className="px-3 py-2 text-end font-medium"><span className="sr-only">{label("files.actions")}</span></th>
           </tr>
         </thead>
         <tbody>
           {sortedFolders.map((folder) => (
-            <tr key={folder.id} draggable={Boolean(canMutate)} onDragStart={(e) => { e.dataTransfer.effectAllowed="move"; e.dataTransfer.setData("application/x-workdrive", JSON.stringify({type:"FOLDER",id:folder.id,name:folder.name})); }} className="imkan-table-row hover:bg-[color:var(--imkan-color-surface)] group transition-colors cursor-grab" onDragOver={(e) => { e.preventDefault(); e.currentTarget.classList.add("ring-2","ring-[color:var(--imkan-color-primary)]"); }} onDragLeave={(e) => e.currentTarget.classList.remove("ring-2","ring-[color:var(--imkan-color-primary)]")} onDrop={(e) => { e.preventDefault(); e.currentTarget.classList.remove("ring-2","ring-[color:var(--imkan-color-primary)]"); try { const item=JSON.parse(e.dataTransfer.getData("application/x-workdrive")); if(item.id !== folder.id) onDropMove?.(item.type,item.id,folder.id); } catch {} }}>
+            <tr key={folder.id} draggable={Boolean(canMutate)} onDoubleClick={() => onOpen?.("FOLDER", folder.id, folder.name)} onDragStart={(e) => { e.dataTransfer.effectAllowed="move"; e.dataTransfer.setData("application/x-workdrive", JSON.stringify({type:"FOLDER",id:folder.id,name:folder.name})); }} className="imkan-table-row hover:bg-[color:var(--imkan-color-surface)] group transition-colors cursor-grab" onDragOver={(e) => { e.preventDefault(); e.currentTarget.classList.add("ring-2","ring-[color:var(--imkan-color-primary)]"); }} onDragLeave={(e) => e.currentTarget.classList.remove("ring-2","ring-[color:var(--imkan-color-primary)]")} onDrop={(e) => { e.preventDefault(); e.currentTarget.classList.remove("ring-2","ring-[color:var(--imkan-color-primary)]"); try { const item=JSON.parse(e.dataTransfer.getData("application/x-workdrive")); if(item.id !== folder.id) onDropMove?.(item.type,item.id,folder.id); } catch {} }}>
               <td className="px-3 py-2">
                 <input
                   type="checkbox"
@@ -158,15 +155,13 @@ export function FileTable({
               <td className="max-w-[18rem] truncate px-3 py-2">
                 <Link href={`/files/${folder.id}`} className="imkan-focusable inline-flex max-w-full items-center truncate rounded-sm">
                   <FileIcon kind="folder" label={label("files.type.folder")} />
-                  <span className="truncate">{folder.name}</span>
+                  <span className="min-w-0 truncate">
+                    <span className="block truncate">{folder.name}</span>
+                    <span className="imkan-meta block truncate">{folder.ownerName ?? folder.ownerEmail ?? label("files.type.folder")}</span>
+                  </span>
                 </Link>
               </td>
-              <td className="px-3 py-2">{label("files.type.folder")}</td>
-              <td className="px-3 py-2">
-                <OwnerCell ownerName={folder.ownerName} ownerEmail={folder.ownerEmail} ownerAvatar={folder.ownerAvatar} />
-              </td>
-              <td className="imkan-muted px-3 py-2 text-[length:var(--imkan-font-size-secondary)]">{formatDate(folderDate(folder.id))}</td>
-              <td className="imkan-muted px-3 py-2 text-[length:var(--imkan-font-size-secondary)]">{folderSizes?.get(folder.id) != null && (folderSizes.get(folder.id) ?? 0) > 0 ? formatBytes(folderSizes.get(folder.id)) : "—"}</td>
+              <td className="imkan-muted whitespace-nowrap px-3 py-2 text-[length:var(--imkan-font-size-secondary)]">{formatDate(folderDate(folder.id))}</td>
               <td className="px-3 py-2 text-end">
                 <FileActionsMenu
                   context={{
@@ -182,6 +177,7 @@ export function FileTable({
                     onRename: canMutate ? () => onRename("FOLDER", folder.id, folder.name) : undefined,
                     onMove: onMove && canMutate ? () => onMove("FOLDER", folder.id, folder.name) : undefined,
                     onFavoriteToggle: onFavorite ? () => onFavorite("FOLDER", folder.id) : undefined,
+                    onViewDetails: onViewDetails ? () => onViewDetails("FOLDER", folder.id, folder.name) : undefined,
                     onDelete: canMutate ? () => onDelete("FOLDER", folder.id) : undefined,
                   }}
                 />
@@ -201,15 +197,13 @@ export function FileTable({
               <td className="max-w-[18rem] truncate px-3 py-2">
                 <button type="button" onClick={() => onPreview?.("FILE", file.id, file.name, file.mimeType ?? undefined, file.size ?? undefined)} className="imkan-focusable inline-flex max-w-full items-center truncate rounded-sm text-start hover:underline">
                   <FileIcon kind="file" mimeType={file.mimeType} name={file.name} label={label("files.type.file")} />
-                  <span className="truncate">{file.name}</span>
+                  <span className="min-w-0 truncate">
+                    <span className="block truncate">{file.name}</span>
+                    <span className="imkan-meta block truncate">{file.ownerName ?? file.ownerEmail ?? label("files.type.file")}</span>
+                  </span>
                 </button>
               </td>
-              <td className="px-3 py-2">{label("files.type.file")}</td>
-              <td className="px-3 py-2">
-                <OwnerCell ownerName={file.ownerName} ownerEmail={file.ownerEmail} ownerAvatar={file.ownerAvatar} />
-              </td>
-              <td className="imkan-muted px-3 py-2 text-[length:var(--imkan-font-size-secondary)]">{formatDate(file.updatedAt)}</td>
-              <td className="imkan-muted px-3 py-2 text-[length:var(--imkan-font-size-secondary)]">{formatSize(resolveItemSize(file))}</td>
+              <td className="imkan-muted whitespace-nowrap px-3 py-2 text-[length:var(--imkan-font-size-secondary)]">{formatDate(file.updatedAt)}</td>
               <td className="px-3 py-2 text-end">
                 <FileActionsMenu
                   context={{
