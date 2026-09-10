@@ -28,6 +28,20 @@ const ShellContext = createContext<ShellContextValue | null>(null);
 const SIDEBAR_KEY = "zoho.sidebar.collapsed";
 const INSPECTOR_KEY = "zoho.inspector.open";
 const INSPECTOR_TAB_KEY = "zoho.inspector.tab";
+const SCOPE_KEY = "zoho.scope.current";
+
+export type ScopeDetail = { folderId: string | null; folderName: string | null };
+
+export function readScope(): ScopeDetail {
+  try {
+    const raw = window.sessionStorage.getItem(SCOPE_KEY);
+    if (!raw) return { folderId: null, folderName: null };
+    const parsed = JSON.parse(raw) as ScopeDetail;
+    return { folderId: parsed.folderId ?? null, folderName: parsed.folderName ?? null };
+  } catch {
+    return { folderId: null, folderName: null };
+  }
+}
 
 function readFlag(key: string): boolean {
   try {
@@ -126,6 +140,19 @@ export function useShell(): ShellContextValue {
   const ctx = useContext(ShellContext);
   if (!ctx) throw new Error("ShellProvider is required");
   return ctx;
+}
+
+export function ShellScopeSync({ folderId, folderName }: { folderId?: string; folderName?: string }) {
+  useEffect(() => {
+    try {
+      window.sessionStorage.setItem(
+        SCOPE_KEY,
+        JSON.stringify({ folderId: folderId ?? null, folderName: folderName ?? null, at: Date.now() })
+      );
+    } catch { /* noop */ }
+    window.dispatchEvent(new CustomEvent("workdrive:scope", { detail: { folderId: folderId ?? null, folderName: folderName ?? null } }));
+  }, [folderId, folderName]);
+  return null;
 }
 
 /** Dispatch from anywhere (FileBrowser rows, grids, search) to open the inspector. */

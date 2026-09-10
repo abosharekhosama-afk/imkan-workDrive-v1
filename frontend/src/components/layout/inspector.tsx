@@ -10,16 +10,18 @@ import { Icons } from "./icons";
 export function InspectorDock() {
   const { label } = useLocale();
   const { inspectorOpen, setInspectorOpen, inspectorTab, setInspectorTab, setMobileInspectorOpen } = useShell();
-  const items: Array<{ tab: InspectorTab | "dock"; icon: keyof typeof Icons; tip: string }> = [
-    { tab: "details", icon: "info", tip: label("nav.openDetails") },
+  const items: Array<{ tab: InspectorTab; icon: keyof typeof Icons; tipKey: "nav.openDetails" | "nav.dataTemplates" | "nav.zia" }> = [
+    { tab: "details", icon: "info", tipKey: "nav.openDetails" },
+    { tab: "details", icon: "layout", tipKey: "nav.dataTemplates" },
+    { tab: "activity", icon: "spark", tipKey: "nav.zia" },
   ];
   return (
     <div className="flex w-12 shrink-0 flex-col items-center gap-1 border-s border-[color:var(--imkan-color-border)] bg-white py-2" role="toolbar" aria-label={label("inspector.details")}>
-      {items.map((i) => (
-        <button key={i.tip} type="button" title={i.tip} aria-label={i.tip} aria-pressed={i.tab === inspectorTab && inspectorOpen}
-          onClick={() => { if (i.tab !== "dock") { setInspectorTab(i.tab as InspectorTab); setInspectorOpen(true); setMobileInspectorOpen(true); } }}
-          className={`rounded-md p-2 ${i.tab === inspectorTab && inspectorOpen ? "bg-slate-900 text-white" : "text-slate-500 hover:bg-slate-100"}`}>
-          <Icons.info size={17} />
+      {items.map((i, idx) => (
+        <button key={`${i.tipKey}-${idx}`} type="button" title={label(i.tipKey)} aria-label={label(i.tipKey)} aria-pressed={i.tipKey === "nav.openDetails" && i.tab === inspectorTab && inspectorOpen}
+          onClick={() => { setInspectorTab(i.tab); setInspectorOpen(true); setMobileInspectorOpen(true); }}
+          className="rounded-md p-2 text-slate-500 hover:bg-slate-100">
+          {(() => { const I = Icons[i.icon]; return <I size={17} />; })()}
         </button>
       ))}
     </div>

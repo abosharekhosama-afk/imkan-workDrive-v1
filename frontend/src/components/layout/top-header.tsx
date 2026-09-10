@@ -2,13 +2,13 @@
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { useLocale } from "../locale-provider";
-import { GlobalSearch } from "../global-search";
 import { ThemeToggle } from "../theme-toggle";
 import { listMemberships, type OrganizationMembershipSummary } from "../../lib/api/auth";
 import { listNotifications, type NotificationRecord } from "../../lib/api/notifications";
-import { useShell } from "./shell-context";
+import { useShell, readScope, type ScopeDetail } from "./shell-context";
 import { Icons } from "./icons";
 import { AccountMenu } from "./account-menu";
+import { ZohoMenu } from "./zoho-menu";
 export function TopHeader() {
   const { label, locale, setLocale } = useLocale();
   const { setMobileNavOpen } = useShell();
@@ -17,7 +17,11 @@ export function TopHeader() {
   const [team, setTeam] = useState(false);
   const [members, setMembers] = useState<OrganizationMembershipSummary[]>([]);
   const [notes, setNotes] = useState<NotificationRecord[]>([]);
+  const [scope, setScope] = useState<ScopeDetail>({ folderId: null, folderName: null });
+  const [manageOpen, setManageOpen] = useState(false);
+  const [searchOpen, setSearchOpen] = useState(false);
   const teamRef = useRef<HTMLDivElement | null>(null);
+  const searchInputRef = useRef<HTMLInputElement | null>(null);
   useEffect(() => {
     try {
       const raw = localStorage.getItem("workdrive_user");
@@ -31,7 +35,18 @@ export function TopHeader() {
     if (!token) return;
     listMemberships(token).then(setMembers).catch(() => undefined);
     listNotifications().then(setNotes).catch(() => undefined);
+    setScope(readScope());
+    const onScope = (e: Event) => setScope((e as CustomEvent<ScopeDetail>).detail ?? { folderId: null, folderName: null });
+    window.addEventListener("workdrive:scope", onScope);
+    return () => window.removeEventListener("workdrive:scope", onScope);
   }, []);
+  useEffect(() => {
+    if (!searchOpen) return;
+    searchInputRef.current?.focus();
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setSearchOpen(false); };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [searchOpen]);
   useEffect(() => {
     if (!team) return;
     const onDown = (e: MouseEvent) => { if (!teamRef.current?.contains(e.target as Node)) setTeam(false); };
@@ -44,11 +59,25 @@ export function TopHeader() {
       <button type="button" className="rounded-md p-2 text-slate-600 hover:bg-slate-100 md:hidden" onClick={() => setMobileNavOpen(true)} aria-label={label("nav.workspace")}>
         <Icons.menu size={18} />
       </button>
-      <div className="flex min-w-0 items-center gap-2">
-        <span className="truncate text-[14px] font-semibold text-slate-900">{label("files.breadcrumb.root")}</span>
-        <button type="button" className="hidden items-center gap-1 rounded-md border border-slate-200 px-2 py-1 text-[12px] text-slate-600 hover:bg-slate-50 sm:inline-flex">
+      <div className="flex min-w-0 items-center gap-1.5">
+        <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-[#E8EFFD] text-[#1B66EA]" aria-hidden="true">
+          <Icons.folder size={18} />
+        </span>
+        <span className="max-w-[30vw] truncate text-[14px] font-semibold text-slate-900" title={scope.folderName ?? label("files.breadcrumb.root")}>
+          {scope.folderName ?? label("files.breadcrumb.root")}
+        </span>
+        <button id="hdr-manage-btn" type="button" onClick={() => setManageOpen((v) => !v)} aria-expanded={manageOpen} aria-haspopup="menu"
+          className="inline-flex items-center gap-1 rounded-md border border-slate-200 px-2 py-1 text-[12px] text-slate-600 hover:bg-slate-50">
           {label("nav.manage")} <Icons.chevD size={13} />
         </button>
+        <ZohoMenu open={manageOpen} onClose={() => setManageOpen(false)} labelledBy="hdr-manage-btn"
+          onSelect={(k) => { if (k === "members") window.dispatchEvent(new Event("workdrive:manage-members")); }}
+          items={[
+            { key: "members", labelKey: "teamFolders.members" },
+            { key: "settings", labelKey: "nav.settings" },
+            "sep",
+            { key: "trash", labelKey: "files.trash" },
+          ]} />
       </div>
       <div className="ms-auto flex shrink-0 items-center gap-1.5">
         <div className="relative hidden lg:block" ref={teamRef}>
@@ -68,17 +97,79 @@ export function TopHeader() {
             </div>
           ) : null}
         </div>
-        <div className="hidden w-56 md:block xl:w-72"><GlobalSearch /></div>
+        <div className="hidden w-56 md:block xl:w-72">
+          <button type="button" onClick={() => setSearchOpen(true)}
+            className="flex w-full items-center gap-2 rounded-md border border-transparent px-2 py-1.5 text-[13px] text-slate-400 hover:border-slate-200 hover:bg-slate-50" aria-label={label("search.placeholder")}>
+            <Icons.search size={16} />
+            <span className="min-w-0 flex-1 truncate text-start">{label("search.placeholder")}</span>
+            <kbd className="hidden rounded border border-slate-200 bg-slate-50 px-1.5 py-0.5 text-[10.5px] font-medium text-slate-400 xl:block">Ctrl K</kbd>
+          </button>
+        </div>
+        <button type="button" className="rounded-md p-2 text-slate-500 hover:bg-slate-100" aria-label={label("search.placeholder")} onClick={() => setSearchOpen(true)}>
+          <Icons.search size={17} />
+        </button>
         <Link href="/notifications" className="relative rounded-md p-2 text-slate-500 hover:bg-slate-100" aria-label={label("nav.notifications")} title={label("nav.notifications")}>
           <Icons.bell size={17} />
           {unread > 0 ? <span className="absolute end-1 top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-bold text-white">{unread > 9 ? "9+" : unread}</span> : null}
         </Link>
+        <Link href="/settings" className="hidden rounded-md p-2 text-slate-500 hover:bg-slate-100 sm:block" aria-label={label("nav.help")} title={label("nav.help")}>
+          <Icons.help size={17} />
+        </Link>
+        <button type="button" className="hidden rounded-md p-2 text-slate-500 hover:bg-slate-100 sm:block" title={label("nav.appSwitcher")} aria-label={label("nav.appSwitcher")}>
+          <Icons.grid size={17} />
+        </button>
         <ThemeToggle />
         <button type="button" className="rounded-md px-2 py-1.5 text-[12px] font-semibold text-slate-500 hover:bg-slate-100" onClick={() => setLocale(locale === "en" ? "ar" : "en")}>
           {locale === "en" ? "ع" : "En"}
         </button>
         <AccountMenu name={name} />
       </div>
+      {searchOpen ? <HeaderSearchOverlay onClose={() => setSearchOpen(false)} inputRef={searchInputRef} /> : null}
     </header>
+  );
+}
+
+function HeaderSearchOverlay({ onClose, inputRef }: { onClose: () => void; inputRef: React.RefObject<HTMLInputElement | null> }) {
+  const { label } = useLocale();
+  const [q, setQ] = useState("");
+  const [rows, setRows] = useState<{ folders: { id: string; name: string }[]; files: { id: string; name: string }[] }>({ folders: [], files: [] });
+  useEffect(() => {
+    if (!q.trim()) { setRows({ folders: [], files: [] }); return; }
+    let live = true;
+    const t = window.setTimeout(() => {
+      import("../../lib/api/search").then(({ searchNames }) => searchNames(q.trim()).then((r) => {
+        if (live) setRows({ folders: (r.folders ?? []).slice(0, 5), files: (r.files ?? []).slice(0, 7) });
+      }).catch(() => undefined));
+    }, 220);
+    return () => { live = false; window.clearTimeout(t); };
+  }, [q]);
+  return (
+    <div className="fixed inset-0 z-[80]" role="dialog" aria-modal="true" aria-label={label("search.placeholder")}>
+      <div className="absolute inset-0 bg-black/30" onClick={onClose} aria-hidden="true" />
+      <div className="absolute start-1/2 top-20 w-[min(36rem,92vw)] -translate-x-1/2 rtl:translate-x-1/2 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-2xl">
+        <div className="flex items-center gap-2 border-b border-slate-100 px-3 py-2.5">
+          <Icons.search size={16} />
+          <input ref={inputRef} value={q} onChange={(e) => setQ(e.target.value)} placeholder={label("search.placeholder")}
+            aria-label={label("search.placeholder")} className="min-w-0 flex-1 bg-transparent text-[14px] outline-none placeholder:text-slate-400" />
+          <kbd className="rounded border border-slate-200 bg-slate-50 px-1.5 py-0.5 text-[10.5px] text-slate-400">ESC</kbd>
+        </div>
+        <div className="max-h-[50vh] overflow-y-auto p-1.5">
+          {rows.folders.map((f) => (
+            <a key={f.id} href={`/files/${f.id}`} onClick={onClose} className="flex items-center gap-2.5 rounded-md px-2.5 py-2 text-[13.5px] hover:bg-[#EEF3FE]">
+              <span className="text-[#1B66EA]"><Icons.folder size={16} /></span>
+              <span className="min-w-0 flex-1 truncate">{f.name}</span>
+            </a>
+          ))}
+          {rows.files.map((f) => (
+            <button key={f.id} type="button" onClick={() => { onClose(); window.dispatchEvent(new CustomEvent("workdrive:preview-by-id", { detail: { id: f.id } })); }}
+              className="flex w-full items-center gap-2.5 rounded-md px-2.5 py-2 text-start text-[13.5px] hover:bg-[#EEF3FE]">
+              <span className="text-slate-400"><Icons.doc size={16} /></span>
+              <span className="min-w-0 flex-1 truncate">{f.name}</span>
+            </button>
+          ))}
+          {!q.trim() ? <p className="px-3 py-4 text-center text-[13px] text-slate-400">{label("search.placeholder")}</p> : null}
+        </div>
+      </div>
+    </div>
   );
 }

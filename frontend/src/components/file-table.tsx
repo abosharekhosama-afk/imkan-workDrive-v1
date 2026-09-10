@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 import { useLocale } from "./locale-provider";
 import { FileIcon } from "./file-icon";
 import { FileActionsMenu } from "./file-actions-menu";
@@ -70,6 +70,7 @@ interface FileTableProps {
   favoriteIds?: Set<string>;
   emptyTitle?: string;
   emptyDescription?: string;
+  emptyAction?: ReactNode;
   selectedIds?: Set<string>;
   onSelectRow?: (id: string, isSelected: boolean) => void;
   onSelectAll?: (isSelected: boolean) => void;
@@ -104,6 +105,7 @@ export function FileTable({
   favoriteIds = new Set(),
   emptyTitle,
   emptyDescription,
+  emptyAction,
   selectedIds = new Set(),
   onSelectRow,
   onSelectAll,
@@ -120,7 +122,7 @@ export function FileTable({
   const formatSize = (value?: number | null) => formatBytes(value ?? 0);
 
   if (folders.length === 0 && files.length === 0) {
-    return <EmptyState title={emptyTitle?? label("files.empty")} description={emptyDescription} />;
+    return <EmptyState title={emptyTitle?? label("files.empty")} description={emptyDescription} action={emptyAction} />;
   }
 
   return (

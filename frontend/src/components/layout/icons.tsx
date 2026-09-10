@@ -33,5 +33,14 @@ function bot(p: P) { return (<Svg {...p}><rect x="4" y="8" width="16" height="12
 function shield(p: P) { return (<Svg {...p}><path d="M20 13c0 5-3.5 7.5-7.7 9a.6.6 0 0 1-.6 0C7.5 20.5 4 18 4 13V6a1 1 0 0 1 .7-1c2.4-.8 4.7-2 6.3-3.5a1 1 0 0 1 1.4 0c1.6 1.5 3.9 2.7 6.3 3.5a1 1 0 0 1 .7 1Z" /></Svg>); }
 function menu(p: P) { return (<Svg {...p}><path d="M4 6h16M4 12h16M4 18h16" /></Svg>); }
 function x(p: P) { return (<Svg {...p}><path d="M18 6 6 18M6 6l12 12" /></Svg>); }
-export const Icons = { grid, folder, users, plus, chevR, chevD, search, bell, help, info, list, star, clock, share, trash, spark, inbox, tag, layout, flow, sun, moon, act, ext, dots, bot, shield, menu, x };
+function doc(p: P) { return (<Svg {...p}><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z" /><path d="M14 2v6h6M9 13h6M9 17h6" /></Svg>); }
+function sheet(p: P) { return (<Svg {...p}><rect x="3" y="3" width="18" height="18" rx="2" /><path d="M3 9h18M3 15h18M9 3v18" /></Svg>); }
+function slide(p: P) { return (<Svg {...p}><rect x="3" y="4" width="18" height="12" rx="2" /><path d="M12 16v4M8 20h8" /></Svg>); }
+function video(p: P) { return (<Svg {...p}><rect x="2" y="6" width="13" height="12" rx="2" /><path d="m15 10 7-3v10l-7-3" /></Svg>); }
+function audio(p: P) { return (<Svg {...p}><path d="M9 18V6l10-2v12" /><circle cx="6.5" cy="18" r="2.5" /><circle cx="16.5" cy="16" r="2.5" /></Svg>); }
+function camera(p: P) { return (<Svg {...p}><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2Z" /><circle cx="12" cy="13" r="4" /></Svg>); }
+function link(p: P) { return (<Svg {...p}><path d="M10 13a5 5 0 0 0 7.5.5l3-3a5 5 0 0 0-7-7l-1.7 1.7" /><path d="M14 11a5 5 0 0 0-7.5-.5l-3 3a5 5 0 0 0 7 7l1.7-1.7" /></Svg>); }
+function download(p: P) { return (<Svg {...p}><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3" /></Svg>); }
+function check(p: P) { return (<Svg {...p}><path d="M20 6 9 17l-5-5" /></Svg>); }
+export const Icons = { grid, folder, users, plus, chevR, chevD, search, bell, help, info, list, star, clock, share, trash, spark, inbox, tag, layout, flow, sun, moon, act, ext, dots, bot, shield, menu, x, doc, sheet, slide, video, audio, camera, link, download, check };
 export type IconName = keyof typeof Icons;

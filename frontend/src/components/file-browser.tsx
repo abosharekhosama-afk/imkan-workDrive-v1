@@ -4,7 +4,10 @@ import { useCallback, useEffect, useState, useRef, type FormEvent } from "react"
 import { useSearchParams } from "next/navigation";
 import { useRouter } from "next/navigation";
 import { Breadcrumbs } from "./breadcrumbs";
-import { ActionToolbar, type SortDir } from "./layout/action-toolbar";
+import { ActionToolbar, FILTER_STORAGE_KEY, type FilterKey, type SortDir } from "./layout/action-toolbar";
+import { SelectionBar } from "./layout/selection-bar";
+import { FolderEmptyState } from "./layout/folder-empty-state";
+import { ShellScopeSync } from "./layout/shell-context";
 import { FileTable } from "./file-table";
 import { FileGridView } from "./file-grid-view";
 import { ShareModal } from "./share-modal";
@@ -97,6 +100,7 @@ export function FileBrowser({
   // Dual view preference (list/table ↔ grid), persisted per browser.
   const [viewMode, setViewMode] = useState<ViewMode>("list");
   const [sortDir, setSortDir] = useState<SortDir>("desc");
+  const [filter, setFilter] = useState<FilterKey>("all");
   // Folder aggregate metadata surfaced by the API (size / latest file update).
   const [folderSizes, setFolderSizes] = useState<ReadonlyMap<string, number>>(new Map());
   const [folderUpdatedAt, setFolderUpdatedAt] = useState<ReadonlyMap<string, string | null>>(new Map());
@@ -167,6 +171,12 @@ export function FileBrowser({
   // Restore the persisted view preference after mount (SSR-safe).
   useEffect(() => {
     setViewMode(readStoredViewMode(typeof window === "undefined" ? null : window.localStorage));
+    try {
+      const f = window.localStorage.getItem(FILTER_STORAGE_KEY);
+      if (f === "folders" || f === "documents" || f === "sheets" || f === "slides" || f === "media" || f === "audio" || f === "archives" || f === "favorites" || f === "all") {
+        setFilter(f);
+      }
+    } catch { /* noop */ }
   }, []);
 
   function switchViewMode(mode: ViewMode) {
@@ -341,12 +351,34 @@ export function FileBrowser({
 
   return (
     <section className="flex min-h-0 flex-1 flex-col w-full max-w-full overflow-x-hidden">
-      <ActionToolbar view={viewMode} onView={(v) => switchViewMode(v)} sort={sortDir} onSort={setSortDir} />
-      <div className="flex shrink-0 items-center justify-between gap-2 bg-white px-3 py-1.5">
+      <ShellScopeSync folderId={folderId} folderName={folderName} />
+      <ActionToolbar view={viewMode} onView={(v) => switchViewMode(v)} sort={sortDir} onSort={setSortDir} filter={filter} onFilter={setFilter} />
+      <SelectionBar
+        folderCount={folders.filter((f) => selectedIds.has(f.id)).length}
+        fileCount={files.filter((f) => selectedIds.has(f.id)).length}
+        onShare={() => {
+          const id = Array.from(selectedIds)[0];
+          if (!id) return;
+          const type = folders.some((f) => f.id === id) ? "FOLDER" : "FILE";
+          setShareTarget({ type, id });
+        }}
+        onCopyLink={() => {
+          const id = Array.from(selectedIds)[0];
+          if (!id) return;
+          try {
+            void navigator.clipboard.writeText(`${window.location.origin}/files/${id}`);
+          } catch { /* clipboard unavailable */ }
+        }}
+        onDownload={() => {
+          const file = files.find((f) => selectedIds.has(f.id));
+          if (file) void onDownload(file.id);
+        }}
+        onClear={() => setSelectedIds(new Set())}
+      />
+      <div className="hidden">
         <h1 className="truncate text-[13.5px] font-semibold text-slate-900">
           {label("files.heading")}
         </h1>
-        {/* Contextual Toolbar Placeholder (Phase 6) */}
         {selectedIds.size > 0 && (
           <div className="imkan-toolbar flex items-center gap-2 bg-[color:var(--imkan-color-surface)] px-4 py-2 rounded-sm shadow-sm border border-[color:var(--imkan-color-border)]">
             <span className="text-[length:var(--imkan-font-size-secondary)] mr-4">{selectedIds.size} {label("files.selected")}</span>
@@ -442,7 +474,8 @@ export function FileBrowser({
           onFavorite={handleFavorite}
           favoriteIds={favoriteIds}
           emptyTitle={searchActive? label("files.searchEmpty") : label("files.empty")}
-          emptyDescription={searchActive? label("files.searchEmptyDescription") : undefined}
+          emptyDescription={searchActive? label("files.searchEmptyDescription") : label("empty.ctaTitle")}
+          emptyAction={searchActive ? undefined : <FolderEmptyState />}
           selectedIds={selectedIds}
           onSelectRow={handleSelectRow}
           onSelectAll={handleSelectAll}
