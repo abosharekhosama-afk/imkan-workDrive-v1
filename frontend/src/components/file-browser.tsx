@@ -521,18 +521,24 @@ export function FileBrowser({
           size={versionHistoryTarget.size ?? 0}
           canWrite={canMutate}
           onPreviewVersion={(version) => {
-            // The preview modal resolves the active version URL itself via
-            // GET /files/:id/preview-url; we only need to open it.
+            // Resolve the freshest file record (the drawer's onRestored()/
+            // onUploaded() re-fetch via load()) so the preview modal receives
+            // the updated stream URL + MIME type instead of stale pre-restore
+            // values. `usePreviewUrl` re-issues GET /files/:id/preview-url on
+            // mount, which now points at the restored version's real bytes.
             void version;
+            const fresh = files.find((candidate) => candidate.id === versionHistoryTarget.id);
             setPreviewTarget({
               type: "FILE",
               id: versionHistoryTarget.id,
               name: versionHistoryTarget.name,
-              mimeType: versionHistoryTarget.mimeType,
-              size: versionHistoryTarget.size,
+              mimeType: fresh?.mimeType ?? versionHistoryTarget.mimeType,
+              size: fresh?.size ?? versionHistoryTarget.size,
             });
           }}
           onRestored={async () => {
+            // Re-fetch the main file details so the preview target (and any
+            // downstream stream URL / MIME) reflects the restored version.
             await load();
           }}
           onUploaded={async () => {

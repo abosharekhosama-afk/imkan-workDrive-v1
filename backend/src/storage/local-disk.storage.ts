@@ -33,11 +33,8 @@ export class LocalDiskStorageAdapter implements StorageService {
     request: StorageObjectRequest,
   ): Promise<SignedUrlResult> {
     const orgId = this.authorize(request);
-    const objectKey = buildTenantObjectKey(
-      orgId,
-      request.fileId,
-      request.versionId,
-    );
+    const objectKey =
+      request.storageKey ?? buildTenantObjectKey(orgId, request.fileId, request.versionId);
     const expiresInSeconds = this.expiresInSeconds();
     const token = signObjectAccess(this.signingSecret(), {
       method: 'PUT',
@@ -57,11 +54,8 @@ export class LocalDiskStorageAdapter implements StorageService {
     request: StorageObjectRequest,
   ): Promise<SignedUrlResult> {
     const orgId = this.authorize(request);
-    const objectKey = buildTenantObjectKey(
-      orgId,
-      request.fileId,
-      request.versionId,
-    );
+    const objectKey =
+      request.storageKey ?? buildTenantObjectKey(orgId, request.fileId, request.versionId);
     const expiresInSeconds = this.expiresInSeconds();
     const token = signObjectAccess(this.signingSecret(), {
       method: 'GET',
@@ -81,15 +75,30 @@ export class LocalDiskStorageAdapter implements StorageService {
 
   async assertObjectExists(request: StorageObjectRequest): Promise<void> {
     const orgId = this.authorize(request);
-    const objectKey = buildTenantObjectKey(
-      orgId,
-      request.fileId,
-      request.versionId,
-    );
+    const objectKey =
+      request.storageKey ?? buildTenantObjectKey(orgId, request.fileId, request.versionId);
     try {
       await access(this.resolveObjectPath(objectKey));
     } catch {
       throw new BadRequestException('Uploaded object was not found');
+    }
+  }
+
+  /**
+   * Storage-integrity gate for version restore: the physical bytes behind an
+   * existing tenant storage key must still be present. Cross-tenant keys are
+   * rejected up front (zero-trust), and a missing object surfaces as a clean
+   * 404 so the restore transaction is never entered against phantom data.
+   */
+  async assertStoredObjectExists(storageKey: string): Promise<void> {
+    const parsed = parseTenantObjectKey(storageKey);
+    if (parsed.orgId !== this.requireOrgId()) {
+      throw new ForbiddenException('Resource does not belong to this organization');
+    }
+    try {
+      await access(this.resolveObjectPath(storageKey));
+    } catch {
+      throw new NotFoundException('File object not found on storage');
     }
   }
 

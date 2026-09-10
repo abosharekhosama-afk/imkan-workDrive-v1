@@ -412,6 +412,13 @@ model File {
   createdAt      DateTime       @default(now()) @map("created_at")
   updatedAt      DateTime       @updatedAt @map("updated_at")
   lastAccessedAt DateTime?      @map("last_accessed_at")
+  /// Physical storage key backing the current (ACTIVE) version. Written on
+  /// version restore so prevew/stream/download resolve the real bytes of a
+  /// historical version instead of a key re-derived from the new version's
+  /// UUID (fixes preview corruption after restore).
+  storageKey      String?      @map("storage_key")
+  /// StorageObject backing the current (ACTIVE) version; populated on restore.
+  storageObjectId String?      @map("storage_object_id") @db.Char(36)
 
   organization   Organization    @relation(fields: [orgId], references: [id])
   folder         Folder?         @relation(fields: [folderId], references: [id], onDelete: Cascade)

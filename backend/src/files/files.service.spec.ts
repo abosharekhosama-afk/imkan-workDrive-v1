@@ -43,6 +43,7 @@ describe('FilesService', () => {
       expiresInSeconds: 900,
     })),
     assertObjectExists: jest.fn(async () => undefined),
+    assertStoredObjectExists: jest.fn(async () => undefined),
     deleteObject: jest.fn(async () => undefined),
     deleteStoredObject: jest.fn(async () => undefined),
     storeObject: jest.fn(async () => undefined),
@@ -836,6 +837,15 @@ describe('FilesService', () => {
       extension: 'pdf',
       sha256Hash: 'c'.repeat(64),
     };
+    const historicalStorageObject = {
+      id: 'so-hist',
+      orgId: ORG_A,
+      storageKey: `tenant_${ORG_A}/files/${FILE_A}/v1`,
+      bucket: 'imkan-workdrive-dev',
+      region: 'us-east-1',
+      size: 10n,
+      checksum: 'c'.repeat(64),
+    };
 
     it('creates a RESTORED version pointing at the historical storage object (zero duplication)', async () => {
       prisma.file.findFirst.mockResolvedValue({
@@ -846,6 +856,7 @@ describe('FilesService', () => {
         versions: [targetVersion],
       });
       prisma.fileVersion.findFirst.mockResolvedValue({ id: 'v3', versionNumber: 3 });
+      prisma.storageObject.findFirst.mockResolvedValue(historicalStorageObject);
 
       const result = await service.restoreVersionById(user, FILE_A, 'v1');
 
@@ -874,6 +885,60 @@ describe('FilesService', () => {
           data: expect.objectContaining({ action: 'RESTORE_VERSION' }),
         }),
       );
+      // The parent File row must mirror the restored version's storage
+      // attributes so preview/stream/download resolve the real historical bytes.
+      expect(prisma.file.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { id: FILE_A },
+          data: expect.objectContaining({
+            storageKey: historicalStorageObject.storageKey,
+            storageObjectId: 'so-hist',
+            mimeType: 'application/pdf',
+            size: 10n,
+            sha256Hash: 'c'.repeat(64),
+          }),
+        }),
+      );
+    });
+
+    it('verifies the physical object exists before the restore transaction (storage integrity gate)', async () => {
+      prisma.file.findFirst.mockResolvedValue({
+        id: FILE_A,
+        orgId: ORG_A,
+        ownerId: USER_A,
+        folder: PERSONAL_FOLDER,
+        versions: [targetVersion],
+      });
+      prisma.fileVersion.findFirst.mockResolvedValue({ id: 'v3', versionNumber: 3 });
+      prisma.storageObject.findFirst.mockResolvedValue(historicalStorageObject);
+      (storage.assertStoredObjectExists as jest.Mock).mockResolvedValueOnce(undefined);
+
+      await service.restoreVersionById(user, FILE_A, 'v1');
+
+      expect(storage.assertStoredObjectExists).toHaveBeenCalledWith(
+        historicalStorageObject.storageKey,
+      );
+    });
+
+    it('rejects the restore when the physical object is missing from storage', async () => {
+      prisma.file.findFirst.mockResolvedValue({
+        id: FILE_A,
+        orgId: ORG_A,
+        ownerId: USER_A,
+        folder: PERSONAL_FOLDER,
+        versions: [targetVersion],
+      });
+      prisma.fileVersion.findFirst.mockResolvedValue({ id: 'v3', versionNumber: 3 });
+      prisma.storageObject.findFirst.mockResolvedValue(historicalStorageObject);
+      (storage.assertStoredObjectExists as jest.Mock).mockRejectedValueOnce(
+        new NotFoundException('File object not found on storage'),
+      );
+
+      await expect(
+        service.restoreVersionById(user, FILE_A, 'v1'),
+      ).rejects.toBeInstanceOf(NotFoundException);
+      // No transaction work may have run against phantom bytes.
+      expect(prisma.fileVersion.create).not.toHaveBeenCalled();
     });
 
     it('rejects restoring the current (latest) version', async () => {

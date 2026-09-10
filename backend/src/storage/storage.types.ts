@@ -16,6 +16,13 @@ export type StorageObjectRequest = {
   ownerOrgId: string;
   contentType?: string;
   /**
+   * Explicit physical storage key override. When a restored version re-points
+   * at a historical version's bytes, the physical key (tenant_{orgId}/files/{f}/{v})
+   * no longer matches the new version's UUID — callers pass the historical
+   * `StorageObject.storageKey` here so URLs/checks target the real bytes.
+   */
+  storageKey?: string;
+  /**
    * Download links default to `attachment`. Pass `inline` for preview URLs so
    * browsers render the bytes in-place instead of forcing a download.
    */
@@ -29,6 +36,12 @@ export interface StorageService {
   createUploadUrl(request: StorageObjectRequest): Promise<SignedUrlResult>;
   createDownloadUrl(request: StorageObjectRequest): Promise<SignedUrlResult>;
   assertObjectExists(request: StorageObjectRequest): Promise<void>;
+  /**
+   * Verifies that the physical object behind an existing tenant storage key is
+   * present (Render/S3/local disk). Used as the storage-integrity gate before a
+   * version restore mutation; throws 404 when the bytes are gone.
+   */
+  assertStoredObjectExists(storageKey: string): Promise<void>;
   deleteObject(request: StorageObjectRequest): Promise<void>;
   /** Deletes a physical object by its full tenant storage key (Database V2). */
   deleteStoredObject(storageKey: string): Promise<void>;

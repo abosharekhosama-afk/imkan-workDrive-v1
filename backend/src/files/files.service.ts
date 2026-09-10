@@ -324,9 +324,11 @@ export class FilesService {
     if (scan[0]?.status === 'INFECTED') throw new NotFoundException('File is unavailable');
 
     const version = file.versions[0];
+    const storageObject = await this.resolveVersionStorageObject(version);
     const signed = await this.storage.createDownloadUrl({
       fileId: file.id,
       versionId: version.id,
+      storageKey: storageObject?.storageKey ?? undefined,
       ownerOrgId: user.org_id,
       contentType: version.mimeType,
       // Force a direct download: the signed URL carries an attachment
@@ -380,9 +382,11 @@ export class FilesService {
     }
 
     const version = file.versions[0];
+    const storageObject = await this.resolveVersionStorageObject(version);
     const signed = await this.storage.createDownloadUrl({
       fileId: file.id,
       versionId: version.id,
+      storageKey: storageObject?.storageKey ?? undefined,
       ownerOrgId: user.org_id,
       contentType: version.mimeType,
       disposition: 'attachment',
@@ -436,9 +440,11 @@ export class FilesService {
     }
 
     const version = file.versions[0];
+    const storageObject = await this.resolveVersionStorageObject(version);
     const signed = await this.storage.createDownloadUrl({
       fileId: file.id,
       versionId: version.id,
+      storageKey: storageObject?.storageKey ?? undefined,
       ownerOrgId: user.org_id,
       contentType: version.mimeType,
       disposition: 'attachment',
@@ -685,9 +691,11 @@ export class FilesService {
     }
 
     const version = file.versions[0];
+    const storageObject = await this.resolveVersionStorageObject(version);
     const signed = await this.storage.createDownloadUrl({
       fileId: file.id,
       versionId: version.id,
+      storageKey: storageObject?.storageKey ?? undefined,
       ownerOrgId: user.org_id,
       contentType: version.mimeType,
       disposition: 'inline',
@@ -898,6 +906,16 @@ export class FilesService {
     });
     const newVersionNumber = (maxVersion?.versionNumber ?? 0) + 1;
 
+    // Storage integrity gate (BEFORE the database transaction): the physical
+    // bytes behind the historical storage object must still exist (Render/S3/
+    // local disk). Asserting up front keeps the restore transaction out of
+    // phantom data and rolls back nothing on a missing object — a clean 404.
+    const storageObject = await this.resolveVersionStorageObject(sourceVersion);
+    if (!storageObject) {
+      throw new NotFoundException('Storage object not found');
+    }
+    await this.storage.assertStoredObjectExists(storageObject.storageKey);
+
     await this.prisma.$transaction(async (tx) => {
       await tx.fileVersion.create({
         data: {
@@ -922,6 +940,10 @@ export class FilesService {
         },
         data: { status: VersionStatus.SUPERSEDED },
       });
+      // Strictly mirror the restored version's storage attributes onto the
+      // parent File so every stream/download/preview path resolves the real
+      // physical bytes (its historical storage key), not a key re-derived from
+      // the restored version's own UUID — the root cause of preview corruption.
       await tx.file.update({
         where: { id: fileId },
         data: {
@@ -930,6 +952,9 @@ export class FilesService {
           mimeType: sourceVersion.mimeType,
           sha256Hash: sourceVersion.sha256Hash,
           extension: sourceVersion.extension,
+          fileType: classifyFileType(sourceVersion.mimeType),
+          storageKey: storageObject.storageKey,
+          storageObjectId: sourceVersion.storageObjectId,
         },
       });
       await tx.fileActivity.create({
@@ -1222,6 +1247,7 @@ export class FilesService {
     const urlResult = await this.storage.createDownloadUrl({
       fileId: file.id,
       versionId: version.id,
+      storageKey: storageObject.storageKey ?? undefined,
       ownerOrgId: user.org_id,
       contentType,
     });
@@ -1345,6 +1371,27 @@ export class FilesService {
       bucket: this.config.get<string>('S3_BUCKET') ?? 'imkan-workdrive-dev',
       region: this.config.get<string>('S3_REGION') ?? 'us-east-1',
     };
+  }
+
+  /**
+   * Resolves the physical storage key backing a version. The StorageObject row
+   * is the source of truth: restored versions re-point at a historical
+   * version's object whose key (tenant_{org}/files/{fileId}/{originalVersionId})
+   * differs from the restored version's own UUID. When the row is missing
+   * (legacy pre-Database-V2 data), the caller falls back to the deterministic
+   * derived key.
+   */
+  private async resolveVersionStorageObject(version: {
+    storageObjectId?: string | null;
+  }): Promise<{ storageKey: string; bucket: string; region: string | null } | null> {
+    if (!version.storageObjectId) return null;
+    const object = await this.prisma.storageObject.findFirst({
+      where: { id: version.storageObjectId },
+      select: { storageKey: true, bucket: true, region: true },
+    });
+    return object
+      ? { storageKey: object.storageKey, bucket: object.bucket, region: object.region }
+      : null;
   }
 
   private async requireMutableFile<
