@@ -478,8 +478,8 @@ export function FileBrowser({
               void navigator.clipboard.writeText(`${window.location.origin}/files/${id}`);
             } catch { /* clipboard unavailable */ }
           }}
-          emptyTitle={searchActive? label("files.searchEmpty") : label("files.empty")}
-          emptyDescription={searchActive? label("files.searchEmptyDescription") : label("empty.ctaTitle")}
+          emptyTitle={searchActive? label("files.searchEmpty") : label("empty.title")}
+          emptyDescription={searchActive? label("files.searchEmptyDescription") : label("empty.subtitle")}
           emptyAction={searchActive ? undefined : <FolderEmptyState />}
           selectedIds={selectedIds}
           onSelectRow={handleSelectRow}

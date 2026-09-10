@@ -12,27 +12,25 @@ export function SidebarFooter({ quota, role, onNav }: { quota: QuotaOverview | n
   const pct = quota && !quota.unlimited && total ? Math.min(100, Math.round((used / total) * 100)) : 12;
   const admin = role === "ADMIN" || role === "SUPER_ADMIN";
   return (
-    <div className="shrink-0 border-t border-white/[0.07] px-3 py-2.5">
-      <div className="flex flex-col gap-1 text-[12px]">
-        <a href="https://www.zoho.com/crm/" target="_blank" rel="noreferrer" className="flex items-center gap-2 rounded px-1 py-1 text-slate-400 hover:bg-white/[0.06] hover:text-white">
-          <Icons.ext size={14} /> {label("nav.integratedApps")}
+    <div className="shrink-0 border-t border-white/[0.07] px-2 py-2.5">
+      <div className="flex flex-col gap-1.5 text-[12px]">
+        <a href="https://www.zoho.com/crm/" target="_blank" rel="noreferrer" className="flex items-center gap-2 rounded-lg px-2 py-1 text-[#9CA3AF] hover:bg-white/[0.06] hover:text-white" title={label("nav.section.integratedApps")}>
+          <Icons.ext size={14} /> {label("nav.zohoCrm")}
         </a>
-        <Link href="/settings" onClick={onNav} className="flex items-center gap-2 rounded px-1 py-1 text-slate-400 hover:bg-white/[0.06] hover:text-white">
-          <Icons.spark size={14} /> {label("nav.getStarted")}
+        <Link href="/settings" onClick={onNav} className="flex items-center justify-center gap-2 rounded-lg bg-[#262C36] px-3 py-2 text-[12.5px] font-medium text-white hover:bg-[#2F3642]">
+          {label("nav.getStarted")}
         </Link>
-        {admin ? (
-          <Link href="/admin" onClick={onNav} className="flex items-center gap-2 rounded px-1 py-1 text-slate-400 hover:bg-white/[0.06] hover:text-white">
-            <Icons.shield size={14} /> {label("nav.admin")}
-          </Link>
-        ) : null}
+        <Link href={admin ? "/admin" : "/settings"} onClick={onNav} className="flex items-center justify-center gap-2 rounded-lg bg-[#262C36] px-3 py-2 text-[12.5px] font-medium text-white hover:bg-[#2F3642]">
+          <span className="min-w-0 truncate">{label("nav.adminConsole")}</span> <Icons.ext size={13} />
+        </Link>
       </div>
       <div className="mt-2 rounded-md bg-white/[0.04] p-2">
-        <div className="flex items-center justify-between text-[11px] text-slate-400">
+        <div className="flex items-center justify-between text-[11px] text-[#9CA3AF]">
           <span className="truncate">{formatBytes(used)} / {formatBytes(total)}</span>
           <button type="button" className="font-medium text-[#5B8DEF] hover:text-[#8FB2FF]" onClick={() => router.push("/settings")}>{label("quota.upgrade")}</button>
         </div>
         <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-white/10" role="progressbar" aria-valuenow={pct} aria-valuemin={0} aria-valuemax={100} aria-label={label("quota.title")}>
-          <div className="h-full rounded-full bg-[#1B66EA]" style={{ width: `${Math.max(pct, 3)}%` }} />
+          <div className="h-full rounded-full bg-[#2563EB]" style={{ width: `${Math.max(pct, 3)}%` }} />
         </div>
       </div>
     </div>

@@ -44,5 +44,8 @@ function download(p: P) { return (<Svg {...p}><path d="M21 15v4a2 2 0 0 1-2 2H5a
 function check(p: P) { return (<Svg {...p}><path d="M20 6 9 17l-5-5" /></Svg>); }
 function sort(p: P) { return (<Svg {...p}><path d="m7 15 5 5 5-5M7 9l5-5 5 5" /></Svg>); }
 function funnel(p: P) { return (<Svg {...p}><path d="M3 5h18l-7 8v5.5l-4 2V13Z" /></Svg>); }
-export const Icons = { grid, folder, users, plus, chevR, chevD, search, bell, help, info, list, star, clock, share, trash, spark, inbox, tag, layout, flow, sun, moon, act, ext, dots, bot, shield, menu, x, doc, sheet, slide, video, audio, camera, link, download, check, sort, funnel };
+function compact(p: P) { return (<Svg {...p}><path d="M4 6h16M4 10h16M4 14h16M4 18h16" /></Svg>); }
+function gear(p: P) { return (<Svg {...p}><circle cx="12" cy="12" r="6" /><path d="M4 12h16M12 4v16M6.3 6.3l1.4 1.4M17.7 17.7l1.4 1.4M6.3 17.7l-1.4 1.4M17.7 6.3l-1.4 1.4" /></Svg>); }
+function horn(p: P) { return (<Svg {...p}><path d="m3 11 18-5v12L3 14v-3Z" /><path d="M11.6 16.8a3 3 0 1 1-5.8-1.6" /></Svg>); }
+export const Icons = { grid, folder, users, plus, chevR, chevD, search, bell, help, info, list, star, clock, share, trash, spark, inbox, tag, layout, flow, sun, moon, act, ext, dots, bot, shield, menu, x, doc, sheet, slide, video, audio, camera, link, download, check, sort, funnel, compact, gear, horn };
 export type IconName = keyof typeof Icons;

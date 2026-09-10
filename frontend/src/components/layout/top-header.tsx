@@ -2,6 +2,7 @@
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { useLocale } from "../locale-provider";
+import type { MessageKey } from "../../i18n";
 import { ThemeToggle } from "../theme-toggle";
 import { listMemberships, type OrganizationMembershipSummary } from "../../lib/api/auth";
 import { listNotifications, type NotificationRecord } from "../../lib/api/notifications";
@@ -9,6 +10,7 @@ import { useShell, readScope, type ScopeDetail } from "./shell-context";
 import { Icons } from "./icons";
 import { AccountMenu } from "./account-menu";
 import { ZohoMenu } from "./zoho-menu";
+import { NotificationPanel } from "./notification-panel";
 export function TopHeader() {
   const { label, locale, setLocale } = useLocale();
   const { setMobileNavOpen } = useShell();
@@ -20,6 +22,7 @@ export function TopHeader() {
   const [scope, setScope] = useState<ScopeDetail>({ folderId: null, folderName: null });
   const [manageOpen, setManageOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
+  const [notifOpen, setNotifOpen] = useState(false);
   const teamRef = useRef<HTMLDivElement | null>(null);
   const searchInputRef = useRef<HTMLInputElement | null>(null);
   useEffect(() => {
@@ -58,6 +61,9 @@ export function TopHeader() {
     <header className="flex h-12 shrink-0 items-center gap-2 border-b border-[color:var(--imkan-color-border)] bg-white px-3">
       <button type="button" className="rounded-md p-2 text-slate-600 hover:bg-slate-100 md:hidden" onClick={() => setMobileNavOpen(true)} aria-label={label("nav.workspace")}>
         <Icons.menu size={18} />
+      </button>
+      <button type="button" onClick={() => setMobileNavOpen(true)} title={label("nav.manage")} aria-label={label("nav.manage")} className="hidden rounded-md p-2 text-slate-600 hover:bg-slate-100 md:inline-flex">
+        <Icons.list size={17} />
       </button>
       <div className="flex min-w-0 items-center gap-1.5">
         <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-[#E8EFFD] text-[#1B66EA]" aria-hidden="true">
@@ -108,11 +114,19 @@ export function TopHeader() {
         <button type="button" className="rounded-md p-2 text-slate-500 hover:bg-slate-100" aria-label={label("search.placeholder")} onClick={() => setSearchOpen(true)}>
           <Icons.search size={17} />
         </button>
-        <Link href="/notifications" className="relative rounded-md p-2 text-slate-500 hover:bg-slate-100" aria-label={label("nav.notifications")} title={label("nav.notifications")}>
+        <button type="button" className="rounded-md p-2 text-slate-500 hover:bg-slate-100" aria-label={label("nav.notifications")} title={label("nav.notifications")}>
+          <Icons.horn size={17} />
+        </button>
+        <button id="hdr-notif-btn" type="button" onClick={() => setNotifOpen((v) => !v)} aria-expanded={notifOpen} aria-haspopup="menu"
+          className="relative rounded-md p-2 text-slate-500 hover:bg-slate-100" aria-label={label("nav.notifications")} title={label("nav.notifications")}>
           <Icons.bell size={17} />
           {unread > 0 ? <span className="absolute end-1 top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-bold text-white">{unread > 9 ? "9+" : unread}</span> : null}
+        </button>
+        {notifOpen ? <NotificationPanel open={notifOpen} onClose={() => setNotifOpen(false)} /> : null}
+        <Link href="/settings" className="hidden rounded-md p-2 text-slate-500 hover:bg-slate-100 sm:block" aria-label={label("nav.theme")} title={label("nav.theme")}>
+          <Icons.gear size={17} />
         </Link>
-        <Link href="/settings" className="hidden rounded-md p-2 text-slate-500 hover:bg-slate-100 sm:block" aria-label={label("nav.help")} title={label("nav.help")}>
+        <Link href="/help" className="hidden rounded-md p-2 text-slate-500 hover:bg-slate-100 sm:block" aria-label={label("nav.help")} title={label("nav.help")}>
           <Icons.help size={17} />
         </Link>
         <button type="button" className="hidden rounded-md p-2 text-slate-500 hover:bg-slate-100 sm:block" title={label("nav.appSwitcher")} aria-label={label("nav.appSwitcher")}>
@@ -122,7 +136,10 @@ export function TopHeader() {
         <button type="button" className="rounded-md px-2 py-1.5 text-[12px] font-semibold text-slate-500 hover:bg-slate-100" onClick={() => setLocale(locale === "en" ? "ar" : "en")}>
           {locale === "en" ? "ع" : "En"}
         </button>
-        <AccountMenu name={name} />
+        <div className="relative">
+          <span className="absolute -end-0.5 bottom-0 z-10 h-2.5 w-2.5 rounded-full border-2 border-white bg-emerald-500" aria-hidden="true" />
+          <AccountMenu name={name} />
+        </div>
       </div>
       {searchOpen ? <HeaderSearchOverlay onClose={() => setSearchOpen(false)} inputRef={searchInputRef} /> : null}
     </header>
@@ -132,17 +149,32 @@ export function TopHeader() {
 function HeaderSearchOverlay({ onClose, inputRef }: { onClose: () => void; inputRef: React.RefObject<HTMLInputElement | null> }) {
   const { label } = useLocale();
   const [q, setQ] = useState("");
+  const [filter, setFilter] = useState<"all" | "folders" | "files" | "recent">("all");
+  const [filterOpen, setFilterOpen] = useState(false);
+  const filterRef = useRef<HTMLDivElement | null>(null);
   const [rows, setRows] = useState<{ folders: { id: string; name: string }[]; files: { id: string; name: string }[] }>({ folders: [], files: [] });
+  const filterOptions: Array<{ key: "all" | "folders" | "files" | "recent"; labelKey: MessageKey }> = [
+    { key: "all", labelKey: "search.filter.all" },
+    { key: "folders", labelKey: "search.filter.folders" },
+    { key: "files", labelKey: "search.filter.files" },
+    { key: "recent", labelKey: "search.filter.recent" },
+  ];
+  useEffect(() => {
+    if (!filterOpen) return;
+    const onDown = (e: MouseEvent) => { if (filterRef.current && !filterRef.current.contains(e.target as Node)) setFilterOpen(false); };
+    document.addEventListener("mousedown", onDown);
+    return () => document.removeEventListener("mousedown", onDown);
+  }, [filterOpen]);
   useEffect(() => {
     if (!q.trim()) { setRows({ folders: [], files: [] }); return; }
     let live = true;
     const t = window.setTimeout(() => {
-      import("../../lib/api/search").then(({ searchNames }) => searchNames(q.trim()).then((r) => {
+      import("../../lib/api/search").then(({ searchNames }) => searchNames(q.trim(), filter).then((r) => {
         if (live) setRows({ folders: (r.folders ?? []).slice(0, 5), files: (r.files ?? []).slice(0, 7) });
       }).catch(() => undefined));
     }, 220);
     return () => { live = false; window.clearTimeout(t); };
-  }, [q]);
+  }, [q, filter]);
   return (
     <div className="fixed inset-0 z-[80]" role="dialog" aria-modal="true" aria-label={label("search.placeholder")}>
       <div className="absolute inset-0 bg-black/30" onClick={onClose} aria-hidden="true" />
@@ -151,6 +183,23 @@ function HeaderSearchOverlay({ onClose, inputRef }: { onClose: () => void; input
           <Icons.search size={16} />
           <input ref={inputRef} value={q} onChange={(e) => setQ(e.target.value)} placeholder={label("search.placeholder")}
             aria-label={label("search.placeholder")} className="min-w-0 flex-1 bg-transparent text-[14px] outline-none placeholder:text-slate-400" />
+          <div className="relative" ref={filterRef}>
+            <button id="hdr-search-filter-btn" type="button" onClick={() => setFilterOpen((v) => !v)} aria-expanded={filterOpen} aria-haspopup="menu"
+              className="inline-flex items-center gap-1 rounded-md border border-slate-200 px-2 py-1 text-[12px] text-slate-600 hover:bg-slate-50">
+              <Icons.funnel size={13} /> {label((filterOptions.find((o) => o.key === filter)?.labelKey ?? "search.filter.all") as MessageKey)}
+            </button>
+            {filterOpen ? (
+              <div className="absolute top-full z-[90] mt-1 w-44 overflow-hidden rounded-lg border border-slate-200 bg-white py-1 shadow-lg" role="menu">
+                {filterOptions.map((o) => (
+                  <button key={o.key} type="button" role="menuitem" onClick={() => { setFilter(o.key); setFilterOpen(false); }}
+                    className={`flex w-full items-center gap-2.5 px-3 py-2 text-start text-[13px] ${filter === o.key ? "bg-[#EEF3FE] text-[#1B66EA]" : "text-slate-700 hover:bg-slate-50"}`}>
+                    <span className="w-4 text-center">{filter === o.key ? "✓" : ""}</span>
+                    <span className="flex-1">{label(o.labelKey)}</span>
+                  </button>
+                ))}
+              </div>
+            ) : null}
+          </div>
           <kbd className="rounded border border-slate-200 bg-slate-50 px-1.5 py-0.5 text-[10.5px] text-slate-400">ESC</kbd>
         </div>
         <div className="max-h-[50vh] overflow-y-auto p-1.5">

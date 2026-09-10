@@ -1,10 +1,10 @@
 /** View mode preference for the dual file browser (list/table vs grid). */
-export type ViewMode = "list" | "grid";
+export type ViewMode = "list" | "compact" | "grid";
 
 export const VIEW_MODE_STORAGE_KEY = "workdrive_view_mode";
 
 export function isViewMode(value: unknown): value is ViewMode {
-  return value === "list" || value === "grid";
+  return value === "list" || value === "compact" || value === "grid";
 }
 
 export function sanitizeViewMode(value: unknown): ViewMode {

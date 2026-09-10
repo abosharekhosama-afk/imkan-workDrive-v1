@@ -9,6 +9,7 @@ export function SelectionBar({ folderCount, fileCount, onShare, onCopyLink, onDo
 }) {
   const { label } = useLocale();
   const [shareOpen, setShareOpen] = useState(false);
+  const [moreOpen, setMoreOpen] = useState(false);
   const total = folderCount + fileCount;
   if (total === 0) return null;
   const text = (folderCount > 0 && fileCount === 0
@@ -18,27 +19,57 @@ export function SelectionBar({ folderCount, fileCount, onShare, onCopyLink, onDo
       : label("sel.itemsSelected")
   ).replace("{count}", String(total));
   return (
-    <div className="flex shrink-0 flex-wrap items-center gap-2 border-b border-[#C9D8F8] bg-[#EEF3FE] px-3 py-1.5" role="status" aria-live="polite">
+    <div className="flex shrink-0 flex-wrap items-center gap-2 border-b border-[#BFDBFE] bg-[#EFF6FF] px-3 py-1.5" role="status" aria-live="polite">
       <button type="button" onClick={onClear} aria-label={label("sel.clear")} title={label("sel.clear")}
-        className="rounded p-1 text-[#1B66EA] hover:bg-[#DCE7FD]"><Icons.x size={15} /></button>
-      <span className="text-[13px] font-medium text-[#1B3A7A]">{text}</span>
+        className="rounded p-1 text-[#1D4ED8] hover:bg-[#DCE7FD]"><Icons.x size={15} /></button>
+      <span className="text-[13px] font-medium text-[#1E40AF]">{text}</span>
       <div className="ms-auto flex items-center gap-1">
         <button id="sel-share-btn" type="button" onClick={() => setShareOpen((v) => !v)} aria-expanded={shareOpen} aria-haspopup="menu"
-          className="inline-flex items-center gap-1 rounded-md border border-[#1B66EA]/30 bg-white px-3 py-1.5 text-[13px] font-medium text-[#1B66EA] hover:bg-[#DCE7FD]">
-          {label("menu.shareMenu")} <Icons.chevD size={13} />
+          className="inline-flex items-center gap-1.5 rounded-lg border border-[#1D4ED8]/30 bg-white px-3 py-1.5 text-[13px] font-medium text-[#1D4ED8] hover:bg-[#DCE7FD]">
+          {label("sel.share")} <Icons.chevD size={13} />
         </button>
         <ZohoMenu open={shareOpen} onClose={() => setShareOpen(false)} labelledBy="sel-share-btn"
           onSelect={(k) => { if (k === "share") onShare(); else if (k === "copy") onCopyLink(); }}
           items={[
-            { key: "share", labelKey: "menu.shareMenu" },
-            { key: "copy", labelKey: "menu.copyLink" },
+            { key: "addMembers", labelKey: "menu.addMembers" },
+            { key: "externalShareLink", labelKey: "menu.externalShareLink" },
+            { key: "downloadLink", labelKey: "menu.downloadLink" },
+            { key: "embedCode", labelKey: "menu.embedCode" },
+            { key: "shareToSupport", labelKey: "menu.shareToSupport" },
           ]} />
         <button type="button" onClick={onCopyLink} title={label("menu.copyLink")} aria-label={label("menu.copyLink")}
-          className="rounded-md p-1.5 text-[#1B3A7A] hover:bg-[#DCE7FD]"><Icons.link size={16} /></button>
-        <button type="button" onClick={onDownload} title={label("menu.download")} aria-label={label("menu.download")}
-          className="rounded-md p-1.5 text-[#1B3A7A] hover:bg-[#DCE7FD]"><Icons.download size={16} /></button>
-        <button type="button" onClick={onShare} title={label("files.actions")} aria-label={label("files.actions")}
-          className="rounded-md p-1.5 text-[#1B3A7A] hover:bg-[#DCE7FD]"><Icons.dots size={16} /></button>
+          className="rounded-md p-1.5 text-[#1E40AF] hover:bg-[#DCE7FD]"><Icons.link size={16} /></button>
+        <button type="button" onClick={onDownload} title={label("sel.download")} aria-label={label("sel.download")}
+          className="rounded-md p-1.5 text-[#1E40AF] hover:bg-[#DCE7FD]"><Icons.download size={16} /></button>
+        <button id="sel-more-btn" type="button" onClick={() => setMoreOpen((v) => !v)} aria-expanded={moreOpen} aria-haspopup="menu"
+          title={label("sel.more")} aria-label={label("sel.more")}
+          className="rounded-md p-1.5 text-[#1E40AF] hover:bg-[#DCE7FD]"><Icons.dots size={16} /></button>
+        <ZohoMenu open={moreOpen} onClose={() => setMoreOpen(false)} labelledBy="sel-more-btn" align="end"
+          onSelect={(k) => {
+            if (k === "share" || k === "addMembers") onShare();
+            else if (k === "copy" || k === "copyPermalink") onCopyLink();
+            else if (k === "download") onDownload();
+          }}
+          items={[
+            { key: "openNewTab", labelKey: "menu.openNewTab" },
+            { key: "properties", labelKey: "menu.properties" },
+            "sep",
+            { key: "share", labelKey: "menu.shareMenu" },
+            { key: "copyPermalink", labelKey: "menu.copyPermalink" },
+            "sep",
+            { key: "moveTo", labelKey: "menu.moveTo", hint: "Z" },
+            { key: "copyTo", labelKey: "menu.copyTo", hint: "C" },
+            { key: "assignWorkflow", labelKey: "menu.assignWorkflow" },
+            { key: "organize", labelKey: "menu.organize" },
+            "sep",
+            { key: "searchInFold", labelKey: "menu.searchInFold" },
+            { key: "download", labelKey: "sel.download", hint: "⌃S" },
+            { key: "rename", labelKey: "menu.rename" },
+            { key: "followUpdates", labelKey: "menu.followUpdates" },
+            { key: "moreOptions", labelKey: "menu.moreOptions" },
+            "sep",
+            { key: "moveToTrash", labelKey: "menu.moveToTrash", danger: true },
+          ]} />
       </div>
     </div>
   );

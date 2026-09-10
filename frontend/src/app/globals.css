@@ -432,9 +432,18 @@ html, body {
 :root{
   --wd-green:#00a884;
   --wd-green-dark:#008f70;
-  --wd-sidebar:#20242d;
+  --wd-sidebar:#181C21;
+  --wd-active:#2A3A58;
+  --wd-primary:#2563EB;
+  --wd-primary-dark:#1D4ED8;
+  --wd-danger:#DC2626;
+  --wd-sel-bar:#EFF6FF;
+  --wd-sel-border:#BFDBFE;
+  --wd-sel-text:#1E40AF;
+  --wd-btn-pill:#F1F5F9;
+  --wd-footer-btn:#262C36;
   --wd-sidebar-text:#d7dbe2;
-  --wd-sidebar-muted:#9ba3b1;
+  --wd-sidebar-muted:#9CA3AF;
   --wd-bg:#fff;
   --wd-canvas:#f7f8fa;
   --wd-line:#e7e9ed;
@@ -499,11 +508,11 @@ html[data-theme="dark"] .zoho-icon-btn:hover{background:var(--wd-hover);color:#d
 .zoho-team-switch .chevron{margin-inline-start:auto;color:#aab1bd}
 .zoho-sidebar-nav{display:flex;flex-direction:column;padding:12px 9px;gap:2px;min-height:0;overflow:auto}
 .zoho-nav-section-title{font-size:9px;color:#7f8897;padding:6px 10px 7px;letter-spacing:.08em}
-.zoho-side-link{display:flex;align-items:center;gap:10px;padding:8px 11px;color:var(--wd-sidebar-text);font-size:11px;text-decoration:none;border-radius:5px}
+.zoho-side-link{display:flex;align-items:center;gap:10px;padding:8px 11px;color:var(--wd-sidebar-text);font-size:13px;text-decoration:none;border-radius:8px}
 .zoho-side-link:hover{background:rgba(255,255,255,.07);color:#fff}
-.zoho-side-link.active{background:#343a46;color:#fff;box-shadow:inset 3px 0 0 var(--wd-green)}
+.zoho-side-link.active{background:var(--wd-active);color:#fff;border-radius:8px}
 .zoho-side-icon{width:15px;text-align:center;color:#aab1bd;font-size:12px;flex-shrink:0}
-.zoho-side-link.active .zoho-side-icon{color:#65d4bd}
+.zoho-side-link.active .zoho-side-icon{color:#fff}
 .zoho-sidebar-spacer{flex:1;min-height:12px}
 .zoho-admin-link{padding:13px 16px;color:#aab1bd;font-size:10px;border-top:1px solid rgba(255,255,255,.08)}
 .zoho-main{min-width:0;flex:1;background:#fff;overflow-x:hidden}
@@ -518,7 +527,8 @@ html[data-theme="dark"] .zoho-icon-btn:hover{background:var(--wd-hover);color:#d
 /* RTL adjustments — flexbox follows document direction automatically,
    so only direction-aware decorations need overrides here. */
 [dir="rtl"] .zoho-side-link.active {
-  box-shadow: inset -3px 0 0 var(--wd-green);
+  background: var(--wd-active);
+  border-radius: 8px;
 }
 .zoho-profile-menu a,
 .zoho-profile-menu button {

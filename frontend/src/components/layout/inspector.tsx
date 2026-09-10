@@ -2,7 +2,6 @@
 import { useEffect, useState } from "react";
 import { useLocale } from "../locale-provider";
 import { FileTypeIcon, fileIconKind } from "../file-icon";
-import { formatBytes } from "../../lib/api/quota";
 import { formatDateLocalized } from "../../lib/localized";
 import { listAudit, formatAuditAction, type AuditRecord } from "../../lib/api/audit";
 import { useShell, type InspectorTab } from "./shell-context";
@@ -59,20 +58,29 @@ export function InspectorPanel({ onVersionHistory }: { onVersionHistory?: (fileI
           <div className="flex flex-col gap-3">
             <div className="flex items-center gap-2.5 rounded-lg bg-slate-50 p-3">
               <FileTypeIcon kind={kind} size={34} />
-              <span className="min-w-0 flex-1 truncate text-[13.5px] font-medium" title={name}>{name}</span>
+              <div className="min-w-0 flex-1">
+                <div className="truncate text-[13.5px] font-medium" title={name}>{name}</div>
+                <button type="button" className="mt-0.5 inline-flex items-center gap-1 text-[12px] text-slate-500 hover:text-slate-700">
+                  <Icons.check size={12} /> {label("inspector.addDescription")}
+                </button>
+              </div>
             </div>
             <dl className="flex flex-col gap-2 text-[13px]">
+              <div className="flex justify-between gap-2"><dt className="text-slate-500">{label("inspector.createdBy")}</dt><dd className="truncate">{(selected.kind === "FILE" ? selected.file.ownerName : selected.folder.ownerName) ?? "—"}</dd></div>
+              <div className="flex justify-between gap-2"><dt className="text-slate-500">{label("inspector.sharedWith")}</dt><dd className="truncate text-[12px]">{label("inspector.sharedWithPrivate")}</dd></div>
+              <div className="flex justify-between gap-2"><dt className="text-slate-500">{label("inspector.permalink")}</dt><dd className="truncate text-slate-400">—</dd></div>
+              <div className="flex justify-between gap-2"><dt className="text-slate-500">{label("inspector.location")}</dt><dd className="truncate text-slate-400">—</dd></div>
+              <div className="flex justify-between gap-2"><dt className="text-slate-500">{label("inspector.addLabels")}</dt><dd className="truncate text-slate-400">—</dd></div>
               <div className="flex justify-between gap-2"><dt className="text-slate-500">{label("inspector.type")}</dt><dd className="truncate">{selected.kind === "FILE" ? selected.file.mimeType ?? "—" : label("files.type.folder")}</dd></div>
-              <div className="flex justify-between gap-2"><dt className="text-slate-500">{label("inspector.size")}</dt><dd>{selected.kind === "FILE" ? formatBytes(selected.file.size ?? null) : "—"}</dd></div>
-              <div className="flex justify-between gap-2"><dt className="text-slate-500">{label("inspector.updated")}</dt><dd className="truncate">{formatDateLocalized(selected.kind === "FILE" ? selected.file.updatedAt : selected.folder.updatedAt, locale)}</dd></div>
-              <div className="flex justify-between gap-2"><dt className="text-slate-500">{label("inspector.owner")}</dt><dd className="truncate">{(selected.kind === "FILE" ? selected.file.ownerName : selected.folder.ownerName) ?? "—"}</dd></div>
+              <div className="flex justify-between gap-2"><dt className="text-slate-500">{label("inspector.timeCreated")}</dt><dd className="truncate">{formatDateLocalized(selected.kind === "FILE" ? selected.file.updatedAt : selected.folder.updatedAt, locale)}</dd></div>
+              <div className="flex justify-between gap-2"><dt className="text-slate-500">{label("inspector.modifiedBy")}</dt><dd className="truncate text-slate-400">—</dd></div>
             </dl>
             {selected.kind === "FILE" ? (
               <button type="button" onClick={() => {
                 if (onVersionHistory) onVersionHistory(selected.file.id);
                 window.dispatchEvent(new CustomEvent("workdrive:version-history", { detail: { fileId: selected.file.id } }));
               }} className="rounded-md border border-slate-200 px-3 py-1.5 text-[13px] hover:bg-slate-50">
-                {label("inspector.versionHistory")}
+                {label("inspector.versionHistory")} <Icons.chevR size={13} />
               </button>
             ) : null}
           </div>
@@ -92,13 +100,13 @@ export function InspectorPanel({ onVersionHistory }: { onVersionHistory?: (fileI
   );
   return (
     <>
-      <aside className="hidden w-80 shrink-0 flex-col border-s border-[color:var(--imkan-color-border)] bg-white lg:flex" aria-label={label("inspector.details")}>
+      <aside className="hidden w-[300px] shrink-0 flex-col border-s border-[color:var(--imkan-color-border)] bg-white lg:flex" aria-label={label("inspector.details")}>
         {inner}
       </aside>
       {mobileInspectorOpen ? (
         <div className="fixed inset-0 z-50 lg:hidden" role="dialog" aria-modal="true" aria-label={label("inspector.details")}>
           <div className="absolute inset-0 bg-black/40" onClick={() => setMobileInspectorOpen(false)} aria-hidden="true" />
-          <div className="absolute bottom-0 end-0 top-0 flex w-80 max-w-[88vw] flex-col bg-white shadow-2xl">
+          <div className="absolute bottom-0 end-0 top-0 flex w-[300px] max-w-[88vw] flex-col bg-white shadow-2xl">
             {inner}
           </div>
         </div>
