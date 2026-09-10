@@ -60,11 +60,11 @@ export function ActionToolbar({ view, onView, sort, onSort, filter, onFilter }: 
         <button type="button" onClick={() => onSort(sort === "asc" ? "desc" : "asc")}
           title={sort === "asc" ? label("nav.sortAsc") : label("nav.sortDesc")} aria-label={sort === "asc" ? label("nav.sortAsc") : label("nav.sortDesc")}
           className="rounded-md p-1.5 text-slate-500 hover:bg-slate-100">
-          <Icons.list size={17} />
+          <Icons.sort size={17} />
         </button>
         <button id="tb-filter-btn" type="button" onClick={() => toggle("filter")} aria-expanded={openMenu === "filter"} aria-haspopup="menu"
           className="rounded-md p-1.5 text-slate-500 hover:bg-slate-100" title={label("nav.filter")} aria-label={label("nav.filter")}>
-          <Icons.info size={17} />
+          <Icons.funnel size={17} />
         </button>
         <ZohoMenu open={openMenu === "filter"} onClose={close} labelledBy="tb-filter-btn" align="end" width="w-52"
           onSelect={chooseFilter}

@@ -42,5 +42,7 @@ function camera(p: P) { return (<Svg {...p}><path d="M23 19a2 2 0 0 1-2 2H3a2 2 
 function link(p: P) { return (<Svg {...p}><path d="M10 13a5 5 0 0 0 7.5.5l3-3a5 5 0 0 0-7-7l-1.7 1.7" /><path d="M14 11a5 5 0 0 0-7.5-.5l-3 3a5 5 0 0 0 7 7l1.7-1.7" /></Svg>); }
 function download(p: P) { return (<Svg {...p}><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3" /></Svg>); }
 function check(p: P) { return (<Svg {...p}><path d="M20 6 9 17l-5-5" /></Svg>); }
-export const Icons = { grid, folder, users, plus, chevR, chevD, search, bell, help, info, list, star, clock, share, trash, spark, inbox, tag, layout, flow, sun, moon, act, ext, dots, bot, shield, menu, x, doc, sheet, slide, video, audio, camera, link, download, check };
+function sort(p: P) { return (<Svg {...p}><path d="m7 15 5 5 5-5M7 9l5-5 5 5" /></Svg>); }
+function funnel(p: P) { return (<Svg {...p}><path d="M3 5h18l-7 8v5.5l-4 2V13Z" /></Svg>); }
+export const Icons = { grid, folder, users, plus, chevR, chevD, search, bell, help, info, list, star, clock, share, trash, spark, inbox, tag, layout, flow, sun, moon, act, ext, dots, bot, shield, menu, x, doc, sheet, slide, video, audio, camera, link, download, check, sort, funnel };
 export type IconName = keyof typeof Icons;
