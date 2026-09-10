@@ -113,3 +113,15 @@ Details dispatches `workdrive:version-history` → `VersionHistoryDrawer`.
 ## 5. Files implementing this spec
 `frontend/src/components/layout/{top-header,action-toolbar,selection-bar,folder-empty-state,zoho-menu,icons,shell-context}.tsx`,
 `frontend/src/components/{file-browser,file-table}.tsx`.
+
+## 6. Zoho-parity interactions added (no backend changes)
+- **Right-click context menu** (`file-context-menu.tsx`): portal menu at cursor, reuses
+  `buildFileRowActions` so it stays in sync with the ⋯ row menu; adds a **Copy link** action
+  before Share; ESC/outside-click closes; arrow-key + Enter navigation; auto-clamps to
+  viewport. Wired to both folder and file rows in `file-table.tsx`.
+- **Shift+Click range selection**: checking a row while holding Shift selects the whole
+  visible range between the anchor row and the clicked row (folders then files in render
+  order). Uses `onClick` (MouseEvent `shiftKey`); feedback flows through the existing
+  Selection Bar. The select-all checkbox also updates the anchor.
+- **Copy link** from context menu and Selection Bar writes `${origin}/files/{id}` to the
+  clipboard, matching the permalink pattern.

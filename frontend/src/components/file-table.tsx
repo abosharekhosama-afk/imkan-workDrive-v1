@@ -1,10 +1,11 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState, type ReactNode } from "react";
+import { useMemo, useRef, useState, type ReactNode } from "react";
 import { useLocale } from "./locale-provider";
 import { FileIcon } from "./file-icon";
 import { FileActionsMenu } from "./file-actions-menu";
+import { FileContextMenu } from "./file-context-menu";
 import { EmptyState } from "./empty-state";
 import type { FileRecord, FolderRecord } from "../lib/api/types";
 import { formatBytes, resolveItemSize } from "../lib/api/quota";
@@ -79,6 +80,7 @@ interface FileTableProps {
   onOpen?: (resourceType: "FILE" | "FOLDER", resourceId: string, resourceName: string) => void;
   onMove?: (resourceType: "FILE" | "FOLDER", resourceId: string, resourceName: string) => void;
   onDropMove?: (resourceType: "FILE" | "FOLDER", resourceId: string, destinationFolderId: string) => void;
+  onCopyLink?: (id: string) => void;
   onViewDetails?: (resourceType: "FILE" | "FOLDER", resourceId: string, resourceName: string, mimeType?: string, size?: number) => void;
   /** Aggregate active-file byte size per listed folder (recursive). */
   folderSizes?: ReadonlyMap<string, number>;
@@ -101,6 +103,7 @@ export function FileTable({
   onOpen,
   onMove,
   onDropMove,
+    onCopyLink,
   onViewDetails,
   favoriteIds = new Set(),
   emptyTitle,
@@ -120,6 +123,30 @@ export function FileTable({
   const sortedFiles = useMemo(() => [...files].sort((a, b) => sort.key === "size" ? compareNumbers(a.size, b.size, sort.direction) : sort.key === "modified" ? compareDates(a.updatedAt, b.updatedAt, sort.direction) : compareText(a.name, b.name, sort.direction)), [files, sort]);
   const formatDate = (value?: string | null) => formatDateLocalized(value, locale);
   const formatSize = (value?: number | null) => formatBytes(value ?? 0);
+
+  // Right-click context menu state (portal-hosted, positioned at cursor).
+  const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number; node: ReactNode } | null>(null);
+
+  // Visible ids in render order (folders then files) → supports Shift+Click ranges.
+  const visibleIds = useMemo(
+    () => [...sortedFolders.map((f) => f.id), ...sortedFiles.map((f) => f.id)],
+    [sortedFolders, sortedFiles]
+  );
+  const rangeAnchorRef = useRef<string | null>(null);
+
+  const handleRowSelect = (id: string, checked: boolean, shiftKey: boolean) => {
+    if (shiftKey && rangeAnchorRef.current) {
+      const a = visibleIds.indexOf(rangeAnchorRef.current);
+      const b = visibleIds.indexOf(id);
+      if (a >= 0 && b >= 0) {
+        const [lo, hi] = a < b ? [a, b] : [b, a];
+        for (let k = lo; k <= hi; k++) onSelectRow?.(visibleIds[k], checked);
+      }
+    } else {
+      onSelectRow?.(id, checked);
+    }
+    if (checked) rangeAnchorRef.current = id;
+  };
 
   if (folders.length === 0 && files.length === 0) {
     return <EmptyState title={emptyTitle?? label("files.empty")} description={emptyDescription} action={emptyAction} />;
@@ -145,13 +172,26 @@ export function FileTable({
         </thead>
         <tbody>
           {sortedFolders.map((folder) => (
-            <tr key={folder.id} draggable={Boolean(canMutate)} onDoubleClick={() => onOpen?.("FOLDER", folder.id, folder.name)} onDragStart={(e) => { e.dataTransfer.effectAllowed="move"; e.dataTransfer.setData("application/x-workdrive", JSON.stringify({type:"FOLDER",id:folder.id,name:folder.name})); }} className="imkan-table-row hover:bg-[color:var(--imkan-color-surface)] group transition-colors cursor-grab" onDragOver={(e) => { e.preventDefault(); e.currentTarget.classList.add("ring-2","ring-[color:var(--imkan-color-primary)]"); }} onDragLeave={(e) => e.currentTarget.classList.remove("ring-2","ring-[color:var(--imkan-color-primary)]")} onDrop={(e) => { e.preventDefault(); e.currentTarget.classList.remove("ring-2","ring-[color:var(--imkan-color-primary)]"); try { const item=JSON.parse(e.dataTransfer.getData("application/x-workdrive")); if(item.id !== folder.id) onDropMove?.(item.type,item.id,folder.id); } catch {} }}>
+            <tr key={folder.id} draggable={Boolean(canMutate)} onDoubleClick={() => onOpen?.("FOLDER", folder.id, folder.name)} onContextMenu={(e) => { e.preventDefault(); setCtxMenu({ x: e.clientX, y: e.clientY, node: (<FileContextMenu
+              context={{ resourceType: "FOLDER", canMutate, canShare, canFavorite: onFavorite != null, isFavorite: favoriteIds.has(folder.id) }}
+              handlers={{
+                onOpen: onOpen ? () => onOpen("FOLDER", folder.id, folder.name) : undefined,
+                onShare: canShare ? () => onShare("FOLDER", folder.id) : undefined,
+                onRename: canMutate ? () => onRename("FOLDER", folder.id, folder.name) : undefined,
+                onMove: onMove && canMutate ? () => onMove("FOLDER", folder.id, folder.name) : undefined,
+                onFavoriteToggle: onFavorite ? () => onFavorite("FOLDER", folder.id) : undefined,
+                onViewDetails: onViewDetails ? () => onViewDetails("FOLDER", folder.id, folder.name) : undefined,
+                onDelete: canMutate ? () => onDelete("FOLDER", folder.id) : undefined,
+              }}
+              onCopyLink={onCopyLink ? () => onCopyLink(folder.id) : undefined}
+              x={e.clientX} y={e.clientY} onClose={() => setCtxMenu(null)}
+            />)}); }} onDragStart={(e) => { e.dataTransfer.effectAllowed="move"; e.dataTransfer.setData("application/x-workdrive", JSON.stringify({type:"FOLDER",id:folder.id,name:folder.name})); }} className="imkan-table-row hover:bg-[color:var(--imkan-color-surface)] group transition-colors cursor-grab" onDragOver={(e) => { e.preventDefault(); e.currentTarget.classList.add("ring-2","ring-[color:var(--imkan-color-primary)]"); }} onDragLeave={(e) => e.currentTarget.classList.remove("ring-2","ring-[color:var(--imkan-color-primary)]")} onDrop={(e) => { e.preventDefault(); e.currentTarget.classList.remove("ring-2","ring-[color:var(--imkan-color-primary)]"); try { const item=JSON.parse(e.dataTransfer.getData("application/x-workdrive")); if(item.id !== folder.id) onDropMove?.(item.type,item.id,folder.id); } catch {} }}>
               <td className="px-3 py-2">
                 <input
                   type="checkbox"
                   className="imkan-checkbox"
                   checked={selectedIds.has(folder.id)}
-                  onChange={(e) => onSelectRow?.(folder.id, e.target.checked)}
+                  onClick={(e) => handleRowSelect(folder.id, (e.currentTarget as HTMLInputElement).checked, e.shiftKey)}
                 />
               </td>
               <td className="max-w-[18rem] truncate px-3 py-2">
@@ -187,13 +227,18 @@ export function FileTable({
             </tr>
           ))}
           {sortedFiles.map((file) => (
-            <tr key={file.id} draggable={Boolean(canMutate)} onDragStart={(e) => { e.dataTransfer.effectAllowed="move"; e.dataTransfer.setData("application/x-workdrive", JSON.stringify({type:"FILE",id:file.id,name:file.name})); }} className="imkan-table-row hover:bg-[color:var(--imkan-color-surface)] group cursor-grab active:cursor-grabbing">
+            <tr key={file.id} draggable={Boolean(canMutate)} onDragStart={(e) => { e.dataTransfer.effectAllowed="move"; e.dataTransfer.setData("application/x-workdrive", JSON.stringify({type:"FILE",id:file.id,name:file.name})); }} onContextMenu={(e) => { e.preventDefault(); setCtxMenu({ x: e.clientX, y: e.clientY, node: (<FileContextMenu
+              context={{ resourceType: "FILE", canMutate, canShare, canFavorite: onFavorite != null, isFavorite: favoriteIds.has(file.id) }}
+              handlers={{ onOpen: onOpen ? () => onOpen("FILE", file.id, file.name) : undefined, onPreview: onPreview ? () => onPreview("FILE", file.id, file.name, file.mimeType ?? undefined, file.size ?? undefined) : undefined, onDownload: () => onDownload(file.id), onShare: canShare ? () => onShare("FILE", file.id) : undefined, onRename: canMutate ? () => onRename("FILE", file.id, file.name) : undefined, onMove: onMove && canMutate ? () => onMove("FILE", file.id, file.name) : undefined, onFavoriteToggle: onFavorite ? () => onFavorite("FILE", file.id) : undefined, onVersionHistory: onVersionHistory ? () => onVersionHistory("FILE", file.id, file.name, file.mimeType ?? undefined, file.size ?? undefined) : undefined, onDelete: canMutate ? () => onDelete("FILE", file.id) : undefined }}
+              onCopyLink={onCopyLink ? () => onCopyLink(file.id) : undefined}
+              x={e.clientX} y={e.clientY} onClose={() => setCtxMenu(null)}
+            />)}); }} className="imkan-table-row group relative cursor-grab active:cursor-grabbing">
               <td className="px-3 py-2">
                 <input
                   type="checkbox"
                   className="imkan-checkbox"
                   checked={selectedIds.has(file.id)}
-                  onChange={(e) => onSelectRow?.(file.id, e.target.checked)}
+                  onClick={(e) => handleRowSelect(file.id, (e.currentTarget as HTMLInputElement).checked, e.shiftKey)}
                 />
               </td>
               <td className="max-w-[18rem] truncate px-3 py-2">
@@ -234,6 +279,7 @@ export function FileTable({
         </tbody>
         </table>
       </div>
+      {ctxMenu ? ctxMenu.node : null}
     </div>
   );
 }
