@@ -1,5 +1,6 @@
 "use client";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { useLocale } from "../locale-provider";
 import type { MessageKey } from "../../i18n";
@@ -13,6 +14,7 @@ import { ZohoMenu } from "./zoho-menu";
 import { NotificationPanel } from "./notification-panel";
 export function TopHeader() {
   const { label, locale, setLocale } = useLocale();
+  const router = useRouter();
   const { setMobileNavOpen } = useShell();
   const [name, setName] = useState("");
   const [org, setOrg] = useState("");
@@ -21,6 +23,7 @@ export function TopHeader() {
   const [notes, setNotes] = useState<NotificationRecord[]>([]);
   const [scope, setScope] = useState<ScopeDetail>({ folderId: null, folderName: null });
   const [manageOpen, setManageOpen] = useState(false);
+  const [treeOpen, setTreeOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
   const [notifOpen, setNotifOpen] = useState(false);
   const teamRef = useRef<HTMLDivElement | null>(null);
@@ -62,27 +65,47 @@ export function TopHeader() {
       <button type="button" className="rounded-md p-2 text-slate-600 hover:bg-slate-100 md:hidden" onClick={() => setMobileNavOpen(true)} aria-label={label("nav.workspace")}>
         <Icons.menu size={18} />
       </button>
-      <button type="button" onClick={() => setMobileNavOpen(true)} title={label("nav.manage")} aria-label={label("nav.manage")} className="hidden rounded-md p-2 text-slate-600 hover:bg-slate-100 md:inline-flex">
+      <button id="hdr-tree-btn" type="button" onClick={() => setTreeOpen((v) => !v)} aria-expanded={treeOpen} aria-haspopup="menu" title={label("nav.manage")} aria-label={label("nav.manage")} className="hidden rounded-md p-2 text-slate-600 hover:bg-slate-100 md:inline-flex">
         <Icons.list size={17} />
       </button>
+      <ZohoMenu open={treeOpen} onClose={() => setTreeOpen(false)} labelledBy="hdr-tree-btn"
+        onSelect={(k) => {
+          if (k === "root") router.push("/files");
+          else if (k === "recent") router.push("/files/recent");
+          else if (k === "favorites") router.push("/files/favorites");
+          else if (k === "trash") router.push("/files/trash");
+        }}
+        items={[
+          { key: "root", labelKey: "files.breadcrumb.root" },
+          { key: "recent", labelKey: "nav.recent" },
+          { key: "favorites", labelKey: "nav.favorites" },
+          "sep",
+          { key: "trash", labelKey: "files.trash" },
+        ]} />
       <div className="flex min-w-0 items-center gap-1.5">
         <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-[#E8EFFD] text-[#1B66EA]" aria-hidden="true">
           <Icons.folder size={18} />
         </span>
-        <span className="max-w-[30vw] truncate text-[14px] font-semibold text-[#212121]" title={scope.folderName ?? label("files.breadcrumb.root")}>
+        <span className="max-w-[30vw] truncate text-[15px] font-semibold text-[#1E293B]" title={scope.folderName ?? label("files.breadcrumb.root")}>
           {scope.folderName ?? label("files.breadcrumb.root")}
         </span>
         <button id="hdr-manage-btn" type="button" onClick={() => setManageOpen((v) => !v)} aria-expanded={manageOpen} aria-haspopup="menu"
-          className="inline-flex items-center gap-1 rounded-md border border-slate-200 px-2 py-1 text-[12px] text-slate-600 hover:bg-slate-50">
+          className="inline-flex items-center gap-1 rounded-full bg-[#F3F4F6] px-3 py-1.5 text-[12px] font-medium text-[#374151] hover:bg-slate-200">
           {label("nav.manage")} <Icons.chevD size={13} />
         </button>
         <ZohoMenu open={manageOpen} onClose={() => setManageOpen(false)} labelledBy="hdr-manage-btn"
-          onSelect={(k) => { if (k === "members") window.dispatchEvent(new Event("workdrive:manage-members")); }}
+          onSelect={(k) => {
+            if (k === "search") setSearchOpen(true);
+            else if (k === "trash") router.push("/files/trash");
+            else if (k === "shared") router.push("/files/shared-with-me");
+            else if (k === "large") router.push("/files/recent");
+          }}
           items={[
-            { key: "members", labelKey: "teamFolders.members" },
-            { key: "settings", labelKey: "nav.settings" },
-            "sep",
+            { key: "search", labelKey: "menu.searchInFold" },
             { key: "trash", labelKey: "files.trash" },
+            "sep",
+            { key: "shared", labelKey: "nav.sharedWithMe" },
+            { key: "large", labelKey: "nav.allUnread" },
           ]} />
       </div>
       <div className="ms-auto flex shrink-0 items-center gap-1.5">

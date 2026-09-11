@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState, useRef, type FormEvent } from "react";
+import { useCallback, useEffect, useState, type FormEvent } from "react";
 import { useSearchParams } from "next/navigation";
 import { useRouter } from "next/navigation";
 import { Breadcrumbs } from "./breadcrumbs";
@@ -11,7 +11,6 @@ import { ShellScopeSync } from "./layout/shell-context";
 import { FileTable } from "./file-table";
 import { FileGridView } from "./file-grid-view";
 import { ShareModal } from "./share-modal";
-import { UploadZone } from "./upload-zone";
 import { useLocale } from "./locale-provider";
 import { bulkTrashFolders, createFolder, deleteFolder, getFolder, listRootContents, renameFolder, moveFolder } from "../lib/api/folders";
 import { bulkTrashFiles, renameFile, requestDownload, trashFile, moveFile } from "../lib/api/files";
@@ -22,7 +21,9 @@ import type { FileRecord, FolderRecord } from "../lib/api/types";
 import { searchNames } from "../lib/api/search";
 import { DeleteModal } from "./delete-modal";
 import { RenameModal } from "./rename-modal";
+import { Modal } from "./modal";
 import { MoveModal } from "./move-modal";
+import { Toast } from "./toast";
 import { FileDetailsModal, type FileDetailsData } from "./file-details-modal";
 import { FilePreviewModal } from "./file-preview-modal";
 import { VersionHistoryDrawer } from "./files/version-history-drawer";
@@ -59,7 +60,13 @@ export function FileBrowser({
   const [folderName, setFolderName] = useState<string | undefined>();
   const [error, setError] = useState<string | null>(null);
   const [newFolderName, setNewFolderName] = useState("");
-  const newFolderInputRef = useRef<HTMLInputElement>(null);
+  const [newFolderOpen, setNewFolderOpen] = useState(false);
+  const [copyTarget, setCopyTarget] = useState<{
+    type: "FILE" | "FOLDER";
+    id: string;
+    name: string;
+  } | null>(null);
+  const [toast, setToast] = useState<string | null>(null);
   const [shareTarget, setShareTarget] = useState<{
     type: "FILE" | "FOLDER";
     id: string;
@@ -93,7 +100,6 @@ export function FileBrowser({
     mimeType?: string;
     size?: number;
   } | null>(null);
-  const [searchInput, setSearchInput] = useState("");
   const [searchActive, setSearchActive] = useState(false);
   const [loading, setLoading] = useState(true);
   const [favoriteIds, setFavoriteIds] = useState<Set<string>>(new Set());
@@ -150,7 +156,7 @@ export function FileBrowser({
   }, [folderId, label, routeQuery]);
 
   useEffect(() => {
-    const focusNewFolder = () => newFolderInputRef.current?.focus();
+    const focusNewFolder = () => setNewFolderOpen(true);
     window.addEventListener("workdrive:new-folder", focusNewFolder);
     return () => window.removeEventListener("workdrive:new-folder", focusNewFolder);
   }, []);
@@ -187,41 +193,11 @@ export function FileBrowser({
   useEffect(() => {
     setSelectedIds(new Set());
     setSearchActive(Boolean(routeQuery));
-    setSearchInput(routeQuery);
     void load();
   }, [load, routeQuery]);
 
-  async function onCreateFolder(event: FormEvent) {
-    event.preventDefault();
-    await createFolder(newFolderName, folderId);
-    setNewFolderName("");
-    await load();
-  }
-
-  async function onSearch(event: FormEvent) {
-    event.preventDefault();
-    const query = searchInput.trim();
-    if (!query) {
-      setSearchActive(false);
-      await load();
-      return;
-    }
-    try {
-      setError(null);
-      setSearchActive(true);
-      const result = await searchNames(query);
-      setFolders(mapFolderRecords(result.folders));
-      setFiles(mapFileRecords(result.files));
-    } catch (cause) {
-      setError(
-        cause instanceof ApiError && cause.status === 401
-          ? label("error.unauthenticated")
-          : cause instanceof ApiError && cause.status === 403
-            ? label("error.forbidden")
-            : label("error.generic"),
-      );
-    }
-  }
+  // Legacy quick-create / inline-search forms were purged (Zoho parity):
+  // creation flows through the + New toolbar menu and header search.
 
   async function onDownload(fileId: string) {
     const result = await requestDownload(fileId);
@@ -352,86 +328,38 @@ export function FileBrowser({
   return (
     <section className="flex min-h-0 flex-1 flex-col w-full max-w-full overflow-x-hidden">
       <ShellScopeSync folderId={folderId} folderName={folderName} />
-      <ActionToolbar view={viewMode} onView={(v) => switchViewMode(v)} sort={sortDir} onSort={setSortDir} filter={filter} onFilter={setFilter} />
-      <SelectionBar
-        folderCount={folders.filter((f) => selectedIds.has(f.id)).length}
-        fileCount={files.filter((f) => selectedIds.has(f.id)).length}
-        onShare={() => {
-          const id = Array.from(selectedIds)[0];
-          if (!id) return;
-          const type = folders.some((f) => f.id === id) ? "FOLDER" : "FILE";
-          setShareTarget({ type, id });
-        }}
-        onCopyLink={() => {
-          const id = Array.from(selectedIds)[0];
-          if (!id) return;
-          try {
-            void navigator.clipboard.writeText(`${window.location.origin}/files/${id}`);
-          } catch { /* clipboard unavailable */ }
-        }}
-        onDownload={() => {
-          const file = files.find((f) => selectedIds.has(f.id));
-          if (file) void onDownload(file.id);
-        }}
-        onClear={() => setSelectedIds(new Set())}
-      />
-      <div className="hidden">
-        <h1 className="truncate text-[13.5px] font-semibold text-slate-900">
-          {label("files.heading")}
-        </h1>
-        {selectedIds.size > 0 && (
-          <div className="imkan-toolbar flex items-center gap-2 bg-[color:var(--imkan-color-surface)] px-4 py-2 rounded-sm shadow-sm border border-[color:var(--imkan-color-border)]">
-            <span className="text-[length:var(--imkan-font-size-secondary)] mr-4">{selectedIds.size} {label("files.selected")}</span>
-            <button className="imkan-button-secondary" onClick={() => setSelectedIds(new Set())}>{label("files.deselect")}</button>
-            <button className="imkan-button-secondary" onClick={async () => {
-              const ids = Array.from(selectedIds);
-              const folderIds = ids.filter((id) => folders.some((folder) => folder.id === id));
-              const fileIds = ids.filter((id) => files.some((file) => file.id === id));
-              if (folderIds.length) await bulkTrashFolders(folderIds);
-              if (fileIds.length) await bulkTrashFiles(fileIds);
-              setSelectedIds(new Set());
-              await load();
-            }}>{label("files.delete")}</button>
-          </div>
+      <div className="flex min-w-0 flex-1 flex-col bg-white">
+        {selectedIds.size === 0 ? (
+          <ActionToolbar view={viewMode} onView={(v) => switchViewMode(v)} sort={sortDir} onSort={setSortDir} filter={filter} onFilter={setFilter} />
+        ) : (
+          <SelectionBar
+            folderCount={folders.filter((f) => selectedIds.has(f.id)).length}
+            fileCount={files.filter((f) => selectedIds.has(f.id)).length}
+            onShare={() => {
+              const id = Array.from(selectedIds)[0];
+              if (!id) return;
+              const type = folders.some((f) => f.id === id) ? "FOLDER" : "FILE";
+              setShareTarget({ type, id });
+            }}
+            onCopyLink={() => {
+              const id = Array.from(selectedIds)[0];
+              if (!id) return;
+              try {
+                void navigator.clipboard.writeText(`${window.location.origin}/files/${id}`);
+              } catch { /* clipboard unavailable */ }
+            }}
+            onDownload={() => {
+              const file = files.find((f) => selectedIds.has(f.id));
+              if (file) void onDownload(file.id);
+            }}
+            onClear={() => setSelectedIds(new Set())}
+          />
         )}
-      </div>
+        <Breadcrumbs folderId={searchActive ? undefined : folderId} folderName={searchActive ? undefined : folderName} />
 
-      <Breadcrumbs folderId={searchActive? undefined : folderId} folderName={searchActive? undefined : folderName} />
+      {error ? <AlertBanner message={error} action={<button type="button" className="imkan-button-secondary" onClick={() => void load()}>{label("feedback.retry")}</button>} /> : null}
 
-      <div className="mb-4 flex flex-wrap items-end gap-3">
-        {canMutate? (
-          <form onSubmit={onCreateFolder} className="flex items-end gap-2">
-            <label className="flex flex-col gap-1 text-[length:var(--imkan-font-size-secondary)]">
-              {label("files.folderName")}
-              <input
-                value={newFolderName}
-                onChange={(event) => setNewFolderName(event.target.value)}
-                placeholder={label("files.newFolderPlaceholder")}
-                className="imkan-input"
-                ref={newFolderInputRef}
-              />
-            </label>
-            <button type="submit" className="imkan-button-secondary">{label("files.createFolder")}</button>
-          </form>
-        ) : null}
-        {canMutate ? <UploadZone folderId={folderId ?? null} onUploaded={() => void load()} /> : null}
-        <form onSubmit={(event) => void onSearch(event)} className="flex items-end gap-2">
-          <label className="flex flex-col gap-1 text-[length:var(--imkan-font-size-secondary)]">
-            {label("files.search")}
-            <input
-              value={searchInput}
-              onChange={(event) => setSearchInput(event.target.value)}
-              placeholder={label("files.searchPlaceholder")}
-              className="imkan-input"
-            />
-          </label>
-          <button type="submit" className="imkan-button-secondary">{label("files.search")}</button>
-        </form>
-      </div>
-
-      {error? <AlertBanner message={error} action={<button type="button" className="imkan-button-secondary" onClick={() => void load()}>{label("feedback.retry")}</button>} /> : null}
-
-      <div className="min-h-0 flex-1 overflow-y-auto bg-slate-100 p-3">
+      <div className="min-h-0 flex-1 overflow-y-auto bg-white">
       {loading ? <SkeletonLoader columns={6} /> : viewMode === "grid" ? (
         <FileGridView
           folders={folders}
@@ -486,6 +414,7 @@ export function FileBrowser({
           onSelectAll={handleSelectAll}
         />
       )}
+      </div>
       </div>
 
       {shareTarget? (
@@ -585,6 +514,38 @@ export function FileBrowser({
         />
       ) : null}
     {detailsTarget ? <FileDetailsModal data={detailsTarget} onClose={() => setDetailsTarget(null)} /> : null}
+    {newFolderOpen ? (
+      <Modal title={label("menu.newFolder")} onClose={() => setNewFolderOpen(false)}>
+        <form
+          onSubmit={async (event) => {
+            event.preventDefault();
+            const name = newFolderName.trim();
+            if (!name) return;
+            await createFolder(name, folderId);
+            setNewFolderName("");
+            setNewFolderOpen(false);
+            await load();
+          }}
+          className="text-[length:var(--imkan-font-size-ui)]"
+        >
+          <label className="mb-3 flex flex-col gap-1">
+            {label("files.folderName")}
+            <input
+              autoFocus
+              value={newFolderName}
+              onChange={(event) => setNewFolderName(event.target.value)}
+              placeholder={label("files.newFolderPlaceholder")}
+              className="imkan-input"
+            />
+          </label>
+          <div className="flex justify-end gap-2">
+            <button type="button" className="imkan-button-secondary" onClick={() => setNewFolderOpen(false)}>{label("share.cancel")}</button>
+            <button type="submit" className="imkan-button" disabled={!newFolderName.trim()}>{label("files.createFolder")}</button>
+          </div>
+        </form>
+      </Modal>
+    ) : null}
+    {toast ? <Toast message={toast} onDismiss={() => setToast(null)} /> : null}
     </section>
   );
 }

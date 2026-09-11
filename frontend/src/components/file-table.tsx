@@ -86,6 +86,7 @@ interface FileTableProps {
   folderSizes?: ReadonlyMap<string, number>;
   /** Latest contained-file updatedAt per listed folder (recursive). */
   folderUpdatedAt?: ReadonlyMap<string, string | null>;
+  onToast?: (message: string) => void;
 }
 
 export function FileTable({
@@ -114,6 +115,7 @@ export function FileTable({
   onSelectAll,
   folderSizes,
   folderUpdatedAt,
+  onToast,
 }: FileTableProps) {
   const { label, locale } = useLocale();
   const [sort, setSort] = useState<{ key: "name" | "modified" | "size"; direction: "asc" | "desc" }>({ key: "name", direction: "asc" });
@@ -173,7 +175,6 @@ export function FileTable({
         <tbody>
           {sortedFolders.map((folder) => (
             <tr key={folder.id} draggable={Boolean(canMutate)} onDoubleClick={() => onOpen?.("FOLDER", folder.id, folder.name)} onContextMenu={(e) => { e.preventDefault(); setCtxMenu({ x: e.clientX, y: e.clientY, node: (<FileContextMenu
-              context={{ resourceType: "FOLDER", canMutate, canShare, canFavorite: onFavorite != null, isFavorite: favoriteIds.has(folder.id) }}
               handlers={{
                 onOpen: onOpen ? () => onOpen("FOLDER", folder.id, folder.name) : undefined,
                 onShare: canShare ? () => onShare("FOLDER", folder.id) : undefined,
@@ -184,6 +185,7 @@ export function FileTable({
                 onDelete: canMutate ? () => onDelete("FOLDER", folder.id) : undefined,
               }}
               onCopyLink={onCopyLink ? () => onCopyLink(folder.id) : undefined}
+              onToast={onToast}
               x={e.clientX} y={e.clientY} onClose={() => setCtxMenu(null)}
             />)}); }} onDragStart={(e) => { e.dataTransfer.effectAllowed="move"; e.dataTransfer.setData("application/x-workdrive", JSON.stringify({type:"FOLDER",id:folder.id,name:folder.name})); }} className="imkan-table-row hover:bg-[color:var(--imkan-color-surface)] group transition-colors cursor-grab" onDragOver={(e) => { e.preventDefault(); e.currentTarget.classList.add("ring-2","ring-[color:var(--imkan-color-primary)]"); }} onDragLeave={(e) => e.currentTarget.classList.remove("ring-2","ring-[color:var(--imkan-color-primary)]")} onDrop={(e) => { e.preventDefault(); e.currentTarget.classList.remove("ring-2","ring-[color:var(--imkan-color-primary)]"); try { const item=JSON.parse(e.dataTransfer.getData("application/x-workdrive")); if(item.id !== folder.id) onDropMove?.(item.type,item.id,folder.id); } catch {} }}>
               <td className="px-3 py-2">
@@ -228,7 +230,7 @@ export function FileTable({
           ))}
           {sortedFiles.map((file) => (
             <tr key={file.id} draggable={Boolean(canMutate)} onDragStart={(e) => { e.dataTransfer.effectAllowed="move"; e.dataTransfer.setData("application/x-workdrive", JSON.stringify({type:"FILE",id:file.id,name:file.name})); }} onContextMenu={(e) => { e.preventDefault(); setCtxMenu({ x: e.clientX, y: e.clientY, node: (<FileContextMenu
-              context={{ resourceType: "FILE", canMutate, canShare, canFavorite: onFavorite != null, isFavorite: favoriteIds.has(file.id) }}
+              onToast={onToast}
               handlers={{ onOpen: onOpen ? () => onOpen("FILE", file.id, file.name) : undefined, onPreview: onPreview ? () => onPreview("FILE", file.id, file.name, file.mimeType ?? undefined, file.size ?? undefined) : undefined, onDownload: () => onDownload(file.id), onShare: canShare ? () => onShare("FILE", file.id) : undefined, onRename: canMutate ? () => onRename("FILE", file.id, file.name) : undefined, onMove: onMove && canMutate ? () => onMove("FILE", file.id, file.name) : undefined, onFavoriteToggle: onFavorite ? () => onFavorite("FILE", file.id) : undefined, onVersionHistory: onVersionHistory ? () => onVersionHistory("FILE", file.id, file.name, file.mimeType ?? undefined, file.size ?? undefined) : undefined, onDelete: canMutate ? () => onDelete("FILE", file.id) : undefined }}
               onCopyLink={onCopyLink ? () => onCopyLink(file.id) : undefined}
               x={e.clientX} y={e.clientY} onClose={() => setCtxMenu(null)}

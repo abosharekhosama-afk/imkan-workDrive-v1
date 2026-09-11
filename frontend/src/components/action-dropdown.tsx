@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import {
   Popover,
   PopoverTrigger,
@@ -14,6 +15,7 @@ export type ActionDropdownItem = {
   destructive?: boolean;
   icon?: React.ReactNode;
   dividerBefore?: boolean;
+  submenu?: ActionDropdownItem[];
 };
 
 interface ActionGroup {
@@ -77,6 +79,68 @@ function groupItems(items: ActionDropdownItem[]): ActionGroup[] {
   return groups;
 }
 
+function RenderItem({ item }: { item: ActionDropdownItem }) {
+  const [subOpen, setSubOpen] = useState(false);
+  if (!item.submenu) {
+    return (
+      <PopoverClose asChild>
+        <button
+          type="button"
+          role="menuitem"
+          className={`w-full flex items-center gap-2 px-3 py-2 text-start text-[length:var(--imkan-font-size-secondary)] rounded-sm transition-colors ${
+            item.destructive
+              ? "text-[color:var(--imkan-color-error)] font-semibold hover:bg-[color:var(--imkan-color-error)]/10"
+              : "text-[color:var(--imkan-color-foreground)] hover:bg-[color:var(--imkan-color-surface)]"
+          }`}
+          onClick={() => item.onSelect()}
+        >
+          {item.icon ?? getIconForLabel(item.label) ? (
+            <span className="flex-shrink-0 w-5 h-5 flex items-center justify-center text-current">
+              {item.icon ?? getIconForLabel(item.label)}
+            </span>
+          ) : (
+            <span className="w-5" />
+          )}
+          <span className="flex-1 truncate">{item.label}</span>
+        </button>
+      </PopoverClose>
+    );
+  }
+  return (
+    <div className="relative" onMouseEnter={() => setSubOpen(true)} onMouseLeave={() => setSubOpen(false)}>
+      <button
+        type="button"
+        role="menuitem"
+        aria-haspopup="menu"
+        aria-expanded={subOpen}
+        className="w-full flex items-center gap-2 px-3 py-2 text-start text-[length:var(--imkan-font-size-secondary)] rounded-sm text-[color:var(--imkan-color-foreground)] hover:bg-[color:var(--imkan-color-surface)] transition-colors"
+        onClick={() => setSubOpen((v) => !v)}
+      >
+        <span className="w-5" />
+        <span className="flex-1 truncate">{item.label}</span>
+        <span aria-hidden="true" className="text-[length:var(--imkan-font-size-secondary)]">›</span>
+      </button>
+      {subOpen ? (
+        <div className="absolute left-full top-0 min-w-[180px] rounded-lg border border-[color:var(--imkan-color-border)] bg-white p-1 shadow-xl" role="menu">
+          {item.submenu.map((sub) => (
+            <PopoverClose key={sub.label} asChild>
+              <button
+                type="button"
+                role="menuitem"
+                className="w-full flex items-center gap-2 px-3 py-2 text-start text-[length:var(--imkan-font-size-secondary)] rounded-sm text-[color:var(--imkan-color-foreground)] hover:bg-[color:var(--imkan-color-surface)] transition-colors"
+                onClick={() => { setSubOpen(false); sub.onSelect(); }}
+              >
+                <span className="w-5" />
+                <span className="flex-1 truncate">{sub.label}</span>
+              </button>
+            </PopoverClose>
+          ))}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 export function ActionDropdown({ label, items, trigger }: ActionDropdownProps) {
   const { label: t } = useLocale();
   const groupedItems = groupItems(items);
@@ -107,30 +171,7 @@ export function ActionDropdown({ label, items, trigger }: ActionDropdownProps) {
         {groupedItems.map((group, groupIndex) => (
           <div key={groupIndex} className={groupIndex > 0 ? "border-t border-[color:var(--imkan-color-border)] pt-1" : ""}>
             {group.items.map((item) => (
-              <PopoverClose key={item.label} asChild>
-                <button
-                  type="button"
-                  role="menuitem"
-                  className={`w-full flex items-center gap-2 px-3 py-2 text-start text-[length:var(--imkan-font-size-secondary)] rounded-sm transition-colors ${
-                    item.destructive
-                      ? "text-[color:var(--imkan-color-error)] font-semibold hover:bg-[color:var(--imkan-color-error)]/10"
-                      : "text-[color:var(--imkan-color-foreground)] hover:bg-[color:var(--imkan-color-surface)]"
-                  }`}
-                  onClick={() => {
-                    item.onSelect();
-                  }}
-                >
-                  {item.icon ?? getIconForLabel(item.label) ? (
-                    // Inherit the button's currentColor so destructive icons tint red.
-                    <span className="flex-shrink-0 w-5 h-5 flex items-center justify-center text-current">
-                      {item.icon ?? getIconForLabel(item.label)}
-                    </span>
-                  ) : (
-                    <span className="w-5" />
-                  )}
-                  <span className="flex-1 truncate">{item.label}</span>
-                </button>
-              </PopoverClose>
+              <RenderItem key={item.label} item={item} />
             ))}
           </div>
         ))}

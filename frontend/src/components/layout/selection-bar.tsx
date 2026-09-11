@@ -21,7 +21,7 @@ export function SelectionBar({ folderCount, fileCount, onShare, onCopyLink, onDo
   return (
     <div className="flex shrink-0 flex-wrap items-center gap-2 border-b border-[#BFDBFE] bg-[#EFF6FF] px-3 py-1.5" role="status" aria-live="polite">
       <button type="button" onClick={onClear} aria-label={label("sel.clear")} title={label("sel.clear")}
-        className="rounded p-1 text-[#1D4ED8] hover:bg-[#DCE7FD]"><Icons.x size={15} /></button>
+        className="rounded p-1 text-[#1D4ED8] hover:bg-[#DCE7FD]"><Icons.check size={16} /></button>
       <span className="text-[13px] font-medium text-[#1E40AF]">{text}</span>
       <div className="ms-auto flex items-center gap-1">
         <button id="sel-share-btn" type="button" onClick={() => setShareOpen((v) => !v)} aria-expanded={shareOpen} aria-haspopup="menu"
@@ -70,6 +70,8 @@ export function SelectionBar({ folderCount, fileCount, onShare, onCopyLink, onDo
             "sep",
             { key: "moveToTrash", labelKey: "menu.moveToTrash", danger: true },
           ]} />
+        <button type="button" onClick={onClear} aria-label={label("sel.clear")} title="Esc"
+          className="rounded-md px-2 py-1 text-[12px] font-medium text-[#1E40AF] hover:bg-[#DCE7FD]">Esc <Icons.x size={13} /></button>
       </div>
     </div>
   );

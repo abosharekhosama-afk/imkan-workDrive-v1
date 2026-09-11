@@ -12,14 +12,14 @@ function Frame({ children }: { children: ReactNode }) {
   if (pathname.startsWith("/auth/")) return <>{children}</>;
   const width = sidebarCollapsed ? "md:w-16" : "md:w-60";
   return (
-    <div className="flex h-screen w-full overflow-hidden bg-slate-100">
+    <div className="flex h-screen w-full overflow-hidden bg-white">
       <aside className={`hidden shrink-0 md:block ${width}`} aria-label="primary">
         <PrimarySidebar />
       </aside>
       {mobileNavOpen ? (
         <div className="fixed inset-0 z-50 md:hidden" role="dialog" aria-modal="true">
           <div className="absolute inset-0 bg-black/40" onClick={() => setMobileNavOpen(false)} aria-hidden="true" />
-          <div className="absolute bottom-0 start-0 top-0 w-72 max-w-[85vw] overflow-hidden rounded-e-xl bg-[#191A1F] shadow-2xl">
+          <div className="absolute bottom-0 start-0 top-0 w-72 max-w-[85vw] overflow-hidden rounded-e-xl bg-[#181C21] shadow-2xl">
             <PrimarySidebar />
           </div>
         </div>

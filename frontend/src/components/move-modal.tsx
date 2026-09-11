@@ -6,10 +6,10 @@ import { Modal } from "./modal";
 import { createFolder, getFolder, listRootContents } from "../lib/api/folders";
 import { friendlyErrorMessageKey } from "../lib/friendly-error";
 
-interface MoveModalProps { resourceName: string; onClose: () => void; onMove: (destinationFolderId: string | null) => Promise<void>; }
+interface MoveModalProps { resourceName: string; mode?: "move" | "copy"; onClose: () => void; onMove: (destinationFolderId: string | null) => Promise<void>; }
 type FlatFolder = { id: string; name: string; depth: number };
 
-export function MoveModal({ resourceName, onClose, onMove }: MoveModalProps) {
+export function MoveModal({ resourceName, mode = "move", onClose, onMove }: MoveModalProps) {
   const { label } = useLocale();
   const [options, setOptions] = useState<FlatFolder[] | null>(null);
   const [destination, setDestination] = useState<string>("");
@@ -51,7 +51,7 @@ export function MoveModal({ resourceName, onClose, onMove }: MoveModalProps) {
     finally { setSubmitting(false); }
   }
 
-  return <Modal title={label("files.moveTitle")} onClose={onClose}>
+  return <Modal title={label(mode === "copy" ? "menu.copyTo" : "files.moveTitle")} onClose={onClose}>
     <form onSubmit={submit} className="text-[length:var(--imkan-font-size-ui)]">
       <p className="mb-3 text-[length:var(--imkan-font-size-secondary)]">{resourceName}</p>
       <fieldset className="mb-3 max-h-64 overflow-auto rounded-lg border border-[color:var(--imkan-color-border)] p-2 flex flex-col gap-1">
@@ -66,7 +66,7 @@ export function MoveModal({ resourceName, onClose, onMove }: MoveModalProps) {
         <div className="flex gap-2"><input className="imkan-input flex-1" value={newName} onChange={(e) => setNewName(e.target.value)} placeholder={label("files.folderName")} /><button type="button" className="imkan-button-secondary" disabled={creating || !newName.trim()} onClick={() => void createAndSelect()}>{creating ? "…" : label("common.create")}</button></div>
       </div>
       {error ? <p className="mb-3 text-red-600">{error}</p> : null}
-      <div className="flex justify-end gap-2"><button type="button" className="imkan-button-secondary" onClick={onClose} disabled={submitting}>{label("share.cancel")}</button><button type="submit" className="imkan-button" disabled={submitting || options === null}>{label("files.moveHere")}</button></div>
+      <div className="flex justify-end gap-2"><button type="button" className="imkan-button-secondary" onClick={onClose} disabled={submitting}>{label("share.cancel")}</button><button type="submit" className="imkan-button" disabled={submitting || options === null}>{label(mode === "copy" ? "menu.copyTo" : "files.moveHere")}</button></div>
     </form>
   </Modal>;
 }
