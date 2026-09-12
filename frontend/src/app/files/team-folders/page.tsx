@@ -156,7 +156,7 @@ export default function TeamFoldersPage() {
                     </td>
                     <td className="imkan-muted px-3 py-2 text-[length:var(--imkan-font-size-secondary)]">
                       <div className="flex items-center gap-2">
-                        <span className="w-6 h-6 rounded-full flex items-center justify-center" style={{ background: "color-mix(in srgb, var(--wd-green) 14%, transparent)", color: "var(--wd-green)" }} aria-hidden="true">
+                        <span className="w-6 h-6 rounded-full flex items-center justify-center" style={{ background: "color-mix(in srgb, var(--wd-primary) 14%, transparent)", color: "var(--wd-primary)" }} aria-hidden="true">
                           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6.5A1.5 1.5 0 0 1 4.5 5h4l1.7 2H19a1.5 1.5 0 0 1 1.5 1.5v9A1.5 1.5 0 0 1 19 19H4.5A1.5 1.5 0 0 1 3 17.5Z" /></svg>
                         </span>
                         <span>IMKAN Workspace</span>
