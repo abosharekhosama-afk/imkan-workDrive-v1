@@ -63,7 +63,7 @@ type FileTypeIconProps = {
 };
 
 const ICON_COLORS: Record<FileIconKind, { accent: string; body: string }> = {
-  folder: { accent: "#f6b73c", body: "#fbd98a" },
+  folder: { accent: "#2C66DD", body: "#EFF6FF" },
   image: { accent: "#8b5cf6", body: "#c4b5fd" },
   video: { accent: "#ef4444", body: "#fca5a5" },
   audio: { accent: "#ec4899", body: "#f9a8d4" },

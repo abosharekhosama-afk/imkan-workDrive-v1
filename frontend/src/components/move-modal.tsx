@@ -82,7 +82,7 @@ export function MoveModal({ resourceName, mode = "move", onClose, onMove }: {
   const title = mode === "copy" ? `${label("menu.copyTo")} ${resourceName}` : `${label("files.moveTitle")} ${resourceName}`;
 return (
     <Modal title={title} onClose={onClose}>
-      <div className="flex flex-col gap-3" style={{ width: "min(92vw, 560px)" }}>
+      <div className="flex flex-col gap-3" style={{ width: "min(94vw, 760px)" }}>
         <div className="relative">
           <Icons.search size={14} className="pointer-events-none absolute start-3 top-1/2 -translate-y-1/2 text-slate-400" />
           <input
@@ -104,7 +104,7 @@ return (
             ))}
           </nav>
           <div className="flex-1">
-            <div className="max-h-64 overflow-y-auto rounded-xl border border-slate-200 p-1.5">
+            <div className="rounded-xl border border-slate-200 p-1.5">
               <button type="button" onClick={() => setDestination(null)}
                 className={`flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-start text-[13px] ${destination === null ? "bg-[var(--wd-primary-light)] font-medium text-[color:var(--wd-primary-ink)]" : "text-slate-700 hover:bg-slate-50"}`}>
                 <Icons.folder size={14} className="shrink-0 text-[color:var(--wd-primary)]" />
