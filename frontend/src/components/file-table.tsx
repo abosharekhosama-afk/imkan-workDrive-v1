@@ -120,6 +120,8 @@ export function FileTable({
   onSelectAll,
   folderSizes,
   folderUpdatedAt,
+  columns,
+  onColumns,
   onToast,
   compact = false,
 }: FileTableProps) {

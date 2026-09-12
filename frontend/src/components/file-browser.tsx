@@ -159,15 +159,23 @@ export function FileBrowser({
   useEffect(() => {
     const focusNewFolder = () => setNewFolderOpen(true);
     window.addEventListener("workdrive:new-folder", focusNewFolder);
-    const onTreeOpen = (event: Event) => {
-      const folderId = (event as CustomEvent<{ folderId: string }>).detail?.folderId;
-      if (folderId) router.push(`/files/${folderId}`);
-    };
-    window.addEventListener("workdrive:tree-open", onTreeOpen);
-    return () => { window.removeEventListener("workdrive:new-folder", focusNewFolder); window.removeEventListener("workdrive:tree-open", onTreeOpen); };
+    return () => window.removeEventListener("workdrive:new-folder", focusNewFolder);
   }, []);
 
   // Inspector deep-link: "Version history" inside the details pane opens the drawer.
+  // `onVersionHistory` is a stable useCallback and the effect now has a proper
+  // dependency array — previously it re-subscribed on every render.
+  const onVersionHistory = useCallback(async (type: "FILE" | "FOLDER", id: string, name: string, mimeType?: string, size?: number) => {
+    if (type !== "FILE") return;
+    setVersionHistoryTarget({
+      type,
+      id,
+      name,
+      mimeType,
+      size,
+    });
+  }, []);
+
   useEffect(() => {
     const onVersion = (event: Event) => {
       const fileId = (event as CustomEvent<{ fileId: string }>).detail?.fileId;
@@ -178,7 +186,7 @@ export function FileBrowser({
     };
     window.addEventListener("workdrive:version-history", onVersion);
     return () => window.removeEventListener("workdrive:version-history", onVersion);
-  });
+  }, [files, onVersionHistory]);
 
   // Restore the persisted view preference after mount (SSR-safe).
   useEffect(() => {
@@ -195,6 +203,15 @@ export function FileBrowser({
     setViewMode(mode);
     persistViewMode(typeof window === "undefined" ? null : window.localStorage, mode);
   }
+
+  // Stable tree-navigation callback: replaces the old `workdrive:tree-open`
+  // CustomEvent bridge. Guarded — no navigation when the target folder is
+  // already the current one, which previously caused redundant RSC refetches
+  // (piled-up 304s) and a full component re-render.
+  const handleOpenFolder = useCallback((targetId: string) => {
+    if (!targetId || targetId === folderId) return;
+    router.push(`/files/${targetId}`);
+  }, [folderId, router]);
 
   useEffect(() => {
     setSelectedIds(new Set());
@@ -252,17 +269,6 @@ export function FileBrowser({
       onPreview("FILE", nextFile.id, nextFile.name, nextFile.mimeType ?? undefined, nextFile.size ?? undefined);
     }
   }, [previewTarget, getPreviewableFiles, findFileIndex]);
-
-  async function onVersionHistory(type: "FILE" | "FOLDER", id: string, name: string, mimeType?: string, size?: number) {
-    if (type !== "FILE") return;
-    setVersionHistoryTarget({
-      type,
-      id,
-      name,
-      mimeType,
-      size,
-    });
-  }
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -348,7 +354,7 @@ export function FileBrowser({
       <ShellScopeSync folderId={folderId} folderName={folderName} />
       <div className="flex min-w-0 flex-1 flex-col bg-white">
         {selectedIds.size === 0 ? (
-          <ActionToolbar view={viewMode} onView={(v) => switchViewMode(v)} sort={sortDir} onSort={setSortDir} filter={filter} onFilter={setFilter} folders={folders} columns={columns} onColumns={setColumns} />
+          <ActionToolbar view={viewMode} onView={(v) => switchViewMode(v)} sort={sortDir} onSort={setSortDir} filter={filter} onFilter={setFilter} folders={folders} columns={columns} onColumns={setColumns} currentFolderId={folderId} onOpenFolder={handleOpenFolder} />
         ) : (
           <SelectionBar
             folderCount={folders.filter((f) => selectedIds.has(f.id)).length}

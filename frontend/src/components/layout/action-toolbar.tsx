@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useLocale } from "../locale-provider";
 import { persistViewMode, type ViewMode } from "../view-mode-logic";
 import { Icons } from "./icons";
@@ -27,6 +27,7 @@ const SORT_FIELDS: Array<[ColumnKey, string]> = [
 
 export function ActionToolbar({
   view, onView, onSort, filter, onFilter, columns, onColumns, folders = [],
+  currentFolderId, onOpenFolder,
 }: {
   view: ViewMode; onView: (v: ViewMode) => void;
   sort: SortDir; onSort: (s: SortDir) => void;
@@ -34,6 +35,9 @@ export function ActionToolbar({
   columns?: Partial<Record<ColumnKey, boolean>>;
   onColumns?: (cols: Partial<Record<ColumnKey, boolean>>) => void;
   folders?: FolderRecord[];
+  currentFolderId?: string;
+  /** Direct navigation callback — replaces the removed `workdrive:tree-open` CustomEvent. */
+  onOpenFolder?: (folderId: string) => void;
 }) {
   const { label } = useLocale();
   const [openMenu, setOpenMenu] = useState<"new" | "record" | "filter" | "columns" | "sort" | "tree" | null>(null);
@@ -43,6 +47,47 @@ export function ActionToolbar({
   const [childMap, setChildMap] = useState<Record<string, FolderRecord[]>>({});
   const cols = columns ?? {};
   const rootRef = useRef<HTMLDivElement | null>(null);
+  // In-flight guard: folders whose child fetch is currently running.
+  // Prevents StrictMode double-invocation and rapid re-toggle from
+  // issuing duplicate `getFolder` calls (the source of piled-up 304s).
+  const treeFetchingRef = useRef<Set<string>>(new Set());
+
+  const loadChildren = useCallback(async (folderId: string) => {
+    if (treeFetchingRef.current.has(folderId)) return;
+    treeFetchingRef.current.add(folderId);
+    try {
+      const detail = await getFolder(folderId);
+      setChildMap((prev) => (
+        Object.prototype.hasOwnProperty.call(prev, folderId)
+          ? prev
+          : { ...prev, [folderId]: detail.folders ?? [] }
+      ));
+    } catch {
+      setChildMap((prev) => (
+        Object.prototype.hasOwnProperty.call(prev, folderId)
+          ? prev
+          : { ...prev, [folderId]: [] }
+      ));
+    } finally {
+      treeFetchingRef.current.delete(folderId);
+    }
+  }, []);
+
+  const toggleNode = useCallback((id: string) => {
+    // Pure updater — no side effects inside, so StrictMode double-calls are safe.
+    const willExpand = !expandedNodes.has(id);
+    setExpandedNodes((prev) => {
+      const next = new Set(prev);
+      if (willExpand) next.add(id);
+      else next.delete(id);
+      return next;
+    });
+    // Side effect outside the updater, guarded: fetch only when expanding
+    // AND children were never fetched before.
+    if (willExpand && !Object.prototype.hasOwnProperty.call(childMap, id)) {
+      void loadChildren(id);
+    }
+  }, [expandedNodes, childMap, loadChildren]);
 
   function pick(v: ViewMode) {
     onView(v);
@@ -58,27 +103,6 @@ export function ActionToolbar({
     if (!onColumns) return;
     onColumns({ ...cols, [key]: !(cols[key] ?? true) });
     setOpenMenu(null);
-  }
-
-  async function loadChildren(folderId: string) {
-    try {
-      const detail = await getFolder(folderId);
-      setChildMap((prev) => ({ ...prev, [folderId]: detail.folders ?? [] }));
-    } catch {
-      setChildMap((prev) => ({ ...prev, [folderId]: [] }));
-    }
-  }
-
-  function toggleNode(id: string) {
-    setExpandedNodes((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else {
-        next.add(id);
-        if (!(id in childMap)) void loadChildren(id);
-      }
-      return next;
-    });
   }
 
   const toggle = (m: "new" | "record" | "filter" | "columns" | "sort" | "tree") => setOpenMenu((c) => (c === m ? null : m));
@@ -116,7 +140,7 @@ export function ActionToolbar({
                 {folders.map((folder) => (
                   <TreeRow key={folder.id} folder={folder} expandedNodes={expandedNodes} childMap={childMap}
                     onToggle={toggleNode}
-                    onSelect={(id) => { window.dispatchEvent(new CustomEvent("workdrive:tree-open", { detail: { folderId: id } })); close(); }} />
+                    onSelect={(id) => { if (id !== currentFolderId) onOpenFolder?.(id); close(); }} />
                 ))}
               </ul>
             )}
@@ -150,7 +174,7 @@ export function ActionToolbar({
           onSelect={(k) => {
             if (k === "folder") window.dispatchEvent(new Event("workdrive:new-folder"));
             else if (k === "upload") window.dispatchEvent(new Event("workdrive:upload"));
-            else openWip();
+            else openWip(label(k === "doc" ? "menu.newDoc" : k === "sheet" ? "menu.newSheet" : "menu.newSlide"));
           }}
           items={[
             { key: "folder", labelKey: "menu.newFolder", icon: <Icons.folder size={16} />, descKey: "menu.newFolderDesc" },
