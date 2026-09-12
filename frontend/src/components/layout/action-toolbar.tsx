@@ -1,4 +1,5 @@
 "use client";
+
 import { useEffect, useRef, useState } from "react";
 import { useLocale } from "../locale-provider";
 import { persistViewMode, type ViewMode } from "../view-mode-logic";
@@ -34,13 +35,7 @@ export function ActionToolbar({
   onColumns?: (cols: Partial<Record<ColumnKey, boolean>>) => void;
   folders?: FolderRecord[];
 }) {
-  const expanded = expandedNodes.has(folder.id);
-  const children = childMap[folder.id];
-  return (
-    <li>
-      <div className="flex items-center">
-        <button type="button" onClick={() => onToggle(folder.id)} aria-expanded={expanded}
-          className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-slate-400 hover:bg-slate-50">  const { label } = useLocale();
+  const { label } = useLocale();
   const [openMenu, setOpenMenu] = useState<"new" | "record" | "filter" | "columns" | "sort" | "tree" | null>(null);
   const [sortField, setSortField] = useState<ColumnKey>("name");
   const [sortOrder, setSortOrder] = useState<"oldest" | "newest">("newest");
@@ -53,12 +48,18 @@ export function ActionToolbar({
     onView(v);
     try { persistViewMode(window.localStorage, v); } catch { /* noop */ }
   }
-  function chooseFilter(k: string) { onFilter(k as FilterKey); try { localStorage.setItem(FILTER_STORAGE_KEY, k); } catch { /* noop */ } }
+
+  function chooseFilter(k: string) {
+    onFilter(k as FilterKey);
+    try { localStorage.setItem(FILTER_STORAGE_KEY, k); } catch { /* noop */ }
+  }
+
   function toggleColumn(key: ColumnKey) {
     if (!onColumns) return;
     onColumns({ ...cols, [key]: !(cols[key] ?? true) });
     setOpenMenu(null);
   }
+
   async function loadChildren(folderId: string) {
     try {
       const detail = await getFolder(folderId);
@@ -67,6 +68,7 @@ export function ActionToolbar({
       setChildMap((prev) => ({ ...prev, [folderId]: [] }));
     }
   }
+
   function toggleNode(id: string) {
     setExpandedNodes((prev) => {
       const next = new Set(prev);
@@ -78,6 +80,7 @@ export function ActionToolbar({
       return next;
     });
   }
+
   const toggle = (m: "new" | "record" | "filter" | "columns" | "sort" | "tree") => setOpenMenu((c) => (c === m ? null : m));
   const close = () => setOpenMenu(null);
 
@@ -120,6 +123,7 @@ export function ActionToolbar({
           </div>
         </div>
       ) : null}
+
       <button type="button" onClick={() => window.dispatchEvent(new Event("workdrive:new-folder"))} title={label("menu.folder")} aria-label={label("menu.folder")}
         className="wd-icon-btn text-[#4F4F4F]">
         <Icons.folder size={16} />
@@ -136,7 +140,9 @@ export function ActionToolbar({
             { key: "screen", labelKey: "menu.screenRecord", icon: <Icons.camera size={16} /> },
             { key: "video", labelKey: "menu.videoRecord", icon: <Icons.video size={16} /> },
             { key: "audio", labelKey: "menu.audioRecord", icon: <Icons.mic size={16} /> },
-          ]} />        <button id="tb-new-btn" type="button" onClick={() => toggle("new")} aria-expanded={openMenu === "new"} aria-haspopup="menu"
+          ]} />
+
+        <button id="tb-new-btn" type="button" onClick={() => toggle("new")} aria-expanded={openMenu === "new"} aria-haspopup="menu"
           className="wd-pill wd-pill-new inline-flex items-center gap-1.5">
           <Icons.plus size={16} /> {label("quick.new")}
         </button>
@@ -176,7 +182,7 @@ export function ActionToolbar({
                   return (
                     <button key={key} type="button" onClick={() => setSortField(key)}
                       className={`flex items-center gap-2 rounded-lg px-2.5 py-1.5 text-[13px] text-start ${active ? "bg-[var(--wd-primary-light)] font-medium text-[color:var(--wd-primary-ink)]" : "text-slate-600 hover:bg-slate-50"}`}>
-                                            <span className="flex h-4 w-4 shrink-0 items-center justify-center">
+                      <span className="flex h-4 w-4 shrink-0 items-center justify-center">
                         {active ? <Icons.check size={12} className="text-[color:var(--wd-primary)]" /> : null}
                       </span>
                       {label(keyName as never)}
@@ -184,17 +190,19 @@ export function ActionToolbar({
                   );
                 })}
               </div>
-                        <div className="px-3 pb-2 pt-2">
+            </div>
+            <div className="px-3 pb-2 pt-2">
               <div className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-slate-400">{label("sort.order")}</div>
               <div className="flex flex-col gap-0.5">
                 {([["newest", "sort.newestFirst", "desc"], ["oldest", "sort.oldestFirst", "asc"]] as const).map(([okey, oname, dir]) => {
                   const oactive = sortOrder === okey;
                   return (
-                    <button key={okey} type="button" onClick={() => { setSortOrder(okey); onSort(dir); }}>
+                    <button key={okey} type="button" onClick={() => { setSortOrder(okey); onSort(dir); }}
+                      className={`flex items-center gap-2 rounded-lg px-2.5 py-1.5 text-[13px] text-start ${oactive ? "bg-[var(--wd-primary-light)] font-medium text-[color:var(--wd-primary-ink)]" : "text-slate-600 hover:bg-slate-50"}`}>
                       <span className="flex h-4 w-4 shrink-0 items-center justify-center">
                         {oactive ? <Icons.check size={12} className="text-[color:var(--wd-primary)]" /> : null}
                       </span>
-                      {label(oname)}
+                      {label(oname as never)}
                     </button>
                   );
                 })}
@@ -202,6 +210,7 @@ export function ActionToolbar({
             </div>
           </div>
         ) : null}
+
         <button id="tb-filter-btn" type="button" onClick={() => toggle("filter")} aria-expanded={openMenu === "filter"} aria-haspopup="menu"
           className={`wd-icon-btn ${openMenu === "filter" ? "bg-[var(--wd-active)] text-[color:var(--wd-primary-ink)]" : ""}`}
           title={label("nav.filter")} aria-label={label("nav.filter")}>
@@ -230,17 +239,16 @@ export function ActionToolbar({
                     return (
                       <button key={key} type="button" disabled={locked} onClick={() => toggleColumn(key)}
                         className={`flex w-full items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-[13px] text-start ${locked ? "opacity-60" : "text-slate-600 hover:bg-slate-50"}`}>
-            <span className={`flex h-4 w-4 shrink-0 items-center justify-center rounded-[4px] border ${active ? "border-[color:var(--wd-primary)] bg-[color:var(--wd-primary)] text-white" : "border-slate-300"}`}>
-                        {active ? <Icons.check size={10} /> : null}
-                      </span>
-                      <span className={locked ? "font-medium text-slate-700" : ""}>{label(keyName as never)}</span>
-                    </button>
-                  );
-                })}
+                        <span className={`flex h-4 w-4 shrink-0 items-center justify-center rounded-[4px] border ${active ? "border-[color:var(--wd-primary)] bg-[color:var(--wd-primary)] text-white" : "border-slate-300"}`}>
+                          {active ? <Icons.check size={10} /> : null}
+                        </span>
+                        <span className={locked ? "font-medium text-slate-700" : ""}>{label(keyName as never)}</span>
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
-            </div>
-          </div>
-        ) : null}
+            ) : null}
           </>
         )}
 
