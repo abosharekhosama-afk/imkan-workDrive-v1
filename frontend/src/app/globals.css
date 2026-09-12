@@ -430,13 +430,14 @@ html, body {
    Reference: Zoho WorkDrive information architecture and interaction patterns.
    -------------------------------------------------------------------------- */
 :root{
-  /*--wd-green:#00a884;*/
+  /*--wd-green:var(--wd-primary);*/
   /*--wd-green-dark:#008f70;*/
   --wd-sidebar:#282828;
-  --wd-active:rgba(44,102,221,.3);
+  --wd-active:var(--wd-active);
   --wd-primary:#2C66DD;
   --wd-primary-dark:#184091;
   --wd-primary-ink:#254993;
+  --wd-primary-light:#EFF6FF;
   --wd-danger:#DC2626;
   --wd-sel-bar:#EFF6FF;
   --wd-sel-border:#BFDBFE;
@@ -498,16 +499,16 @@ body{background:var(--wd-canvas)!important;color:var(--wd-text)!important;font-f
 .mobile-sidebar-toggle{display:none}
 @media (min-width:1024px){.mobile-sidebar-toggle{display:none!important}}
 @media (max-width:1023.98px){.mobile-sidebar-toggle{display:grid}}
-.mobile-sidebar-toggle:hover{background:color-mix(in srgb,var(--wd-primary) 12%,transparent);color:#0b6b58}
+.mobile-sidebar-toggle:hover{background:color-mix(in srgb,var(--wd-primary) 12%,transparent);color:var(--wd-primary-dark)}
 html[data-theme="dark"] .mobile-sidebar-toggle:hover{background:var(--wd-hover);color:#dbeafe}
 .zoho-logo{display:flex;align-items:center;gap:8px;color:#252a31;text-decoration:none;font-weight:700;font-size:14px;min-width:118px}
 .zoho-logo-mark{width:27px;height:27px;border-radius:6px;background:var(--wd-primary);color:#fff;display:grid;place-items:center;font-size:14px;font-weight:800}
 .zoho-top-actions{display:flex;align-items:center;gap:8px;margin-inline-start:auto;position:relative}
 .zoho-icon-btn{width:32px;height:32px;border:0;background:transparent;border-radius:6px;display:grid;place-items:center;color:#68707c;cursor:pointer;text-decoration:none;font-size:14px;transition:background .15s ease,color .15s ease}
 /* Soft, identity-consistent hover tint that adapts to both themes. */
-.zoho-icon-btn:hover{background:color-mix(in srgb,var(--wd-primaryryry) 12%,transparent);color:#0b6b58}
+.zoho-icon-btn:hover{background:color-mix(in srgb,var(--wd-primary) 12%,transparent);color:var(--wd-primary-dark)}
 html[data-theme="dark"] .zoho-icon-btn:hover{background:var(--wd-hover);color:#dbeafe}
-.zoho-avatar{width:32px;height:32px;border-radius:50%;border:0;background:#e9f5f2;color:#087d67;font-size:11px;font-weight:800;cursor:pointer}
+.zoho-avatar{width:32px;height:32px;border-radius:50%;border:0;background:var(--wd-primary-light);color:var(--wd-primary-ink);font-size:11px;font-weight:800;cursor:pointer}
 .zoho-profile-menu{position:absolute;inset-inline-end:0;top:42px;width:210px;background:#fff;border:1px solid var(--wd-line);box-shadow:0 10px 28px rgba(20,30,40,.14);border-radius:7px;padding:7px;z-index:80}
 .zoho-profile-menu a,.zoho-profile-menu button{display:block;width:100%;text-align:left;padding:9px 10px;border:0;background:transparent;border-radius:5px;color:#353a42;font-size:12px;text-decoration:none;cursor:pointer}
 .zoho-profile-menu a:hover,.zoho-profile-menu button:hover{background:var(--wd-hover)}
@@ -571,7 +572,7 @@ html[data-theme="dark"] .zoho-icon-btn:hover{background:var(--wd-hover);color:#d
 .zoho-content .imkan-button-secondary{height:34px;border:1px solid #d9dfe4;background:#fff;color:#343a42;border-radius:5px;font-size:11px}
 .zoho-content .imkan-button-secondary:hover{background:var(--wd-hover);color:#222}
 .zoho-content .imkan-input{height:34px;border:1px solid #d9dfe4;background:#fff;border-radius:4px}
-.zoho-content .imkan-input:focus{outline:2px solid rgba(0,168,132,.18);border-color:var(--wd-primaryryry)}
+.zoho-content .imkan-input:focus{outline:2px solid var(--wd-active);border-color:var(--wd-primary)}
 .zoho-content .imkan-table{background:#fff;font-size:11px}
 .zoho-content .imkan-table thead{background:#fafbfc}
 .zoho-content .imkan-table th{font-size:10px;color:#727a85;font-weight:600;height:38px;border-bottom:1px solid var(--wd-line)}
@@ -579,7 +580,7 @@ html[data-theme="dark"] .zoho-icon-btn:hover{background:var(--wd-hover);color:#d
 .zoho-content .imkan-table-row{border-bottom:1px solid #eef0f2}
 .zoho-content .imkan-table-row:hover{background:#f8fbfa!important}
 .zoho-content .imkan-table a{color:#2d333b;text-decoration:none}
-.zoho-content .imkan-table a:hover{color:#087d67}
+.zoho-content .imkan-table a:hover{color:var(--wd-primary-ink)}
 .zoho-content .imkan-muted{color:#8a919c}
 .zoho-content .imkan-alert{border-radius:5px}
 .zoho-content .imkan-panel{border-color:var(--wd-line);border-radius:6px}
@@ -603,7 +604,7 @@ html[data-theme="dark"] .zoho-icon-btn:hover{background:var(--wd-hover);color:#d
 .auth-form{gap:13px;margin-top:23px}
 .auth-form label{font-size:11px;color:#4e5660}
 .auth-form .imkan-input{height:42px;border:1px solid #d8dde2;border-radius:4px}
-.auth-form .imkan-input:focus{border-color:var(--wd-primary);outline:2px solid rgba(0,168,132,.12)}
+.auth-form .imkan-input:focus{border-color:var(--wd-primary);outline:2px solid var(--wd-active)}
 .auth-submit{height:42px!important;border-radius:4px!important;background:var(--wd-primary)!important}
 .auth-submit:hover{background:var(--wd-primary-dark)!important}
 .google-button{height:42px;border:1px solid #d8dde2!important;border-radius:4px!important;background:#fff!important;color:#333!important;font-size:12px}
@@ -621,7 +622,7 @@ html[data-theme="dark"] .zoho-icon-btn:hover{background:var(--wd-hover);color:#d
 .wd-page-head-titles h1{margin:0;font-size:21px;font-weight:700;color:#24292f;line-height:1.25}
 .wd-page-head-titles p{margin:4px 0 0;font-size:12.5px;color:#7b838e}
 .wd-page-head-actions{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
-.wd-count-pill{display:inline-flex;align-items:center;justify-content:center;min-width:22px;height:20px;padding:0 7px;border-radius:10px;background:#eef7f4;color:#087d67;font-size:11px;font-weight:700}
+.wd-count-pill{display:inline-flex;align-items:center;justify-content:center;min-width:22px;height:20px;padding:0 7px;border-radius:10px;background:var(--wd-primary-light);color:var(--wd-primary-ink);font-size:11px;font-weight:700}
 .wd-card{background:#fff;border:1px solid var(--wd-line);border-radius:8px;overflow:hidden}
 .wd-card-head{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:15px 18px;border-bottom:1px solid var(--wd-line);flex-wrap:wrap}
 .wd-card-head h2{margin:0;font-size:14px;font-weight:700;color:#24292f}
@@ -638,18 +639,18 @@ html[data-theme="dark"] .zoho-icon-btn:hover{background:var(--wd-hover);color:#d
 .wd-name-cell{display:flex;align-items:center;gap:10px;min-width:0}
 .wd-name-cell .icon{width:30px;height:30px;flex:0 0 30px;border-radius:7px;display:grid;place-items:center;background:#f1f6f5;font-size:14px}
 .wd-name-link{color:#2d333b;font-weight:600;text-decoration:none;font-size:13px}
-.wd-name-link:hover{color:#087d67;text-decoration:underline}
+.wd-name-link:hover{color:var(--wd-primary-ink);text-decoration:underline}
 .wd-subtext{display:block;margin-top:1px;font-size:11px;color:#8a919c;font-weight:400}
 .wd-badge{display:inline-flex;align-items:center;gap:5px;height:22px;padding:0 10px;border-radius:11px;font-size:11px;font-weight:600;border:1px solid transparent;white-space:nowrap}
 .wd-badge-gray{background:#f1f3f5;color:#5b636e;border-color:#e3e6ea}
-.wd-badge-green{background:#e8f6f2;color:#087d67;border-color:#cdeee5}
+.wd-badge-green{background:var(--wd-primary-light);color:var(--wd-primary-ink);border-color:rgba(44,102,221,0.15)}
 .wd-badge-blue{background:#edf4fd;color:#2160ac;border-color:#d4e4f7}
 .wd-badge-red{background:#fdeeee;color:#b3322e;border-color:#f6d3d2}
 .wd-badge-amber{background:#fdf4e3;color:#9a6b0f;border-color:#f4e2bb}
-.wd-avatar{width:34px;height:34px;border-radius:50%;flex:0 0 34px;display:inline-flex;align-items:center;justify-content:center;background:#e9f5f2;color:#087d67;font-size:12px;font-weight:800;text-transform:uppercase}
+.wd-avatar{width:34px;height:34px;border-radius:50%;flex:0 0 34px;display:inline-flex;align-items:center;justify-content:center;background:var(--wd-primary-light);color:var(--wd-primary-ink);font-size:12px;font-weight:800;text-transform:uppercase}
 .wd-avatar-lg{width:56px;height:56px;flex-basis:56px;border-radius:14px;font-size:22px}
 .wd-btn{display:inline-flex;align-items:center;justify-content:center;gap:7px;height:34px;padding:0 14px;border-radius:5px;border:1px solid transparent;font-size:12px;font-weight:600;cursor:pointer;text-decoration:none;white-space:nowrap}
-.wd-btn:focus-visible{outline:2px solid rgba(0,168,132,.35);outline-offset:1px}
+.wd-btn:focus-visible{outline:2px solid var(--wd-active);outline-offset:1px}
 .wd-btn:disabled{opacity:.55;cursor:not-allowed}
 .wd-btn-primary{background:var(--wd-primary);color:#fff}
 .wd-btn-primary:hover:not(:disabled){background:var(--wd-primary-dark)}
@@ -661,7 +662,7 @@ html[data-theme="dark"] .zoho-icon-btn:hover{background:var(--wd-hover);color:#d
 .wd-field{display:flex;flex-direction:column;gap:6px;margin-bottom:14px}
 .wd-field label{font-size:11.5px;font-weight:600;color:#4e5660}
 .wd-input{height:38px;width:100%;padding:0 12px;border:1px solid #d8dde2;border-radius:5px;font-size:12.5px;color:#24292f;background:#fff}
-.wd-input:focus{border-color:var(--wd-primary);outline:2px solid rgba(0,168,132,.12)}
+.wd-input:focus{border-color:var(--wd-primary);outline:2px solid var(--wd-active)}
 select.wd-input{appearance:auto;cursor:pointer}
 .wd-empty{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;padding:52px 20px;text-align:center}
 .wd-empty-icon{width:58px;height:58px;border-radius:50%;background:#f1f6f5;display:grid;place-items:center;font-size:24px;color:#9fb8b1;margin-bottom:4px}
@@ -669,7 +670,7 @@ select.wd-input{appearance:auto;cursor:pointer}
 .wd-empty p{margin:0;font-size:12.5px;color:#7b838e}
 .wd-alert{display:flex;align-items:center;gap:10px;padding:10px 14px;border-radius:6px;font-size:12.5px;border:1px solid #f0d9d8;background:#fdf3f2;color:#94302c}
 .wd-alert-info{border-color:#d9e6f5;background:#f3f8fd;color:#2c5a94}
-.wd-alert-success{border-color:#cdeee5;background:#effaf6;color:#087d67;word-break:break-all}
+.wd-alert-success{border-color:rgba(44,102,221,0.15);background:var(--wd-primary-light);color:var(--wd-primary-ink);word-break:break-all}
 .wd-alert a{color:inherit;font-weight:600}
 .wd-skel-row{display:flex;gap:14px;align-items:center;height:46px;border-bottom:1px solid #f0f2f4}
 .wd-skel-bar{height:11px;border-radius:5px;background:#eef0f3;animation:wd-pulse 1.4s ease-in-out infinite}
@@ -690,7 +691,7 @@ select.wd-input{appearance:auto;cursor:pointer}
 .zoho-avatar{transition:background .15s ease,color .15s ease,transform .15s ease}
 .zoho-top-actions .wd-btn:hover,
 .zoho-top-actions .zoho-icon-btn:hover,
-.zoho-topbar-start .zoho-icon-btn:hover{background:color-mix(in srgb,var(--wd-primary) 12%,transparent);color:#0b6b58}
+.zoho-topbar-start .zoho-icon-btn:hover{background:color-mix(in srgb,var(--wd-primary) 12%,transparent);color:var(--wd-primary-dark)}
 html[data-theme="dark"] .zoho-top-actions .wd-btn:hover,
 html[data-theme="dark"] .zoho-top-actions .zoho-icon-btn:hover,
 html[data-theme="dark"] .zoho-topbar-start .zoho-icon-btn:hover{background:var(--wd-hover);color:#dbeafe}
@@ -700,7 +701,7 @@ html[data-theme="dark"] .zoho-top-actions .wd-btn-primary{background:var(--wd-pr
 
 /* Enterprise admin console */
 .imkan-admin-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px;margin-bottom:14px}.imkan-admin-metric{display:flex;justify-content:space-between;align-items:center;padding:11px 0;border-bottom:1px solid var(--wd-line);font-size:11px}.imkan-admin-metric:last-child{border-bottom:0}.imkan-admin-metric strong{font-size:16px;color:#252a31}.imkan-chip-row{display:flex;flex-wrap:wrap;gap:7px}.imkan-chip{display:inline-flex;align-items:center;padding:6px 9px;border:1px solid #dfe4e8;border-radius:14px;background:#fafbfc;color:#424952;font-size:10px}.imkan-subtitle{margin:3px 0 0;color:#7c8590;font-size:11px}@media(max-width:800px){.imkan-admin-grid{grid-template-columns:1fr}}
-.imkan-share-recipient-list{display:flex;flex-direction:column;gap:4px;margin:4px 0 10px;max-height:180px;overflow:auto}.imkan-share-recipient{display:flex;align-items:center;gap:8px;width:100%;text-align:start;border:1px solid transparent;background:#fafbfc;border-radius:5px;padding:7px;cursor:pointer;color:#343a42}.imkan-share-recipient:hover,.imkan-share-recipient.selected{background:#f0faf7;border-color:#b9e6db}.imkan-share-recipient>span:nth-child(2){display:flex;flex-direction:column;flex:1}.imkan-share-recipient small{color:#8a929d;font-size:9px;margin-top:2px}.imkan-share-avatar{width:24px;height:24px;border-radius:50%;background:#e9f5f2;color:#087d67;display:grid;place-items:center;font-size:9px;font-weight:800}
+.imkan-share-recipient-list{display:flex;flex-direction:column;gap:4px;margin:4px 0 10px;max-height:180px;overflow:auto}.imkan-share-recipient{display:flex;align-items:center;gap:8px;width:100%;text-align:start;border:1px solid transparent;background:#fafbfc;border-radius:5px;padding:7px;cursor:pointer;color:#343a42}.imkan-share-recipient:hover,.imkan-share-recipient.selected{background:var(--wd-primary-light);border-color:rgba(44,102,221,0.2)}.imkan-share-recipient>span:nth-child(2){display:flex;flex-direction:column;flex:1}.imkan-share-recipient small{color:#8a929d;font-size:9px;margin-top:2px}.imkan-share-avatar{width:24px;height:24px;border-radius:50%;background:var(--wd-primary-light);color:var(--wd-primary-ink);display:grid;place-items:center;font-size:9px;font-weight:800}
 
 /* ═══════════════════════════════════════════════════════════════════════
    WorkDrive V3 shell upgrade — Zoho layout system, themes, polish.
@@ -778,7 +779,7 @@ button.wd-name-link{background:none;border:0;padding:0;font:inherit;color:inheri
 /* ── Top bar layout ───────────────────────────────────────────────────── */
 .zoho-topbar-inner{gap:10px;padding-inline-start:0}
 .zoho-account{position:relative;display:inline-flex}
-.zoho-account .zoho-avatar{cursor:pointer;font-size:11px;font-weight:700;background:#e9f5f2;color:#087d67;border:0}
+.zoho-account .zoho-avatar{cursor:pointer;font-size:11px;font-weight:700;background:var(--wd-primary-light);color:var(--wd-primary-ink);border:0}
 
 /* Organization switcher adapted to the light top bar */
 .zoho-org-switch{position:relative;margin-inline-end:6px}
@@ -797,7 +798,7 @@ button.wd-name-link{background:none;border:0;padding:0;font:inherit;color:inheri
 .zoho-org-item-text small{font-size:9.5px;color:#7f8897}
 .zoho-org-empty{padding:10px;font-size:11px;color:#8a929d}
 .zoho-team-avatar.sm{width:22px;height:22px;font-size:10px}
-.zoho-spinner{width:13px;height:13px;border-radius:50%;border:2px solid rgba(0,168,132,.25);border-top-color:var(--wd-primary);animation:zoho-spin .7s linear infinite;display:inline-block}
+.zoho-spinner{width:13px;height:13px;border-radius:50%;border:2px solid var(--wd-active);border-top-color:var(--wd-primary);animation:zoho-spin .7s linear infinite;display:inline-block}
 @keyframes zoho-spin{to{transform:rotate(360deg)}}
 
 /* Quick actions */
@@ -808,7 +809,7 @@ button.wd-name-link{background:none;border:0;padding:0;font:inherit;color:inheri
 .zoho-storage{display:inline-flex;align-items:center;gap:6px;min-width:74px;justify-content:center}
 .zoho-storage small{font-size:9.5px;color:#7f8897;white-space:nowrap}
 .zoho-storage-track{position:relative;width:56px;height:5px;border-radius:4px;background:#e6eaee;overflow:hidden;display:inline-block}
-.zoho-storage-fill{display:block;height:100%;border-radius:4px;background:linear-gradient(90deg,#00a884,#12c39a);transition:width .3s ease}
+.zoho-storage-fill{display:block;height:100%;border-radius:4px;background:linear-gradient(90deg,var(--wd-primary),var(--wd-primary-dark));transition:width .3s ease}
 .zoho-storage.warn .zoho-storage-fill{background:linear-gradient(90deg,#d99a17,#f0b53e)}
 .zoho-storage.danger .zoho-storage-fill{background:linear-gradient(90deg,#c0392b,#e05546)}
 .zoho-storage-fill.indeterminate{width:38%!important;animation:zoho-indet 1.2s ease-in-out infinite}
@@ -816,7 +817,7 @@ button.wd-name-link{background:none;border:0;padding:0;font:inherit;color:inheri
 
 /* ── Global instant search ────────────────────────────────────────────── */
 .zoho-global-search{position:relative;display:flex;align-items:center;gap:8px;height:34px;background:var(--wd-canvas);border:1px solid var(--wd-line);border-radius:6px;padding-inline:10px;color:#8b929e;transition:border-color .15s ease,background .15s ease}
-.zoho-global-search:focus-within{border-color:#9fd9cb;background:#fff;outline:2px solid rgba(0,168,132,.14)}
+.zoho-global-search:focus-within{border-color:#9fd9cb;background:#fff;outline:2px solid var(--wd-active)}
 .zoho-global-search input{flex:1;min-width:0;border:0;outline:0;background:transparent;font-size:12.5px;color:#252a31}
 .zoho-global-search kbd{font-size:9px;color:#8b929e;border:1px solid var(--wd-line);border-radius:4px;padding:2px 5px;background:#fff;white-space:nowrap}
 .zoho-search-glyph{font-size:13px;line-height:1}
@@ -824,7 +825,7 @@ button.wd-name-link{background:none;border:0;padding:0;font:inherit;color:inheri
 .zoho-search-filters{display:flex;align-items:center;gap:6px;padding:4px 4px 8px;border-bottom:1px solid var(--wd-line)}
 .zoho-filter-chip{border:1px solid transparent;background:transparent;border-radius:14px;font-size:10.5px;padding:4px 10px;cursor:pointer;color:#5c6570}
 .zoho-filter-chip:hover{background:var(--wd-hover)}
-.zoho-filter-chip.active{background:#e9f5f2;color:#087d67;border-color:#b9e6db;font-weight:600}
+.zoho-filter-chip.active{background:var(--wd-primary-light);color:var(--wd-primary-ink);border-color:rgba(44,102,221,0.2);font-weight:600}
 .zoho-search-group{padding-block-start:4px}
 .zoho-search-group-title{font-size:9px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:#98a0ab;padding:7px 8px 4px}
 .zoho-search-row{display:flex;align-items:center;gap:9px;width:100%;text-align:start;border:0;background:transparent;border-radius:6px;padding:7px 8px;cursor:pointer;font-size:12.5px;color:#252a31}
@@ -832,12 +833,12 @@ button.wd-name-link{background:none;border:0;padding:0;font:inherit;color:inheri
 .zoho-search-name{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .zoho-search-sub{font-size:10px;color:#98a0ab}
 .zoho-search-empty{padding:18px;text-align:center;font-size:11.5px;color:#8a929d}
-.zoho-search-all{display:block;margin-top:6px;padding:9px;border-radius:6px;text-align:center;font-size:11.5px;font-weight:700;color:#087d67;background:#f2faf8}
-.zoho-search-all:hover{background:#e9f5f2}
+.zoho-search-all{display:block;margin-top:6px;padding:9px;border-radius:6px;text-align:center;font-size:11.5px;font-weight:700;color:var(--wd-primary-ink);background:var(--wd-primary-light)}
+.zoho-search-all:hover{background:var(--wd-primary-light)}
 
 /* ── Owner cell ───────────────────────────────────────────────────────── */
 .zoho-owner-cell{display:inline-flex;align-items:center;gap:8px;min-width:0}
-.zoho-owner-avatar{width:26px;height:26px;border-radius:50%;display:inline-grid;place-items:center;background:#e9f5f2;color:#087d67;font-size:9.5px;font-weight:800;flex:none}
+.zoho-owner-avatar{width:26px;height:26px;border-radius:50%;display:inline-grid;place-items:center;background:var(--wd-primary-light);color:var(--wd-primary-ink);font-size:9.5px;font-weight:800;flex:none}
 .zoho-owner-avatar.sm{width:20px;height:20px;font-size:8px}
 img.zoho-owner-avatar{object-fit:cover}
 .zoho-owner-name{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
@@ -865,21 +866,21 @@ img.zoho-owner-avatar{object-fit:cover}
 .zoho-view-btn{height:32px;padding-inline:12px;border:0;background:transparent;font-size:11.5px;color:#5c6570;cursor:pointer;display:inline-flex;align-items:center;gap:6px}
 .zoho-view-btn + .zoho-view-btn{border-inline-start:1px solid var(--wd-line)}
 .zoho-view-btn:hover{background:var(--wd-hover);color:#22252a}
-.zoho-view-btn.active{background:#e9f5f2;color:#087d67;font-weight:700}
+.zoho-view-btn.active{background:var(--wd-primary-light);color:var(--wd-primary-ink);font-weight:700}
 
 /* ── Upload zone & progress toast ─────────────────────────────────────── */
 .zoho-upload-zone{display:inline-flex}
 .zoho-dashed-drop{display:inline-flex;align-items:center;justify-content:center;height:34px;padding-inline:14px;border:1px dashed #c3ccd3;border-radius:5px;font-size:11.5px;color:#424952;background:#fff;cursor:pointer;transition:border-color .15s ease,color .15s ease,background .15s ease}
-.zoho-dashed-drop:hover{border-color:var(--wd-primary);color:#087d67}
-.zoho-dashed-drop.active{border-color:var(--wd-primary);background:#effaf6;color:#087d67}
+.zoho-dashed-drop:hover{border-color:var(--wd-primary);color:var(--wd-primary-ink)}
+.zoho-dashed-drop.active{border-color:var(--wd-primary);background:var(--wd-primary-light);color:var(--wd-primary-ink)}
 .zoho-upload-toast{position:fixed;bottom:16px;inset-inline-end:16px;z-index:95;width:min(340px,calc(100vw - 32px));background:#fff;border:1px solid var(--wd-line);border-radius:9px;box-shadow:0 22px 55px rgba(15,25,35,.22);padding:11px 12px;display:flex;flex-direction:column;gap:9px;opacity:1;animation:zoho-toast-in .18s ease}
 .zoho-upload-toast.closing{opacity:0;transform:translateY(6px);transition:opacity .45s ease,transform .45s ease;pointer-events:none}
 @keyframes zoho-toast-in{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
 .zoho-upload-head{display:flex;align-items:center;justify-content:space-between;gap:8px}
 .zoho-upload-head strong{font-size:11.5px;color:#252a31}
-.zoho-upload-percent{font-size:11px;font-weight:700;color:#087d67}
+.zoho-upload-percent{font-size:11px;font-weight:700;color:var(--wd-primary-ink)}
 .zoho-upload-bar{height:5px;border-radius:4px;background:#edf0f2;overflow:hidden}
-.zoho-upload-fill{display:block;height:100%;background:linear-gradient(90deg,#00a884,#12c39a);transition:width .25s ease;border-radius:4px}
+.zoho-upload-fill{display:block;height:100%;background:linear-gradient(90deg,var(--wd-primary),var(--wd-primary-dark));transition:width .25s ease;border-radius:4px}
 .zoho-upload-fill.done{background:var(--wd-primary)}
 .zoho-upload-list{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:5px;max-height:190px;overflow:auto}
 .zoho-upload-row{display:flex;align-items:center;gap:8px;padding:5px 6px;border-radius:5px}
@@ -1058,12 +1059,12 @@ html[data-theme="dark"] .wd-details-row dt{color:var(--wd-sidebar-muted)}
 .zoho-member-head-text{display:flex;flex-direction:column;min-width:0}
 .zoho-member-title{margin:0;font-size:13.5px;font-weight:700;color:#24292f;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .zoho-member-subtitle{font-size:10.5px;color:#7b838e}
-.zoho-member-count{display:inline-flex;align-items:center;justify-content:center;min-width:26px;height:26px;padding:0 8px;border-radius:13px;background:#eef7f4;color:#087d67;font-size:11.5px;font-weight:700}
+.zoho-member-count{display:inline-flex;align-items:center;justify-content:center;min-width:26px;height:26px;padding:0 8px;border-radius:13px;background:var(--wd-primary-light);color:var(--wd-primary-ink);font-size:11.5px;font-weight:700}
 .zoho-member-list{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:4px;max-height:260px;overflow:auto}
 .zoho-member-row{display:flex;align-items:center;gap:10px;padding:6px 10px;border:1px solid transparent;border-radius:9px;transition:background .15s ease,border-color .15s ease}
 .zoho-member-row:hover{background:var(--wd-hover);border-color:var(--wd-line)}
 .zoho-member-avatar-wrap{position:relative;display:inline-flex;flex:0 0 auto}
-.zoho-member-avatar{display:grid;place-items:center;width:32px;height:32px;border-radius:50%;background:#e9f5f2;color:#087d67;font-size:11px;font-weight:800;overflow:hidden}
+.zoho-member-avatar{display:grid;place-items:center;width:32px;height:32px;border-radius:50%;background:var(--wd-primary-light);color:var(--wd-primary-ink);font-size:11px;font-weight:800;overflow:hidden}
 .zoho-member-avatar.sm{width:26px;height:26px;font-size:9.5px}
 .zoho-member-status{position:absolute;inset-block-end:0;inset-inline-end:0;width:9px;height:9px;border-radius:50%;border:2px solid #fff;background:#9aa2ad}
 .zoho-member-status.active{background:#22c55e}
@@ -1100,7 +1101,7 @@ html[data-theme="dark"] .zoho-member-remove:hover{background:#3b1d23;color:#f871
 .zoho-member-avatar img{width:100%;height:100%;object-fit:cover}
 .zoho-role-badge{display:inline-flex;align-items:center;gap:5px;height:22px;padding:0 10px;border-radius:11px;font-size:10.5px;font-weight:700;letter-spacing:.02em;border:1px solid transparent;white-space:nowrap}
 .zoho-role-badge.admin{background:#edf4fd;color:#2160ac;border-color:#d4e4f7}
-.zoho-role-badge.organizer{background:#e8f6f2;color:#087d67;border-color:#cdeee5}
+.zoho-role-badge.organizer{background:var(--wd-primary-light);color:var(--wd-primary-ink);border-color:rgba(44,102,221,0.15)}
 .zoho-role-badge.editor{background:#f3ecfd;color:#6d28d9;border-color:#e0d2fb}
 .zoho-role-badge.viewer{background:#f1f3f5;color:#5b636e;border-color:#e3e6ea}
 html[data-theme="dark"] .zoho-role-badge.admin{background:#1e2a45;color:#93c5fd;border-color:#2e3b52}
@@ -1203,7 +1204,7 @@ html[data-theme="dark"] .imkan-modal-surface .imkan-muted{color:var(--wd-sidebar
 .wd-pill{height:32px;border-radius:var(--wd-pill-radius);padding:7px 14px;font-size:13px;line-height:18px;transition:background-color var(--wd-dur) var(--wd-ease),color var(--wd-dur) var(--wd-ease),box-shadow var(--wd-dur) var(--wd-ease)}
 .wd-pill-new{background:var(--wd-primary);color:#fff;font-weight:700;border:0}
 .wd-pill-new:hover,.wd-pill-new[aria-expanded="true"]{background:var(--wd-primary-dark)}
-.wd-pill-record{background:transparent;color:var(--wd-primary-ink);font-weight:500;box-shadow:inset 0 0 0 1px rgba(44,102,221,.5)}
+.wd-pill-record{background:transparent;color:var(--wd-primary-ink);font-weight:500;box-shadow:inset 0 0 0 1px var(--wd-active)}
 .wd-pill-record:hover,.wd-pill-record[aria-expanded="true"]{background:var(--wd-menu-hover)}
 .wd-pill-manage{height:28px;border-radius:var(--wd-pill-radius);padding:6px 8px;font-size:12px;font-weight:500;color:var(--wd-text);background:transparent;box-shadow:inset 0 0 0 1px var(--wd-capsule);transition:background-color var(--wd-dur) var(--wd-ease)}
 .wd-pill-manage:hover,.wd-pill-manage[aria-expanded="true"]{background:var(--wd-hover)}
@@ -1225,7 +1226,7 @@ html[data-theme="dark"] .imkan-modal-surface .imkan-muted{color:var(--wd-sidebar
 .wd-list-meta{font-size:12px;font-weight:400;line-height:16px;color:var(--wd-text-muted)}
 .wd-check{width:14px;height:14px;margin:0;accent-color:var(--wd-primary)}
 .wd-search{height:34px;border-radius:var(--wd-pill-radius);border:1px solid var(--wd-capsule);padding:6px 8px;font-size:13px;color:var(--wd-text);background:#fff;transition:border-color var(--wd-dur) var(--wd-ease),box-shadow var(--wd-dur) var(--wd-ease)}
-.wd-search:focus,.wd-search:focus-within{border-color:var(--wd-primary);box-shadow:0 0 0 3px rgba(44,102,221,.18);outline:none}
+.wd-search:focus,.wd-search:focus-within{border-color:var(--wd-primary);box-shadow:0 0 0 3px var(--wd-active);outline:none}
 .wd-drawer{width:var(--wd-inspector-w);transition:transform var(--wd-drawer-dur) var(--wd-ease),opacity var(--wd-drawer-dur) var(--wd-ease)}
 .wd-rail{width:var(--wd-inspector-rail);padding:12px 5px}
 

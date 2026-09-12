@@ -10,7 +10,17 @@ The project uses the **IMKAN One Design System** as its visual authority. The of
 
 ### Token File Location
 - `frontend/src/styles/imkan-tokens.css` — fallback token definitions
-- `frontend/src/app/globals.css` — Tailwind v4 `@theme inline` bindings + semantic CSS utilities
+- `frontend/src/app/globals.css` — Tailwind v4 `@theme inline` bindings + semantic CSS utilities + WorkDrive-specific variables
+
+### WorkDrive CSS Variables (in globals.css `:root`)
+| Variable | Value | Usage |
+|----------|-------|-------|
+| `--wd-primary` | `#2C66DD` | Primary action color (buttons, links, active states) |
+| `--wd-primary-dark` | `#184091` | Darker shade for hover/gradient endpoints |
+| `--wd-primary-ink` | `#254993` | Text color on light backgrounds (metadata, labels) |
+| `--wd-primary-light` | `#EFF6FF` | Light background tint (avatars, badges, hover states) |
+| `--wd-active` | `rgba(44,102,221,0.15)` | Active/selected state backgrounds |
+| `--wd-sidebar` | `#282828` | Sidebar background |
 
 ---
 
@@ -37,7 +47,6 @@ The project uses the **IMKAN One Design System** as its visual authority. The of
 | Primary | `#3b82f6` | Accent (differs from light mode) |
 | Border | `#2e3b52` (`--wd-line`) | Borders, dividers |
 | Hover | `#1c2128` (`--wd-hover`) | Hover state backgrounds |
-| Green Accent | `#26c281` (`--wd-primary`) | Success/active states |
 
 ### Zoho-Inferred Accent Colors (from globals.css)
 | Hex Value | Usage |
@@ -208,7 +217,7 @@ The project uses the **IMKAN One Design System** as its visual authority. The of
 | `#222222` text | `#f1f5f9` text |
 | `#f7f8fa` surface | `#171717` bg |
 | `#e5e7eb` border | `#2e3b52` line |
-| `#2C66DD` primary | `#2C66DD` primary (`--wd-primary`) |
+| `#2C66DD` primary | `#3b82f6` primary (`--wd-primary`) |
 
 ---
 
@@ -235,7 +244,7 @@ The project uses the **IMKAN One Design System** as its visual authority. The of
 | Element | Styling |
 |---------|---------|
 | Container | `bg-[#282828] text-[#EEEEEE]` |
-| Active nav | `bg-[rgba(44,102,221,0.3)] font-bold text-[#DBE3FA]` |
+| Active nav | `bg-[var(--wd-active)] font-bold text-[#DBE3FA]` |
 | Hover nav | `hover:bg-white/[0.08]` |
 | Muted text | `text-[#9CA3AF]` |
 

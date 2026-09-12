@@ -68,7 +68,7 @@ export function InspectorPanel({ onVersionHistory }: { onVersionHistory?: (fileI
       <div className="flex items-center border-b border-[#EDEDED]">
         {(["details", "activity"] as const).map((t) => (
           <button key={t} type="button" onClick={() => setInspectorTab(t)} aria-selected={inspectorTab === t} role="tab"
-            className={`flex-1 px-3 py-2.5 text-[13px] font-medium transition-colors duration-150 ease-in-out ${inspectorTab === t ? "border-b-2 border-[#2C66DD] text-[#2C66DD]" : "text-[#4F4F4F] hover:text-[#212121]"}`}>
+            className={`flex-1 px-3 py-2.5 text-[13px] font-medium transition-colors duration-150 ease-in-out ${inspectorTab === t ? "border-b-2 border-[var(--wd-primary)] text-[var(--wd-primary)]" : "text-[#4F4F4F] hover:text-[#212121]"}`}>
             {label(t === "details" ? "inspector.details" : "inspector.activity")}
           </button>
         ))}
@@ -104,7 +104,7 @@ export function InspectorPanel({ onVersionHistory }: { onVersionHistory?: (fileI
               <div className="flex justify-between gap-2">
                 <dt className="text-[#4F4F4F]">{label("inspector.permalink")}</dt>
                 <dd className="min-w-0 truncate">
-                  <button type="button" onClick={() => void copyPermalink()} className="inline-flex max-w-full items-center gap-1 truncate text-[#2C66DD] hover:underline" title={permalink}>
+                  <button type="button" onClick={() => void copyPermalink()} className="inline-flex max-w-full items-center gap-1 truncate text-[var(--wd-primary)] hover:underline" title={permalink}>
                     <Icons.link size={12} /> <span className="truncate">{permalink || "—"}</span>
                   </button>
                 </dd>

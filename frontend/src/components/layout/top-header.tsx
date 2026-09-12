@@ -83,7 +83,7 @@ export function TopHeader() {
           { key: "trash", labelKey: "files.trash" },
         ]} />
       <div className="flex min-w-0 items-center gap-1.5">
-        <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[8px] bg-[#F0F4FF] text-[#2C66DD]" aria-hidden="true">
+        <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[8px] bg-[#F0F4FF] text-[var(--wd-primary)]" aria-hidden="true">
           <Icons.folder size={18} />
         </span>
         <span className="max-w-[30vw] truncate text-[15px] font-semibold text-[#212121]" title={scope.folderName ?? label("files.breadcrumb.root")}>

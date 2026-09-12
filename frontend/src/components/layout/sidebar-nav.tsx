@@ -11,7 +11,7 @@ function Row({ item, collapsed, onNav, active }: { item: Item; collapsed: boolea
   const Icon = Icons[item.icon];
   const isActive = active ?? item.active;
   const cls = isActive
-    ? "bg-[rgba(44,102,221,0.3)] font-bold text-[#DBE3FA]"
+    ? "bg-[var(--wd-active)] font-bold text-[#DBE3FA]"
     : "font-medium text-[#EEEEEE] hover:bg-white/[0.08]";
   return (
     <Link href={item.href} onClick={onNav} aria-current={isActive ? "page" : undefined}
