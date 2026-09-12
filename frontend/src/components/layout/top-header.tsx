@@ -61,12 +61,12 @@ export function TopHeader() {
   }, [team]);
   const unread = notes.filter((n) => !n.readAt).length;
   return (
-    <header className="flex h-12 shrink-0 items-center gap-2 border-b border-[color:var(--imkan-color-border)] bg-white px-3">
-      <button type="button" className="rounded-md p-2 text-slate-600 hover:bg-slate-100 md:hidden" onClick={() => setMobileNavOpen(true)} aria-label={label("nav.workspace")}>
+    <header className="flex h-12 shrink-0 items-center gap-2 border-b border-[#EDEDED] bg-white px-3">
+      <button type="button" className="wd-icon-btn md:hidden" onClick={() => setMobileNavOpen(true)} aria-label={label("nav.workspace")}>
         <Icons.menu size={18} />
       </button>
-      <button id="hdr-tree-btn" type="button" onClick={() => setTreeOpen((v) => !v)} aria-expanded={treeOpen} aria-haspopup="menu" title={label("nav.manage")} aria-label={label("nav.manage")} className="hidden rounded-md p-2 text-slate-600 hover:bg-slate-100 md:inline-flex">
-        <Icons.list size={17} />
+      <button id="hdr-tree-btn" type="button" onClick={() => setTreeOpen((v) => !v)} aria-expanded={treeOpen} aria-haspopup="menu" title={label("nav.manage")} aria-label={label("nav.manage")} className="wd-icon-btn hidden md:inline-flex">
+        <Icons.tree size={17} />
       </button>
       <ZohoMenu open={treeOpen} onClose={() => setTreeOpen(false)} labelledBy="hdr-tree-btn"
         onSelect={(k) => {
@@ -83,15 +83,15 @@ export function TopHeader() {
           { key: "trash", labelKey: "files.trash" },
         ]} />
       <div className="flex min-w-0 items-center gap-1.5">
-        <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-[#E8EFFD] text-[#1B66EA]" aria-hidden="true">
+        <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[8px] bg-[#F0F4FF] text-[#2C66DD]" aria-hidden="true">
           <Icons.folder size={18} />
         </span>
-        <span className="max-w-[30vw] truncate text-[15px] font-semibold text-[#1E293B]" title={scope.folderName ?? label("files.breadcrumb.root")}>
+        <span className="max-w-[30vw] truncate text-[15px] font-semibold text-[#212121]" title={scope.folderName ?? label("files.breadcrumb.root")}>
           {scope.folderName ?? label("files.breadcrumb.root")}
         </span>
         <button id="hdr-manage-btn" type="button" onClick={() => setManageOpen((v) => !v)} aria-expanded={manageOpen} aria-haspopup="menu"
-          className="inline-flex items-center gap-1 rounded-full bg-[#F3F4F6] px-3 py-1.5 text-[12px] font-medium text-[#374151] hover:bg-slate-200">
-          {label("nav.manage")} <Icons.chevD size={13} />
+          className="wd-pill-manage inline-flex items-center gap-1">
+          <Icons.gear size={14} /> {label("nav.manage")} <Icons.chevD size={13} />
         </button>
         <ZohoMenu open={manageOpen} onClose={() => setManageOpen(false)} labelledBy="hdr-manage-btn"
           onSelect={(k) => {
@@ -110,7 +110,7 @@ export function TopHeader() {
       </div>
       <div className="ms-auto flex shrink-0 items-center gap-1.5">
         <div className="relative hidden lg:block" ref={teamRef}>
-          <button type="button" onClick={() => setTeam((v) => !v)} aria-expanded={team} aria-haspopup="menu" className="flex max-w-[220px] items-center gap-2 rounded-md px-2 py-1.5 hover:bg-slate-100">
+          <button type="button" onClick={() => setTeam((v) => !v)} aria-expanded={team} aria-haspopup="menu" className="flex max-w-[220px] items-center gap-2 rounded-[16px] px-2 py-1.5 hover:bg-[#F3F5F7]">
             <span className="flex h-6 w-6 items-center justify-center rounded bg-slate-900 text-[11px] font-bold text-white">{(org || "I").slice(0, 1).toUpperCase()}</span>
             <span className="truncate text-[13px] font-medium text-slate-800">{org || "IMKAN"}</span>
             <Icons.chevD size={14} />
@@ -128,31 +128,31 @@ export function TopHeader() {
         </div>
         <div className="hidden w-56 md:block xl:w-72">
           <button type="button" onClick={() => setSearchOpen(true)}
-            className="flex w-full items-center gap-2 rounded-md border border-transparent px-2 py-1.5 text-[13px] text-slate-400 hover:border-slate-200 hover:bg-slate-50" aria-label={label("search.placeholder")}>
+            className="wd-search flex w-full items-center gap-2 text-[#4F4F4F]" aria-label={label("search.placeholder")}>
             <Icons.search size={16} />
             <span className="min-w-0 flex-1 truncate text-start">{label("search.placeholder")}</span>
-            <kbd className="hidden rounded border border-slate-200 bg-slate-50 px-1.5 py-0.5 text-[10.5px] font-medium text-slate-400 xl:block">Ctrl K</kbd>
+            <kbd className="hidden rounded border border-[#EDEDED] bg-[#F7F8FA] px-1.5 py-0.5 text-[10.5px] font-medium text-[#4F4F4F] xl:block">Ctrl K</kbd>
           </button>
         </div>
-        <button type="button" className="rounded-md p-2 text-slate-500 hover:bg-slate-100" aria-label={label("search.placeholder")} onClick={() => setSearchOpen(true)}>
+        <button type="button" className="wd-icon-btn" aria-label={label("search.placeholder")} onClick={() => setSearchOpen(true)}>
           <Icons.search size={17} />
         </button>
-        <button type="button" className="rounded-md p-2 text-slate-500 hover:bg-slate-100" aria-label={label("nav.notifications")} title={label("nav.notifications")}>
+        <button type="button" className="wd-icon-btn" aria-label={label("nav.notifications")} title={label("nav.notifications")}>
           <Icons.horn size={17} />
         </button>
         <button id="hdr-notif-btn" type="button" onClick={() => setNotifOpen((v) => !v)} aria-expanded={notifOpen} aria-haspopup="menu"
-          className="relative rounded-md p-2 text-slate-500 hover:bg-slate-100" aria-label={label("nav.notifications")} title={label("nav.notifications")}>
+          className="wd-icon-btn relative" aria-label={label("nav.notifications")} title={label("nav.notifications")}>
           <Icons.bell size={17} />
-          {unread > 0 ? <span className="absolute end-1 top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-bold text-white">{unread > 9 ? "9+" : unread}</span> : null}
+          {unread > 0 ? <span className="absolute end-1 top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-[#DC2626] px-1 text-[10px] font-bold text-white">{unread > 9 ? "9+" : unread}</span> : null}
         </button>
         {notifOpen ? <NotificationPanel open={notifOpen} onClose={() => setNotifOpen(false)} /> : null}
-        <Link href="/settings" className="hidden rounded-md p-2 text-slate-500 hover:bg-slate-100 sm:block" aria-label={label("nav.theme")} title={label("nav.theme")}>
+        <Link href="/settings" className="wd-icon-btn hidden sm:inline-flex" aria-label={label("nav.theme")} title={label("nav.theme")}>
           <Icons.gear size={17} />
         </Link>
-        <Link href="/help" className="hidden rounded-md p-2 text-slate-500 hover:bg-slate-100 sm:block" aria-label={label("nav.help")} title={label("nav.help")}>
+        <Link href="/help" className="wd-icon-btn hidden sm:inline-flex" aria-label={label("nav.help")} title={label("nav.help")}>
           <Icons.help size={17} />
         </Link>
-        <button type="button" className="hidden rounded-md p-2 text-slate-500 hover:bg-slate-100 sm:block" title={label("nav.appSwitcher")} aria-label={label("nav.appSwitcher")}>
+        <button type="button" className="wd-icon-btn hidden sm:inline-flex" title={label("nav.appSwitcher")} aria-label={label("nav.appSwitcher")}>
           <Icons.grid size={17} />
         </button>
         <ThemeToggle />

@@ -87,6 +87,7 @@ interface FileTableProps {
   /** Latest contained-file updatedAt per listed folder (recursive). */
   folderUpdatedAt?: ReadonlyMap<string, string | null>;
   onToast?: (message: string) => void;
+  compact?: boolean;
 }
 
 export function FileTable({
@@ -116,6 +117,7 @@ export function FileTable({
   folderSizes,
   folderUpdatedAt,
   onToast,
+  compact = false,
 }: FileTableProps) {
   const { label, locale } = useLocale();
   const [sort, setSort] = useState<{ key: "name" | "modified" | "size"; direction: "asc" | "desc" }>({ key: "name", direction: "asc" });
@@ -159,17 +161,18 @@ export function FileTable({
       <div className="overflow-x-auto w-full max-w-full">
         <table className="imkan-table min-w-[42rem] w-full table-auto">
           <thead>
-          <tr className="imkan-table-row">
-            <th scope="col" className="px-3 py-2 text-start font-medium w-10">
+          <tr className="wd-list-head">
+            <th scope="col" className="w-10 ps-[13px] text-start font-medium">
               <input
                 type="checkbox"
-                className="imkan-checkbox"
+                className="wd-check"
                 onChange={(e) => onSelectAll?.(e.target.checked)}
               />
             </th>
-            <th scope="col" className="px-3 py-2 text-start font-medium">{label("files.column.name")}</th>
-            <th scope="col" className="px-3 py-2 text-start font-medium"><button type="button" className="imkan-focusable rounded-sm" onClick={() => toggleSort("modified")}>{label("files.column.modified")} {sort.key === "modified" ? (sort.direction === "asc" ? "↑" : "↓") : "↓"}</button></th>
-            <th scope="col" className="px-3 py-2 text-end font-medium"><span className="sr-only">{label("files.actions")}</span></th>
+            <th scope="col" className="px-3 text-start font-medium">{label("files.column.name")}</th>
+            <th scope="col" className="px-3 text-start font-medium"><button type="button" className="imkan-focusable rounded-[16px] px-3 py-2.5" onClick={() => toggleSort("modified")}>{label("files.column.modified")} {sort.key === "modified" ? (sort.direction === "asc" ? "↑" : "↓") : "↓"}</button></th>
+            <th scope="col" className="px-3 text-start font-medium"><button type="button" className="imkan-focusable rounded-[16px] px-3 py-2.5" onClick={() => toggleSort("size")}>{label("files.column.size")} {sort.key === "size" ? (sort.direction === "asc" ? "↑" : "↓") : ""}</button></th>
+            <th scope="col" className="px-4 text-end font-medium"><span className="sr-only">{label("files.actions")}</span></th>
           </tr>
         </thead>
         <tbody>
@@ -187,25 +190,27 @@ export function FileTable({
               onCopyLink={onCopyLink ? () => onCopyLink(folder.id) : undefined}
               onToast={onToast}
               x={e.clientX} y={e.clientY} onClose={() => setCtxMenu(null)}
-            />)}); }} onDragStart={(e) => { e.dataTransfer.effectAllowed="move"; e.dataTransfer.setData("application/x-workdrive", JSON.stringify({type:"FOLDER",id:folder.id,name:folder.name})); }} className="imkan-table-row hover:bg-[color:var(--imkan-color-surface)] group transition-colors cursor-grab" onDragOver={(e) => { e.preventDefault(); e.currentTarget.classList.add("ring-2","ring-[color:var(--imkan-color-primary)]"); }} onDragLeave={(e) => e.currentTarget.classList.remove("ring-2","ring-[color:var(--imkan-color-primary)]")} onDrop={(e) => { e.preventDefault(); e.currentTarget.classList.remove("ring-2","ring-[color:var(--imkan-color-primary)]"); try { const item=JSON.parse(e.dataTransfer.getData("application/x-workdrive")); if(item.id !== folder.id) onDropMove?.(item.type,item.id,folder.id); } catch {} }}>
-              <td className="px-3 py-2">
+            />)});             }} onDragStart={(e) => { e.dataTransfer.effectAllowed="move"; e.dataTransfer.setData("application/x-workdrive", JSON.stringify({type:"FOLDER",id:folder.id,name:folder.name})); }} className="wd-list-row group cursor-grab" data-compact={compact || undefined} data-selected={selectedIds.has(folder.id) || undefined} onDragOver={(e) => { e.preventDefault(); e.currentTarget.classList.add("ring-2","ring-[#2C66DD]"); }} onDragLeave={(e) => e.currentTarget.classList.remove("ring-2","ring-[#2C66DD]")} onDrop={(e) => { e.preventDefault(); e.currentTarget.classList.remove("ring-2","ring-[#2C66DD]"); try { const item=JSON.parse(e.dataTransfer.getData("application/x-workdrive")); if(item.id !== folder.id) onDropMove?.(item.type,item.id,folder.id); } catch {} }}>
+              <td className="ps-[13px]">
                 <input
                   type="checkbox"
-                  className="imkan-checkbox"
+                  className="wd-check"
                   checked={selectedIds.has(folder.id)}
+                  onChange={(e) => handleRowSelect(folder.id, e.target.checked, false)}
                   onClick={(e) => handleRowSelect(folder.id, (e.currentTarget as HTMLInputElement).checked, e.shiftKey)}
                 />
               </td>
-              <td className="max-w-[18rem] truncate px-3 py-2">
-                <Link href={`/files/${folder.id}`} className="imkan-focusable inline-flex max-w-full items-center truncate rounded-sm">
+              <td className="max-w-[18rem] truncate px-2">
+                <Link href={`/files/${folder.id}`} className="imkan-focusable inline-flex max-w-full items-center gap-4 truncate rounded-sm">
                   <FileIcon kind="folder" label={label("files.type.folder")} />
                   <span className="min-w-0 truncate">
-                    <span className="block truncate">{folder.name}</span>
-                    <span className="imkan-meta block truncate">{folder.ownerName ?? folder.ownerEmail ?? label("files.type.folder")}</span>
+                    <span className="wd-list-name block truncate">{folder.name}</span>
+                    <span className="wd-list-meta block truncate">{label("files.uploadedBy").replace("{name}", folder.ownerName ?? folder.ownerEmail ?? label("files.type.folder"))}</span>
                   </span>
                 </Link>
               </td>
-              <td className="imkan-muted whitespace-nowrap px-3 py-2 text-[length:var(--imkan-font-size-secondary)]">{formatDate(folderDate(folder.id))}</td>
+              <td className="wd-list-meta whitespace-nowrap px-3">{folder.ownerName ? label("files.modifiedByLine").replace("{date}", formatDate(folderDate(folder.id))).replace("{name}", folder.ownerName) : formatDate(folderDate(folder.id))}</td>
+              <td className="wd-list-meta whitespace-nowrap px-3">{folderSizes?.get(folder.id) ? formatSize(folderSizes.get(folder.id)) : "–"}</td>
               <td className="px-3 py-2 text-end">
                 <FileActionsMenu
                   context={{
@@ -234,25 +239,27 @@ export function FileTable({
               handlers={{ onOpen: onOpen ? () => onOpen("FILE", file.id, file.name) : undefined, onPreview: onPreview ? () => onPreview("FILE", file.id, file.name, file.mimeType ?? undefined, file.size ?? undefined) : undefined, onDownload: () => onDownload(file.id), onShare: canShare ? () => onShare("FILE", file.id) : undefined, onRename: canMutate ? () => onRename("FILE", file.id, file.name) : undefined, onMove: onMove && canMutate ? () => onMove("FILE", file.id, file.name) : undefined, onFavoriteToggle: onFavorite ? () => onFavorite("FILE", file.id) : undefined, onVersionHistory: onVersionHistory ? () => onVersionHistory("FILE", file.id, file.name, file.mimeType ?? undefined, file.size ?? undefined) : undefined, onDelete: canMutate ? () => onDelete("FILE", file.id) : undefined }}
               onCopyLink={onCopyLink ? () => onCopyLink(file.id) : undefined}
               x={e.clientX} y={e.clientY} onClose={() => setCtxMenu(null)}
-            />)}); }} className="imkan-table-row group relative cursor-grab active:cursor-grabbing">
-              <td className="px-3 py-2">
+            />)}); }} className="wd-list-row group relative cursor-grab active:cursor-grabbing" data-compact={compact || undefined} data-selected={selectedIds.has(file.id) || undefined}>
+              <td className="ps-[13px]">
                 <input
                   type="checkbox"
-                  className="imkan-checkbox"
+                  className="wd-check"
                   checked={selectedIds.has(file.id)}
+                  onChange={(e) => handleRowSelect(file.id, e.target.checked, false)}
                   onClick={(e) => handleRowSelect(file.id, (e.currentTarget as HTMLInputElement).checked, e.shiftKey)}
                 />
               </td>
-              <td className="max-w-[18rem] truncate px-3 py-2">
-                <button type="button" onClick={() => onPreview?.("FILE", file.id, file.name, file.mimeType ?? undefined, file.size ?? undefined)} className="imkan-focusable inline-flex max-w-full items-center truncate rounded-sm text-start hover:underline">
+              <td className="max-w-[18rem] truncate px-2">
+                <button type="button" onClick={() => onPreview?.("FILE", file.id, file.name, file.mimeType ?? undefined, file.size ?? undefined)} className="imkan-focusable inline-flex max-w-full items-center gap-4 truncate rounded-sm text-start hover:underline">
                   <FileIcon kind="file" mimeType={file.mimeType} name={file.name} label={label("files.type.file")} />
                   <span className="min-w-0 truncate">
-                    <span className="block truncate">{file.name}</span>
-                    <span className="imkan-meta block truncate">{file.ownerName ?? file.ownerEmail ?? label("files.type.file")}</span>
+                    <span className="wd-list-name block truncate">{file.name}</span>
+                    <span className="wd-list-meta block truncate">{label("files.uploadedBy").replace("{name}", file.ownerName ?? file.ownerEmail ?? label("files.type.file"))}</span>
                   </span>
                 </button>
               </td>
-              <td className="imkan-muted whitespace-nowrap px-3 py-2 text-[length:var(--imkan-font-size-secondary)]">{formatDate(file.updatedAt)}</td>
+              <td className="wd-list-meta whitespace-nowrap px-3">{file.ownerName ? label("files.modifiedByLine").replace("{date}", formatDate(file.updatedAt)).replace("{name}", file.ownerName) : formatDate(file.updatedAt)}</td>
+              <td className="wd-list-meta whitespace-nowrap px-3">{file.size != null ? formatSize(file.size) : "–"}</td>
               <td className="px-3 py-2 text-end">
                 <FileActionsMenu
                   context={{

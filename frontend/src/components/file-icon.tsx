@@ -187,7 +187,7 @@ type FileIconProps = {
 export function FileIcon({ kind, mimeType, name, label }: FileIconProps) {
   return (
     <span aria-label={label} role="img" className="me-2 inline-flex flex-none items-center">
-      <FileTypeIcon kind={fileIconKind(kind, mimeType, name)} size={20} />
+      <FileTypeIcon kind={fileIconKind(kind, mimeType, name)} size={32} />
     </span>
   );
 }

@@ -32,15 +32,15 @@ export function PrimarySidebar() {
   const close = () => setMobileNavOpen(false);
   const teamActive = pathname.startsWith("/files/team-folders");
   return (
-    <div className="flex h-full w-full flex-col bg-[#181C21] text-slate-200">
-      <div className="flex h-14 shrink-0 items-center gap-2 border-b border-white/[0.07] px-3">
-        <button type="button" className="rounded-md p-1.5 text-slate-400 hover:bg-white/10 hover:text-white" title={label("nav.appSwitcher")} aria-label={label("nav.appSwitcher")}>
+    <div className="flex h-full w-full flex-col bg-[#282828] text-[#EEEEEE]">
+      <div className="flex h-12 shrink-0 items-center gap-2 px-4 shadow-[0_1px_2px_rgba(0,0,0,0.3)]">
+        <button type="button" className="rounded-[8px] p-1.5 text-[#EEEEEE] hover:bg-white/10" title={label("nav.appSwitcher")} aria-label={label("nav.appSwitcher")}>
           <Icons.grid size={18} />
         </button>
         {c ? null : (
           <Link href="/files" onClick={close} className="flex min-w-0 flex-1 items-center gap-2">
-            <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-[#2563EB] text-[13px] font-bold text-white">W</span>
-            <span className="truncate text-[14px] font-bold text-white">{label("app.title")}</span>
+            <span className="flex h-6 w-6 shrink-0 items-center justify-center text-[#EEEEEE]" aria-hidden="true"><Icons.folder size={20} /></span>
+            <span className="mt-0.5 truncate text-[17px] font-medium leading-5 text-[#EEEEEE]">{label("app.title")}</span>
           </Link>
         )}
       </div>
@@ -49,7 +49,7 @@ export function PrimarySidebar() {
         <div className="px-2 pb-1">
           <div className="flex items-center">
             <button type="button" onClick={() => setOpen((v) => !v)} aria-expanded={open}
-              className="flex min-w-0 flex-1 items-center gap-2.5 rounded-lg px-2.5 py-[7px] text-[13px] text-[#9CA3AF] hover:bg-white/[0.06] hover:text-white">
+              className="flex h-10 min-w-0 flex-1 items-center gap-4 rounded-[16px] px-[15px] text-[14px] font-medium text-[#EEEEEE] hover:bg-white/[0.08]">
               <span aria-hidden="true" className="text-[#9CA3AF]"><Icons.users size={17} /></span>
               <span className="min-w-0 flex-1 truncate text-start">{label("nav.teamFolders")}</span>
               <span aria-hidden="true" className={open ? "rotate-90 text-slate-500" : "text-slate-500"}><Icons.chevR size={14} /></span>
@@ -70,7 +70,7 @@ export function PrimarySidebar() {
               </button>
             </div>
           ) : null}
-          <Link href="/files" onClick={close} className="flex items-center gap-2.5 rounded-lg px-2.5 py-[7px] text-[13px] text-[#9CA3AF] hover:bg-white/[0.06] hover:text-white">
+          <Link href="/files" onClick={close} className="flex h-10 items-center gap-4 rounded-[16px] px-[15px] text-[14px] font-medium text-[#EEEEEE] hover:bg-white/[0.08]">
             <span aria-hidden="true" className="text-[#9CA3AF]"><Icons.inbox size={17} /></span>
             <span className="min-w-0 flex-1 truncate">{label("nav.general")}</span>
           </Link>

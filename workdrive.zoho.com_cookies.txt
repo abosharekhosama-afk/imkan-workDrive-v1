@@ -1,0 +1,32 @@
+# Netscape HTTP Cookie File
+# https://curl.haxx.se/rfc/cookie_spec.html
+# This is a generated file! Do not edit.
+
+.zoho.com	TRUE	/	TRUE	1823685068	siq1.zohocares-_zldp	dMx6e5HtWrXzXnFN9w3clYZ6o%2B%2BpqSubp1GYpzm3WMzsYlZsINDOPvjK66A10S0T5S5DUetx4ro%3D
+.zoho.com	TRUE	/	TRUE	1823685068	siq1.zohocares-_zldt	f3f9ff19-ea79-478c-a51f-a998f17e5c9b-1
+.zoho.com	TRUE	/	TRUE	1817645559	zabHMBucket	CAZqauY
+.zoho.com	TRUE	/	TRUE	1791102738	__Secure-iamsdt	0.CAESdBIwd2riB8653hn7g6ykxglNylqCzrfoAxH1VmE5-derKC2y3oMzBXwBZTVc2ZdnqT5iGkATnixBJydM92uif0wyiV9mRVTPonhcBuH-vvE2GVee-UW6WxiGCU6FIfC2wm_iAInSDtLxrLyTXl4562fyDPU_ILD3paivjaehBg
+.zoho.com	TRUE	/	TRUE	1791102738	_iamadt	776ae207ceb9de19fb83aca4c6094dca5a82ceb7e80311f5566139f9d7ab282db2de8333057c0165355cd99767a93e62
+.zoho.com	TRUE	/	TRUE	1791102738	_iambdt	139e2c4127274cf76ba27f4c32895f664554cfa2785c06e1febef13619579ef945ba5b1886094e8521f0b6c26fe20089d20ed2f1acbc935e5e39eb67f20cf53f
+.zoho.com	TRUE	/	TRUE	1791448474	zpsfa_c9fceTb	1788856474534psf0.03533966637755359
+.zoho.com	TRUE	/	TRUE	1791448474	zpsfa_OoHW1dT	1788856474551psf0.1443672814741549
+.zoho.com	TRUE	/	TRUE	1791448474	zpsfa_lRPaobA	1788856474567psf0.14070761953515476
+workdrive.zoho.com	FALSE	/	TRUE	0	zalb_9eb55d8a61	0f13b1b789c516a2cf9d8c5ffa21ef5e
+workdrive.zoho.com	FALSE	/	TRUE	0	zpcc	670ea31f4b30e6b6f296bdc3e35cb618b38f1258de01674b69cdd039af88a1d435ca99a83746b4f27553d60095ef3f7463b63271b4d467d3a5aa2fc2230f3e36
+workdrive.zoho.com	FALSE	/	TRUE	0	zalb_3309580ed5	af01e47c8bb237e248f92f9d1bd7405d
+workdrive.zoho.com	FALSE	/	TRUE	0	CT_CSRF_TOKEN	670ea31f4b30e6b6f296bdc3e35cb618b38f1258de01674b69cdd039af88a1d435ca99a83746b4f27553d60095ef3f7463b63271b4d467d3a5aa2fc2230f3e36
+workdrive.zoho.com	FALSE	/	TRUE	0	zalb_8b7213828d	4ac63b362811c7fbc0e984656c5e4aff
+workdrive.zoho.com	FALSE	/	TRUE	0	CSRF_TOKEN	670ea31f4b30e6b6f296bdc3e35cb618b38f1258de01674b69cdd039af88a1d435ca99a83746b4f27553d60095ef3f7463b63271b4d467d3a5aa2fc2230f3e36
+.zoho.com	TRUE	/	TRUE	1789125373	com_chat_owner	1789124041205_f
+.zoho.com	TRUE	/	TRUE	1789125373	com_avcliq_owner	1789124041208
+.zoho.com	TRUE	/	TRUE	0	ZohoMarkSrc	"google:books|google:workdrive|direct:workdrive"
+.zoho.com	TRUE	/	TRUE	1789151399	zft-sdc	isef%3Dtrue-isfr%3Dtrue-source%3Ddirect
+.zoho.com	TRUE	/	TRUE	1789131326	zsrTjPuOmt	1789124126778zsrv0.07773057056591814
+.zoho.com	TRUE	/	TRUE	1789131326	zsd1789124126778zsrv0.07773057056591814	1789124126778-1-1789124139773-intrinfosnt%3Dfalse-siqinfosnt%3Dfalse
+.zoho.com	TRUE	/	TRUE	1789131339	ps_payloadSeqId	12
+.zoho.com	TRUE	/	TRUE	0	ZohoMarkRef	"https://www.zoho.com/workdrive/help/getting-started.html"
+.zoho.com	TRUE	/	TRUE	1789126831	zsca63a3daff87f4d33b6cffbe7a949ff5f	1789124121324zsc0.05760857079377768
+.zoho.com	TRUE	/	TRUE	1817207175	zps-tgr-dts	sc%3D10-expAppOnNewSession%3D%5B%5D-pc%3D3-sesst%3D1789124121357
+.zoho.com	TRUE	/	TRUE	1823685031	zpsCookieMeta	%7B%22zpsfa_c9fceTb%22%3A1791448474535%2C%22zpsfa_OoHW1dT%22%3A1791448474551%2C%22zpsfa_lRPaobA%22%3A1791448474567%2C%22zsca63a3daff87f4d33b6cffbe7a949ff5f%22%3A1789126831183%2C%22zft-sdc%22%3A1789151399999%2C%22zps-tgr-dts%22%3A1817207175093%7D
+.workdrive.zoho.com	TRUE	/	TRUE	0	zalb_zid	933168267
+.zoho.com	TRUE	/	TRUE	0	wms-tkp-token	932846641-432778d6-f571550d7f1ffb2fa40d3a66bbc742f5

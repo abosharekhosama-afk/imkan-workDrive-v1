@@ -258,6 +258,18 @@ export function FileBrowser({
     });
   }
 
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "Escape" || selectedIds.size === 0) return;
+      const target = e.target as HTMLElement | null;
+      if (target && (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable)) return;
+      e.preventDefault();
+      setSelectedIds(new Set());
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [selectedIds]);
+
   // Selection Handlers
   const handleSelectRow = (id: string, isSelected: boolean) => {
     const newSelection = new Set(selectedIds);
@@ -412,6 +424,7 @@ export function FileBrowser({
           selectedIds={selectedIds}
           onSelectRow={handleSelectRow}
           onSelectAll={handleSelectAll}
+          compact={viewMode === "compact"}
         />
       )}
       </div>

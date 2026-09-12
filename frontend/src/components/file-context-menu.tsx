@@ -90,6 +90,11 @@ export function FileContextMenu({
   ];
 
   const [subOpen, setSubOpen] = useState(false);
+  const subTimer = useRef<number | null>(null);
+  const openSubmenu = (open: boolean) => {
+    if (subTimer.current) window.clearTimeout(subTimer.current);
+    subTimer.current = window.setTimeout(() => setSubOpen(open), open ? 80 : 120);
+  };
   useEffect(() => {
     const onDown = (e: MouseEvent) => { if (ref.current?.contains(e.target as Node)) return; onClose(); };
     const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
@@ -98,6 +103,7 @@ export function FileContextMenu({
     document.addEventListener("keydown", onKey);
     window.addEventListener("scroll", onScroll, true);
     return () => {
+      if (subTimer.current) window.clearTimeout(subTimer.current);
       document.removeEventListener("mousedown", onDown);
       document.removeEventListener("keydown", onKey);
       window.removeEventListener("scroll", onScroll, true);
@@ -113,27 +119,29 @@ export function FileContextMenu({
 
   return createPortal(
     <div ref={ref} role="menu" style={{ left, top, width: menuW }}
-      className="fixed z-[95] overflow-hidden rounded-lg border border-slate-200 bg-white py-1 shadow-[0_12px_32px_rgba(16,24,40,0.18)]">
+      className="wd-menu fixed z-[95] overflow-hidden">
       {sections.map((group, gi) => (
-        <div key={`g-${gi}`} className={gi > 0 ? "mx-1 my-1 border-t border-slate-100 pt-1" : ""}>
+        <div key={`g-${gi}`} className={gi > 0 ? "wd-menu-sep !my-1" : ""}>
           {group.map((it) => (
             <button key={it.key} type="button" role="menuitem"
-              onClick={() => { if (!it.submenu) it.onSelect?.(); onClose(); }}
-              onMouseEnter={() => setSubOpen(it.submenu ? true : false)}
-              className={`flex w-full items-center gap-2.5 px-3 py-1.5 text-start text-[13px] transition-colors ${it.danger ? "font-medium text-red-600 hover:bg-red-50" : `text-slate-700 hover:bg-[#EEF3FE] hover:text-[#1B66EA] ${it.submenu && openSub ? "bg-[#EEF3FE] text-[#1B66EA]" : ""}`}`}>
+              onClick={() => { if (!it.submenu) { it.onSelect?.(); onClose(); } }}
+              onMouseEnter={() => openSubmenu(Boolean(it.submenu))}
+              data-active={it.submenu && openSub ? true : undefined}
+              data-danger={it.danger || undefined}
+              className="wd-menu-item min-h-[34px] text-start">
               <span className="min-w-0 flex-1 truncate">{it.label}</span>
-              {it.submenu ? <span className="shrink-0 text-slate-400">▸</span> : it.hint ? <span className="shrink-0 text-[11px] text-slate-400">{it.hint}</span> : null}
+              {it.submenu ? <span className="shrink-0 text-[#4F4F4F]">▸</span> : it.hint ? <span className="shrink-0 text-[12px] text-[#4F4F4F]">{it.hint}</span> : null}
             </button>
           ))}
         </div>
       ))}
       {openSub && share.submenuItems ? (
-        <div className="fixed z-[96] rounded-lg border border-slate-200 bg-white py-1 shadow-[0_12px_32px_rgba(16,24,40,0.18)]"
-          style={{ left: left + menuW + 4, top: top + 8, width: 244 }}>
+        <div className="wd-menu fixed z-[96]"
+          style={{ left: left + menuW + 2, top: top + 36, width: 244 }}>
           {share.submenuItems.map((si) => (
             <button key={si.key} type="button" role="menuitem"
               onClick={() => { si.onSelect?.(); onClose(); }}
-              className="flex w-full items-center px-3 py-1.5 text-start text-[13px] text-slate-700 hover:bg-[#EEF3FE] hover:text-[#1B66EA]">
+              className="wd-menu-item min-h-[34px] text-start">
               <span className="min-w-0 flex-1 truncate">{si.label}</span>
             </button>
           ))}

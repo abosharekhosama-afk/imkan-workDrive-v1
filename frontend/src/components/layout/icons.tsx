@@ -47,5 +47,20 @@ function funnel(p: P) { return (<Svg {...p}><path d="M3 5h18l-7 8v5.5l-4 2V13Z" 
 function compact(p: P) { return (<Svg {...p}><path d="M4 6h16M4 10h16M4 14h16M4 18h16" /></Svg>); }
 function gear(p: P) { return (<Svg {...p}><circle cx="12" cy="12" r="6" /><path d="M4 12h16M12 4v16M6.3 6.3l1.4 1.4M17.7 17.7l1.4 1.4M6.3 17.7l-1.4 1.4M17.7 6.3l-1.4 1.4" /></Svg>); }
 function horn(p: P) { return (<Svg {...p}><path d="m3 11 18-5v12L3 14v-3Z" /><path d="M11.6 16.8a3 3 0 1 1-5.8-1.6" /></Svg>); }
-export const Icons = { grid, folder, users, plus, chevR, chevD, search, bell, help, info, list, star, clock, share, trash, spark, inbox, tag, layout, flow, sun, moon, act, ext, dots, bot, shield, menu, x, doc, sheet, slide, video, audio, camera, link, download, check, sort, funnel, compact, gear, horn };
+function tree(p: P) { return (<Svg {...p}><circle cx="6" cy="5" r="2.2" /><circle cx="6" cy="19" r="2.2" /><circle cx="18" cy="12" r="2.2" /><path d="M6 7v10M7.8 6.2 16 10.8M7.8 17.8 16 13.2" /></Svg>); }
+function upload(p: P) { return (<Svg {...p}><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12" /></Svg>); }
+function cloudUp(p: P) { return (<Svg {...p}><path d="M17.5 19a4.5 4.5 0 0 0 .4-9A6 6 0 0 0 6.2 8.5 4.5 4.5 0 0 0 7 17.5" /><path d="M12 12v9M8.5 15.5 12 12l3.5 3.5" /></Svg>); }
+function globe(p: P) { return (<Svg {...p}><circle cx="12" cy="12" r="9" /><path d="M3 12h18M12 3a13.5 13.5 0 0 1 0 18M12 3a13.5 13.5 0 0 0 0 18" /></Svg>); }
+function code(p: P) { return (<Svg {...p}><path d="m8 9-4 3 4 3M16 9l4 3-4 3M13 5l-2 14" /></Svg>); }
+function mic(p: P) { return (<Svg {...p}><rect x="9" y="2" width="6" height="11" rx="3" /><path d="M5 10a7 7 0 0 0 14 0M12 18v4" /></Svg>); }
+function openExt(p: P) { return (<Svg {...p}><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" /><path d="M15 3h6v6M10 14 21 3" /></Svg>); }
+function props(p: P) { return (<Svg {...p}><rect x="4" y="3" width="16" height="18" rx="2" /><path d="M8 8h8M8 12h8M8 16h5" /></Svg>); }
+function copy(p: P) { return (<Svg {...p}><rect x="9" y="9" width="12" height="12" rx="2" /><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" /></Svg>); }
+function eye(p: P) { return (<Svg {...p}><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7Z" /><circle cx="12" cy="12" r="3" /></Svg>); }
+function pencil(p: P) { return (<Svg {...p}><path d="M17 3a2.8 2.8 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z" /></Svg>); }
+function history(p: P) { return (<Svg {...p}><path d="M3 12a9 9 0 1 0 2.6-6.4M3 4v5h5" /><path d="M12 7v5l3 2" /></Svg>); }
+function pin(p: P) { return (<Svg {...p}><path d="M12 17v5M9 3h6l1 7 3 3H5l3-3Z" /></Svg>); }
+function headset(p: P) { return (<Svg {...p}><path d="M4 14v-2a8 8 0 0 1 16 0v2" /><rect x="2" y="13" width="5" height="7" rx="2" /><rect x="17" y="13" width="5" height="7" rx="2" /></Svg>); }
+function columns(p: P) { return (<Svg {...p}><rect x="3" y="4" width="18" height="16" rx="2" /><path d="M9 4v16M15 4v16" /></Svg>); }
+export const Icons = { grid, folder, users, plus, chevR, chevD, search, bell, help, info, list, star, clock, share, trash, spark, inbox, tag, layout, flow, sun, moon, act, ext, dots, bot, shield, menu, x, doc, sheet, slide, video, audio, camera, link, download, check, sort, funnel, compact, gear, horn, tree, upload, cloudUp, globe, code, mic, openExt, props, copy, eye, pencil, history, pin, headset, columns };
 export type IconName = keyof typeof Icons;

@@ -12,16 +12,16 @@ export function SidebarFooter({ quota, role, onNav }: { quota: QuotaOverview | n
   const pct = quota && !quota.unlimited && total ? Math.min(100, Math.round((used / total) * 100)) : 12;
   const admin = role === "ADMIN" || role === "SUPER_ADMIN";
   return (
-    <div className="shrink-0 border-t border-white/[0.07] px-2 py-2.5">
-      <div className="flex flex-col gap-1.5 text-[12px]">
-        <a href="https://www.zoho.com/crm/" target="_blank" rel="noreferrer" className="flex items-center gap-2 rounded-lg px-2 py-1 text-[#9CA3AF] hover:bg-white/[0.06] hover:text-white" title={label("nav.section.integratedApps")}>
-          <Icons.ext size={14} /> {label("nav.zohoCrm")}
+    <div className="shrink-0 px-2 pb-2">
+      <div className="flex flex-col gap-1 text-[12px]">
+        <a href="https://www.zoho.com/crm/" target="_blank" rel="noreferrer" className="flex h-10 items-center gap-4 rounded-[16px] px-[15px] text-[14px] font-medium text-[#EEEEEE] hover:bg-white/[0.08]" title={label("nav.section.integratedApps")}>
+          <Icons.ext size={18} /> {label("nav.zohoCrm")}
         </a>
-        <Link href="/settings" onClick={onNav} className="flex items-center justify-center gap-2 rounded-lg bg-[#262C36] px-3 py-2 text-[12.5px] font-medium text-white hover:bg-[#2F3642]">
-          {label("nav.getStarted")}
+        <Link href="/settings" onClick={onNav} className="mt-1 flex h-[42px] items-center justify-between rounded-[16px] bg-[#3E3E3E] px-3 text-[13px] font-bold text-white hover:bg-[#4A4A4A]">
+          <span className="inline-flex items-center gap-1.5"><Icons.spark size={16} /> {label("nav.getStarted")}</span> <Icons.chevR size={16} />
         </Link>
-        <Link href={admin ? "/admin" : "/settings"} onClick={onNav} className="flex items-center justify-center gap-2 rounded-lg bg-[#262C36] px-3 py-2 text-[12.5px] font-medium text-white hover:bg-[#2F3642]">
-          <span className="min-w-0 truncate">{label("nav.adminConsole")}</span> <Icons.ext size={13} />
+        <Link href={admin ? "/admin" : "/settings"} onClick={onNav} className="mb-2 flex h-[42px] items-center justify-between rounded-[16px] bg-[#3E3E3E] px-3 text-[13px] font-bold text-white hover:bg-[#4A4A4A]">
+          <span className="min-w-0 truncate">{label("nav.adminConsole")}</span> <Icons.ext size={16} />
         </Link>
       </div>
       <div className="mt-2 rounded-md bg-white/[0.04] p-2">

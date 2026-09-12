@@ -87,11 +87,8 @@ function RenderItem({ item }: { item: ActionDropdownItem }) {
         <button
           type="button"
           role="menuitem"
-          className={`w-full flex items-center gap-2 px-3 py-2 text-start text-[length:var(--imkan-font-size-secondary)] rounded-sm transition-colors ${
-            item.destructive
-              ? "text-[color:var(--imkan-color-error)] font-semibold hover:bg-[color:var(--imkan-color-error)]/10"
-              : "text-[color:var(--imkan-color-foreground)] hover:bg-[color:var(--imkan-color-surface)]"
-          }`}
+          data-danger={item.destructive || undefined}
+          className="wd-menu-item min-h-[34px] text-start"
           onClick={() => item.onSelect()}
         >
           {item.icon ?? getIconForLabel(item.label) ? (
@@ -113,7 +110,8 @@ function RenderItem({ item }: { item: ActionDropdownItem }) {
         role="menuitem"
         aria-haspopup="menu"
         aria-expanded={subOpen}
-        className="w-full flex items-center gap-2 px-3 py-2 text-start text-[length:var(--imkan-font-size-secondary)] rounded-sm text-[color:var(--imkan-color-foreground)] hover:bg-[color:var(--imkan-color-surface)] transition-colors"
+        className="wd-menu-item min-h-[34px] text-start"
+        data-active={subOpen || undefined}
         onClick={() => setSubOpen((v) => !v)}
       >
         <span className="w-5" />
@@ -121,13 +119,13 @@ function RenderItem({ item }: { item: ActionDropdownItem }) {
         <span aria-hidden="true" className="text-[length:var(--imkan-font-size-secondary)]">›</span>
       </button>
       {subOpen ? (
-        <div className="absolute left-full top-0 min-w-[180px] rounded-lg border border-[color:var(--imkan-color-border)] bg-white p-1 shadow-xl" role="menu">
+        <div className="wd-menu absolute left-full top-0 min-w-[220px]" role="menu">
           {item.submenu.map((sub) => (
             <PopoverClose key={sub.label} asChild>
               <button
                 type="button"
                 role="menuitem"
-                className="w-full flex items-center gap-2 px-3 py-2 text-start text-[length:var(--imkan-font-size-secondary)] rounded-sm text-[color:var(--imkan-color-foreground)] hover:bg-[color:var(--imkan-color-surface)] transition-colors"
+                className="wd-menu-item min-h-[34px] text-start"
                 onClick={() => { setSubOpen(false); sub.onSelect(); }}
               >
                 <span className="w-5" />
@@ -150,7 +148,7 @@ export function ActionDropdown({ label, items, trigger }: ActionDropdownProps) {
       <button
         type="button"
         aria-label={label}
-        className="imkan-button-secondary p-1.5"
+        className="wd-icon-btn"
         aria-haspopup="menu"
       >
         <span aria-hidden="true" className="text-[length:var(--imkan-font-size-ui)]">⋯</span>
@@ -165,8 +163,8 @@ export function ActionDropdown({ label, items, trigger }: ActionDropdownProps) {
         side="bottom"
         align="end"
         sideOffset={4}
-        className="imkan-popover z-[100] w-56 p-1 shadow-xl bg-white rounded-lg border border-[color:var(--imkan-color-border)]"
-        style={{ minWidth: "224px" }}
+        className="wd-menu z-[100] w-64"
+        style={{ minWidth: "252px" }}
       >
         {groupedItems.map((group, groupIndex) => (
           <div key={groupIndex} className={groupIndex > 0 ? "border-t border-[color:var(--imkan-color-border)] pt-1" : ""}>
