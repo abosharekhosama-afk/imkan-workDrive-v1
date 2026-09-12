@@ -1,10 +1,10 @@
 "use client";
 
-import { useCallback, useEffect, useState, type FormEvent } from "react";
+import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
 import { useSearchParams } from "next/navigation";
 import { useRouter } from "next/navigation";
 import { Breadcrumbs } from "./breadcrumbs";
-import { ActionToolbar, FILTER_STORAGE_KEY, type FilterKey, type SortDir } from "./layout/action-toolbar";
+import { ActionToolbar, FILTER_STORAGE_KEY, type ColumnKey, type FilterKey, type SortDir } from "./layout/action-toolbar";
 import { SelectionBar } from "./layout/selection-bar";
 import { FolderEmptyState } from "./layout/folder-empty-state";
 import { ShellScopeSync } from "./layout/shell-context";
@@ -106,6 +106,8 @@ export function FileBrowser({
   // Dual view preference (list/table ↔ grid), persisted per browser.
   const [viewMode, setViewMode] = useState<ViewMode>("list");
   const [sortDir, setSortDir] = useState<SortDir>("desc");
+  const [sortField, setSortField] = useState<ColumnKey>("name");
+  const [columns, setColumns] = useState<Partial<Record<ColumnKey, boolean>>>({ lastModified: true, timeCreated: false, size: true, type: false, extension: false });
   const [filter, setFilter] = useState<FilterKey>("all");
   // Folder aggregate metadata surfaced by the API (size / latest file update).
   const [folderSizes, setFolderSizes] = useState<ReadonlyMap<string, number>>(new Map());
@@ -162,17 +164,20 @@ export function FileBrowser({
   }, []);
 
   // Inspector deep-link: "Version history" inside the details pane opens the drawer.
+  // The handler is read through a ref so the listener subscribes exactly once
+  // (fixed dependency array → no re-subscribe churn on every render).
+  const onVersionHistoryRef = useRef(onVersionHistory);
   useEffect(() => {
     const onVersion = (event: Event) => {
       const fileId = (event as CustomEvent<{ fileId: string }>).detail?.fileId;
       if (!fileId) return;
       const file = files.find((f) => f.id === fileId);
       if (!file) return;
-      onVersionHistory("FILE", file.id, file.name, file.mimeType ?? undefined, file.size ?? undefined);
+      onVersionHistoryRef.current("FILE", file.id, file.name, file.mimeType ?? undefined, file.size ?? undefined);
     };
     window.addEventListener("workdrive:version-history", onVersion);
     return () => window.removeEventListener("workdrive:version-history", onVersion);
-  });
+  }, [files]);
 
   // Restore the persisted view preference after mount (SSR-safe).
   useEffect(() => {
@@ -337,12 +342,20 @@ export function FileBrowser({
     setSelectedIds(newSelection);
   };
 
+  // Stable tree-navigation callback — direct prop wiring (replaces the old
+  // `workdrive:tree-open` CustomEvent). Guarded: no redundant navigation when
+  // the target folder is already the current one.
+  const handleOpenFolder = useCallback((targetId: string) => {
+    if (!targetId || targetId === folderId) return;
+    router.push(`/files/${targetId}`);
+  }, [folderId, router]);
+
   return (
     <section className="flex min-h-0 flex-1 flex-col w-full max-w-full overflow-x-hidden">
       <ShellScopeSync folderId={folderId} folderName={folderName} />
       <div className="flex min-w-0 flex-1 flex-col bg-white">
         {selectedIds.size === 0 ? (
-          <ActionToolbar view={viewMode} onView={(v) => switchViewMode(v)} sort={sortDir} onSort={setSortDir} filter={filter} onFilter={setFilter} />
+          <ActionToolbar view={viewMode} onView={(v) => switchViewMode(v)} sortField={sortField} onSortField={setSortField} sortDir={sortDir} onSortDir={setSortDir} filter={filter} onFilter={setFilter} columns={columns} onColumns={setColumns} folders={folders} currentFolderId={folderId} onOpenFolder={handleOpenFolder} />
         ) : (
           <SelectionBar
             folderCount={folders.filter((f) => selectedIds.has(f.id)).length}
@@ -425,6 +438,10 @@ export function FileBrowser({
           onSelectRow={handleSelectRow}
           onSelectAll={handleSelectAll}
           compact={viewMode === "compact"}
+          sortField={sortField}
+          sortDir={sortDir}
+          columns={columns}
+          onColumns={setColumns}
         />
       )}
       </div>

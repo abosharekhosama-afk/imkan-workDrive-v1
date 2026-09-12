@@ -68,7 +68,7 @@ export function ZohoMenu({ open, onClose, onSelect, items, labelledBy, align = "
       {items.map((it, i) => {
         if (it === "sep") return <div key={`sep-${i}`} className="wd-menu-sep" role="separator" />;
         if (typeof it === "object" && "header" in it) {
-          return <div key={`h-${i}`} className="px-3 pb-1 pt-1 text-[11px] font-semibold uppercase tracking-wide text-[#4F4F4F]">{label(it.header)}</div>;
+          return <div key={`h-${i}`} className="px-3 pb-1 pt-1 text-[11px] font-semibold uppercase tracking-wide text-slate-500">{label(it.header)}</div>;
         }
         const m = it as MenuItem;
         const hasDesc = Boolean(m.descKey);
@@ -81,15 +81,15 @@ export function ZohoMenu({ open, onClose, onSelect, items, labelledBy, align = "
             onClick={() => { onSelect(m.key); onClose(); }}
             className={`wd-menu-item disabled:opacity-40 ${hasDesc ? "min-h-[49px] py-2" : "min-h-[34px]"}`}>
             <span className="flex w-6 shrink-0 items-center justify-center" aria-hidden="true">
-              {m.icon ?? (m.checked ? <span className="text-[13px]">✓</span> : null)}
+              {m.icon ?? (m.checked ? <span className="text-[13px] font-bold text-[color:var(--wd-primary)]">✓</span> : null)}
             </span>
             <span className="min-w-0 flex-1">
               <span className="block truncate text-[14px] font-normal leading-4">{label(m.labelKey)}</span>
-              {m.descKey ? <span className="mt-0.5 block truncate text-[12px] font-normal leading-4 text-[#4F4F4F]">{label(m.descKey)}</span> : null}
+              {m.descKey ? <span className="mt-0.5 block truncate text-[12px] font-normal leading-4 text-slate-500">{label(m.descKey)}</span> : null}
             </span>
-            {m.chevron ? <span className="shrink-0 text-[#4F4F4F]" aria-hidden="true">›</span> : null}
+            {m.chevron ? <span className="shrink-0 text-slate-500" aria-hidden="true">›</span> : null}
             {m.hint ? (
-              <span className={m.hintPill ? "shrink-0 rounded-md bg-[#F3F5F7] px-1.5 py-0.5 text-[11px] font-medium text-[#4F4F4F]" : "shrink-0 text-[12px] text-[#4F4F4F]"}>{m.hint}</span>
+              <span className={m.hintPill ? "shrink-0 rounded-md bg-slate-100 px-1.5 py-0.5 text-[11px] font-medium text-slate-500" : "shrink-0 text-[12px] text-slate-500"}>{m.hint}</span>
             ) : null}
           </button>
         );
