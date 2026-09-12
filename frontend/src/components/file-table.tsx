@@ -2,13 +2,14 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { createPortal } from "react-dom";
+import type { ColumnKey, SortDir } from "./layout/action-toolbar";
+import { Icons } from "./layout/icons";
 import { useLocale } from "./locale-provider";
 import { FileIcon } from "./file-icon";
-import { Icons } from"./layout/icons";
 import { FileActionsMenu } from "./file-actions-menu";
 import { FileContextMenu } from "./file-context-menu";
 import { EmptyState } from "./empty-state";
-import type { ColumnKey } from "./layout/action-toolbar";
 import type { FileRecord, FolderRecord } from "../lib/api/types";
 import { formatBytes, resolveItemSize } from "../lib/api/quota";
 import { formatDateLocalized, latestOf } from "../lib/localized";
@@ -35,7 +36,7 @@ function getInitials(name: string | null | undefined, email: string | null | und
   if (email) {
     return email.slice(0, 2).toUpperCase();
   }
-  return "?";
+  return "؟";
 }
 
 function OwnerCell({ ownerName, ownerEmail, ownerAvatar }: { ownerName?: string | null; ownerEmail?: string | null; ownerAvatar?: string | null }) {
@@ -55,7 +56,7 @@ function OwnerCell({ ownerName, ownerEmail, ownerAvatar }: { ownerName?: string 
           {initials}
         </div>
       )}
-      <span className="truncate">{ownerName ?? ownerEmail ?? "?"}</span>
+      <span className="truncate">{ownerName ?? ownerEmail ?? "—"}</span>
     </div>
   );
 }
@@ -75,8 +76,6 @@ interface FileTableProps {
   emptyDescription?: string;
   emptyAction?: ReactNode;
   selectedIds?: Set<string>;
-  columns?: Partial<Record<ColumnKey, boolean>>;
-  onColumns?: (cols: Partial<Record<ColumnKey, boolean>>) => void;
   onSelectRow?: (id: string, isSelected: boolean) => void;
   onSelectAll?: (isSelected: boolean) => void;
   onPreview?: (resourceType: "FILE" | "FOLDER", resourceId: string, resourceName: string, mimeType?: string, size?: number) => void;
@@ -92,6 +91,13 @@ interface FileTableProps {
   folderUpdatedAt?: ReadonlyMap<string, string | null>;
   onToast?: (message: string) => void;
   compact?: boolean;
+  /** Controlled table sorting (driven by the toolbar Sort-by popover). */
+  sortField?: ColumnKey;
+  sortDir?: SortDir;
+  onSortField?: (k: ColumnKey) => void;
+  onSortDir?: (d: SortDir) => void;
+  columns?: Partial<Record<ColumnKey, boolean>>;
+  onColumns?: (cols: Partial<Record<ColumnKey, boolean>>) => void;
 }
 
 export function FileTable({
@@ -120,24 +126,54 @@ export function FileTable({
   onSelectAll,
   folderSizes,
   folderUpdatedAt,
-  columns,
-  onColumns,
   onToast,
   compact = false,
+  sortField, sortDir, onSortField, onSortDir, columns, onColumns,
 }: FileTableProps) {
   const { label, locale } = useLocale();
-  const [sort, setSort] = useState<{ key: "name" | "modified" | "size"; direction: "asc" | "desc" }>({ key: "name", direction: "asc" });
-  const toggleSort = (key: "name" | "modified" | "size") => setSort((current) => current.key === key ? { key, direction: current.direction === "asc" ? "desc" : "asc" } : { key, direction: "asc" });
+  // Controlled sorting — driven by the toolbar Sort-by popover (sortField/sortDir)
+  // when provided; falls back to internal state otherwise.
+  const [sort, setSort] = useState<{ key: ColumnKey; direction: SortDir }>({ key: "name", direction: "asc" });
+  useEffect(() => {
+    if (sortField !== undefined && sortDir !== undefined) setSort({ key: sortField, direction: sortDir });
+  }, [sortField, sortDir]);
+  const toggleSort = (key: ColumnKey, dir?: SortDir) => {
+    const direction = dir ?? (sort.key === key ? (sort.direction === "asc" ? "desc" : "asc") : "asc");
+    setSort({ key, direction });
+    onSortField?.(key);
+    onSortDir?.(direction);
+  };
+  const extOf = (name: string) => { const i = name.lastIndexOf("."); return i > 0 && i < name.length - 1 ? name.slice(i + 1).toLowerCase() : ""; };
   const folderDate = (id: string) => latestOf(folders.find((f) => f.id === id)?.updatedAt, folderUpdatedAt?.get(id) ?? undefined);
-  const sortedFolders = useMemo(() => [...folders].sort((a, b) => sort.key === "modified" ? compareDates(folderSizes ? folderDate(a.id) : a.updatedAt, folderSizes ? folderDate(b.id) : b.updatedAt, sort.direction) : sort.key === "size" ? compareNumbers(folderSizes?.get(a.id), folderSizes?.get(b.id), sort.direction) : compareText(a.name, b.name, sort.direction)), [folders, sort, folderSizes, folderUpdatedAt]);
-  const sortedFiles = useMemo(() => [...files].sort((a, b) => sort.key === "size" ? compareNumbers(a.size, b.size, sort.direction) : sort.key === "modified" ? compareDates(a.updatedAt, b.updatedAt, sort.direction) : compareText(a.name, b.name, sort.direction)), [files, sort]);
+  const colOn = (k: ColumnKey) => columns?.[k] ?? (k === "lastModified" || k === "size" || k === "name");
+  const sortedFolders = useMemo(() => {
+    const k = sort.key; const d = sort.direction;
+    return [...folders].sort((a, b) => {
+      if (k === "lastModified") return compareDates(folderSizes ? folderDate(a.id) : a.updatedAt, folderSizes ? folderDate(b.id) : b.updatedAt, d);
+      if (k === "size") return compareNumbers(folderSizes?.get(a.id), folderSizes?.get(b.id), d);
+      if (k === "timeCreated") return compareDates(a.updatedAt, b.updatedAt, d);
+      if (k === "extension") return compareText(extOf(a.name), extOf(b.name), d);
+      return compareText(a.name, b.name, d);
+    });
+  }, [folders, sort, folderSizes, folderUpdatedAt]);
+  const sortedFiles = useMemo(() => {
+    const k = sort.key; const d = sort.direction;
+    return [...files].sort((a, b) => {
+      if (k === "size") return compareNumbers(a.size, b.size, d);
+      if (k === "lastModified") return compareDates(a.updatedAt, b.updatedAt, d);
+      if (k === "timeCreated") return compareDates(a.updatedAt, b.updatedAt, d);
+      if (k === "extension") return compareText(extOf(a.name), extOf(b.name), d);
+      if (k === "type") return compareText(a.mimeType ?? "", b.mimeType ?? "", d);
+      return compareText(a.name, b.name, d);
+    });
+  }, [files, sort]);
   const formatDate = (value?: string | null) => formatDateLocalized(value, locale);
   const formatSize = (value?: number | null) => formatBytes(value ?? 0);
 
   // Right-click context menu state (portal-hosted, positioned at cursor).
   const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number; node: ReactNode } | null>(null);
 
-  // Visible ids in render order (folders then files) ? supports Shift+Click ranges.
+  // Visible ids in render order (folders then files) → supports Shift+Click ranges.
   const visibleIds = useMemo(
     () => [...sortedFolders.map((f) => f.id), ...sortedFiles.map((f) => f.id)],
     [sortedFolders, sortedFiles]
@@ -175,12 +211,14 @@ export function FileTable({
                 onChange={(e) => onSelectAll?.(e.target.checked)}
               />
             </th>
-            <th scope="col" className="px-3 text-start font-medium">{label("files.column.name")}</th>
-            <th scope="col" className="px-3 text-start font-medium"><button type="button" className="imkan-focusable rounded-[16px] px-3 py-2.5" onClick={() => toggleSort("modified")}>{label("files.column.modified")} {sort.key === "modified" ? (sort.direction === "asc" ? "?" : "?") : "?"}</button></th>
-            <th scope="col" className="px-3 text-start font-medium"><button type="button" className="imkan-focusable rounded-[16px] px-3 py-2.5" onClick={() => toggleSort("size")}>{label("files.column.size")} {sort.key === "size" ? (sort.direction === "asc" ? "?" : "?") : ""}</button></th>
+            <th scope="col" className="px-3 text-start font-medium"><button type="button" className="imkan-focusable rounded-[16px] px-3 py-2.5" onClick={() => toggleSort("name")}>{label("files.column.name")} {sort.key === "name" ? (sort.direction === "asc" ? "↑" : "↓") : "↑"}</button></th>
+            <th scope="col" className="px-3 text-start font-medium"><button type="button" className="imkan-focusable rounded-[16px] px-3 py-2.5" onClick={() => toggleSort("lastModified")}>{label("files.column.modified")} {sort.key === "lastModified" ? (sort.direction === "asc" ? "↑" : "↓") : "↓"}</button></th>
+            {colOn("timeCreated") ? <th scope="col" className="px-3 text-start font-medium">{label("column.timeCreated")}</th> : null}
+            <th scope="col" className="px-3 text-start font-medium"><button type="button" className="imkan-focusable rounded-[16px] px-3 py-2.5" onClick={() => toggleSort("size")}>{label("files.column.size")} {sort.key === "size" ? (sort.direction === "asc" ? "↑" : "↓") : ""}</button></th>
+            {colOn("type") ? <th scope="col" className="px-3 text-start font-medium">{label("files.column.type")}</th> : null}
+            {colOn("extension") ? <th scope="col" className="px-3 text-start font-medium">{label("files.column.extension")}</th> : null}
             <th scope="col" className="px-4 text-end font-medium">
-              <span className="sr-only">{label("files.actions")}</span>
-              {onColumns ? <ColumnsPlus columns={columns} onColumns={onColumns} /> : null}
+              {onColumns ? <ColumnsPlusBtn columns={columns ?? {}} onChange={onColumns} label={label} /> : <span className="sr-only">{label("files.actions")}</span>}
             </th>
           </tr>
         </thead>
@@ -199,7 +237,7 @@ export function FileTable({
               onCopyLink={onCopyLink ? () => onCopyLink(folder.id) : undefined}
               onToast={onToast}
               x={e.clientX} y={e.clientY} onClose={() => setCtxMenu(null)}
-            />)});             }} onDragStart={(e) => { e.dataTransfer.effectAllowed="move"; e.dataTransfer.setData("application/x-workdrive", JSON.stringify({type:"FOLDER",id:folder.id,name:folder.name})); }} className="wd-list-row group cursor-grab" data-compact={compact || undefined} data-selected={selectedIds.has(folder.id) || undefined} onDragOver={(e) => { e.preventDefault(); e.currentTarget.classList.add("ring-2","ring-[color:var(--wd-primary)]"); }} onDragLeave={(e) => e.currentTarget.classList.remove("ring-2","ring-[color:var(--wd-primary)]")} onDrop={(e) => { e.preventDefault(); e.currentTarget.classList.remove("ring-2","ring-[color:var(--wd-primary)]"); try { const item=JSON.parse(e.dataTransfer.getData("application/x-workdrive")); if(item.id !== folder.id) onDropMove?.(item.type,item.id,folder.id); } catch {} }}>
+            />)});             }} onDragStart={(e) => { e.dataTransfer.effectAllowed="move"; e.dataTransfer.setData("application/x-workdrive", JSON.stringify({type:"FOLDER",id:folder.id,name:folder.name})); }} className="wd-list-row group cursor-grab" data-compact={compact || undefined} data-selected={selectedIds.has(folder.id) || undefined} onDragOver={(e) => { e.preventDefault(); e.currentTarget.classList.add("ring-2","ring-[var(--wd-primary)]"); }} onDragLeave={(e) => e.currentTarget.classList.remove("ring-2","ring-[var(--wd-primary)]")} onDrop={(e) => { e.preventDefault(); e.currentTarget.classList.remove("ring-2","ring-[var(--wd-primary)]"); try { const item=JSON.parse(e.dataTransfer.getData("application/x-workdrive")); if(item.id !== folder.id) onDropMove?.(item.type,item.id,folder.id); } catch {} }}>
               <td className="ps-[13px]">
                 <input
                   type="checkbox"
@@ -219,7 +257,10 @@ export function FileTable({
                 </Link>
               </td>
               <td className="wd-list-meta whitespace-nowrap px-3">{folder.ownerName ? label("files.modifiedByLine").replace("{date}", formatDate(folderDate(folder.id))).replace("{name}", folder.ownerName) : formatDate(folderDate(folder.id))}</td>
-              <td className="wd-list-meta whitespace-nowrap px-3">{folderSizes?.get(folder.id) ? formatSize(folderSizes.get(folder.id)) : "?"}</td>
+              {colOn("timeCreated") ? <td className="wd-list-meta whitespace-nowrap px-3">{"–"}</td> : null}
+              <td className="wd-list-meta whitespace-nowrap px-3">{folderSizes?.get(folder.id) ? formatSize(folderSizes.get(folder.id)) : "–"}</td>
+              {colOn("type") ? <td className="wd-list-meta whitespace-nowrap px-3">{label("files.type.folder")}</td> : null}
+              {colOn("extension") ? <td className="wd-list-meta whitespace-nowrap px-3">{"–"}</td> : null}
               <td className="px-3 py-2 text-end">
                 <FileActionsMenu
                   context={{
@@ -268,7 +309,10 @@ export function FileTable({
                 </button>
               </td>
               <td className="wd-list-meta whitespace-nowrap px-3">{file.ownerName ? label("files.modifiedByLine").replace("{date}", formatDate(file.updatedAt)).replace("{name}", file.ownerName) : formatDate(file.updatedAt)}</td>
-              <td className="wd-list-meta whitespace-nowrap px-3">{file.size != null ? formatSize(file.size) : "?"}</td>
+              {colOn("timeCreated") ? <td className="wd-list-meta whitespace-nowrap px-3">{formatDate(file.updatedAt)}</td> : null}
+              <td className="wd-list-meta whitespace-nowrap px-3">{file.size != null ? formatSize(file.size) : "–"}</td>
+              {colOn("type") ? <td className="wd-list-meta whitespace-nowrap px-3">{label("files.type.file")}</td> : null}
+              {colOn("extension") ? <td className="wd-list-meta whitespace-nowrap px-3">{extOf(file.name) ? extOf(file.name) : "–"}</td> : null}
               <td className="px-3 py-2 text-end">
                 <FileActionsMenu
                   context={{
@@ -302,61 +346,88 @@ export function FileTable({
   );
 }
 
-
-const COLUMN_DEFS: Array<[ColumnKey, string]> = [
-  ["name", "files.column.name"],
-  ["lastModified", "files.column.modified"],
-  ["timeCreated", "column.timeCreated"],
-  ["size", "files.column.size"],
-  ["type", "files.column.type"],
-  ["extension", "files.column.extension"],
+// Local column definitions mirror the toolbar's (name locked, others toggleable).
+const COLUMN_DEFS: Array<[ColumnKey, string, boolean]> = [
+  ["name", "files.column.name", true],
+  ["lastModified", "files.column.modified", true],
+  ["timeCreated", "column.timeCreated", false],
+  ["size", "files.column.size", true],
+  ["type", "files.column.type", false],
+  ["extension", "files.column.extension", false],
 ];
-function ColumnsPlus({ columns, onColumns }: {
-  columns?: Partial<Record<ColumnKey, boolean>>;
-  onColumns: (cols: Partial<Record<ColumnKey, boolean>>) => void;
+
+function ColumnsPlusBtn({ columns, onChange, label }: {
+  columns: Partial<Record<ColumnKey, boolean>>;
+  onChange: (cols: Partial<Record<ColumnKey, boolean>>) => void;
+  label: (k: never) => string;
 }) {
-  const { label } = useLocale();
   const [open, setOpen] = useState(false);
-  const rootRef = useRef<HTMLDivElement | null>(null);
-  const cols = columns ?? {};
+  const anchorRef = useRef<HTMLButtonElement | null>(null);
+  const posElRef = useRef<HTMLDivElement | null>(null);
+  const [pos, setPos] = useState<{ top: number; left: number } | null>(null);
+
+  // Position the popover under the "+" button; listeners confined to useEffect
+  // with cleanup + dependency array (no global-re-render event dispatch).
+  useEffect(() => {
+    if (!open) return;
+    const place = () => {
+      const r = anchorRef.current?.getBoundingClientRect();
+      if (!r) return;
+      const w = 240;
+      let left = r.right - w;
+      left = Math.min(Math.max(8, left), window.innerWidth - w - 8);
+      setPos({ top: r.bottom + 4, left });
+    };
+    place();
+    window.addEventListener("resize", place);
+    window.addEventListener("scroll", place, true);
+    return () => { window.removeEventListener("resize", place); window.removeEventListener("scroll", place, true); };
+  }, [open]);
+
   useEffect(() => {
     if (!open) return;
     const onDown = (e: MouseEvent) => {
-      if (rootRef.current?.contains(e.target as Node)) return;
+      const t = e.target as Node;
+      if (anchorRef.current?.contains(t)) return;
+      if (posElRef.current?.contains(t)) return;
       setOpen(false);
     };
     const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setOpen(false); };
     document.addEventListener("mousedown", onDown);
     document.addEventListener("keydown", onKey);
-    return () => {
-      document.removeEventListener("mousedown", onDown);
-      document.removeEventListener("keydown", onKey);
-    };
+    return () => { document.removeEventListener("mousedown", onDown); document.removeEventListener("keydown", onKey); };
   }, [open]);
+
+  const isOn = (k: ColumnKey) => columns[k] ?? (k === "lastModified" || k === "size" || k === "name");
+
   return (
-    <div ref={rootRef} className="relative inline-flex">
-      <button type="button" onClick={() => setOpen((v) => !v)} aria-expanded={open} aria-haspopup="menu"
-        title={label("view.columns")} aria-label={label("view.columns")}
-        className={`flex h-6 w-6 items-center justify-center rounded-full text-slate-500 hover:bg-slate-100 ${open ? "bg-[var(--wd-active)] text-[color:var(--wd-primary-ink)]" : ""}`}>
+    <>
+      <button ref={anchorRef} type="button" onClick={() => setOpen((v) => !v)} aria-expanded={open} aria-haspopup="menu"
+        title={label("manage.columns" as never)} aria-label={label("manage.columns" as never)}
+        className={`flex h-6 w-6 translate-y-[2px] items-center justify-center rounded-full border border-slate-200 bg-white text-[color:var(--wd-primary)] transition-colors ${open ? "bg-[var(--wd-active)]" : "hover:bg-[var(--wd-primary-light)]"}`}>
         <Icons.plus size={14} />
       </button>
-      {open ? (
-        <div className="absolute top-full end-0 z-[90] mt-1 w-52 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-lg">
-          <div className="px-3 pb-1 pt-2 text-[11px] font-semibold uppercase tracking-wide text-slate-400">{label("manage.columns")}</div>
-          <div className="flex flex-col gap-0.5 px-1 pb-2">
-            {COLUMN_DEFS.map(([key, keyName]) => {
-              const locked = key === "name";
-              const active = locked ? true : (cols[key] ?? true);
+      {open && pos ? createPortal(
+        <div ref={posElRef} style={{ position: "fixed", top: pos.top, left: pos.left, width: 240 }}
+          className="z-[95] rounded-[var(--wd-menu-radius)] border border-slate-200/80 bg-white p-1.5 shadow-[var(--wd-menu-shadow)]" role="menu" aria-label={label("manage.columns" as never)}>
+          <div className="mb-1 px-1 pt-1 text-[11px] font-semibold uppercase tracking-wide text-slate-400">{label("manage.columns" as never)}</div>
+          <div className="flex flex-col gap-0.5">
+            {COLUMN_DEFS.map(([key, keyName, locked]) => {
+              const active = isOn(key);
               return (
-                <button key={key} type="button" disabled={locked} onClick={() => onColumns({ ...cols, [key]: !(cols[key] ?? true) })}                  className={`flex w-full items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-[13px] text-start ${locked ? "opacity-60" : "text-slate-600 hover:bg-slate-50"}`}>                  <span className={`flex h-4 w-4 shrink-0 items-center justify-center rounded-[4px] border ${active ? "border-[color:var(--wd-primary)] bg-[color:var(--wd-primary)] text-white" : "border-slate-300"}`}>                    {active ? <Icons.check size={10} /> : null}
+                <button key={key} type="button" disabled={locked} onClick={() => { if (!locked) onChange({ ...columns, [key]: !isOn(key) }); }}
+                  className={`flex w-full items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-[13px] text-start ${locked ? "cursor-not-allowed opacity-70" : "text-slate-600 hover:bg-slate-50"}`}>
+                  <span className={`flex h-4 w-4 shrink-0 items-center justify-center rounded-[4px] border ${active ? "border-[color:var(--wd-primary)] bg-[color:var(--wd-primary)] text-white" : "border-slate-300 bg-white"}`}>
+                    {active ? <Icons.check size={10} /> : null}
                   </span>
-                  <span className={locked ? "font-medium text-slate-700" : ""}>{label(keyName as never)}</span>
+                  <span className={locked ? "font-medium text-slate-500" : ""}>{label(keyName as never)}</span>
                 </button>
               );
             })}
           </div>
-        </div>
+        </div>,
+        document.body
       ) : null}
-    </div>
+    </>
   );
 }

@@ -21,7 +21,7 @@ export function SelectionBar({ folderCount, fileCount, onShare, onCopyLink, onDo
   return (
     <div className="wd-selbar flex shrink-0 flex-wrap items-center gap-2" role="status" aria-live="polite">
       <button type="button" onClick={onClear} aria-label={label("sel.clear")} title={label("sel.clear")}
-        className="flex h-7 w-7 items-center justify-center rounded-full bg-[var(--wd-active)] text-[color:var(--wd-primary-ink)]"><Icons.check size={14} /></button>
+        className="flex h-8 w-8 items-center justify-center rounded-full bg-[var(--wd-active)] text-[color:var(--wd-primary)]"><Icons.check size={16} /></button>
       <span className="text-[13px] font-medium text-[color:var(--wd-primary-ink)]">{text}</span>
       <div className="ms-auto flex items-center gap-1">
         <button id="sel-share-btn" type="button" onClick={() => setShareOpen((v) => !v)} aria-expanded={shareOpen} aria-haspopup="menu"
@@ -63,7 +63,7 @@ export function SelectionBar({ folderCount, fileCount, onShare, onCopyLink, onDo
             { key: "organize", labelKey: "menu.organize" },
             "sep",
             { key: "searchInFold", labelKey: "menu.searchInFold" },
-            { key: "download", labelKey: "sel.download", hint: "Ctrl+S" },
+            { key: "download", labelKey: "sel.download", hint: "⌃S" },
             { key: "rename", labelKey: "menu.rename" },
             { key: "followUpdates", labelKey: "menu.followUpdates" },
             { key: "moreOptions", labelKey: "menu.moreOptions" },

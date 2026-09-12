@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState, type FormEvent } from "react";
+import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
 import { useSearchParams } from "next/navigation";
 import { useRouter } from "next/navigation";
 import { Breadcrumbs } from "./breadcrumbs";
@@ -103,11 +103,12 @@ export function FileBrowser({
   const [searchActive, setSearchActive] = useState(false);
   const [loading, setLoading] = useState(true);
   const [favoriteIds, setFavoriteIds] = useState<Set<string>>(new Set());
-  // Dual view preference (list/table Ã¢â€ â€ grid), persisted per browser.
+  // Dual view preference (list/table ↔ grid), persisted per browser.
   const [viewMode, setViewMode] = useState<ViewMode>("list");
   const [sortDir, setSortDir] = useState<SortDir>("desc");
+  const [sortField, setSortField] = useState<ColumnKey>("name");
+  const [columns, setColumns] = useState<Partial<Record<ColumnKey, boolean>>>({ lastModified: true, timeCreated: false, size: true, type: false, extension: false });
   const [filter, setFilter] = useState<FilterKey>("all");
-   const [columns, setColumns] = useState<Partial<Record<ColumnKey, boolean>>>({ lastModified: true, timeCreated: false, size: true, type: false, extension: false });
   // Folder aggregate metadata surfaced by the API (size / latest file update).
   const [folderSizes, setFolderSizes] = useState<ReadonlyMap<string, number>>(new Map());
   const [folderUpdatedAt, setFolderUpdatedAt] = useState<ReadonlyMap<string, string | null>>(new Map());
@@ -163,30 +164,20 @@ export function FileBrowser({
   }, []);
 
   // Inspector deep-link: "Version history" inside the details pane opens the drawer.
-  // `onVersionHistory` is a stable useCallback and the effect now has a proper
-  // dependency array — previously it re-subscribed on every render.
-  const onVersionHistory = useCallback(async (type: "FILE" | "FOLDER", id: string, name: string, mimeType?: string, size?: number) => {
-    if (type !== "FILE") return;
-    setVersionHistoryTarget({
-      type,
-      id,
-      name,
-      mimeType,
-      size,
-    });
-  }, []);
-
+  // The handler is read through a ref so the listener subscribes exactly once
+  // (fixed dependency array → no re-subscribe churn on every render).
+  const onVersionHistoryRef = useRef(onVersionHistory);
   useEffect(() => {
     const onVersion = (event: Event) => {
       const fileId = (event as CustomEvent<{ fileId: string }>).detail?.fileId;
       if (!fileId) return;
       const file = files.find((f) => f.id === fileId);
       if (!file) return;
-      onVersionHistory("FILE", file.id, file.name, file.mimeType ?? undefined, file.size ?? undefined);
+      onVersionHistoryRef.current("FILE", file.id, file.name, file.mimeType ?? undefined, file.size ?? undefined);
     };
     window.addEventListener("workdrive:version-history", onVersion);
     return () => window.removeEventListener("workdrive:version-history", onVersion);
-  }, [files, onVersionHistory]);
+  }, [files]);
 
   // Restore the persisted view preference after mount (SSR-safe).
   useEffect(() => {
@@ -203,15 +194,6 @@ export function FileBrowser({
     setViewMode(mode);
     persistViewMode(typeof window === "undefined" ? null : window.localStorage, mode);
   }
-
-  // Stable tree-navigation callback: replaces the old `workdrive:tree-open`
-  // CustomEvent bridge. Guarded — no navigation when the target folder is
-  // already the current one, which previously caused redundant RSC refetches
-  // (piled-up 304s) and a full component re-render.
-  const handleOpenFolder = useCallback((targetId: string) => {
-    if (!targetId || targetId === folderId) return;
-    router.push(`/files/${targetId}`);
-  }, [folderId, router]);
 
   useEffect(() => {
     setSelectedIds(new Set());
@@ -269,6 +251,17 @@ export function FileBrowser({
       onPreview("FILE", nextFile.id, nextFile.name, nextFile.mimeType ?? undefined, nextFile.size ?? undefined);
     }
   }, [previewTarget, getPreviewableFiles, findFileIndex]);
+
+  async function onVersionHistory(type: "FILE" | "FOLDER", id: string, name: string, mimeType?: string, size?: number) {
+    if (type !== "FILE") return;
+    setVersionHistoryTarget({
+      type,
+      id,
+      name,
+      mimeType,
+      size,
+    });
+  }
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -349,12 +342,20 @@ export function FileBrowser({
     setSelectedIds(newSelection);
   };
 
+  // Stable tree-navigation callback — direct prop wiring (replaces the old
+  // `workdrive:tree-open` CustomEvent). Guarded: no redundant navigation when
+  // the target folder is already the current one.
+  const handleOpenFolder = useCallback((targetId: string) => {
+    if (!targetId || targetId === folderId) return;
+    router.push(`/files/${targetId}`);
+  }, [folderId, router]);
+
   return (
     <section className="flex min-h-0 flex-1 flex-col w-full max-w-full overflow-x-hidden">
       <ShellScopeSync folderId={folderId} folderName={folderName} />
       <div className="flex min-w-0 flex-1 flex-col bg-white">
         {selectedIds.size === 0 ? (
-          <ActionToolbar view={viewMode} onView={(v) => switchViewMode(v)} sort={sortDir} onSort={setSortDir} filter={filter} onFilter={setFilter} folders={folders} columns={columns} onColumns={setColumns} currentFolderId={folderId} onOpenFolder={handleOpenFolder} />
+          <ActionToolbar view={viewMode} onView={(v) => switchViewMode(v)} sortField={sortField} onSortField={setSortField} sortDir={sortDir} onSortDir={setSortDir} filter={filter} onFilter={setFilter} columns={columns} onColumns={setColumns} folders={folders} currentFolderId={folderId} onOpenFolder={handleOpenFolder} />
         ) : (
           <SelectionBar
             folderCount={folders.filter((f) => selectedIds.has(f.id)).length}
@@ -411,8 +412,6 @@ export function FileBrowser({
           files={files}
           canMutate={canMutate}
           canShare={canShare}
-          columns={columns}
-          onColumns={setColumns}
           folderSizes={folderSizes}
           folderUpdatedAt={folderUpdatedAt}
           onShare={(type, id) => setShareTarget({ type, id })}
@@ -439,6 +438,10 @@ export function FileBrowser({
           onSelectRow={handleSelectRow}
           onSelectAll={handleSelectAll}
           compact={viewMode === "compact"}
+          sortField={sortField}
+          sortDir={sortDir}
+          columns={columns}
+          onColumns={setColumns}
         />
       )}
       </div>
