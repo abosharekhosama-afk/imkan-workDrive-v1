@@ -4,7 +4,6 @@ import Link from "next/link";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useLocale } from "./locale-provider";
 import { FileIcon } from "./file-icon";
-import { Icons } from"./layout/icons";
 import { FileActionsMenu } from "./file-actions-menu";
 import { FileContextMenu } from "./file-context-menu";
 import { EmptyState } from "./empty-state";
@@ -35,7 +34,7 @@ function getInitials(name: string | null | undefined, email: string | null | und
   if (email) {
     return email.slice(0, 2).toUpperCase();
   }
-  return "?";
+  return "؟";
 }
 
 function OwnerCell({ ownerName, ownerEmail, ownerAvatar }: { ownerName?: string | null; ownerEmail?: string | null; ownerAvatar?: string | null }) {
@@ -55,7 +54,7 @@ function OwnerCell({ ownerName, ownerEmail, ownerAvatar }: { ownerName?: string 
           {initials}
         </div>
       )}
-      <span className="truncate">{ownerName ?? ownerEmail ?? "?"}</span>
+      <span className="truncate">{ownerName ?? ownerEmail ?? "—"}</span>
     </div>
   );
 }
@@ -135,7 +134,7 @@ export function FileTable({
   // Right-click context menu state (portal-hosted, positioned at cursor).
   const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number; node: ReactNode } | null>(null);
 
-  // Visible ids in render order (folders then files) ? supports Shift+Click ranges.
+  // Visible ids in render order (folders then files) → supports Shift+Click ranges.
   const visibleIds = useMemo(
     () => [...sortedFolders.map((f) => f.id), ...sortedFiles.map((f) => f.id)],
     [sortedFolders, sortedFiles]
@@ -174,8 +173,8 @@ export function FileTable({
               />
             </th>
             <th scope="col" className="px-3 text-start font-medium">{label("files.column.name")}</th>
-            <th scope="col" className="px-3 text-start font-medium"><button type="button" className="imkan-focusable rounded-[16px] px-3 py-2.5" onClick={() => toggleSort("modified")}>{label("files.column.modified")} {sort.key === "modified" ? (sort.direction === "asc" ? "?" : "?") : "?"}</button></th>
-            <th scope="col" className="px-3 text-start font-medium"><button type="button" className="imkan-focusable rounded-[16px] px-3 py-2.5" onClick={() => toggleSort("size")}>{label("files.column.size")} {sort.key === "size" ? (sort.direction === "asc" ? "?" : "?") : ""}</button></th>
+            <th scope="col" className="px-3 text-start font-medium"><button type="button" className="imkan-focusable rounded-[16px] px-3 py-2.5" onClick={() => toggleSort("modified")}>{label("files.column.modified")} {sort.key === "modified" ? (sort.direction === "asc" ? "↑" : "↓") : "↓"}</button></th>
+            <th scope="col" className="px-3 text-start font-medium"><button type="button" className="imkan-focusable rounded-[16px] px-3 py-2.5" onClick={() => toggleSort("size")}>{label("files.column.size")} {sort.key === "size" ? (sort.direction === "asc" ? "↑" : "↓") : ""}</button></th>
             <th scope="col" className="px-4 text-end font-medium">
               <span className="sr-only">{label("files.actions")}</span>
               {onColumns ? <ColumnsPlus columns={columns} onColumns={onColumns} /> : null}
@@ -217,7 +216,7 @@ export function FileTable({
                 </Link>
               </td>
               <td className="wd-list-meta whitespace-nowrap px-3">{folder.ownerName ? label("files.modifiedByLine").replace("{date}", formatDate(folderDate(folder.id))).replace("{name}", folder.ownerName) : formatDate(folderDate(folder.id))}</td>
-              <td className="wd-list-meta whitespace-nowrap px-3">{folderSizes?.get(folder.id) ? formatSize(folderSizes.get(folder.id)) : "?"}</td>
+              <td className="wd-list-meta whitespace-nowrap px-3">{folderSizes?.get(folder.id) ? formatSize(folderSizes.get(folder.id)) : "–"}</td>
               <td className="px-3 py-2 text-end">
                 <FileActionsMenu
                   context={{
@@ -266,7 +265,7 @@ export function FileTable({
                 </button>
               </td>
               <td className="wd-list-meta whitespace-nowrap px-3">{file.ownerName ? label("files.modifiedByLine").replace("{date}", formatDate(file.updatedAt)).replace("{name}", file.ownerName) : formatDate(file.updatedAt)}</td>
-              <td className="wd-list-meta whitespace-nowrap px-3">{file.size != null ? formatSize(file.size) : "?"}</td>
+              <td className="wd-list-meta whitespace-nowrap px-3">{file.size != null ? formatSize(file.size) : "–"}</td>
               <td className="px-3 py-2 text-end">
                 <FileActionsMenu
                   context={{
@@ -296,65 +295,6 @@ export function FileTable({
         </table>
       </div>
       {ctxMenu ? ctxMenu.node : null}
-    </div>
-  );
-}
-
-
-const COLUMN_DEFS: Array<[ColumnKey, string]> = [
-  ["name", "files.column.name"],
-  ["lastModified", "files.column.modified"],
-  ["timeCreated", "column.timeCreated"],
-  ["size", "files.column.size"],
-  ["type", "files.column.type"],
-  ["extension", "files.column.extension"],
-];
-function ColumnsPlus({ columns, onColumns }: {
-  columns?: Partial<Record<ColumnKey, boolean>>;
-  onColumns: (cols: Partial<Record<ColumnKey, boolean>>) => void;
-}) {
-  const { label } = useLocale();
-  const [open, setOpen] = useState(false);
-  const rootRef = useRef<HTMLDivElement | null>(null);
-  const cols = columns ?? {};
-  useEffect(() => {
-    if (!open) return;
-    const onDown = (e: MouseEvent) => {
-      if (rootRef.current?.contains(e.target as Node)) return;
-      setOpen(false);
-    };
-    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setOpen(false); };
-    document.addEventListener("mousedown", onDown);
-    document.addEventListener("keydown", onKey);
-    return () => {
-      document.removeEventListener("mousedown", onDown);
-      document.removeEventListener("keydown", onKey);
-    };
-  }, [open]);
-  return (
-    <div ref={rootRef} className="relative inline-flex">
-      <button type="button" onClick={() => setOpen((v) => !v)} aria-expanded={open} aria-haspopup="menu"
-        title={label("view.columns")} aria-label={label("view.columns")}
-        className={`flex h-6 w-6 items-center justify-center rounded-full text-slate-500 hover:bg-slate-100 ${open ? "bg-[var(--wd-active)] text-[color:var(--wd-primary-ink)]" : ""}`}>
-        <Icons.plus size={14} />
-      </button>
-      {open ? (
-        <div className="absolute top-full end-0 z-[90] mt-1 w-52 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-lg">
-          <div className="px-3 pb-1 pt-2 text-[11px] font-semibold uppercase tracking-wide text-slate-400">{label("manage.columns")}</div>
-          <div className="flex flex-col gap-0.5 px-1 pb-2">
-            {COLUMN_DEFS.map(([key, keyName]) => {
-              const locked = key === "name";
-              const active = locked ? true : (cols[key] ?? true);
-              return (
-                <button key={key} type="button" disabled={locked} onClick={() => onColumns({ ...cols, [key]: !(cols[key] ?? true) })}                  className={`flex w-full items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-[13px] text-start ${locked ? "opacity-60" : "text-slate-600 hover:bg-slate-50"}`}>                  <span className={`flex h-4 w-4 shrink-0 items-center justify-center rounded-[4px] border ${active ? "border-[color:var(--wd-primary)] bg-[color:var(--wd-primary)] text-white" : "border-slate-300"}`}>                    {active ? <Icons.check size={10} /> : null}
-                  </span>
-                  <span className={locked ? "font-medium text-slate-700" : ""}>{label(keyName as never)}</span>
-                </button>
-              );
-            })}
-          </div>
-        </div>
-      ) : null}
     </div>
   );
 }

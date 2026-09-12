@@ -85,11 +85,11 @@ export function MoveModal({ resourceName, mode = "move", onClose, onMove }: Move
         <div className="min-w-0 flex-1">
           <fieldset className="mb-3 max-h-48 overflow-auto rounded-lg border border-slate-200 p-2 flex flex-col gap-0.5">
             <label className="flex items-center gap-2 rounded-md px-2 py-1.5 hover:bg-slate-50"><input type="radio" name="move-destination" checked={destination === ""} onChange={() => setDestination("")} className="accent-[var(--wd-primary)]" />{label("files.rootFolder")}</label>
-            {filteredOptions.map((option) => <label key={option.id} className={`flex items-center gap-2 rounded-md px-2 py-1.5 ${destination === option.id ? "bg-[var(--wd-primary-light)]" : "hover:bg-slate-50"}`} style={{ paddingInlineStart: 12 + option.depth * 20 }}><input type="radio" name="move-destination" checked={destination === option.id} onChange={() => setDestination(option.id)} className="accent-[var(--wd-primary)]" /><span className="text-[color:var(--wd-primary)]">??</span> {option.name}</label>)}
+            {filteredOptions.map((option) => <label key={option.id} className={`flex items-center gap-2 rounded-md px-2 py-1.5 ${destination === option.id ? "bg-[var(--wd-primary-light)]" : "hover:bg-slate-50"}`} style={{ paddingInlineStart: 12 + option.depth * 20 }}><input type="radio" name="move-destination" checked={destination === option.id} onChange={() => setDestination(option.id)} className="accent-[var(--wd-primary)]" /><Icons.folder size={13} className="shrink-0 text-[color:var(--wd-primary)]" /> {option.name}</label>)}
           </fieldset>
           <div className="mb-3 rounded-lg border border-dashed border-slate-300 p-3">
             <div className="mb-2 flex items-center gap-2"><Icons.plus size={14} className="text-slate-400" /><span className="text-[13px] font-medium text-slate-700">{label("move.createNewFolder")}</span></div>
-            <div className="flex gap-2"><input className="imkan-input flex-1" value={newName} onChange={(e) => setNewName(e.target.value)} placeholder={label("files.folderName")} /><button type="button" className="imkan-button-secondary" disabled={creating || !newName.trim()} onClick={() => void createAndSelect()}>{creating ? "…" : label("common.create")}</button></div>
+            <div className="flex gap-2"><input className="imkan-input flex-1" value={newName} onChange={(e) => setNewName(e.target.value)} placeholder={label("files.folderName")} /><button type="button" className="imkan-button-secondary" disabled={creating || !newName.trim()} onClick={() => void createAndSelect()}>{creating ? "..." : label("common.create")}</button></div>
           </div>
         </div>
       </div>

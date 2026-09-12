@@ -103,7 +103,7 @@ export function FileBrowser({
   const [searchActive, setSearchActive] = useState(false);
   const [loading, setLoading] = useState(true);
   const [favoriteIds, setFavoriteIds] = useState<Set<string>>(new Set());
-  // Dual view preference (list/table ↔ grid), persisted per browser.
+  // Dual view preference (list/table Ã¢â€ â€ grid), persisted per browser.
   const [viewMode, setViewMode] = useState<ViewMode>("list");
   const [sortDir, setSortDir] = useState<SortDir>("desc");
   const [filter, setFilter] = useState<FilterKey>("all");
@@ -159,7 +159,12 @@ export function FileBrowser({
   useEffect(() => {
     const focusNewFolder = () => setNewFolderOpen(true);
     window.addEventListener("workdrive:new-folder", focusNewFolder);
-    return () => window.removeEventListener("workdrive:new-folder", focusNewFolder);
+    const onTreeOpen = (event: Event) => {
+      const folderId = (event as CustomEvent<{ folderId: string }>).detail?.folderId;
+      if (folderId) router.push(`/files/${folderId}`);
+    };
+    window.addEventListener("workdrive:tree-open", onTreeOpen);
+    return () => { window.removeEventListener("workdrive:new-folder", focusNewFolder); window.removeEventListener("workdrive:tree-open", onTreeOpen); };
   }, []);
 
   // Inspector deep-link: "Version history" inside the details pane opens the drawer.
@@ -400,6 +405,8 @@ export function FileBrowser({
           files={files}
           canMutate={canMutate}
           canShare={canShare}
+          columns={columns}
+          onColumns={setColumns}
           folderSizes={folderSizes}
           folderUpdatedAt={folderUpdatedAt}
           onShare={(type, id) => setShareTarget({ type, id })}

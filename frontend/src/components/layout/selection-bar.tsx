@@ -63,7 +63,7 @@ export function SelectionBar({ folderCount, fileCount, onShare, onCopyLink, onDo
             { key: "organize", labelKey: "menu.organize" },
             "sep",
             { key: "searchInFold", labelKey: "menu.searchInFold" },
-            { key: "download", labelKey: "sel.download", hint: "^S" },
+            { key: "download", labelKey: "sel.download", hint: "Ctrl+S" },
             { key: "rename", labelKey: "menu.rename" },
             { key: "followUpdates", labelKey: "menu.followUpdates" },
             { key: "moreOptions", labelKey: "menu.moreOptions" },
