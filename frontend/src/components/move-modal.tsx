@@ -5,9 +5,18 @@ import { useLocale } from "./locale-provider";
 import { Modal } from "./modal";
 import { createFolder, getFolder, listRootContents } from "../lib/api/folders";
 import { friendlyErrorMessageKey } from "../lib/friendly-error";
+import { Icons } from "./layout/icons";
 
 interface MoveModalProps { resourceName: string; mode?: "move" | "copy"; onClose: () => void; onMove: (destinationFolderId: string | null) => Promise<void>; }
 type FlatFolder = { id: string; name: string; depth: number };
+
+const SIDEBAR_ITEMS = [
+  { key: "all", labelKey: "files.allFiles", icon: "inbox" as const },
+  { key: "favorites", labelKey: "nav.favorites", icon: "star" as const },
+  { key: "myFolders", labelKey: "files.myFolders", icon: "folder" as const },
+  { key: "sharedWithMe", labelKey: "nav.sharedWithMe", icon: "share" as const },
+  { key: "teamFolders", labelKey: "nav.teamFolders", icon: "users" as const },
+];
 
 export function MoveModal({ resourceName, mode = "move", onClose, onMove }: MoveModalProps) {
   const { label } = useLocale();
@@ -17,6 +26,8 @@ export function MoveModal({ resourceName, mode = "move", onClose, onMove }: Move
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [activeSection, setActiveSection] = useState<string>("all");
 
   const loadTree = async () => {
     const root = await listRootContents();
@@ -51,22 +62,39 @@ export function MoveModal({ resourceName, mode = "move", onClose, onMove }: Move
     finally { setSubmitting(false); }
   }
 
-  return <Modal title={label(mode === "copy" ? "menu.copyTo" : "files.moveTitle")} onClose={onClose}>
+  const filteredOptions = options?.filter((o) => o.name.toLowerCase().includes(searchQuery.toLowerCase())) ?? [];
+
+  return <Modal title={`${label(mode === "copy" ? "menu.copyTo" : "files.moveTitle")} ${resourceName}`} onClose={onClose}>
     <form onSubmit={submit} className="text-[length:var(--imkan-font-size-ui)]">
-      <p className="mb-3 text-[length:var(--imkan-font-size-secondary)]">{resourceName}</p>
-      <fieldset className="mb-3 max-h-64 overflow-auto rounded-lg border border-[color:var(--imkan-color-border)] p-2 flex flex-col gap-1">
-        <legend className="px-1 text-[length:var(--imkan-font-size-secondary)]">{label("files.moveTo")}</legend>
-        {options === null ? <p className="imkan-muted py-2">…</p> : <>
-          <label className="flex items-center gap-2 py-1"><input type="radio" name="move-destination" checked={destination === ""} onChange={() => setDestination("")} />{label("files.rootFolder")}</label>
-          {options.map((option) => <label key={option.id} className="flex items-center gap-2 rounded px-1 py-1 hover:bg-[color:var(--imkan-color-surface)]" style={{ paddingInlineStart: 12 + option.depth * 20 }}><input type="radio" name="move-destination" checked={destination === option.id} onChange={() => setDestination(option.id)} />📁 {option.name}</label>)}
-        </>}
-      </fieldset>
-      <div className="mb-3 rounded-lg border border-dashed border-[color:var(--imkan-color-border)] p-2">
-        <div className="mb-1 text-sm font-medium">{label("move.createAndMove")}</div>
-        <div className="flex gap-2"><input className="imkan-input flex-1" value={newName} onChange={(e) => setNewName(e.target.value)} placeholder={label("files.folderName")} /><button type="button" className="imkan-button-secondary" disabled={creating || !newName.trim()} onClick={() => void createAndSelect()}>{creating ? "…" : label("common.create")}</button></div>
+      <div className="mb-3 flex items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
+        <Icons.search size={15} className="text-slate-400" />
+        <input type="text" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} placeholder={label("search.placeholder")} className="min-w-0 flex-1 bg-transparent text-[13px] outline-none placeholder:text-slate-400" />
       </div>
-      {error ? <p className="mb-3 text-red-600">{error}</p> : null}
-      <div className="flex justify-end gap-2"><button type="button" className="imkan-button-secondary" onClick={onClose} disabled={submitting}>{label("share.cancel")}</button><button type="submit" className="imkan-button" disabled={submitting || options === null}>{label(mode === "copy" ? "menu.copyTo" : "files.moveHere")}</button></div>
+      <div className="flex gap-4">
+        <aside className="w-40 shrink-0 border-r border-slate-100">
+          <nav className="flex flex-col gap-0.5">
+            {SIDEBAR_ITEMS.map((item) => (
+              <button key={item.key} type="button" onClick={() => setActiveSection(item.key)}
+                className={`flex items-center gap-2 rounded-lg px-3 py-2 text-[13px] text-start ${activeSection === item.key ? "bg-[var(--wd-primary-light)] font-medium text-[color:var(--wd-primary-ink)]" : "text-slate-600 hover:bg-slate-50"}`}>
+                <Icons[item.icon] size={15} className={activeSection === item.key ? "text-[color:var(--wd-primary)]" : "text-slate-400"} />
+                {label(item.labelKey as never)}
+              </button>
+            ))}
+          </nav>
+        </aside>
+        <div className="min-w-0 flex-1">
+          <fieldset className="mb-3 max-h-48 overflow-auto rounded-lg border border-slate-200 p-2 flex flex-col gap-0.5">
+            <label className="flex items-center gap-2 rounded-md px-2 py-1.5 hover:bg-slate-50"><input type="radio" name="move-destination" checked={destination === ""} onChange={() => setDestination("")} className="accent-[var(--wd-primary)]" />{label("files.rootFolder")}</label>
+            {filteredOptions.map((option) => <label key={option.id} className={`flex items-center gap-2 rounded-md px-2 py-1.5 ${destination === option.id ? "bg-[var(--wd-primary-light)]" : "hover:bg-slate-50"}`} style={{ paddingInlineStart: 12 + option.depth * 20 }}><input type="radio" name="move-destination" checked={destination === option.id} onChange={() => setDestination(option.id)} className="accent-[var(--wd-primary)]" /><span className="text-[color:var(--wd-primary)]">??</span> {option.name}</label>)}
+          </fieldset>
+          <div className="mb-3 rounded-lg border border-dashed border-slate-300 p-3">
+            <div className="mb-2 flex items-center gap-2"><Icons.plus size={14} className="text-slate-400" /><span className="text-[13px] font-medium text-slate-700">{label("move.createNewFolder")}</span></div>
+            <div className="flex gap-2"><input className="imkan-input flex-1" value={newName} onChange={(e) => setNewName(e.target.value)} placeholder={label("files.folderName")} /><button type="button" className="imkan-button-secondary" disabled={creating || !newName.trim()} onClick={() => void createAndSelect()}>{creating ? "�" : label("common.create")}</button></div>
+          </div>
+        </div>
+      </div>
+      {error ? <p className="mb-3 text-[13px] text-red-600">{error}</p> : null}
+      <div className="flex items-center justify-between"><button type="button" className="flex items-center gap-1.5 text-[13px] text-slate-500 hover:text-slate-700"><Icons.plus size={14} /> {label("files.newFolder")}</button><div className="flex gap-2"><button type="button" className="imkan-button-secondary" onClick={onClose} disabled={submitting}>{label("share.cancel")}</button><button type="submit" className="imkan-button !bg-[color:var(--wd-primary)] !text-white hover:!bg-[color:var(--wd-primary-dark)]" disabled={submitting || options === null}>{label(mode === "copy" ? "menu.copyTo" : "files.moveHere")}</button></div></div>
     </form>
   </Modal>;
 }

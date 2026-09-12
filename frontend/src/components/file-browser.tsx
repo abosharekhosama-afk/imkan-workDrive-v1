@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState, type FormEvent } from "react";
 import { useSearchParams } from "next/navigation";
 import { useRouter } from "next/navigation";
 import { Breadcrumbs } from "./breadcrumbs";
-import { ActionToolbar, FILTER_STORAGE_KEY, type FilterKey, type SortDir } from "./layout/action-toolbar";
+import { ActionToolbar, FILTER_STORAGE_KEY, type ColumnKey, type FilterKey, type SortDir } from "./layout/action-toolbar";
 import { SelectionBar } from "./layout/selection-bar";
 import { FolderEmptyState } from "./layout/folder-empty-state";
 import { ShellScopeSync } from "./layout/shell-context";
@@ -107,6 +107,7 @@ export function FileBrowser({
   const [viewMode, setViewMode] = useState<ViewMode>("list");
   const [sortDir, setSortDir] = useState<SortDir>("desc");
   const [filter, setFilter] = useState<FilterKey>("all");
+   const [columns, setColumns] = useState<Partial<Record<ColumnKey, boolean>>>({ lastModified: true, timeCreated: false, size: true, type: false, extension: false });
   // Folder aggregate metadata surfaced by the API (size / latest file update).
   const [folderSizes, setFolderSizes] = useState<ReadonlyMap<string, number>>(new Map());
   const [folderUpdatedAt, setFolderUpdatedAt] = useState<ReadonlyMap<string, string | null>>(new Map());
@@ -342,7 +343,7 @@ export function FileBrowser({
       <ShellScopeSync folderId={folderId} folderName={folderName} />
       <div className="flex min-w-0 flex-1 flex-col bg-white">
         {selectedIds.size === 0 ? (
-          <ActionToolbar view={viewMode} onView={(v) => switchViewMode(v)} sort={sortDir} onSort={setSortDir} filter={filter} onFilter={setFilter} />
+          <ActionToolbar view={viewMode} onView={(v) => switchViewMode(v)} sort={sortDir} onSort={setSortDir} filter={filter} onFilter={setFilter} folders={folders} columns={columns} onColumns={setColumns} />
         ) : (
           <SelectionBar
             folderCount={folders.filter((f) => selectedIds.has(f.id)).length}
