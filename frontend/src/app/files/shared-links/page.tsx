@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { ZohoWorkdriveLayout } from "@/components/layout/zoho-workdrive-layout";
 import { useLocale } from "@/components/locale-provider";
 import { listSharedByMe, type SharedItem } from "@/lib/api/shared";
 import { formatDateLocalized } from "@/lib/localized";
@@ -34,7 +33,7 @@ export default function SharedLinksPage() {
   };
 
   return (
-    <ZohoWorkdriveLayout>
+    
       <div className="flex min-h-0 flex-1 flex-col">
         <div className="flex h-12 shrink-0 items-center justify-between border-b border-[color:var(--imkan-color-border)] bg-white px-3">
           <h1 className="text-[15px] font-semibold text-[#212121]">
@@ -132,6 +131,6 @@ export default function SharedLinksPage() {
         </div>
       </div>
       {toast ? <Toast message={toast} onDismiss={() => setToast(null)} /> : null}
-    </ZohoWorkdriveLayout>
+    
   );
 }
