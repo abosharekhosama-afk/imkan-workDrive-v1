@@ -15,14 +15,27 @@ export default function SharedLinksPage() {
   const [toast, setToast] = useState<string | null>(null);
 
   useEffect(() => {
+    let isMounted = true;
     setLoading(true);
+
     listSharedByMe()
-      .then(setLinks)
-      .catch(() => setLinks([]))
-      .finally(() => setLoading(false));
+      .then((data) => {
+        if (isMounted) setLinks(data);
+      })
+      .catch(() => {
+        if (isMounted) setLinks([]);
+      })
+      .finally(() => {
+        if (isMounted) setLoading(false);
+      });
+
+    return () => {
+      isMounted = false;
+    };
   }, []);
 
-  const handleCopy = async (resourceId: string) => {
+  const handleCopy = async (resourceId?: string) => {
+    if (!resourceId) return;
     const url = `${window.location.origin}/files/${resourceId}`;
     try {
       await navigator.clipboard.writeText(url);
@@ -33,7 +46,7 @@ export default function SharedLinksPage() {
   };
 
   return (
-    
+    <>
       <div className="flex min-h-0 flex-1 flex-col">
         <div className="flex h-12 shrink-0 items-center justify-between border-b border-[color:var(--imkan-color-border)] bg-white px-3">
           <h1 className="text-[15px] font-semibold text-[#212121]">
@@ -42,7 +55,7 @@ export default function SharedLinksPage() {
           <button
             type="button"
             onClick={() => {
-              window.dispatchEvent(new Event("workdrive:trigger-upload"));
+              window.dispatchEvent(new Event("workdrive:trigger-create-folder"));
             }}
             className="inline-flex items-center gap-1 rounded-md bg-[#1B66EA] px-4 py-1.5 text-[13px] font-medium text-white hover:bg-[#1556C7]"
           >
@@ -57,7 +70,7 @@ export default function SharedLinksPage() {
           ) : links.length === 0 ? (
             <div className="flex flex-col items-center justify-center gap-3 py-12 text-center">
               <span className="flex h-16 w-16 items-center justify-center rounded-2xl bg-[#EEF3FD] text-[#1B66EA]">
-                <Icons.link size={30} />
+                <Icons.Link size={30} />
               </span>
               <p className="text-[13.5px] text-slate-500">
                 {label("shared.empty")}
@@ -96,7 +109,6 @@ export default function SharedLinksPage() {
                           kind={link.resourceType === "FOLDER" ? "folder" : "file"}
                           mimeType={link.mimeType}
                           name={link.name ?? ""}
-                          label={label("files.type.file")}
                         />
                         <span className="truncate text-[13px] text-slate-800">
                           {link.name ?? "—"}
@@ -111,13 +123,13 @@ export default function SharedLinksPage() {
                     </td>
                     <td className="px-3 py-2.5 truncate text-[13px] text-slate-600">
                       {link.expiresAt
-                        ? formatDateLocalized(link.expiresAt, locale)
+                        ? formatDateLocalized(new Date(link.expiresAt), locale)
                         : label("share.expiry.never")}
                     </td>
                     <td className="px-3 py-2.5 text-end">
                       <button
                         type="button"
-                        onClick={() => handleCopy(link.resourceId)}
+                        onClick={() => handleCopy(link.resourceId ?? link.id)}
                         className="rounded-md px-2.5 py-1.5 text-[12.5px] text-[#1B66EA] hover:bg-[#EEF3FD]"
                       >
                         {label("share.copyLink")}
@@ -131,6 +143,6 @@ export default function SharedLinksPage() {
         </div>
       </div>
       {toast ? <Toast message={toast} onDismiss={() => setToast(null)} /> : null}
-    
+    </>
   );
 }
