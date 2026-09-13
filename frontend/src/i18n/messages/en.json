@@ -734,5 +734,18 @@
   "workflows.edit": "Edit",
   "workflows.nameRequired": "Workflow name is required.",
   "menu.templates": "Templates",
-  "menu.externalApps": "External apps"
+  "menu.externalApps": "External apps",
+  "help.title": "Help & Support Center",
+  "help.subtitle": "Find answers about managing files, sharing folders, and automating workflows in IMKAN WorkDrive.",
+  "help.faqTitle": "Frequently asked questions",
+  "help.faq.files.q": "How do I manage my files?",
+  "help.faq.files.a": "Upload, download, rename, and organize your files from the Files page. Use team folders for shared content, favorites to pin important items, and the trash to restore anything deleted by mistake.",
+  "help.faq.share.q": "How do I share folders?",
+  "help.faq.share.a": "Right-click any folder and choose Share, or open it and use the Share action. You can share with organization members, set view/edit permissions, and manage external shared links from Shared with me and Shared by me.",
+  "help.faq.workflows.q": "How do workflows work?",
+  "help.faq.workflows.a": "Open the Workflows page to build automations that trigger on file events — assign tasks, send notifications, and track every run from the Runs and Tasks tabs.",
+  "help.supportTitle": "Still need help?",
+  "help.supportDescription": "Our support team is ready to assist. Reach out from your account settings or send us your feedback directly.",
+  "help.contactSupport": "Contact support",
+  "help.sendFeedback": "Send feedback"
 }
