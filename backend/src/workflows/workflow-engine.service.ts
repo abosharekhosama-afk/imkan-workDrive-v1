@@ -1,4 +1,5 @@
 import { Injectable, Logger, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { randomUUID } from 'node:crypto';
 import { PrismaService } from '../prisma/prisma.service';
 import { SharesService } from '../shares/shares.service';
@@ -173,10 +174,10 @@ export class WorkflowEngineService implements OnModuleInit, OnModuleDestroy {
       const results: unknown[] = [];
       for (let i = 0; i < actions.length; i++) {
         const action = actions[i];
-        const step = await this.prisma.workflowStepRun.create({ data: { orgId: job.orgId, runId: job.run.id, stepKind: `ACTION:${action.type}`, stepPosition: i, status: 'RUNNING', input: action } });
+        const step = await this.prisma.workflowStepRun.create({ data: { orgId: job.orgId, runId: job.run.id, stepKind: `ACTION:${action.type}`, stepPosition: i, status: 'RUNNING', input: action as unknown as Prisma.InputJsonValue } });
         try {
           results.push(await this.executeAction(token, event, action, job.workflow.id, job.run.id));
-          await this.prisma.workflowStepRun.update({ where: { id: step.id }, data: { status: 'SUCCEEDED', output: results.at(-1) as object, finishedAt: new Date() } });
+          await this.prisma.workflowStepRun.update({ where: { id: step.id }, data: { status: 'SUCCEEDED', output: results.at(-1) as unknown as Prisma.InputJsonValue, finishedAt: new Date() } });
         } catch (error) {
           const message = error instanceof Error ? error.message : String(error);
           await this.prisma.workflowStepRun.update({ where: { id: step.id }, data: { status: 'FAILED', error: message, finishedAt: new Date() } });
@@ -184,7 +185,7 @@ export class WorkflowEngineService implements OnModuleInit, OnModuleDestroy {
         }
       }
       const waiting = results.some((result) => Boolean((result as { waiting?: boolean } | null)?.waiting));
-      await this.prisma.workflowRun.update({ where: { id: job.run.id }, data: waiting ? { status: 'WAITING', result: { actions: results } } : { status: 'SUCCEEDED', result: { actions: results }, finishedAt: new Date() } });
+      await this.prisma.workflowRun.update({ where: { id: job.run.id }, data: waiting ? { status: 'WAITING', result: { actions: results } as unknown as Prisma.InputJsonValue } : { status: 'SUCCEEDED', result: { actions: results } as unknown as Prisma.InputJsonValue, finishedAt: new Date() } });
       await this.prisma.workflowJob.update({ where: { id: job.id }, data: { status: 'SUCCEEDED', lockedAt: null, lockedBy: null } });
       await this.prisma.auditLog.create({ data: { orgId: job.orgId, actorId: user.id, action: 'WORKFLOW_EXECUTED', resourceType: 'WORKFLOW', resourceId: job.workflow.id, metadata: { runId: job.run.id, eventKey: job.run.eventKey, actions: actions.map((a) => a.type) } } });
     } catch (error) {
@@ -206,13 +207,16 @@ export class WorkflowEngineService implements OnModuleInit, OnModuleDestroy {
       case 'notify': {
         const recipientIds = Array.isArray(config.userIds) ? config.userIds.filter((id): id is string => typeof id === 'string') : [user.sub];
         const recipients = await this.prisma.organizationMembership.findMany({ where: { organizationId: user.org_id, userId: { in: recipientIds }, status: 'ACTIVE' }, select: { userId: true } });
-        for (const recipient of recipients) await this.prisma.notification.create({ data: { orgId: user.org_id, userId: recipient.userId, type: 'SYSTEM', title: String(config.title ?? 'Workflow notification'), body: String(config.message ?? `Workflow action completed for ${event.name}`), resourceType: event.resourceType === 'FOLDER' ? 'FOLDER' : 'FILE', resourceId: event.fileId } });
+        const resourceType = (event.resourceType ?? 'FILE') as 'FILE' | 'FOLDER';
+        for (const recipient of recipients) await this.prisma.notification.create({ data: { orgId: user.org_id, userId: recipient.userId, type: 'SYSTEM', title: String(config.title ?? 'Workflow notification'), body: String(config.message ?? `Workflow action completed for ${event.name}`), resourceType, resourceId: event.fileId } });
         return { action: 'notify', deliveredTo: recipients.map((r) => r.userId) };
       }
-      case 'favorite':
-        if (event.resourceType === 'FOLDER') throw new Error('Favorite action is only supported for files');
-        await this.prisma.favorite.upsert({ where: { userId_resourceType_resourceId: { userId: user.sub, resourceType: event.resourceType === 'FOLDER' ? 'FOLDER' : 'FILE', resourceId: event.fileId } }, create: { orgId: user.org_id, userId: user.sub, resourceType: event.resourceType === 'FOLDER' ? 'FOLDER' : 'FILE', resourceId: event.fileId }, update: {} });
+      case 'favorite': {
+        const kind: string = event.resourceType ?? 'FILE';
+        if (kind === 'FOLDER') throw new Error('Favorite action is only supported for files');
+        await this.prisma.favorite.upsert({ where: { userId_resourceType_resourceId: { userId: user.sub, resourceType: 'FILE', resourceId: event.fileId } }, create: { orgId: user.org_id, userId: user.sub, resourceType: 'FILE', resourceId: event.fileId }, update: {} });
         return { action: 'favorite', resourceId: event.fileId };
+      }
       case 'tag': {
         if (event.resourceType === 'FOLDER') throw new Error('Tag action is only supported for files');
         const name = String(config.name ?? '').trim();

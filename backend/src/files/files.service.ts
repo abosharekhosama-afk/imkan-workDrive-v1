@@ -1032,13 +1032,13 @@ export class FilesService {
   }
 
 
-  private dispatchWorkflowFileEvent(user: AccessTokenPayload, eventType: string, file: { id: string; name: string; mimeType: string; fileType: string; size: bigint | number }) {
+  private dispatchWorkflowFileEvent(user: AccessTokenPayload, eventType: string, file: { id: string; name: string; mimeType: string | null; fileType: string | null; size: bigint | number }) {
     void this.workflowEngine.executeTrigger(user, {
       eventType,
       fileId: file.id,
       name: file.name,
-      mimeType: file.mimeType,
-      fileType: file.fileType,
+      mimeType: file.mimeType ?? undefined,
+      fileType: file.fileType ?? undefined,
       size: file.size.toString(),
       userId: user.sub,
     }).catch(() => undefined);
@@ -1562,7 +1562,7 @@ export class FilesService {
     file: {
       orgId: string;
       ownerId: string;
-      folder?: { teamFolderId: string | null } | null;
+      folder?: { teamFolderId?: string | null } | null;
     },
   ): Promise<boolean> {
     const teamFolderId = file.folder?.teamFolderId ?? null;
@@ -1609,7 +1609,7 @@ export class FilesService {
   private toAccessibleResource(file: {
     orgId: string;
     ownerId: string;
-    folder?: { teamFolderId: string | null } | null;
+    folder?: { teamFolderId?: string | null } | null;
   }): AccessibleResource {
     return {
       orgId: file.orgId,

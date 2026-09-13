@@ -1,4 +1,5 @@
 import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { randomUUID } from 'node:crypto';
 import { PrismaService } from '../prisma/prisma.service';
 import type { AccessTokenPayload } from '../auth/jwt.types';
@@ -59,12 +60,12 @@ export class WorkflowsService {
     const input = this.validate(body);
     const id = randomUUID();
     const created = await this.prisma.$transaction(async (tx) => {
-      const workflow = await tx.workflow.create({ data: { id, orgId: user.org_id, ownerId: user.sub, name: input.name, description: input.description || null, mode: input.mode, resourceType: input.resourceType, status: input.status, steps: { create: [ { position: 0, kind: 'TRIGGER', config: { value: input.trigger } }, { position: 1, kind: 'CONDITION', config: { value: input.condition } }, { position: 2, kind: 'ACTIONS', config: { value: input.actions } } ] } } });
+      const workflow = await tx.workflow.create({ data: { id, orgId: user.org_id, ownerId: user.sub, name: input.name, description: input.description || null, mode: input.mode, resourceType: input.resourceType, status: input.status, steps: { create: [ { position: 0, kind: 'TRIGGER', config: { value: input.trigger } as unknown as Prisma.InputJsonValue }, { position: 1, kind: 'CONDITION', config: { value: input.condition } as unknown as Prisma.InputJsonValue }, { position: 2, kind: 'ACTIONS', config: { value: input.actions } as unknown as Prisma.InputJsonValue } ] } } });
       const states = await Promise.all(input.states.map((s, position) => { const v = s as Record<string, unknown>; return tx.workflowState.create({ data: { id: randomUUID(), workflowId: id, name: typeof v.name === 'string' ? v.name : `State ${position + 1}`, description: typeof v.description === 'string' ? v.description : null, position, terminal: v.terminal === true } }); }));
       for (const t of input.transitions as Array<Record<string, unknown>>) {
         const from = Number(t.from ?? 0), to = Number(t.to ?? Math.min(1, states.length - 1));
         if (!states[from] || !states[to]) throw new BadRequestException('Invalid workflow transition state');
-        await tx.workflowTransition.create({ data: { id: randomUUID(), workflowId: id, fromStateId: states[from].id, toStateId: states[to].id, name: typeof t.name === 'string' ? t.name : 'Transition', description: typeof t.description === 'string' ? t.description : null, trigger: typeof t.trigger === 'string' ? t.trigger : null, condition: (t.condition ?? null) as object | null, actions: (Array.isArray(t.actions) ? t.actions : input.actions) as object } });
+        await tx.workflowTransition.create({ data: { id: randomUUID(), workflowId: id, fromStateId: states[from].id, toStateId: states[to].id, name: typeof t.name === 'string' ? t.name : 'Transition', description: typeof t.description === 'string' ? t.description : null, trigger: typeof t.trigger === 'string' ? t.trigger : null, condition: (t.condition ?? Prisma.JsonNull) as unknown as Prisma.InputJsonValue, actions: (Array.isArray(t.actions) ? t.actions : input.actions) as unknown as Prisma.InputJsonValue } });
       }
       return tx.workflow.findUnique({ where: { id }, include: { steps: { orderBy: { position: 'asc' } }, states: { orderBy: { position: 'asc' } }, transitions: true } });
     });
@@ -81,10 +82,10 @@ export class WorkflowsService {
       await tx.workflowStep.deleteMany({ where: { workflowId: id } });
       await tx.workflowTransition.deleteMany({ where: { workflowId: id } });
       await tx.workflowState.deleteMany({ where: { workflowId: id } });
-      await tx.workflow.update({ where: { id }, data: { name: input.name, description: input.description || null, mode: input.mode, resourceType: input.resourceType, status: input.status, steps: { create: [ { position: 0, kind: 'TRIGGER', config: { value: input.trigger } }, { position: 1, kind: 'CONDITION', config: { value: input.condition } }, { position: 2, kind: 'ACTIONS', config: { value: input.actions } } ] } } });
+      await tx.workflow.update({ where: { id }, data: { name: input.name, description: input.description || null, mode: input.mode, resourceType: input.resourceType, status: input.status, steps: { create: [ { position: 0, kind: 'TRIGGER', config: { value: input.trigger } as unknown as Prisma.InputJsonValue }, { position: 1, kind: 'CONDITION', config: { value: input.condition } as unknown as Prisma.InputJsonValue }, { position: 2, kind: 'ACTIONS', config: { value: input.actions } as unknown as Prisma.InputJsonValue } ] } } });
       const states: { id: string }[] = [];
       for (const [position, raw] of input.states.entries()) { const v = raw as Record<string, unknown>; states.push(await tx.workflowState.create({ data: { id: randomUUID(), workflowId: id, name: typeof v.name === 'string' ? v.name : `State ${position + 1}`, description: typeof v.description === 'string' ? v.description : null, position, terminal: v.terminal === true } })); }
-      for (const raw of input.transitions as Array<Record<string, unknown>>) { const from = Number(raw.from ?? 0), to = Number(raw.to ?? Math.min(1, states.length - 1)); if (!states[from] || !states[to]) throw new BadRequestException('Invalid workflow transition state'); await tx.workflowTransition.create({ data: { id: randomUUID(), workflowId: id, fromStateId: states[from].id, toStateId: states[to].id, name: typeof raw.name === 'string' ? raw.name : 'Transition', description: typeof raw.description === 'string' ? raw.description : null, trigger: typeof raw.trigger === 'string' ? raw.trigger : null, condition: (raw.condition ?? null) as object | null, actions: (Array.isArray(raw.actions) ? raw.actions : input.actions) as object } }); }
+      for (const raw of input.transitions as Array<Record<string, unknown>>) { const from = Number(raw.from ?? 0), to = Number(raw.to ?? Math.min(1, states.length - 1)); if (!states[from] || !states[to]) throw new BadRequestException('Invalid workflow transition state'); await tx.workflowTransition.create({ data: { id: randomUUID(), workflowId: id, fromStateId: states[from].id, toStateId: states[to].id, name: typeof raw.name === 'string' ? raw.name : 'Transition', description: typeof raw.description === 'string' ? raw.description : null, trigger: typeof raw.trigger === 'string' ? raw.trigger : null, condition: (raw.condition ?? Prisma.JsonNull) as unknown as Prisma.InputJsonValue, actions: (Array.isArray(raw.actions) ? raw.actions : input.actions) as unknown as Prisma.InputJsonValue } }); }
     });
     await this.prisma.auditLog.create({ data: { orgId: user.org_id, actorId: user.sub, action: 'WORKFLOW_UPDATED', resourceType: 'WORKFLOW', resourceId: id } });
     return this.get(user, id);
@@ -145,7 +146,7 @@ export class WorkflowsService {
     const next = task.workflow.states.find((s) => s.id === transition.toStateId);
     await this.prisma.$transaction(async (tx) => {
       await tx.workflowTask.update({ where: { id }, data: { status: 'COMPLETED', completedAt: new Date() } });
-      await tx.workflowRun.update({ where: { id: task.runId }, data: { status: 'QUEUED', currentStateId: next?.id ?? null, result: { continueTransitionId: transition.id } } });
+      await tx.workflowRun.update({ where: { id: task.runId }, data: { status: 'QUEUED', currentStateId: next?.id ?? null, result: { continueTransitionId: transition.id } as unknown as Prisma.InputJsonValue } });
       await tx.workflowJob.create({ data: { id: randomUUID(), orgId: user.org_id, workflowId: task.workflowId, runId: task.runId, status: 'QUEUED', runAt: new Date() } });
     });
     return { id, completed: true, transitionId };
