@@ -138,6 +138,7 @@
   "files.column.owner": "المالك",
   "files.column.size": "حجم الملف",
   "files.column.type": "النوع",
+  "files.column.created": "تاريخ الإنشاء",
   "files.column.updated": "آخر تعديل",
   "files.createFolder": "مجلد جديد",
   "files.delete": "حذف",

@@ -70,7 +70,7 @@ export default function SharedLinksPage() {
           ) : links.length === 0 ? (
             <div className="flex flex-col items-center justify-center gap-3 py-12 text-center">
               <span className="flex h-16 w-16 items-center justify-center rounded-2xl bg-[#EEF3FD] text-[#1B66EA]">
-                <Icons.Link size={30} />
+                <Icons.link size={30} />
               </span>
               <p className="text-[13.5px] text-slate-500">
                 {label("shared.empty")}
@@ -109,6 +109,7 @@ export default function SharedLinksPage() {
                           kind={link.resourceType === "FOLDER" ? "folder" : "file"}
                           mimeType={link.mimeType}
                           name={link.name ?? ""}
+                          label={link.name ?? ""}
                         />
                         <span className="truncate text-[13px] text-slate-800">
                           {link.name ?? "—"}
@@ -123,7 +124,7 @@ export default function SharedLinksPage() {
                     </td>
                     <td className="px-3 py-2.5 truncate text-[13px] text-slate-600">
                       {link.expiresAt
-                        ? formatDateLocalized(new Date(link.expiresAt), locale)
+                        ? formatDateLocalized(link.expiresAt, locale)
                         : label("share.expiry.never")}
                     </td>
                     <td className="px-3 py-2.5 text-end">

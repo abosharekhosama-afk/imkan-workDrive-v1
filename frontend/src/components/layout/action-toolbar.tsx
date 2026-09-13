@@ -47,6 +47,7 @@ const COLUMN_DEFS: Array<[ColumnKey, string, boolean]> = [
 export function ActionToolbar({
   view, onView, sortField, onSortField, sortDir, onSortDir,
   filter, onFilter, columns, onColumns, folders = [], currentFolderId, onOpenFolder,
+  advancedFilter, onAdvancedFilter, owners = [],
 }: {
   view: ViewMode; onView: (v: ViewMode) => void;
   sortField: ColumnKey; onSortField: (k: ColumnKey) => void;

@@ -6,7 +6,7 @@ import { useLocale } from "../../components/locale-provider";
 type FaqItem = { q: string; a: string };
 
 export default function HelpPage() {
-  const { label, locale } = useLocale();
+  const { label } = useLocale();
   const [openIndex, setOpenIndex] = useState<number | null>(0);
 
   const faqs: FaqItem[] = [

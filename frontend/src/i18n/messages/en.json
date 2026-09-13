@@ -138,6 +138,7 @@
   "files.column.owner": "Owner",
   "files.column.size": "File size",
   "files.column.type": "Type",
+  "files.column.created": "Created",
   "files.column.updated": "Updated",
   "files.createFolder": "New folder",
   "files.delete": "Delete",

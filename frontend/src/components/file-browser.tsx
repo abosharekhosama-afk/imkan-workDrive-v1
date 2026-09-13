@@ -13,7 +13,7 @@ import { FileGridView } from "./file-grid-view";
 import { ShareModal } from "./share-modal";
 import { useLocale } from "./locale-provider";
 import { bulkTrashFolders, createFolder, deleteFolder, getFolder, listRootContents, renameFolder, moveFolder } from "../lib/api/folders";
-import { bulkTrashFiles, renameFile, requestDownload, trashFile, moveFile } from "../lib/api/files";
+import { bulkTrashFiles, renameFile, requestDownload, trashFile, moveFile, getFileDetails } from "../lib/api/files";
 import { triggerDownload } from "../lib/api/download";
 import { addFavorite, listFavorites, removeFavorite } from "../lib/api/favorites";
 import { ApiError } from "../lib/api/client";

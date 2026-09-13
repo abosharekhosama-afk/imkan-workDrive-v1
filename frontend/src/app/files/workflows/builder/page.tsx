@@ -61,7 +61,7 @@ export default function WorkflowBuilderPage() {
       if (Array.isArray(av)) setActions(av as Action[]);
       if (w.states.length) setStates(w.states.map((s) => ({ name: s.name, description: s.description || "", terminal: s.terminal })));
       if (w.transitions.length) {
-        setTransitions(w.transitions.map((t) => ({ from: w.states.findIndex((s) => s.id === t.fromStateId), to: w.states.findIndex((s) => s.id === t.toStateId), name: t.name, description: t.description || "", trigger: t.trigger || undefined, condition: t.condition || undefined, actions: t.actions || [] })));
+        setTransitions(w.transitions.map((t) => ({ from: w.states.findIndex((s) => s.id === t.fromStateId), to: w.states.findIndex((s) => s.id === t.toStateId), name: t.name, description: t.description || "", trigger: t.trigger || undefined, condition: t.condition || undefined, actions: (t.actions || []).map((a) => ({ type: a.type, config: a.config ?? {} })) })));
       }
     }).catch(() => setError(label("error.generic"))).finally(() => setLoading(false));
   }, [urlId, label]);
