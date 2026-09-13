@@ -1,7 +1,88 @@
 "use client";
+
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { SecondarySidebar } from "@/components/layout/secondary-sidebar";
 import { useLocale } from "@/components/locale-provider";
 import { completeWorkflowTask, listWorkflowTasks, type WorkflowTask } from "@/lib/api/workflows";
-export default function WorkflowTasksPage(){const{label}=useLocale();const[rows,setRows]=useState<WorkflowTask[]>([]);const[busy,setBusy]=useState(false);useEffect(()=>{void listWorkflowTasks().then(setRows).catch(()=>setRows([]))},[]);const complete=async(task:WorkflowTask,transitionId:string)=>{setBusy(true);try{await completeWorkflowTask(task.id,transitionId);setRows(all=>all.filter(x=>x.id!==task.id))}finally{setBusy(false)}};return <div className="flex min-h-0 flex-1"><SecondarySidebar section="workflows"/><main className="min-w-0 flex-1 overflow-y-auto bg-white"><div className="flex items-center justify-between border-b border-slate-200 px-5 py-4"><div><h1 className="text-[18px] font-semibold">{label("workflows.waitingTitle")}</h1><p className="mt-1 text-[12px] text-slate-500">{label("workflows.waitingDescription")}</p></div><Link href="/files/workflows" className="rounded-lg border border-slate-200 px-3 py-2 text-[12px]">{label("workflows.back")}</Link></div>{rows.length===0?<div className="p-6"><div className="wd-empty"><h2>{label("workflows.noTasks")}</h2></div></div>:<div className="space-y-3 p-5">{rows.map(t=>{const transitions=t.workflow.transitions.filter(x=>x.fromStateId===t.state.id);return <article key={t.id} className="rounded-xl border border-slate-200 p-4"><div className="flex flex-wrap items-start justify-between gap-3"><div><h2 className="text-[14px] font-semibold">{t.title}</h2><p className="mt-1 text-[12px] text-slate-500">{t.workflow.name} · {t.state.name}</p><p className="mt-1 text-[11px] text-slate-400">{new Date(t.createdAt).toLocaleString()}</p></div><span className="rounded-full bg-amber-50 px-2 py-1 text-[11px] text-amber-700">{t.status}</span></div><div className="mt-4 flex flex-wrap gap-2">{transitions.map(tr=><button key={tr.id} disabled={busy} onClick={()=>void complete(t,tr.id)} className="rounded-lg bg-[var(--wd-primary)] px-3 py-2 text-[11px] font-medium text-white">{tr.name}</button>)}</div></article>})}</div></main></div>}
+
+export default function WorkflowTasksPage() {
+  const { label } = useLocale();
+  const [rows, setRows] = useState<WorkflowTask[]>([]);
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    void listWorkflowTasks().then(setRows).catch(() => setRows([]));
+  }, []);
+
+  const complete = async (task: WorkflowTask, transitionId: string) => {
+    setBusy(true);
+    try {
+      await completeWorkflowTask(task.id, transitionId);
+      setRows((all) => all.filter((x) => x.id !== task.id));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="flex min-h-0 flex-1">
+      <SecondarySidebar section="workflows"/>
+      <main className="min-w-0 flex-1 overflow-y-auto bg-white">
+        <div className="flex items-center justify-between border-b border-slate-200 px-5 py-4">
+          <div>
+            <h1 className="text-[18px] font-semibold">{label("workflows.waitingTitle")}</h1>
+            <p className="mt-1 text-[12px] text-slate-500">{label("workflows.waitingDescription")}</p>
+          </div>
+          <Link className="rounded-lg border border-slate-200 px-3 py-2 text-[12px]" href="/files/workflows">
+            {label("workflows.back")}
+          </Link>
+        </div>
+
+        {rows.length === 0 ? (
+          <div className="p-6">
+            <div className="wd-empty">
+              <h2>{label("workflows.noTasks")}</h2>
+            </div>
+          </div>
+        ) : (
+          <div className="space-y-3 p-5">
+            {rows.map((t) => {
+              const transitions = t.workflow.transitions.filter((x) => x.fromStateId === t.state.id);
+              return (
+                <article key={t.id} className="rounded-xl border border-slate-200 p-4">
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div>
+                      <h2 className="text-[14px] font-semibold">{t.title}</h2>
+                      <p className="mt-1 text-[12px] text-slate-500">
+                        {t.workflow.name} · {t.state.name}
+                      </p>
+                      <p className="mt-1 text-[11px] text-slate-400">
+                        {new Date(t.createdAt).toLocaleString()}
+                      </p>
+                    </div>
+                    <span className="rounded-full bg-amber-50 px-2 py-1 text-[11px] text-amber-700">
+                      {t.status}
+                    </span>
+                  </div>
+                  <div className="mt-4 flex flex-wrap gap-2">
+                    {transitions.map((tr) => (
+                      <button
+                        key={tr.id}
+                        disabled={busy}
+                        onClick={() => void complete(t, tr.id)}
+                        className="rounded-lg bg-[var(--wd-primary)] px-3 py-2 text-[11px] font-medium text-white hover:opacity-90 disabled:opacity-50"
+                      >
+                        {tr.name}
+                      </button>
+                    ))}
+                  </div>
+                </article>
+              );
+            })}
+          </div>
+        )}
+      </main>
+    </div>
+  );
+}
