@@ -218,7 +218,8 @@ export class WorkflowEngineService implements OnModuleInit, OnModuleDestroy {
         return { action: 'favorite', resourceId: event.fileId };
       }
       case 'tag': {
-        if (event.resourceType === 'FOLDER') throw new Error('Tag action is only supported for files');
+        const tagKind: string = event.resourceType ?? 'FILE';
+        if (tagKind === 'FOLDER') throw new Error('Tag action is only supported for files');
         const name = String(config.name ?? '').trim();
         if (!name) throw new Error('Tag action requires a tag name');
         const tag = await this.prisma.tag.upsert({ where: { orgId_name: { orgId: user.org_id, name } }, create: { orgId: user.org_id, name }, update: {} });
@@ -226,12 +227,15 @@ export class WorkflowEngineService implements OnModuleInit, OnModuleDestroy {
         return { action: 'tag', tag: name };
       }
       case 'mark_final':
-      case 'archive':
-        if (event.resourceType === 'FOLDER') throw new Error('Mark as final is only supported for files');
+      case 'archive': {
+        const finalKind: string = event.resourceType ?? 'FILE';
+        if (finalKind === 'FOLDER') throw new Error('Mark as final is only supported for files');
         await this.prisma.file.updateMany({ where: { id: event.fileId, orgId: user.org_id, deletedAt: null }, data: { status: 'ARCHIVED' } });
         return { action: 'mark_final', resourceId: event.fileId };
+      }
       case 'create_folder': {
-        const parentId = typeof config.parentFolderId === 'string' ? config.parentFolderId : (event.resourceType === 'FOLDER' ? event.fileId : event.folderId ?? null);
+        const createKind: string = event.resourceType ?? 'FILE';
+        const parentId = typeof config.parentFolderId === 'string' ? config.parentFolderId : (createKind === 'FOLDER' ? event.fileId : event.folderId ?? null);
         const name = String(config.name ?? `Workflow folder ${new Date().toISOString().slice(0,10)}`).trim();
         if (!name) throw new Error('Create folder action requires a name');
         const parent = parentId ? await this.prisma.folder.findFirst({ where: { id: parentId, orgId: user.org_id }, select: { id: true, teamFolderId: true } }) : null;
@@ -244,7 +248,8 @@ export class WorkflowEngineService implements OnModuleInit, OnModuleDestroy {
         if (!destinationFolderId) throw new Error('Move action requires a destination folder');
         const destination = await this.prisma.folder.findFirst({ where: { id: destinationFolderId, orgId: user.org_id }, select: { id: true } });
         if (!destination) throw new Error('Destination folder not found');
-        if (event.resourceType === 'FOLDER') {
+        const moveKind: string = event.resourceType ?? 'FILE';
+        if (moveKind === 'FOLDER') {
           if (destinationFolderId === event.fileId) throw new Error('A folder cannot be moved into itself');
           await this.prisma.folder.update({ where: { id: event.fileId }, data: { parentId: destinationFolderId } });
           return { action: 'move', resourceId: event.fileId, destinationFolderId };
@@ -255,7 +260,8 @@ export class WorkflowEngineService implements OnModuleInit, OnModuleDestroy {
       case 'copy': {
         const destinationFolderId = typeof config.destinationFolderId === 'string' ? config.destinationFolderId : null;
         if (!destinationFolderId) throw new Error('Copy action requires a destination folder');
-        if (event.resourceType === 'FOLDER') {
+        const copyKind: string = event.resourceType ?? 'FILE';
+        if (copyKind === 'FOLDER') {
           const sourceFolder = await this.prisma.folder.findFirst({ where: { id: event.fileId, orgId: user.org_id }, include: { children: true, files: { include: { versions: { orderBy: { versionNumber: 'desc' }, take: 1 } } } } });
           if (!sourceFolder) throw new Error('Source folder not found');
           const copyTree = async (sourceId: string, parentId: string | null): Promise<string> => {
@@ -283,12 +289,14 @@ export class WorkflowEngineService implements OnModuleInit, OnModuleDestroy {
       }
       case 'generate_link':
       case 'link': {
-        if (event.resourceType === 'FOLDER') throw new Error('Link generation currently supports files only');
+        const linkKind: string = event.resourceType ?? 'FILE';
+        if (linkKind === 'FOLDER') throw new Error('Link generation currently supports files only');
         const created = await this.shares.createShare(user, { resourceType: 'FILE' as never, resourceId: event.fileId, permission: 'VIEW' as never, recipientUserIds: [], canDownload: config.canDownload !== false });
         return { action: 'generate_link', link_url: created.link_url, resourceId: event.fileId };
       }
       case 'share': {
-        if (event.resourceType === 'FOLDER') throw new Error('Share action is only supported for files');
+        const shareKind: string = event.resourceType ?? 'FILE';
+        if (shareKind === 'FOLDER') throw new Error('Share action is only supported for files');
         const recipientUserIds = Array.isArray(config.userIds) ? config.userIds.filter((id): id is string => typeof id === 'string') : [];
         const created = await this.shares.createShare(user, { resourceType: 'FILE' as never, resourceId: event.fileId, permission: (typeof config.permission === 'string' ? config.permission : 'VIEW') as never, recipientUserIds, canDownload: config.canDownload !== false });
         return { action: 'share', link_url: created.link_url, recipientUserIds };
@@ -301,7 +309,8 @@ export class WorkflowEngineService implements OnModuleInit, OnModuleDestroy {
         if (!run) throw new Error('Workflow run not found');
         await this.prisma.workflowTask.create({ data: { orgId: user.org_id, workflowId, runId: run.id, stateId: state.id, assigneeId, title: String(config.title ?? `Approval required for ${event.name}`) } });
         await this.prisma.workflowRun.update({ where: { id: run.id }, data: { status: 'WAITING', currentStateId: state.id } });
-        await this.prisma.notification.create({ data: { orgId: user.org_id, userId: assigneeId, type: 'SYSTEM', title: 'Workflow approval required', body: String(config.title ?? `Approval required for ${event.name}`), resourceType: event.resourceType === 'FOLDER' ? 'FOLDER' : 'FILE', resourceId: event.fileId } });
+        const approvalResourceType = (event.resourceType ?? 'FILE') as 'FILE' | 'FOLDER';
+        await this.prisma.notification.create({ data: { orgId: user.org_id, userId: assigneeId, type: 'SYSTEM', title: 'Workflow approval required', body: String(config.title ?? `Approval required for ${event.name}`), resourceType: approvalResourceType, resourceId: event.fileId } });
         return { action: 'request_approval', assigneeId, stateId: state.id, waiting: true };
       }
       default: throw new Error(`Unsupported workflow action: ${action.type}`);

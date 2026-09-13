@@ -774,8 +774,7 @@ export class FilesService {
       metadata: (row.metadata as Record<string, unknown> | null) ?? null,
     }));
   }
-
-  /**
+/**
    * Complete version history for a file, newest first. Tenant-scoped by
    * `orgId` and read-gated: cross-tenant or unreadable files are a 404.
    */
@@ -784,7 +783,7 @@ export class FilesService {
       where: { id, orgId: user.org_id, deletedAt: null },
       include: {
         owner: { select: { id: true, name: true, email: true } },
-        folder: { select: { id: true, name: true } },
+        folder: { select: { id: true, name: true, teamFolderId: true } },
         metadata: true,
         tags: { include: { tag: true } },
       },
