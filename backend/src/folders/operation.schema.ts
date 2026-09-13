@@ -1,0 +1,5 @@
+export type FolderMoveCopyInput = { destinationFolderId: string | null };
+export type BulkFolderOperationInput = { ids: string[]; destinationFolderId?: string | null };
+function obj(value: unknown): Record<string, unknown> { if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('Invalid request body'); return value as Record<string, unknown>; }
+export function parseFolderMoveCopy(value: unknown): FolderMoveCopyInput { const body=obj(value); const v=body.destinationFolderId; if(v!==null && typeof v!=='string') throw new Error('destinationFolderId must be a string or null'); return {destinationFolderId:v??null}; }
+export function parseBulkFolderOperation(value: unknown): BulkFolderOperationInput { const body=obj(value); if(!Array.isArray(body.ids)||body.ids.length<1||body.ids.length>100||body.ids.some((id)=>typeof id!=='string')) throw new Error('ids must contain 1 to 100 folder ids'); const v=body.destinationFolderId; if(v!==undefined&&v!==null&&typeof v!=='string') throw new Error('destinationFolderId must be a string or null'); return {ids:body.ids as string[],destinationFolderId:v??null}; }

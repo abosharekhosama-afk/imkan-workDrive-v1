@@ -1,0 +1,71 @@
+# Cursor Rules — IMKAN WorkDrive
+
+> Strict guidelines for AI-assisted development. Read `.specs/` directory before any task.
+
+---
+
+## 1. Mandatory Pre-Work
+
+Before writing or modifying any code, you MUST read:
+- `.specs/ARCHITECTURE.md` — Project tech stack, directory structure, conventions
+- `.specs/UI_UX_PARITY.md` — Design tokens, colors, spacing, component styling
+- `.specs/TASKS.md` — Current task tracker and known issues
+
+These specs are the **single source of truth** for project context. Do NOT re-scan the entire codebase to gather information that is already documented in `.specs/`.
+
+---
+
+## 2. Design System Compliance
+
+- **Primary color** `#00a884` is AUTHORITATIVE — never change it
+- Use **IMKAN One design tokens** (CSS custom properties) for all styling
+- Do NOT invent new token values or hardcoded colors
+- Font stacks: `system-ui` fallbacks until official fonts are installed
+- All spacing/typography must follow the scale in `UI_UX_PARITY.md`
+- Dark mode uses `html[data-theme="dark"]` with `--wd-*` custom properties
+
+---
+
+## 3. Code Conventions
+
+- **Components**: PascalCase (`FileTable.tsx`)
+- **API modules**: camelCase (`files.ts`, `auth.ts`)
+- **Logic files**: `*-logic.ts` for testable pure functions
+- **Schemas**: `*.schema.ts` for Zod validation
+- **Path alias**: `@/*` maps to `./src/*` (frontend only)
+- **Module imports**: use `@nestjs/common` patterns in backend
+- **API errors**: use `ApiError` class, not raw `Error`
+- **State**: React Context for shell state, useState for component state
+
+---
+
+## 4. What NOT to Do
+
+- Do NOT re-scan the entire project for context — read `.specs/` first
+- Do NOT modify `node_modules/`, `docker-compose.yml`, or `.env` without explicit instruction
+- Do NOT ignore TypeScript errors or add `@ts-ignore` comments
+- Do NOT create new design tokens without updating `.specs/UI_UX_PARITY.md`
+- Do NOT modify database schema without updating `.specs/ARCHITECTURE.md` section 5
+- Do NOT add dependencies without confirming they are already in `package.json`
+
+---
+
+## 5. Testing Requirements
+
+- All `*-logic.ts` files MUST have corresponding `*.spec.ts` files
+- Backend modules follow Jest pattern with `*.spec.ts`
+- Frontend E2E tests use Playwright in `e2e/` directory
+- Run `npm run test` before completing any task involving logic changes
+
+---
+
+## 6. File Modification Scope
+
+- When fixing a bug: modify only the relevant file + add/update tests
+- When adding a feature: follow existing module patterns (controller + service + schema in backend, page + components in frontend)
+- When updating styles: reference existing tokens from `imkan-tokens.css`, never hardcode new values
+- When touching the API: update `client.ts` or the specific module in `lib/api/`
+
+---
+
+*Generated: 2026-09-12 from commit 9472ff6 on branch v2-release*

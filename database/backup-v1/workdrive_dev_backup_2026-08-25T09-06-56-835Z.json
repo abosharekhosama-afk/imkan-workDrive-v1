@@ -1,0 +1,286 @@
+{
+  "organizations": [
+    {
+      "id": "00000000-0000-4000-8000-000000000001",
+      "name": "IMKAN Demo Organization",
+      "createdAt": "2026-08-25T07:38:40.511Z"
+    },
+    {
+      "id": "20d201b1-c5e3-46fa-9c21-b5af30c09113",
+      "name": "Osama Abo Sharekh's Workspace",
+      "createdAt": "2026-08-25T07:56:55.289Z"
+    }
+  ],
+  "users": [
+    {
+      "id": "00000000-0000-4000-8000-000000000011",
+      "orgId": "00000000-0000-4000-8000-000000000001",
+      "email": "admin@example.imkan",
+      "name": null,
+      "passwordHash": null,
+      "googleId": null,
+      "role": "ADMIN",
+      "createdAt": "2026-08-25T07:45:01.572Z"
+    },
+    {
+      "id": "00000000-0000-4000-8000-000000000012",
+      "orgId": "00000000-0000-4000-8000-000000000001",
+      "email": "organizer@example.imkan",
+      "name": null,
+      "passwordHash": null,
+      "googleId": null,
+      "role": "MEMBER",
+      "createdAt": "2026-08-25T07:45:01.676Z"
+    },
+    {
+      "id": "00000000-0000-4000-8000-000000000013",
+      "orgId": "00000000-0000-4000-8000-000000000001",
+      "email": "viewer@example.imkan",
+      "name": null,
+      "passwordHash": null,
+      "googleId": null,
+      "role": "MEMBER",
+      "createdAt": "2026-08-25T07:45:01.730Z"
+    },
+    {
+      "id": "e9bc09ba-ef1a-4c74-acdd-b57b5e37bf90",
+      "orgId": "20d201b1-c5e3-46fa-9c21-b5af30c09113",
+      "email": "abosharekhosama@gmail.com",
+      "name": "Osama Abo Sharekh",
+      "passwordHash": "879d5dffdfe4c60d968433f127fcf09e:dd098be36c1008ee60c907148d88653e617c36c9f52705f62aff7a98283985425b43491e6c3a7c8a86bc6639caf69567f3ad24fa8b6d54cfa943003ba03b98a5",
+      "googleId": null,
+      "role": "ADMIN",
+      "createdAt": "2026-08-25T07:56:55.677Z"
+    }
+  ],
+  "team_folders": [
+    {
+      "id": "1d5b2cb6-1c1b-4954-a2ca-cca87770a26a",
+      "orgId": "20d201b1-c5e3-46fa-9c21-b5af30c09113",
+      "name": "fold",
+      "isPublicToOrg": false
+    }
+  ],
+  "team_folder_members": [],
+  "folders": [
+    {
+      "id": "a1b3810e-2bfa-4a06-a001-4355d6a27fea",
+      "orgId": "20d201b1-c5e3-46fa-9c21-b5af30c09113",
+      "teamFolderId": "1d5b2cb6-1c1b-4954-a2ca-cca87770a26a",
+      "parentId": null,
+      "name": "fold",
+      "ownerId": "e9bc09ba-ef1a-4c74-acdd-b57b5e37bf90",
+      "updatedAt": "2026-08-25T07:57:41.310Z"
+    }
+  ],
+  "files": [
+    {
+      "id": "55477aac-a132-46d4-ac2e-a6166d66764e",
+      "orgId": "20d201b1-c5e3-46fa-9c21-b5af30c09113",
+      "folderId": "a1b3810e-2bfa-4a06-a001-4355d6a27fea",
+      "name": "master_.pdf",
+      "originalName": "master_.pdf",
+      "extension": "pdf",
+      "mimeType": "application/pdf",
+      "fileType": "PDF",
+      "size": "2271241",
+      "sha256Hash": "3f53baf6a32a8c1efaa18b5a28347deae07b1e30b7f41de8cc5a8747a9022bec",
+      "status": "ACTIVE",
+      "visibility": "PRIVATE",
+      "ownerId": "e9bc09ba-ef1a-4c74-acdd-b57b5e37bf90",
+      "deletedAt": null,
+      "createdAt": "2026-08-25T12:00:40.768Z",
+      "updatedAt": "2026-08-25T08:50:09.164Z",
+      "lastAccessedAt": null
+    }
+  ],
+  "favorites": [
+    {
+      "id": "22ae24e6-1032-45fe-91e3-0e271cee8a82",
+      "orgId": "20d201b1-c5e3-46fa-9c21-b5af30c09113",
+      "userId": "e9bc09ba-ef1a-4c74-acdd-b57b5e37bf90",
+      "resourceType": "FOLDER",
+      "resourceId": "a1b3810e-2bfa-4a06-a001-4355d6a27fea",
+      "createdAt": "2026-08-25T08:53:14.835Z"
+    },
+    {
+      "id": "350ad91a-ae93-4e23-b816-bc64cff7994b",
+      "orgId": "20d201b1-c5e3-46fa-9c21-b5af30c09113",
+      "userId": "e9bc09ba-ef1a-4c74-acdd-b57b5e37bf90",
+      "resourceType": "FILE",
+      "resourceId": "55477aac-a132-46d4-ac2e-a6166d66764e",
+      "createdAt": "2026-08-25T08:53:24.002Z"
+    }
+  ],
+  "file_versions": [
+    {
+      "id": "840e52e9-f575-468d-8e53-74df20478c9e",
+      "orgId": "20d201b1-c5e3-46fa-9c21-b5af30c09113",
+      "fileId": "55477aac-a132-46d4-ac2e-a6166d66764e",
+      "versionNumber": 1,
+      "storageObjectId": "19d0bcbc-ec9c-5271-a398-e926d03f7a1e",
+      "size": "2271241",
+      "mimeType": "application/pdf",
+      "extension": null,
+      "sha256Hash": "3f53baf6a32a8c1efaa18b5a28347deae07b1e30b7f41de8cc5a8747a9022bec",
+      "uploadedById": "e9bc09ba-ef1a-4c74-acdd-b57b5e37bf90",
+      "status": "ACTIVE",
+      "createdAt": "2026-08-25T12:00:40.237Z"
+    }
+  ],
+  "shares": [
+    {
+      "id": "d22e31b2-4216-452d-a8c3-9b75e42720bd",
+      "orgId": "20d201b1-c5e3-46fa-9c21-b5af30c09113",
+      "fileId": "55477aac-a132-46d4-ac2e-a6166d66764e",
+      "createdById": "e9bc09ba-ef1a-4c74-acdd-b57b5e37bf90",
+      "permission": "VIEW",
+      "status": "ACTIVE",
+      "linkToken": "4HhlopwwxxUeUszR5WcY-LGbeN-Okz-dW6B9R23OtAU",
+      "passwordHash": null,
+      "expiresAt": null,
+      "canDownload": true,
+      "createdAt": "2026-08-25T12:00:42.626Z",
+      "revokedAt": null
+    }
+  ],
+  "share_recipients": [],
+  "access_events": [],
+  "audit_logs": [
+    {
+      "id": "0c4b5686-8aee-4176-baca-97a8e217a8f6",
+      "orgId": "20d201b1-c5e3-46fa-9c21-b5af30c09113",
+      "actorId": "e9bc09ba-ef1a-4c74-acdd-b57b5e37bf90",
+      "action": "FILE_DOWNLOAD",
+      "resourceType": "FILE",
+      "resourceId": "55477aac-a132-46d4-ac2e-a6166d66764e",
+      "ipAddress": null,
+      "metadata": null,
+      "createdAt": "2026-08-25T08:08:04.670Z"
+    },
+    {
+      "id": "227bdb45-6150-4c62-804a-8387c8defcc5",
+      "orgId": "20d201b1-c5e3-46fa-9c21-b5af30c09113",
+      "actorId": "e9bc09ba-ef1a-4c74-acdd-b57b5e37bf90",
+      "action": "ORG_INVITATION_REVOKED",
+      "resourceType": "ORGANIZATION_INVITATION",
+      "resourceId": "478bebe5-0b9a-4159-9447-4695ff682fbe",
+      "ipAddress": null,
+      "metadata": null,
+      "createdAt": "2026-08-25T08:11:16.371Z"
+    },
+    {
+      "id": "82d24365-f9d4-4a42-bcca-6f70798ae969",
+      "orgId": "20d201b1-c5e3-46fa-9c21-b5af30c09113",
+      "actorId": "e9bc09ba-ef1a-4c74-acdd-b57b5e37bf90",
+      "action": "SHARE_CREATED",
+      "resourceType": "FILE",
+      "resourceId": "55477aac-a132-46d4-ac2e-a6166d66764e",
+      "ipAddress": null,
+      "metadata": null,
+      "createdAt": "2026-08-25T08:54:15.132Z"
+    },
+    {
+      "id": "8c2b9726-18eb-40ef-805c-f8995e3b2ff4",
+      "orgId": "20d201b1-c5e3-46fa-9c21-b5af30c09113",
+      "actorId": "e9bc09ba-ef1a-4c74-acdd-b57b5e37bf90",
+      "action": "FILE_RENAMED",
+      "resourceType": "FILE",
+      "resourceId": "55477aac-a132-46d4-ac2e-a6166d66764e",
+      "ipAddress": null,
+      "metadata": null,
+      "createdAt": "2026-08-25T08:50:09.827Z"
+    },
+    {
+      "id": "94e35ba2-6cc8-48b0-8f89-ac77a070c313",
+      "orgId": "20d201b1-c5e3-46fa-9c21-b5af30c09113",
+      "actorId": "e9bc09ba-ef1a-4c74-acdd-b57b5e37bf90",
+      "action": "FILE_UPLOAD_COMPLETE",
+      "resourceType": "FILE",
+      "resourceId": "55477aac-a132-46d4-ac2e-a6166d66764e",
+      "ipAddress": null,
+      "metadata": null,
+      "createdAt": "2026-08-25T07:59:32.432Z"
+    },
+    {
+      "id": "c40de504-efde-4ac6-b811-38cc99f4f999",
+      "orgId": "20d201b1-c5e3-46fa-9c21-b5af30c09113",
+      "actorId": "e9bc09ba-ef1a-4c74-acdd-b57b5e37bf90",
+      "action": "ORG_INVITATION_CREATED",
+      "resourceType": "ORGANIZATION_INVITATION",
+      "resourceId": "478bebe5-0b9a-4159-9447-4695ff682fbe",
+      "ipAddress": null,
+      "metadata": null,
+      "createdAt": "2026-08-25T08:10:56.335Z"
+    },
+    {
+      "id": "f4e973ae-f3d8-4a3e-937e-5979e137d94f",
+      "orgId": "20d201b1-c5e3-46fa-9c21-b5af30c09113",
+      "actorId": "e9bc09ba-ef1a-4c74-acdd-b57b5e37bf90",
+      "action": "TEAM_FOLDER_CREATED",
+      "resourceType": "TEAM_FOLDER",
+      "resourceId": "1d5b2cb6-1c1b-4954-a2ca-cca87770a26a",
+      "ipAddress": null,
+      "metadata": null,
+      "createdAt": "2026-08-25T07:57:41.361Z"
+    }
+  ],
+  "organization_invitations": [
+    {
+      "id": "478bebe5-0b9a-4159-9447-4695ff682fbe",
+      "orgId": "20d201b1-c5e3-46fa-9c21-b5af30c09113",
+      "email": "osama@gmail.com",
+      "role": "MEMBER",
+      "tokenHash": "914fd66f7582e6cdc990829930d690d657971dc9a91d164c1ea3e5338cce981f",
+      "invitedById": "e9bc09ba-ef1a-4c74-acdd-b57b5e37bf90",
+      "status": "REVOKED",
+      "expiresAt": "2026-09-01T08:10:56.200Z",
+      "acceptedAt": null,
+      "revokedAt": "2026-08-25T08:11:16.195Z",
+      "createdAt": "2026-08-25T08:10:56.202Z"
+    }
+  ],
+  "sessions": [
+    {
+      "id": "f65d15103e54745f4778980bb99184a8",
+      "orgId": "20d201b1-c5e3-46fa-9c21-b5af30c09113",
+      "userId": "e9bc09ba-ef1a-4c74-acdd-b57b5e37bf90",
+      "tokenHash": "c97f119b58c24427ca1778fd16bfee7d250785492bc9ea9c49afa4620ccaa3ca",
+      "expiresAt": "2026-08-25T15:56:55.688Z",
+      "revokedAt": null,
+      "createdAt": "2026-08-25T07:56:55.692Z",
+      "lastSeenAt": "2026-08-25T07:56:55.692Z"
+    }
+  ],
+  "password_reset_tokens": [],
+  "notifications": [],
+  "comments": [],
+  "storage_quotas": [
+    {
+      "id": "b286612c-25ae-439b-a44a-8f6724d54ade",
+      "orgId": "20d201b1-c5e3-46fa-9c21-b5af30c09113",
+      "quotaBytes": "10737418240",
+      "usedBytes": "2271241",
+      "updatedAt": "2026-08-25T07:59:32.252Z"
+    }
+  ],
+  "file_metadata": [],
+  "storage_objects": [
+    {
+      "id": "19d0bcbc-ec9c-5271-a398-e926d03f7a1e",
+      "orgId": "20d201b1-c5e3-46fa-9c21-b5af30c09113",
+      "fileId": "55477aac-a132-46d4-ac2e-a6166d66764e",
+      "storageKey": "tenant_20d201b1-c5e3-46fa-9c21-b5af30c09113/files/55477aac-a132-46d4-ac2e-a6166d66764e/840e52e9-f575-468d-8e53-74df20478c9e",
+      "bucket": "imkan-workdrive-dev",
+      "region": "us-east-1",
+      "size": "2271241",
+      "checksum": "3f53baf6a32a8c1efaa18b5a28347deae07b1e30b7f41de8cc5a8747a9022bec",
+      "status": "ACTIVE",
+      "createdAt": "2026-08-25T12:00:40.325Z"
+    }
+  ],
+  "trash_entries": [],
+  "file_activities": [],
+  "tags": [],
+  "file_tags": []
+}
