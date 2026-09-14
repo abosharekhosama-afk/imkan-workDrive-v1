@@ -1,7 +1,88 @@
 "use client";
+
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { SecondarySidebar } from "@/components/layout/secondary-sidebar";
 import { useLocale } from "@/components/locale-provider";
-import { completeWorkflowTask,listWorkflowTasks,type WorkflowTask } from "@/lib/api/workflows";
-export default function WorkflowTasksPage(){const{label}=useLocale();const[rows,setRows]=useState<WorkflowTask[]>([]);const[busy,setBusy]=useState(false);useEffect(()=>{void listWorkflowTasks().then(setRows).catch(()=>setRows([]))},[]);const complete=async(t:WorkflowTask,id:string)=>{setBusy(true);try{await completeWorkflowTask(t.id,id);setRows(a=>a.filter(x=>x.id!==t.id))}finally{setBusy(false)}};return <div className="flex min-h-0 flex-1 bg-[#f6f8fb]"><SecondarySidebar section="workflows"/><main className="min-w-0 flex-1 overflow-y-auto"><header className="border-b border-slate-200 bg-white px-6 py-5"><div className="flex items-end justify-between gap-4"><div><div className="text-[9.5px] font-bold uppercase tracking-[.15em] text-slate-400">Workflows</div><h1 className="mt-1 text-[20px] font-semibold tracking-tight text-slate-900">{label("workflows.waitingTitle")}</h1><p className="mt-1 text-[11.5px] text-slate-500">{label("workflows.waitingDescription")}</p></div><Link href="/files/workflows" className="rounded-lg border border-slate-200 px-3 py-2 text-[10.5px] text-slate-600">{label("workflows.back")}</Link></div></header>{rows.length===0?<div className="p-8"><div className="mx-auto max-w-xl rounded-xl border border-dashed border-slate-300 bg-white p-12 text-center"><h2 className="text-[14px] font-semibold text-slate-900">{label("workflows.noTasks")}</h2><p className="mt-1 text-[11px] text-slate-400">You're all caught up.</p></div></div>:<div className="p-6"><div className="overflow-hidden rounded-xl border border-slate-200 bg-white"><div className="grid grid-cols-[minmax(260px,1.6fr)_170px_150px_160px] border-b border-slate-100 bg-[#fbfcfe] px-4 py-3 text-[9px] font-bold uppercase tracking-wider text-slate-400"><div>Task</div><div>Workflow</div><div>State</div><div className="text-end">Decision</div></div>{rows.map(t=>{const trs=t.workflow.transitions.filter(x=>x.fromStateId===t.state.id);return <div key={t.id} className="grid grid-cols-[minmax(260px,1.6fr)_170px_150px_160px] items-center border-b border-slate-100 px-4 py-3 last:border-0 hover:bg-[#fbfcff]"><div><div className="text-[11.5px] font-semibold text-slate-800">{t.title}</div><div className="mt-0.5 text-[9.5px] text-slate-400">{new Date(t.createdAt).toLocaleString()}</div></div><div className="truncate text-[10px] text-slate-500">{t.workflow.name}</div><div><span className="rounded-full bg-amber-50 px-2 py-1 text-[9px] font-semibold text-amber-700">{t.state.name}</span></div><div className="flex justify-end gap-1">{trs.map(tr=><button key={tr.id} disabled={busy} onClick={()=>void complete(t,tr.id)} className="rounded-md bg-[#1B66EA] px-2.5 py-1.5 text-[9.5px] font-semibold text-white disabled:opacity-50">{tr.name}</button>)}</div></div>})}</div></div>}</main></div>}
+import { completeWorkflowTask, listWorkflowTasks, type WorkflowTask } from "@/lib/api/workflows";
+
+export default function WorkflowTasksPage() {
+  const { label } = useLocale();
+  const [rows, setRows] = useState<WorkflowTask[]>([]);
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    void listWorkflowTasks().then(setRows).catch(() => setRows([]));
+  }, []);
+
+  const complete = async (task: WorkflowTask, transitionId: string) => {
+    setBusy(true);
+    try {
+      await completeWorkflowTask(task.id, transitionId);
+      setRows((all) => all.filter((x) => x.id !== task.id));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="flex min-h-0 flex-1">
+      <SecondarySidebar section="workflows"/>
+      <main className="min-w-0 flex-1 overflow-y-auto bg-white">
+        <div className="flex items-center justify-between border-b border-slate-200 px-5 py-4">
+          <div>
+            <h1 className="text-[18px] font-semibold">{label("workflows.waitingTitle")}</h1>
+            <p className="mt-1 text-[12px] text-slate-500">{label("workflows.waitingDescription")}</p>
+          </div>
+          <Link className="rounded-lg border border-slate-200 px-3 py-2 text-[12px]" href="/files/workflows">
+            {label("workflows.back")}
+          </Link>
+        </div>
+
+        {rows.length === 0 ? (
+          <div className="p-6">
+            <div className="wd-empty">
+              <h2>{label("workflows.noTasks")}</h2>
+            </div>
+          </div>
+        ) : (
+          <div className="space-y-3 p-5">
+            {rows.map((t) => {
+              const transitions = t.workflow.transitions.filter((x) => x.fromStateId === t.state.id);
+              return (
+                <article key={t.id} className="rounded-xl border border-slate-200 p-4">
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div>
+                      <h2 className="text-[14px] font-semibold">{t.title}</h2>
+                      <p className="mt-1 text-[12px] text-slate-500">
+                        {t.workflow.name} · {t.state.name}
+                      </p>
+                      <p className="mt-1 text-[11px] text-slate-400">
+                        {new Date(t.createdAt).toLocaleString()}
+                      </p>
+                    </div>
+                    <span className="rounded-full bg-amber-50 px-2 py-1 text-[11px] text-amber-700">
+                      {t.status}
+                    </span>
+                  </div>
+                  <div className="mt-4 flex flex-wrap gap-2">
+                    {transitions.map((tr) => (
+                      <button
+                        key={tr.id}
+                        disabled={busy}
+                        onClick={() => void complete(t, tr.id)}
+                        className="rounded-lg bg-[var(--wd-primary)] px-3 py-2 text-[11px] font-medium text-white hover:opacity-90 disabled:opacity-50"
+                      >
+                        {tr.name}
+                      </button>
+                    ))}
+                  </div>
+                </article>
+              );
+            })}
+          </div>
+        )}
+      </main>
+    </div>
+  );
+}

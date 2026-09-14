@@ -6,7 +6,7 @@ import type { AccessTokenPayload } from '../auth/jwt.types';
 import { WorkflowEngineService } from './workflow-engine.service';
 
 type ActionInput = { type?: unknown; config?: unknown };
-type WorkflowInput = { name?: unknown; description?: unknown; mode?: unknown; resourceType?: unknown; trigger?: unknown; condition?: unknown; action?: unknown; actions?: unknown; status?: unknown; states?: unknown; transitions?: unknown; fields?: unknown };
+type WorkflowInput = { name?: unknown; description?: unknown; mode?: unknown; resourceType?: unknown; trigger?: unknown; condition?: unknown; action?: unknown; actions?: unknown; status?: unknown; states?: unknown; transitions?: unknown };
 
 type WorkflowStatus = 'DRAFT' | 'ACTIVE';
 
@@ -27,14 +27,13 @@ export class WorkflowsService {
     const status: WorkflowStatus = value.status === 'ACTIVE' ? 'ACTIVE' : 'DRAFT';
     const states = Array.isArray(value.states) && value.states.length ? value.states : [{ name: 'Start', description: '', terminal: false }, { name: 'Completed', description: '', terminal: true }];
     const transitions = Array.isArray(value.transitions) && value.transitions.length ? value.transitions : [{ from: 0, to: 1, name: 'Complete', actions: normalizedActions }];
-    const fields = Array.isArray(value.fields) ? value.fields.slice(0, 50).map((raw) => { const f = raw as Record<string, unknown>; return { id: typeof f.id === 'string' ? f.id : randomUUID(), name: typeof f.name === 'string' ? f.name.trim() : 'Field', type: typeof f.type === 'string' ? f.type : 'Text', required: f.required === true, options: Array.isArray(f.options) ? f.options.map(String).slice(0, 50) : undefined }; }).filter((f) => f.name) : [];
     if (states.length > 20) throw new BadRequestException('A workflow can contain at most 20 states');
     if (normalizedActions.length > 5) throw new BadRequestException('A workflow transition can contain at most 5 actions');
     for (const rawTransition of transitions) {
       const t = rawTransition as Record<string, unknown>;
       if (Array.isArray(t.actions) && t.actions.length > 5) throw new BadRequestException('A workflow transition can contain at most 5 actions');
     }
-    return { name, description: typeof value.description === 'string' ? value.description.trim() : '', mode, resourceType, trigger, condition, actions: normalizedActions, status, states, transitions, fields };
+    return { name, description: typeof value.description === 'string' ? value.description.trim() : '', mode, resourceType, trigger, condition, actions: normalizedActions, status, states, transitions };
   }
 
   async list(user: AccessTokenPayload, scope?: string) {
@@ -61,7 +60,7 @@ export class WorkflowsService {
     const input = this.validate(body);
     const id = randomUUID();
     const created = await this.prisma.$transaction(async (tx) => {
-      const workflow = await tx.workflow.create({ data: { id, orgId: user.org_id, ownerId: user.sub, name: input.name, description: input.description || null, mode: input.mode, resourceType: input.resourceType, status: input.status, steps: { create: [ { position: 0, kind: 'TRIGGER', config: { value: input.trigger } as unknown as Prisma.InputJsonValue }, { position: 1, kind: 'CONDITION', config: { value: input.condition } as unknown as Prisma.InputJsonValue }, { position: 2, kind: 'ACTIONS', config: { value: input.actions } as unknown as Prisma.InputJsonValue }, { position: 3, kind: 'WORKFLOW_FIELDS', config: { value: input.fields } as unknown as Prisma.InputJsonValue } ] } } });
+      const workflow = await tx.workflow.create({ data: { id, orgId: user.org_id, ownerId: user.sub, name: input.name, description: input.description || null, mode: input.mode, resourceType: input.resourceType, status: input.status, steps: { create: [ { position: 0, kind: 'TRIGGER', config: { value: input.trigger } as unknown as Prisma.InputJsonValue }, { position: 1, kind: 'CONDITION', config: { value: input.condition } as unknown as Prisma.InputJsonValue }, { position: 2, kind: 'ACTIONS', config: { value: input.actions } as unknown as Prisma.InputJsonValue } ] } } });
       const states = await Promise.all(input.states.map((s, position) => { const v = s as Record<string, unknown>; return tx.workflowState.create({ data: { id: randomUUID(), workflowId: id, name: typeof v.name === 'string' ? v.name : `State ${position + 1}`, description: typeof v.description === 'string' ? v.description : null, position, terminal: v.terminal === true } }); }));
       for (const t of input.transitions as Array<Record<string, unknown>>) {
         const from = Number(t.from ?? 0), to = Number(t.to ?? Math.min(1, states.length - 1));
@@ -83,7 +82,7 @@ export class WorkflowsService {
       await tx.workflowStep.deleteMany({ where: { workflowId: id } });
       await tx.workflowTransition.deleteMany({ where: { workflowId: id } });
       await tx.workflowState.deleteMany({ where: { workflowId: id } });
-      await tx.workflow.update({ where: { id }, data: { name: input.name, description: input.description || null, mode: input.mode, resourceType: input.resourceType, status: input.status, steps: { create: [ { position: 0, kind: 'TRIGGER', config: { value: input.trigger } as unknown as Prisma.InputJsonValue }, { position: 1, kind: 'CONDITION', config: { value: input.condition } as unknown as Prisma.InputJsonValue }, { position: 2, kind: 'ACTIONS', config: { value: input.actions } as unknown as Prisma.InputJsonValue }, { position: 3, kind: 'WORKFLOW_FIELDS', config: { value: input.fields } as unknown as Prisma.InputJsonValue } ] } } });
+      await tx.workflow.update({ where: { id }, data: { name: input.name, description: input.description || null, mode: input.mode, resourceType: input.resourceType, status: input.status, steps: { create: [ { position: 0, kind: 'TRIGGER', config: { value: input.trigger } as unknown as Prisma.InputJsonValue }, { position: 1, kind: 'CONDITION', config: { value: input.condition } as unknown as Prisma.InputJsonValue }, { position: 2, kind: 'ACTIONS', config: { value: input.actions } as unknown as Prisma.InputJsonValue } ] } } });
       const states: { id: string }[] = [];
       for (const [position, raw] of input.states.entries()) { const v = raw as Record<string, unknown>; states.push(await tx.workflowState.create({ data: { id: randomUUID(), workflowId: id, name: typeof v.name === 'string' ? v.name : `State ${position + 1}`, description: typeof v.description === 'string' ? v.description : null, position, terminal: v.terminal === true } })); }
       for (const raw of input.transitions as Array<Record<string, unknown>>) { const from = Number(raw.from ?? 0), to = Number(raw.to ?? Math.min(1, states.length - 1)); if (!states[from] || !states[to]) throw new BadRequestException('Invalid workflow transition state'); await tx.workflowTransition.create({ data: { id: randomUUID(), workflowId: id, fromStateId: states[from].id, toStateId: states[to].id, name: typeof raw.name === 'string' ? raw.name : 'Transition', description: typeof raw.description === 'string' ? raw.description : null, trigger: typeof raw.trigger === 'string' ? raw.trigger : null, condition: (raw.condition ?? Prisma.JsonNull) as unknown as Prisma.InputJsonValue, actions: (Array.isArray(raw.actions) ? raw.actions : input.actions) as unknown as Prisma.InputJsonValue } }); }
