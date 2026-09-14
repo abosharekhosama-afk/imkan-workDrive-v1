@@ -1,0 +1,197 @@
+import {
+  BadRequestException,
+  ForbiddenException,
+  Injectable,
+  NotFoundException,
+  UnauthorizedException,
+} from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
+import {
+  GetObjectCommand,
+  HeadObjectCommand,
+  PutObjectCommand,
+  DeleteObjectCommand,
+  S3Client,
+} from '@aws-sdk/client-s3';
+import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
+import { Inject } from '@nestjs/common';
+import { getTenantStore } from '../auth/tenant-context';
+import { buildTenantObjectKey, parseTenantObjectKey } from './object-key';
+import { contentDispositionInline } from '../common/content-disposition';
+import {
+  S3_CLIENT,
+  S3_PRESIGNER,
+  SignedUrlResult,
+  StorageObjectRequest,
+  StorageService,
+} from './storage.types';
+
+export type S3Presigner = (
+  client: S3Client,
+  command: PutObjectCommand | GetObjectCommand,
+  options: { expiresIn: number },
+) => Promise<string>;
+
+@Injectable()
+export class S3CompatibleStorageAdapter implements StorageService {
+  constructor(
+    private readonly config: ConfigService,
+    @Inject(S3_CLIENT) private readonly client: S3Client,
+    @Inject(S3_PRESIGNER) private readonly presign: S3Presigner,
+  ) {}
+
+  buildObjectKey(fileId: string, versionId: string): string {
+    return buildTenantObjectKey(this.requireOrgId(), fileId, versionId);
+  }
+
+  async createUploadUrl(
+    request: StorageObjectRequest,
+  ): Promise<SignedUrlResult> {
+    const orgId = this.authorize(request);
+    const objectKey =
+      request.storageKey ?? buildTenantObjectKey(orgId, request.fileId, request.versionId);
+    const expiresInSeconds = this.expiresInSeconds();
+    const command = new PutObjectCommand({
+      Bucket: this.bucket(),
+      Key: objectKey,
+      ContentType: request.contentType,
+    });
+    const url = await this.presign(this.client, command, {
+      expiresIn: expiresInSeconds,
+    });
+    return { url, method: 'PUT', objectKey, expiresInSeconds };
+  }
+
+  async createDownloadUrl(
+    request: StorageObjectRequest,
+  ): Promise<SignedUrlResult> {
+    const orgId = this.authorize(request);
+    const objectKey =
+      request.storageKey ?? buildTenantObjectKey(orgId, request.fileId, request.versionId);
+    const expiresInSeconds = this.expiresInSeconds();
+    const command = new GetObjectCommand({
+      Bucket: this.bucket(),
+      Key: objectKey,
+      // Inline previews must serve the stored content type and an inline
+      // disposition, otherwise R2/S3 replays the upload-time headers and
+      // browsers download the asset instead of rendering it (403/CORS class
+      // of preview failures). These response overrides are part of the
+      // signature, so they cannot be tampered with.
+      ...(request.disposition === 'inline'
+        ? {
+            ResponseContentType: request.contentType,
+            ResponseContentDisposition: contentDispositionInline(
+              request.fileName ?? 'preview',
+            ),
+          }
+        : {}),
+    });
+    const url = await this.presign(this.client, command, {
+      expiresIn: expiresInSeconds,
+    });
+    return { url, method: 'GET', objectKey, expiresInSeconds };
+  }
+
+  async deleteObject(request: StorageObjectRequest): Promise<void> {
+    const orgId = this.authorize(request);
+    const objectKey = buildTenantObjectKey(orgId, request.fileId, request.versionId);
+    await this.client.send(new DeleteObjectCommand({ Bucket: this.bucket(), Key: objectKey }));
+  }
+
+  async deleteStoredObject(storageKey: string): Promise<void> {
+    parseTenantObjectKey(storageKey);
+    await this.client.send(new DeleteObjectCommand({ Bucket: this.bucket(), Key: storageKey }));
+  }
+
+  /** Server-side ingestion for direct multipart uploads (version upload). */
+  async storeObject(request: StorageObjectRequest, bytes: Buffer): Promise<void> {
+    const orgId = this.authorize(request);
+    const objectKey = buildTenantObjectKey(
+      orgId,
+      request.fileId,
+      request.versionId,
+    );
+    await this.client.send(
+      new PutObjectCommand({
+        Bucket: this.bucket(),
+        Key: objectKey,
+        ContentType: request.contentType,
+        Body: bytes,
+      }),
+    );
+  }
+
+  async assertObjectExists(request: StorageObjectRequest): Promise<void> {
+    const orgId = this.authorize(request);
+    const objectKey =
+      request.storageKey ?? buildTenantObjectKey(orgId, request.fileId, request.versionId);
+    try {
+      await this.client.send(
+        new HeadObjectCommand({
+          Bucket: this.bucket(),
+          Key: objectKey,
+        }),
+      );
+    } catch {
+      throw new BadRequestException('Uploaded object was not found');
+    }
+  }
+
+  /**
+   * Storage-integrity gate for version restore: the physical bytes behind an
+   * existing tenant storage key must still be present. Cross-tenant keys are
+   * rejected up front (zero-trust), and a missing object surfaces as a clean
+   * 404 so the restore transaction is never entered against phantom data.
+   */
+  async assertStoredObjectExists(storageKey: string): Promise<void> {
+    const parsed = parseTenantObjectKey(storageKey);
+    if (parsed.orgId !== this.requireOrgId()) {
+      throw new ForbiddenException('Resource does not belong to this organization');
+    }
+    try {
+      await this.client.send(
+        new HeadObjectCommand({ Bucket: this.bucket(), Key: storageKey }),
+      );
+    } catch {
+      throw new NotFoundException('File object not found on storage');
+    }
+  }
+
+  private authorize(request: StorageObjectRequest): string {
+    if ('orgId' in request) {
+      throw new ForbiddenException('orgId must not be supplied by the client');
+    }
+    const orgId = this.requireOrgId();
+    if (request.ownerOrgId !== orgId) {
+      throw new ForbiddenException(
+        'Resource does not belong to this organization',
+      );
+    }
+    return orgId;
+  }
+
+  private requireOrgId(): string {
+    const orgId = getTenantStore()?.orgId;
+    if (!orgId) {
+      throw new UnauthorizedException('Tenant context is missing');
+    }
+    return orgId;
+  }
+
+  private bucket(): string {
+    const bucket = this.config.get<string>('S3_BUCKET');
+    if (!bucket) {
+      throw new Error('S3_BUCKET is not configured');
+    }
+    return bucket;
+  }
+
+  private expiresInSeconds(): number {
+    const raw = this.config.get<string>('S3_SIGNED_URL_EXPIRES_SECONDS');
+    const parsed = raw ? Number(raw) : 900;
+    return Number.isFinite(parsed) && parsed > 0 ? parsed : 900;
+  }
+}
+
+export const defaultS3Presigner: S3Presigner = (client, command, options) =>
+  getSignedUrl(client, command, options);
