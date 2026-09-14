@@ -1,0 +1,23 @@
+{
+  "navigations": [
+    {
+      "name": "marketing-home",
+      "requested": "https://workdrive.zoho.com/",
+      "error": "TimeoutError: page.goto: Timeout 30000ms exceeded.\nCall log:\n\u001b[2m  - navigating to \"https://workdrive.zoho.com/\", waiting until \"domcontentloaded\"\u001b[22m\n"
+    },
+    {
+      "name": "app-files-route",
+      "requested": "https://workdrive.zoho.com/files",
+      "status": 500,
+      "finalUrl": "https://workdrive.zoho.com/files",
+      "title": "Zoho WorkDrive",
+      "styles": {
+        "header": null,
+        "topbar": null,
+        "bodyBg": "rgb(255, 255, 255)",
+        "primaryButtons": []
+      }
+    }
+  ],
+  "notes": []
+}
