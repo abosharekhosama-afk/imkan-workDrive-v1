@@ -1235,7 +1235,3 @@ html[data-theme="dark"] .imkan-modal-surface .imkan-muted{color:var(--wd-sidebar
 
 
 
-.control{width:100%;border:1px solid #e2e8f0;border-radius:.5rem;background:#fff;padding:.55rem .7rem;font-size:10.5px;color:#334155;outline:none}.control:focus{border-color:#93c5fd;box-shadow:0 0 0 2px rgba(27,102,234,.08)}
-
-.control { width:100%; border:1px solid #d8dee8; border-radius:8px; background:#fff; padding:9px 10px; font-size:11px; outline:none; }
-.control:focus { border-color:#2f6fed; box-shadow:0 0 0 2px rgba(47,111,237,.10); }
