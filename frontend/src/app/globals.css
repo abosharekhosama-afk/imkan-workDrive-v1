@@ -342,24 +342,6 @@ html, body {
 [dir="rtl"] .zoho-side-icon {
   margin-inline-end: 0.5rem;
 }
-
-/* ═══════════════════════════════════════════════════════════════════════
-   SOURCE OF TRUTH — Top Bar / New button / New menu (READ-ONLY reference)
-   .zoho-pill-new → reference for ALL buttons (height 32px, radius 16px,
-     bg #1B66EA, hover #1558D6, 13px/500, icon 16px).
-   .wd-menu → reference for ALL cards/panels/modals (bg #fff,
-     border #E6E9EF, radius 16px, shadow 0 24px 70px).
-   --wd-font → reference for ALL typography.
-   Top Bar selectors are FROZEN — do not restyle them.
-   ═══════════════════════════════════════════════════════════════════════ */
-:root{
-  --app-button-height:32px;--app-button-radius:16px;--app-button-font-size:13px;
-  --app-button-font-weight:500;--app-button-bg:#1B66EA;--app-button-hover:#1558D6;
-  --app-button-text:#fff;--app-button-shadow:0 1px 2px rgba(27,102,234,.22);
-  --app-card-radius:16px;--app-card-border:#E6E9EF;
-  --app-card-shadow:0 24px 70px rgba(15,23,42,.16);--app-card-bg:#fff;
-  --app-card-padding:12px 8px;--app-input-radius:12px;
-}
 [dir="rtl"] .zoho-command-search {
   margin-inline-start: auto;
   margin-inline-end: 0;
@@ -1383,52 +1365,5 @@ html[data-theme="dark"] .imkan-modal-surface .imkan-muted{color:var(--wd-sidebar
 .workflow-ui .border-slate-100.bg-white,
 .workflow-ui article.border,
 .workflow-ui section.border { border-radius:18px; box-shadow:0 24px 70px rgba(15,23,42,.09); }
-.workflow-ui button:not(.wf-icon-button):not([role="switch"]) { border-radius:16px; }
-.workflow-ui .workflow-shell-header .wf-primary-button { min-height:32px !important; }
-
-/* === UI UNIFICATION (Top-Bar parity; Top Bar re-pinned frozen below) === */
-.wd-btn,.wf-primary-button,.wf-secondary-button,.imkan-button,.imkan-button-secondary,.imkan-button-destructive{
-  min-height:var(--app-button-height);border-radius:var(--app-button-radius)!important;
-  font-size:var(--app-button-font-size)!important;font-weight:var(--app-button-font-weight)!important;
-  font-family:var(--wd-font)!important;line-height:1.2}
-.wd-btn{height:var(--app-button-height);padding:0 14px;gap:7px}
-.wd-btn-primary,.wf-primary-button,.imkan-button{background:var(--app-button-bg)!important;border-color:transparent!important;color:#fff!important;box-shadow:var(--app-button-shadow)!important}
-.wd-btn-primary:hover:not(:disabled),.wf-primary-button:hover:not(:disabled),.imkan-button:hover:not(:disabled){background:var(--app-button-hover)!important}
-.wd-btn-ghost,.imkan-button-secondary{background:#fff!important;color:#3a4149!important;border:1px solid #d9dfe4!important}
-.wd-btn-ghost:hover:not(:disabled),.imkan-button-secondary:hover:not(:disabled){background:var(--wd-hover)!important}
-.wf-secondary-button{background:var(--app-button-bg)!important;color:#fff!important;border-color:transparent!important}
-.wf-secondary-button:hover:not(:disabled){background:var(--app-button-hover)!important}
-button.bg-\[\#1B66EA\],a.bg-\[\#1B66EA\]{border-radius:var(--app-button-radius)!important;min-height:var(--app-button-height);font-size:var(--app-button-font-size)!important;font-weight:var(--app-button-font-weight)!important;font-family:var(--wd-font)!important;box-shadow:var(--app-button-shadow)}
-button.bg-\[\#1B66EA\]:hover:not(:disabled),a.bg-\[\#1B66EA\]:hover{background:var(--app-button-hover)!important}
-div[role="status"] button[class*="rounded-lg"][class*="border"]{border-radius:var(--app-button-radius)!important;min-height:var(--app-button-height);font-family:var(--wd-font)!important;font-size:var(--app-button-font-size)!important;font-weight:var(--app-button-font-weight)!important}
-/* Cards/panels/modals speak New-menu language */
-.wd-card,.wf-card,.imkan-panel,.workflow-ui .wf-card,.workflow-ui article.border,.workflow-ui section.border{background:var(--app-card-bg)!important;border:1px solid var(--app-card-border)!important;border-radius:var(--app-card-radius)!important;box-shadow:var(--app-card-shadow)!important}
-.imkan-modal-surface{background:var(--app-card-bg)!important;border:1px solid var(--app-card-border)!important;border-radius:var(--app-card-radius)!important;box-shadow:var(--app-card-shadow)!important;font-family:var(--wd-font)!important}
-.workflow-ui .border-slate-200.bg-white,.workflow-ui .border-slate-100.bg-white{border-radius:var(--app-card-radius)!important;box-shadow:var(--app-card-shadow)!important}
-.wd-card-head h2{font-family:var(--wd-font)!important;font-size:14px;font-weight:700}
-.wd-card-head p{font-family:var(--wd-font)!important}
-/* Type: one family */
-body,button,input,select,textarea,[role="menu"],[role="dialog"]{font-family:var(--wd-font)!important}
-.wd-page-head-titles h1{font-size:15px;font-weight:600}
-/* Inputs: New-modal geometry */
-.wd-input,.imkan-input{border-radius:var(--app-input-radius)!important;min-height:38px;font-family:var(--wd-font)!important;font-size:12.5px!important;border:1px solid #d8dde2!important;background:#fff!important}
-.wd-input:focus,.imkan-input:focus{border-color:var(--wd-primary)!important;outline:2px solid var(--wd-active)!important}
-.wd-field label{font-family:var(--wd-font)!important;font-size:11.5px;font-weight:600}
-/* Tables */
-.wd-table,.imkan-table{font-family:var(--wd-font)!important;font-size:12.5px}
-.wd-table thead th{font-size:11px;font-weight:600}
-.wd-table tbody td{font-size:12.5px}
-/* Workflow buttons: New-pill */
-.workflow-ui .wf-primary-button,.workflow-ui .wf-secondary-button,.workflow-ui button.wf-primary-button,.workflow-ui button.wf-secondary-button{min-height:var(--app-button-height)!important;border-radius:var(--app-button-radius)!important;font-size:var(--app-button-font-size)!important;font-weight:var(--app-button-font-weight)!important;box-shadow:var(--app-button-shadow)!important}
-.workflow-ui .wf-primary-button:hover,.workflow-ui .wf-secondary-button:hover{background:var(--app-button-hover)!important;transform:none!important}
-/* FROZEN Top Bar re-pin (must stay last) */
-.zoho-topbar{height:var(--wd-topbar-h);background:#fff;border-bottom:1px solid #EBEBEB}
-.zoho-pill-new{height:32px;border-radius:16px;background:#1B66EA;color:#fff;font-size:13px;font-weight:500;box-shadow:0 1px 2px rgba(27,102,234,.22)}
-.zoho-pill-new:hover{background:#1558D6}
-.zoho-top-actions .wd-btn{height:32px;font-size:11.5px;border-radius:5px;padding-inline:11px}
-.zoho-icon-btn{width:32px;height:32px;border-radius:16px}
-.wd-menu{border:1px solid #E6E9EF;border-radius:16px;box-shadow:0 24px 70px rgba(15,23,42,.16);padding:12px 8px;background:#fff}
-/* Size variants keep context heights (icon-only / mobile) but same pill language */
-.wd-btn-sm{min-height:27px!important;height:27px;font-size:11.5px!important}
-.wd-btn-lg{min-height:40px!important}
-.wd-btn-xl{min-height:44px!important}
+.workflow-ui button:not(.wf-icon-button):not([role="switch"]) { border-radius:10px; }
+.workflow-ui .workflow-shell-header .wf-primary-button { min-height:40px !important; }
