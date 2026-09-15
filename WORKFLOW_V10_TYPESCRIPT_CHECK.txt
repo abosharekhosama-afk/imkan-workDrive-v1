@@ -1,0 +1,121 @@
+backend/src/auth/current-user.decorator.ts(1,56): error TS2307: Cannot find module '@nestjs/common' or its corresponding type declarations.
+backend/src/auth/jwt-auth.guard.ts(6,8): error TS2307: Cannot find module '@nestjs/common' or its corresponding type declarations.
+backend/src/auth/jwt-auth.guard.ts(7,31): error TS2307: Cannot find module '@nestjs/config' or its corresponding type declarations.
+backend/src/auth/jwt-auth.guard.ts(8,27): error TS2307: Cannot find module '@nestjs/core' or its corresponding type declarations.
+backend/src/auth/jwt-auth.guard.ts(9,25): error TS2307: Cannot find module 'express' or its corresponding type declarations.
+backend/src/auth/jwt-auth.guard.ts(10,22): error TS2307: Cannot find module 'jsonwebtoken' or its corresponding type declarations.
+backend/src/auth/jwt-auth.guard.ts(55,41): error TS2339: Property 'session' does not exist on type 'PrismaService'.
+backend/src/auth/jwt-auth.guard.ts(60,22): error TS2580: Cannot find name 'require'. Do you need to install type definitions for node? Try `npm i --save-dev @types/node`.
+backend/src/auth/jwt-auth.guard.ts(68,44): error TS2339: Property 'organizationMembership' does not exist on type 'PrismaService'.
+backend/src/auth/jwt-auth.guard.ts(88,24): error TS2339: Property 'session' does not exist on type 'PrismaService'.
+backend/src/auth/public.decorator.ts(1,29): error TS2307: Cannot find module '@nestjs/common' or its corresponding type declarations.
+backend/src/auth/tenant-context.ts(1,35): error TS2307: Cannot find module 'node:async_hooks' or its corresponding type declarations.
+backend/src/crypto/secret-hash.ts(1,54): error TS2307: Cannot find module 'node:crypto' or its corresponding type declarations.
+backend/src/crypto/secret-hash.ts(2,27): error TS2307: Cannot find module 'node:util' or its corresponding type declarations.
+backend/src/crypto/secret-hash.ts(8,60): error TS2580: Cannot find name 'Buffer'. Do you need to install type definitions for node? Try `npm i --save-dev @types/node`.
+backend/src/crypto/secret-hash.ts(20,60): error TS2580: Cannot find name 'Buffer'. Do you need to install type definitions for node? Try `npm i --save-dev @types/node`.
+backend/src/crypto/secret-hash.ts(21,20): error TS2580: Cannot find name 'Buffer'. Do you need to install type definitions for node? Try `npm i --save-dev @types/node`.
+backend/src/permissions/permission.service.ts(1,46): error TS2307: Cannot find module '@nestjs/common' or its corresponding type declarations.
+backend/src/permissions/permission.service.ts(2,41): error TS2307: Cannot find module '@prisma/client' or its corresponding type declarations.
+backend/src/permissions/permission.service.ts(35,5): error TS1206: Decorators are not valid here.
+backend/src/prisma/prisma.service.ts(1,45): error TS2307: Cannot find module '@nestjs/common' or its corresponding type declarations.
+backend/src/prisma/prisma.service.ts(2,30): error TS2307: Cannot find module '@prisma/client' or its corresponding type declarations.
+backend/src/prisma/prisma.service.ts(10,17): error TS2339: Property '$extends' does not exist on type 'PrismaService'.
+backend/src/prisma/prisma.service.ts(37,16): error TS2339: Property '$disconnect' does not exist on type 'PrismaService'.
+backend/src/shares/create-share.schema.ts(1,57): error TS2307: Cannot find module '@nestjs/common' or its corresponding type declarations.
+backend/src/shares/create-share.schema.ts(2,30): error TS2307: Cannot find module '@prisma/client' or its corresponding type declarations.
+backend/src/shares/shares.service.ts(8,8): error TS2307: Cannot find module '@nestjs/common' or its corresponding type declarations.
+backend/src/shares/shares.service.ts(9,31): error TS2307: Cannot find module '@nestjs/config' or its corresponding type declarations.
+backend/src/shares/shares.service.ts(16,8): error TS2307: Cannot find module '@prisma/client' or its corresponding type declarations.
+backend/src/shares/shares.service.ts(58,5): error TS1206: Decorators are not valid here.
+backend/src/shares/shares.service.ts(89,44): error TS2339: Property 'teamFolder' does not exist on type 'PrismaService'.
+backend/src/shares/shares.service.ts(101,41): error TS2339: Property 'securityPolicy' does not exist on type 'PrismaService'.
+backend/src/shares/shares.service.ts(136,27): error TS2339: Property 'organizationMembership' does not exist on type 'PrismaService'.
+backend/src/shares/shares.service.ts(157,23): error TS2339: Property '$transaction' does not exist on type 'PrismaService'.
+backend/src/shares/shares.service.ts(210,36): error TS2339: Property 'fileShareRecipient' does not exist on type 'PrismaService'.
+backend/src/shares/shares.service.ts(225,27): error TS2339: Property 'fileShare' does not exist on type 'PrismaService'.
+backend/src/shares/shares.service.ts(232,42): error TS2339: Property 'file' does not exist on type 'PrismaService'.
+backend/src/shares/shares.service.ts(267,36): error TS2339: Property 'fileShare' does not exist on type 'PrismaService'.
+backend/src/shares/shares.service.ts(313,37): error TS2339: Property 'fileShare' does not exist on type 'PrismaService'.
+backend/src/shares/shares.service.ts(332,41): error TS2339: Property 'fileShareRecipient' does not exist on type 'PrismaService'.
+backend/src/shares/shares.service.ts(338,23): error TS2339: Property '$transaction' does not exist on type 'PrismaService'.
+backend/src/shares/shares.service.ts(339,19): error TS2339: Property 'fileShare' does not exist on type 'PrismaService'.
+backend/src/shares/shares.service.ts(343,19): error TS2339: Property 'fileActivity' does not exist on type 'PrismaService'.
+backend/src/shares/shares.service.ts(352,19): error TS2339: Property 'auditLog' does not exist on type 'PrismaService'.
+backend/src/shares/shares.service.ts(371,37): error TS2339: Property 'fileShare' does not exist on type 'PrismaService'.
+backend/src/shares/shares.service.ts(390,23): error TS2339: Property '$transaction' does not exist on type 'PrismaService'.
+backend/src/shares/shares.service.ts(424,37): error TS2339: Property 'fileShare' does not exist on type 'PrismaService'.
+backend/src/shares/shares.service.ts(447,23): error TS2339: Property '$transaction' does not exist on type 'PrismaService'.
+backend/src/shares/shares.service.ts(448,19): error TS2339: Property 'fileShare' does not exist on type 'PrismaService'.
+backend/src/shares/shares.service.ts(452,19): error TS2339: Property 'fileActivity' does not exist on type 'PrismaService'.
+backend/src/shares/shares.service.ts(461,19): error TS2339: Property 'auditLog' does not exist on type 'PrismaService'.
+backend/src/shares/shares.service.ts(479,37): error TS2339: Property 'fileShare' does not exist on type 'PrismaService'.
+backend/src/shares/shares.service.ts(488,25): error TS2339: Property 'fileShare' does not exist on type 'PrismaService'.
+backend/src/shares/shares.service.ts(519,36): error TS2339: Property 'file' does not exist on type 'PrismaService'.
+backend/src/shares/shares.service.ts(553,42): error TS2339: Property 'teamFolderMember' does not exist on type 'PrismaService'.
+backend/src/shares/shares.service.ts(572,38): error TS2339: Property 'file' does not exist on type 'PrismaService'.
+backend/src/shares/shares.service.ts(586,38): error TS2339: Property 'folder' does not exist on type 'PrismaService'.
+backend/src/storage/storage.types.ts(59,53): error TS2580: Cannot find name 'Buffer'. Do you need to install type definitions for node? Try `npm i --save-dev @types/node`.
+backend/src/workflows/workflow-engine.service.ts(1,67): error TS2307: Cannot find module '@nestjs/common' or its corresponding type declarations.
+backend/src/workflows/workflow-engine.service.ts(2,24): error TS2307: Cannot find module '@prisma/client' or its corresponding type declarations.
+backend/src/workflows/workflow-engine.service.ts(3,28): error TS2307: Cannot find module 'node:crypto' or its corresponding type declarations.
+backend/src/workflows/workflow-engine.service.ts(23,85): error TS2503: Cannot find namespace 'NodeJS'.
+backend/src/workflows/workflow-engine.service.ts(32,41): error TS2339: Property 'workflow' does not exist on type 'PrismaService'.
+backend/src/workflows/workflow-engine.service.ts(45,40): error TS2339: Property 'workflow' does not exist on type 'PrismaService'.
+backend/src/workflows/workflow-engine.service.ts(117,37): error TS2339: Property 'workflowRun' does not exist on type 'PrismaService'.
+backend/src/workflows/workflow-engine.service.ts(118,25): error TS2339: Property 'workflowJob' does not exist on type 'PrismaService'.
+backend/src/workflows/workflow-engine.service.ts(133,41): error TS2339: Property 'workflowTask' does not exist on type 'PrismaService'.
+backend/src/workflows/workflow-engine.service.ts(142,27): error TS2339: Property 'notification' does not exist on type 'PrismaService'.
+backend/src/workflows/workflow-engine.service.ts(144,25): error TS2339: Property 'workflowTask' does not exist on type 'PrismaService'.
+backend/src/workflows/workflow-engine.service.ts(147,39): error TS2339: Property 'workflowTask' does not exist on type 'PrismaService'.
+backend/src/workflows/workflow-engine.service.ts(156,27): error TS2339: Property 'notification' does not exist on type 'PrismaService'.
+backend/src/workflows/workflow-engine.service.ts(158,25): error TS2339: Property 'workflowTask' does not exist on type 'PrismaService'.
+backend/src/workflows/workflow-engine.service.ts(162,37): error TS2339: Property 'workflowTask' does not exist on type 'PrismaService'.
+backend/src/workflows/workflow-engine.service.ts(169,51): error TS2339: Property 'notification' does not exist on type 'PrismaService'.
+backend/src/workflows/workflow-engine.service.ts(170,25): error TS2339: Property 'workflowTask' does not exist on type 'PrismaService'.
+backend/src/workflows/workflow-engine.service.ts(178,97): error TS2339: Property 'groupMember' does not exist on type 'PrismaService'.
+backend/src/workflows/workflow-engine.service.ts(179,98): error TS2339: Property 'organizationMembership' does not exist on type 'PrismaService'.
+backend/src/workflows/workflow-engine.service.ts(182,37): error TS2339: Property 'organizationMembership' does not exist on type 'PrismaService'.
+backend/src/workflows/workflow-engine.service.ts(186,90): error TS2339: Property 'workflowJob' does not exist on type 'PrismaService'.
+backend/src/workflows/workflow-engine.service.ts(186,257): error TS2339: Property 'workflowJob' does not exist on type 'PrismaService'.
+backend/src/workflows/workflow-engine.service.ts(189,35): error TS2339: Property 'workflowJob' does not exist on type 'PrismaService'.
+backend/src/workflows/workflow-engine.service.ts(192,36): error TS2339: Property 'user' does not exist on type 'PrismaService'.
+backend/src/workflows/workflow-engine.service.ts(194,25): error TS2339: Property 'workflowRun' does not exist on type 'PrismaService'.
+backend/src/workflows/workflow-engine.service.ts(208,29): error TS2339: Property 'workflowRun' does not exist on type 'PrismaService'.
+backend/src/workflows/workflow-engine.service.ts(222,27): error TS2339: Property 'workflowRun' does not exist on type 'PrismaService'.
+backend/src/workflows/workflow-engine.service.ts(234,102): error TS2339: Property 'workflowStepRun' does not exist on type 'PrismaService'.
+backend/src/workflows/workflow-engine.service.ts(235,158): error TS2339: Property 'workflowStepRun' does not exist on type 'PrismaService'.
+backend/src/workflows/workflow-engine.service.ts(236,115): error TS2339: Property 'workflowStepRun' does not exist on type 'PrismaService'.
+backend/src/workflows/workflow-engine.service.ts(257,29): error TS2339: Property 'folder' does not exist on type 'PrismaService'.
+backend/src/workflows/workflow-engine.service.ts(258,29): error TS2339: Property 'file' does not exist on type 'PrismaService'.
+backend/src/workflows/workflow-engine.service.ts(262,49): error TS2339: Property 'organizationMembership' does not exist on type 'PrismaService'.
+backend/src/workflows/workflow-engine.service.ts(263,5): error TS2322: Type 'unknown[]' is not assignable to type 'string[]'.
+  Type 'unknown' is not assignable to type 'string'.
+backend/src/workflows/workflow-engine.service.ts(270,40): error TS2339: Property 'workflowTask' does not exist on type 'PrismaService'.
+backend/src/workflows/workflow-engine.service.ts(272,38): error TS2339: Property 'workflowTask' does not exist on type 'PrismaService'.
+backend/src/workflows/workflow-engine.service.ts(273,25): error TS2339: Property 'workflowTaskParticipant' does not exist on type 'PrismaService'.
+backend/src/workflows/workflow-engine.service.ts(274,62): error TS2339: Property 'notification' does not exist on type 'PrismaService'.
+backend/src/workflows/workflow-engine.service.ts(276,23): error TS2339: Property 'workflowRun' does not exist on type 'PrismaService'.
+backend/src/workflows/workflow-engine.service.ts(277,23): error TS2339: Property 'workflowJob' does not exist on type 'PrismaService'.
+backend/src/workflows/workflow-engine.service.ts(288,186): error TS2339: Property 'workflowRun' does not exist on type 'PrismaService'.
+backend/src/workflows/workflow-engine.service.ts(288,396): error TS2339: Property 'workflowJob' does not exist on type 'PrismaService'.
+backend/src/workflows/workflow-engine.service.ts(289,152): error TS2339: Property 'workflowRun' does not exist on type 'PrismaService'.
+backend/src/workflows/workflow-engine.service.ts(289,366): error TS2339: Property 'workflowJob' does not exist on type 'PrismaService'.
+backend/src/workflows/workflow-engine.service.ts(290,252): error TS2339: Property 'workflowJob' does not exist on type 'PrismaService'.
+backend/src/workflows/workflow-engine.service.ts(290,453): error TS2339: Property 'workflowRun' does not exist on type 'PrismaService'.
+backend/src/workflows/workflow-engine.service.ts(295,187): error TS2339: Property 'organizationMembership' does not exist on type 'PrismaService'.
+backend/src/workflows/workflow-engine.service.ts(295,449): error TS2339: Property 'notification' does not exist on type 'PrismaService'.
+backend/src/workflows/workflow-engine.service.ts(296,157): error TS2339: Property 'favorite' does not exist on type 'PrismaService'.
+backend/src/workflows/workflow-engine.service.ts(297,268): error TS2339: Property 'tag' does not exist on type 'PrismaService'.
+backend/src/workflows/workflow-engine.service.ts(297,405): error TS2339: Property 'fileTag' does not exist on type 'PrismaService'.
+backend/src/workflows/workflow-engine.service.ts(298,173): error TS2339: Property 'file' does not exist on type 'PrismaService'.
+backend/src/workflows/workflow-engine.service.ts(299,418): error TS2339: Property 'folder' does not exist on type 'PrismaService'.
+backend/src/workflows/workflow-engine.service.ts(299,637): error TS2339: Property 'folder' does not exist on type 'PrismaService'.
+backend/src/workflows/workflow-engine.service.ts(300,246): error TS2339: Property 'folder' does not exist on type 'PrismaService'.
+backend/src/workflows/workflow-engine.service.ts(300,564): error TS2339: Property 'folder' does not exist on type 'PrismaService'.
+backend/src/workflows/workflow-engine.service.ts(300,678): error TS2339: Property 'file' does not exist on type 'PrismaService'.
+backend/src/workflows/workflow-engine.service.ts(301,246): error TS2339: Property 'folder' does not exist on type 'PrismaService'.
+backend/src/workflows/workflow-engine.service.ts(301,486): error TS2339: Property 'folder' does not exist on type 'PrismaService'.
+backend/src/workflows/workflow-engine.service.ts(301,854): error TS2339: Property 'folder' does not exist on type 'PrismaService'.
+backend/src/workflows/workflow-engine.service.ts(301,1136): error TS2339: Property 'folder' does not exist on type 'PrismaService'.
+backend/src/workflows/workflow-engine.service.ts(301,1422): error TS2339: Property 'file' does not exist on type 'PrismaService'.
