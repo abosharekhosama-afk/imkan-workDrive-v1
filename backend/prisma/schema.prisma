@@ -180,13 +180,13 @@ model Organization {
   workflows         Workflow[]
   workflowStates    WorkflowState[]
   workflowTransitions WorkflowTransition[]
-  workflowTasks     WorkflowTask[]
+  workflowTasks     WorkflowTask[]         @relation("WorkflowTaskAssignee")
   workflowRuns      WorkflowRun[]
+  startedWorkflowRuns WorkflowRun[]         @relation("WorkflowRunStarter")
   invitations       OrganizationInvitation[]
   tags              Tag[]
   trashEntries      TrashEntry[]
   fileActivities    FileActivity[]
-  ownedWorkflows    Workflow[]              @relation("WorkflowOwner")
 
   @@map("organizations")
 }
@@ -219,7 +219,6 @@ model User {
   trashDeletedBy    TrashEntry[]             @relation("TrashEntryDeletedBy")
   trashRestoredBy   TrashEntry[]             @relation("TrashEntryRestoredBy")
   fileActivities    FileActivity[]
-  ownedWorkflows    Workflow[]              @relation("WorkflowOwner")
 
   @@unique([orgId, email])
   @@index([orgId])
@@ -662,36 +661,11 @@ model StorageQuota {
 }
 
 
-enum WorkflowStatus {
-  DRAFT
-  ACTIVE
-  INACTIVE
-}
-
-enum WorkflowMode {
-  MANUAL
-  AUTOMATIC
-}
-
-enum WorkflowResourceType {
-  FILE
-  FOLDER
-}
-
-enum WorkflowTaskStatus {
-  PENDING
-  APPROVED
-  REJECTED
-  CANCELLED
-}
-
-enum WorkflowRunStatus {
-  RUNNING
-  WAITING
-  COMPLETED
-  REJECTED
-  FAILED
-}
+enum WorkflowStatus { DRAFT ACTIVE INACTIVE }
+enum WorkflowMode { MANUAL AUTOMATIC }
+enum WorkflowResourceType { FILE FOLDER }
+enum WorkflowTaskStatus { PENDING APPROVED REJECTED CANCELLED }
+enum WorkflowRunStatus { RUNNING WAITING COMPLETED REJECTED FAILED }
 
 model Workflow {
   id             String         @id @default(uuid()) @db.Char(36)
@@ -763,7 +737,7 @@ model WorkflowRun {
   completedAt DateTime? @map("completed_at")
   organization Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
   workflow Workflow @relation(fields: [workflowId], references: [id], onDelete: Cascade)
-  startedBy User @relation(fields: [startedById], references: [id])
+  startedBy User @relation("WorkflowRunStarter", fields: [startedById], references: [id])
   currentState WorkflowState? @relation(fields: [currentStateId], references: [id])
   tasks WorkflowTask[]
   @@index([orgId, workflowId, createdAt])
@@ -787,7 +761,7 @@ model WorkflowTask {
   workflow Workflow @relation(fields: [workflowId], references: [id], onDelete: Cascade)
   run WorkflowRun @relation(fields: [runId], references: [id], onDelete: Cascade)
   state WorkflowState @relation(fields: [stateId], references: [id])
-  assignee User @relation(fields: [assigneeId], references: [id])
+  assignee User @relation("WorkflowTaskAssignee", fields: [assigneeId], references: [id])
   @@index([orgId, assigneeId, status, createdAt])
   @@index([orgId, workflowId])
   @@map("workflow_tasks")
