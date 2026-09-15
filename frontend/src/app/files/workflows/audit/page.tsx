@@ -37,44 +37,44 @@ export default function AuditPage() {
       title={ar ? "سجل التدقيق" : "Audit center"}
       subtitle={ar ? "تتبع تغييرات الإعدادات وأحداث التشغيل." : "Track configuration and runtime changes."}
     >
-      <main className="h-full overflow-y-auto p-5" dir={ar ? "rtl" : "ltr"}>
+      <main className="wd-page h-full overflow-y-auto" dir={ar ? "rtl" : "ltr"}>
         <div className="mx-auto max-w-[1400px]">
           <div className="flex items-center justify-between">
             <div>
               <h2 className="text-[18px] font-semibold">{ar ? "سجل تدقيق مركزي" : "Central audit log"}</h2>
-              <p className="mt-1 text-[10.5px] text-slate-500">
+              <p className="mt-1 text-[10.5px] text-[color:var(--wd-text-muted)]">
                 {ar ? "يمكنك قراءة before/after من metadata عند توفرها." : "Inspect before/after metadata when available."}
               </p>
             </div>
             <WorkflowHelp compact helpKey="workflow.audit" />
           </div>
 
-          {error && <div className="wf-card mt-4 p-4 text-[11px] text-red-600">{error}</div>}
+          {error && <div className="wd-alert mt-4">{error}</div>}
 
           <div className="mt-5 grid gap-3">
             {rows.length === 0 ? (
-              <div className="wf-card p-12 text-center text-[11px] text-slate-400">
+              <div className="wf-card p-12 text-center text-[12.5px] text-[#7b838e]">
                 {ar ? "لا توجد أحداث تدقيق بعد." : "No audit events yet."}
               </div>
             ) : (
               rows.map((a) => (
-                <article key={a.id} className="wf-card p-4">
+                <article key={a.id} className="wf-card wd-card-body ">
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <div>
-                      <span className="rounded-full bg-[#EEF4FF] px-2 py-1 text-[9px] font-semibold text-[#1B66EA]">
+                      <span className="rounded-full bg-[color:var(--wd-primary-light)] px-2 py-1 text-[9px] font-semibold text-[color:var(--wd-primary)]">
                         {a.action}
                       </span>
-                      <span className="ms-2 text-[10px] text-slate-500">
+                      <span className="ms-2 text-[10px] text-[color:var(--wd-text-muted)]">
                         {a.resourceType} · {a.resourceId.slice(0, 8)}…
                       </span>
                     </div>
-                    <time className="text-[9px] text-slate-400">{new Date(a.createdAt).toLocaleString()}</time>
+                    <time className="text-[9px] text-[#8a919c]">{new Date(a.createdAt).toLocaleString()}</time>
                   </div>
                   <div className="mt-3 grid gap-2 sm:grid-cols-2">
-                    <div className="rounded-xl bg-slate-50 p-3 text-[9px] text-slate-500">
+                    <div className="rounded-xl bg-[color:var(--wd-hover)] p-3 text-[9px] text-[color:var(--wd-text-muted)]">
                       {ar ? "المنفذ" : "Actor"}: {a.actor?.name || a.actor?.email || a.actorId || "—"}
                     </div>
-                    <pre className="max-h-32 overflow-auto whitespace-pre-wrap rounded-xl bg-slate-50 p-3 text-[8.5px] text-slate-600">
+                    <pre className="max-h-32 overflow-auto whitespace-pre-wrap rounded-xl bg-[color:var(--wd-hover)] p-3 text-[8.5px] text-[#4f4f4f]">
                       {JSON.stringify(a.metadata ?? {}, null, 2)}
                     </pre>
                   </div>
@@ -83,11 +83,11 @@ export default function AuditPage() {
             )}
           </div>
 
-          <section className="wf-card mt-6 p-4">
+          <section className="wf-card mt-6 wd-card-body ">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <div>
                 <h3 className="text-[13px] font-semibold">{ar ? "مقارنة إصدارات سير العمل" : "Workflow version diff"}</h3>
-                <p className="mt-1 text-[9.5px] text-slate-500">
+                <p className="mt-1 text-[9.5px] text-[color:var(--wd-text-muted)]">
                   {ar ? "اختر Workflow ثم إصدارين لرؤية metadata الإصدارين ومعلومات النشر." : "Select a workflow and two versions to compare publication metadata."}
                 </p>
               </div>
@@ -147,11 +147,11 @@ export default function AuditPage() {
                   {[v1, v2].map((id, i) => {
                     const v = versions.find((x) => x.id === id);
                     return (
-                      <div key={i} className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+                      <div key={i} className="rounded-xl border border-[color:var(--wd-line)] bg-[color:var(--wd-hover)] p-3">
                         <div className="text-[10px] font-semibold">
                           {i === 0 ? "A" : "B"} · {v ? `v${v.version}` : "—"}
                         </div>
-                        <div className="mt-2 text-[9px] text-slate-500">
+                        <div className="mt-2 text-[9px] text-[color:var(--wd-text-muted)]">
                           {v && new Date(v.createdAt).toLocaleString()} · {v?.status} ·{" "}
                           {v?.publishedAt ? new Date(v.publishedAt).toLocaleString() : ar ? "غير منشور" : "unpublished"}
                         </div>
@@ -190,14 +190,14 @@ export default function AuditPage() {
                 </button>
 
                 {diff.length > 0 && (
-                  <div className="mt-4 overflow-auto rounded-xl border border-slate-200">
-                    <div className="grid min-w-[760px] grid-cols-[1.4fr_1fr_1fr] border-b border-slate-100 bg-slate-50 px-3 py-2 text-[9px] font-semibold text-slate-500">
+                  <div className="mt-4 overflow-auto rounded-xl border border-[color:var(--wd-line)]">
+                    <div className="grid min-w-[760px] grid-cols-[1.4fr_1fr_1fr] border-b border-[color:var(--wd-line)] bg-[color:var(--wd-hover)] px-3 py-2 text-[9px] font-semibold text-[color:var(--wd-text-muted)]">
                       <span>Path</span>
                       <span>A</span>
                       <span>B</span>
                     </div>
                     {diff.map((x) => (
-                      <div key={x.path} className="grid min-w-[760px] grid-cols-[1.4fr_1fr_1fr] border-b border-slate-100 px-3 py-2 text-[8.5px]">
+                      <div key={x.path} className="grid min-w-[760px] grid-cols-[1.4fr_1fr_1fr] border-b border-[color:var(--wd-line)] px-3 py-2 text-[8.5px]">
                         <code>{x.path}</code>
                         <pre className="whitespace-pre-wrap text-red-600">{JSON.stringify(x.a)}</pre>
                         <pre className="whitespace-pre-wrap text-emerald-700">{JSON.stringify(x.b)}</pre>
@@ -207,7 +207,7 @@ export default function AuditPage() {
                 )}
 
                 {diff.length === 0 && d1 && d2 && (
-                  <div className="mt-3 text-[9px] text-slate-500">
+                  <div className="mt-3 text-[9px] text-[color:var(--wd-text-muted)]">
                     {ar ? "لا توجد فروقات في اللقطة المحددة." : "No differences found in the selected snapshots."}
                   </div>
                 )}

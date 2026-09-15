@@ -33,12 +33,12 @@ export default function QueuePage() {
       title={ar ? "مركز الطابور" : "Queue center"}
       subtitle={ar ? "مراقبة Jobs الفعلية والمحاولات والـLease والأخطاء." : "Monitor real jobs, attempts, leases and errors."}
     >
-      <main className="h-full overflow-y-auto p-5" dir={ar ? "rtl" : "ltr"}>
+      <main className="wd-page h-full overflow-y-auto" dir={ar ? "rtl" : "ltr"}>
         <div className="mx-auto max-w-[1400px]">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
               <h2 className="text-[18px] font-semibold">{ar ? "عمليات الطابور" : "Queue operations"}</h2>
-              <p className="mt-1 text-[10.5px] text-slate-500">
+              <p className="mt-1 text-[10.5px] text-[color:var(--wd-text-muted)]">
                 {ar ? "بيانات من قاعدة البيانات وليست مؤشرات تجريبية." : "Database-backed operational data, not mock metrics."}
               </p>
             </div>
@@ -46,7 +46,7 @@ export default function QueuePage() {
               <select
                 value={status}
                 onChange={(e) => setStatus(e.target.value)}
-                className="wf-input mt-0 w-auto"
+                className="wf-input w-auto" style={{ marginTop: 0 }}
               >
                 <option value="">{ar ? "كل الحالات" : "All statuses"}</option>
                 <option>QUEUED</option>
@@ -59,11 +59,11 @@ export default function QueuePage() {
             </div>
           </div>
 
-          {error && <div className="wf-card mt-4 p-4 text-[11px] text-red-600">{error}</div>}
+          {error && <div className="wd-alert mt-4">{error}</div>}
 
           <div className="workflow-table-scroll wf-card mt-5">
             <div className="min-w-[980px]">
-              <div className="grid grid-cols-[1.5fr_1fr_110px_90px_110px_170px_1.3fr] border-b border-slate-100 bg-slate-50/70 px-4 py-3 text-[9px] font-semibold text-slate-400">
+              <div className="grid grid-cols-[1.5fr_1fr_110px_90px_110px_170px_1.3fr] border-b border-[color:var(--wd-line)] bg-[#fafbfc] px-4 py-3 text-[9px] font-semibold text-[#8a919c]">
                 <span>{ar ? "سير العمل" : "Workflow"}</span>
                 <span>Run</span>
                 <span>Status</span>
@@ -74,17 +74,17 @@ export default function QueuePage() {
               </div>
 
               {rows.length === 0 ? (
-                <div className="p-12 text-center text-[11px] text-slate-400">
+                <div className="p-12 text-center text-[12.5px] text-[#7b838e]">
                   {ar ? "لا توجد Jobs مطابقة." : "No matching jobs."}
                 </div>
               ) : (
                 rows.map((j) => (
                   <div
                     key={j.id}
-                    className="grid grid-cols-[1.5fr_1fr_110px_90px_110px_170px_1.3fr] items-center border-b border-slate-100 px-4 py-3 text-[10px]"
+                    className="grid grid-cols-[1.5fr_1fr_110px_90px_110px_170px_1.3fr] items-center border-b border-[color:var(--wd-line)] px-4 py-3 text-[10px]"
                   >
                     <span className="font-semibold">{j.workflow?.name ?? j.workflowId}</span>
-                    <Link href={`/files/workflows/runs?id=${j.runId}`} className="text-[#1B66EA]">
+                    <Link href={`/files/workflows/runs?id=${j.runId}`} className="text-[color:var(--wd-primary)]">
                       {j.runId.slice(0, 8)}…
                     </Link>
                     <button
@@ -98,7 +98,7 @@ export default function QueuePage() {
                       {j.attempts}/{j.maxAttempts}
                     </span>
                     <span>{j.priority}</span>
-                    <span className="text-slate-500">
+                    <span className="text-[color:var(--wd-text-muted)]">
                       {j.leaseUntil ? new Date(j.leaseUntil).toLocaleString() : new Date(j.runAt).toLocaleString()}
                     </span>
                     <span className="truncate text-red-500" title={j.lastError ?? ""}>
@@ -112,14 +112,14 @@ export default function QueuePage() {
 
           {selected && (
             <div className="fixed inset-0 z-[230] flex justify-end">
-              <div className="absolute inset-0 bg-slate-950/30" onClick={() => setSelected(null)} />
+              <div className="absolute inset-0 bg-[rgba(15,23,42,.55)]" onClick={() => setSelected(null)} />
               <aside
-                className="relative h-full w-[min(520px,96vw)] overflow-y-auto bg-white p-5 shadow-2xl"
+                className="relative h-full w-[min(520px,96vw)] overflow-y-auto border-s border-[color:var(--wd-line)] bg-[color:var(--wd-bg)] p-[18px] shadow-[var(--wd-menu-shadow)]"
                 dir={ar ? "rtl" : "ltr"}
               >
                 <div className="flex items-center justify-between">
                   <div>
-                    <div className="text-[9px] uppercase tracking-[.15em] text-slate-400">
+                    <div className="text-[9px] uppercase tracking-[.15em] text-[#8a919c]">
                       {ar ? "تفاصيل Job" : "Job details"}
                     </div>
                     <h3 className="mt-1 text-[15px] font-semibold">
@@ -131,7 +131,7 @@ export default function QueuePage() {
                   </button>
                 </div>
 
-                <div className="wf-card mt-4 space-y-2 p-4 text-[10px]">
+                <div className="wf-card wd-card-body mt-4 flex flex-col gap-2 text-[12px]">
                   <div>
                     {ar ? "الحالة" : "Status"}: <b>{selected.status}</b>
                   </div>

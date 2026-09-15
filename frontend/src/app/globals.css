@@ -24,7 +24,10 @@ html, body {
   --color-surface: var(--imkan-color-surface);
   --color-border: var(--imkan-color-border);
   --color-focus: var(--imkan-color-focus);
-  --font-sans: var(--imkan-font-latin);
+  /* Files-UI body font. `body` below already renders Arial; binding the
+     Tailwind `font-sans` utility to the same stack keeps every surface
+     (including Workflow) on the one product font instead of system-ui. */
+  --font-sans: Arial, system-ui, sans-serif;
 }
 
 /* ── Semantic CSS Utilities ──────────────────────────────────────────────────
@@ -712,6 +715,7 @@ html[data-theme="dark"]{
   --wd-primary:#3b82f6;--wd-primary-dark:#2563eb;
   --wd-sidebar:#1e293b;--wd-sidebar-text:#cbd5e1;--wd-sidebar-muted:#94a3b8;
   --wd-bg:#1a2232;--wd-canvas:#121824;--wd-line:#2e3b52;--wd-hover:#2d3a4e;--wd-text:#f1f5f9;
+  --wd-text-muted:#94a3b8;
   --imkan-color-bg:#1a2232;--imkan-color-fg:#f1f5f9;--imkan-color-muted:#94a3b8;
   --imkan-color-surface:#1e293b;--imkan-color-border:#2e3b52;
   --imkan-color-primary:#3b82f6;
@@ -767,6 +771,18 @@ html[data-theme="dark"] .zoho-profile-menu a:hover,
 html[data-theme="dark"] .zoho-profile-menu button:hover{background:var(--wd-hover)}
 html[data-theme="dark"] .zoho-member-dropdown,
 html[data-theme="dark"] .zoho-member-row:hover{background:var(--wd-hover)}
+
+/* ── Dark-theme parity for the Workflow surfaces (same surfaces as .wd-card) ── */
+html[data-theme="dark"] .wf-card,
+html[data-theme="dark"] .wf-modal{background:var(--wd-bg);border-color:var(--wd-line);color:var(--wd-text)}
+html[data-theme="dark"] .wf-card h2,
+html[data-theme="dark"] .wf-card h3,
+html[data-theme="dark"] .wd-card-head h2{color:var(--wd-text)}
+html[data-theme="dark"] .wf-input{background:var(--wd-canvas);border-color:var(--wd-line);color:var(--wd-text)}
+html[data-theme="dark"] .wf-input:focus{border-color:var(--wd-primary)}
+html[data-theme="dark"] .wf-icon{background:var(--wd-hover);color:var(--wd-primary)}
+html[data-theme="dark"] .wf-secondary-button{color:#dbeafe}
+html[data-theme="dark"] .wf-icon-button{color:#aeb6c2}
 
 /* ── Clickable rows / name links ──────────────────────────────────────── */
 .wd-row-clickable{cursor:pointer}
@@ -1325,8 +1341,105 @@ html[data-theme="dark"] .imkan-modal-surface .imkan-muted{color:var(--wd-sidebar
 @media (max-width:640px) { .workflow-reorder-controls { opacity:1; } }
 
 
-/* Workflow V12 visual system: use the same visual language as the top-level New action. */
-.wf-primary-button{display:inline-flex;align-items:center;justify-content:center;gap:.4rem;min-height:38px;border:1px solid transparent;border-radius:10px;background:var(--wd-primary,#1B66EA);color:#fff;padding:.55rem .9rem;font-size:11px;font-weight:600;box-shadow:0 1px 2px rgba(15,23,42,.08);transition:transform .16s ease,box-shadow .16s ease,background .16s ease}.wf-primary-button:hover{transform:translateY(-1px);box-shadow:0 5px 14px rgba(15,23,42,.10);background:#1558ca}.wf-primary-button:disabled{opacity:.45;cursor:not-allowed;transform:none}.wf-secondary-button{display:inline-flex;align-items:center;justify-content:center;gap:.35rem;min-height:36px;border:1px solid #E2E8F0;border-radius:10px;background:#fff;color:#475569;padding:.5rem .8rem;font-size:10.5px;font-weight:500;transition:.16s ease}.wf-secondary-button:hover{background:#F8FAFC;border-color:#CBD5E1}.wf-card{border:1px solid #E2E8F0;border-radius:16px;background:#fff;box-shadow:0 8px 24px rgba(15,23,42,.055);transition:border-color .16s ease,box-shadow .16s ease,transform .16s ease}.wf-card:hover{border-color:#D6DEE9;box-shadow:0 10px 28px rgba(15,23,42,.075)}.wf-modal{border:1px solid #E2E8F0;border-radius:18px;background:#fff;box-shadow:0 24px 70px rgba(15,23,42,.18)}.wf-input{display:block;width:100%;margin-top:.4rem;min-height:40px;border:1px solid #E2E8F0;border-radius:10px;background:#fff;padding:.55rem .7rem;font-size:11px;color:#0f172a;outline:none}.wf-input:focus{border-color:#93B4F8;box-shadow:0 0 0 3px rgba(27,102,234,.09)}.wf-icon{display:flex;height:38px;width:38px;align-items:center;justify-content:center;border-radius:10px;background:#EEF4FF;color:#1B66EA;font-size:11px;font-weight:700}.wf-icon-button{display:flex;height:34px;width:34px;align-items:center;justify-content:center;border-radius:10px;color:#64748B}.wf-icon-button:hover{background:#F1F5F9}
+/* ══════════════════════════════════════════════════════════════════════════
+   Workflow ↔ Files UI parity layer — ONE visual system, no second theme.
+
+   Source of truth (the Files UI, which is never redesigned here):
+     • Buttons        → .wd-pill / .wd-pill-new / .wd-pill-record  ("+ New")
+     • Panels & menus → .wd-menu            (the card opened by "+ New")
+     • Cards          → .wd-card / .wd-card-head / .wd-card-body
+     • Tables         → .wd-table
+     • Fields         → .wd-field / .wd-input
+     • Modals         → .imkan-modal-backdrop / .imkan-modal-surface
+     • Font           → Arial, as declared on `body` above.
+
+   The legacy `wf-*` names are NOT a second design system: they are
+   re-pointed here at the very same declarations and tokens the Files UI
+   already uses, so every Workflow surface inherits the "+ New" geometry,
+   the shared card surface and the Files-UI type scale.
+   ══════════════════════════════════════════════════════════════════════════ */
+
+/* ── Buttons — exact geometry/typography of the top-bar "+ New" pill ────── */
+.wf-primary-button,
+.wf-secondary-button{display:inline-flex;align-items:center;justify-content:center;gap:7px;height:32px;min-height:32px;padding:7px 14px;border:0;border-radius:var(--wd-pill-radius);font-size:13px;line-height:18px;cursor:pointer;text-decoration:none;white-space:nowrap;transition:background-color var(--wd-dur) var(--wd-ease),color var(--wd-dur) var(--wd-ease),box-shadow var(--wd-dur) var(--wd-ease)}
+.wf-primary-button{background:var(--wd-primary);color:#fff;font-weight:700}
+.wf-primary-button:hover:not(:disabled),.wf-primary-button[aria-expanded="true"]:not(:disabled){background:var(--wd-primary-dark)}
+.wf-secondary-button{background:transparent;color:var(--wd-primary-ink);font-weight:500;box-shadow:inset 0 0 0 1px var(--wd-active)}
+.wf-secondary-button:hover:not(:disabled),.wf-secondary-button[aria-expanded="true"]:not(:disabled){background:var(--wd-menu-hover)}
+.wf-primary-button:focus-visible,.wf-secondary-button:focus-visible{outline:2px solid var(--wd-active);outline-offset:1px}
+.wf-primary-button:disabled,.wf-secondary-button:disabled{opacity:.55;cursor:not-allowed}
+/* Icon button — .wd-icon-btn geometry. */
+.wf-icon-button{display:inline-flex;align-items:center;justify-content:center;width:32px;height:32px;padding:0;border:0;border-radius:var(--wd-pill-radius);background:transparent;color:var(--wd-text);font-size:16px;line-height:1;cursor:pointer;transition:background-color var(--wd-dur) var(--wd-ease)}
+.wf-icon-button:hover{background:var(--wd-hover)}
+.wf-icon-button:focus-visible{outline:2px solid var(--wd-active);outline-offset:1px}
+/* ── Cards & panels — .wd-card surface + the "+ New" panel surface ──────── */
+.wf-card{border:1px solid var(--wd-line);border-radius:8px;background:#fff;box-shadow:none;transition:border-color var(--wd-dur) var(--wd-ease)}
+.wf-card:hover{border-color:var(--wd-line)}
+.wf-modal{border:1px solid var(--wd-menu-border);border-radius:var(--wd-menu-radius);background:#fff;box-shadow:var(--wd-menu-shadow);max-width:calc(100vw - 24px);margin-inline:auto}
+.wf-icon{display:flex;height:36px;width:36px;flex:0 0 36px;align-items:center;justify-content:center;border-radius:var(--wd-row-radius);background:var(--wd-primary-light);color:var(--wd-primary-ink);font-size:13px;font-weight:700}
+
+/* ── Fields — .wd-input geometry ────────────────────────────────────────── */
+.wf-input{display:block;width:100%;margin-top:6px;padding:0 12px;border:1px solid #d8dde2;border-radius:5px;background:#fff;color:#24292f;font-size:12.5px;outline:none;transition:border-color var(--wd-dur) var(--wd-ease)}
+.wf-input:not(textarea){min-height:38px}
+.wf-input:focus{border-color:var(--wd-primary);outline:2px solid var(--wd-active);outline-offset:0}
+select.wf-input{appearance:auto;cursor:pointer}
+textarea.wf-input{height:auto;padding:10px 12px;line-height:1.6}
+
+/* ── Typography parity — Arial + the Files-UI scale and weights ───────────
+   Files-UI ramp: 21/700 page title · 16/600 dialog title · 15/700 empty
+   state · 14/700 card title · 13/600 name & button · 12.5/400 body, table,
+   field · 12/400 meta & button · 11.5/600 label & card subtitle · 11/600
+   badge · 11/400 helper text.                                             */
+.workflow-ui,
+.workflow-ui button,
+.workflow-ui input,
+.workflow-ui select,
+.workflow-ui textarea{font-family:Arial,system-ui,sans-serif}
+.workflow-ui .text-\[8px\],
+.workflow-ui .text-\[8\.5px\],
+.workflow-ui .text-\[9px\],
+.workflow-ui .text-\[9\.5px\],
+.workflow-ui .text-\[10px\]{font-size:11px}
+.workflow-ui .text-\[10\.5px\]{font-size:11.5px}
+.workflow-ui .text-\[11px\]{font-size:12px}
+.workflow-ui .text-\[12px\]{font-size:12.5px}
+.workflow-ui .text-\[17px\],
+.workflow-ui .text-\[18px\],
+.workflow-ui .text-\[19px\]{font-size:16px}
+.workflow-ui .text-\[20px\]{font-size:21px}
+.workflow-ui .wf-card h2,
+.workflow-ui .wf-card h3,
+.workflow-ui .wd-card-head h2{font-weight:700;color:#24292f}
+.workflow-ui .wf-card label{font-size:11.5px;font-weight:600;color:#4e5660}
+.workflow-ui .wf-card p{line-height:1.55}
+
+/* ── Mobile parity — same language, no overflow, touch-sized targets ────── */
+@media (max-width:640px){
+  .wf-primary-button,.wf-secondary-button{height:auto;min-height:38px;padding:9px 14px}
+  .wf-icon-button{width:36px;height:36px}
+  .workflow-ui .wd-card-body{padding:14px}
+}
+
+/* ── Dark theme — the Workflow area resolves through the same tokens as Files ── */
+html[data-theme="dark"] .workflow-ui{color:var(--wd-text)}
+html[data-theme="dark"] .workflow-ui .bg-white,
+html[data-theme="dark"] .workflow-ui .bg-white\/90,
+html[data-theme="dark"] .workflow-ui .bg-white\/95{background:var(--wd-bg)}
+html[data-theme="dark"] .workflow-ui .bg-\[\#fafbfc\],
+html[data-theme="dark"] .workflow-ui .bg-\[\#f8fbfa\],
+html[data-theme="dark"] .workflow-ui .bg-\[\#EEF4FF\]{background:var(--wd-hover)}
+html[data-theme="dark"] .workflow-ui .text-\[\#24292f\],
+html[data-theme="dark"] .workflow-ui .text-\[\#333a42\],
+html[data-theme="dark"] .workflow-ui .text-\[\#4f4f4f\],
+html[data-theme="dark"] .workflow-ui .wf-card label{color:var(--wd-text)}
+html[data-theme="dark"] .workflow-ui .text-\[\#8a919c\],
+html[data-theme="dark"] .workflow-ui .text-\[\#7a828d\],
+html[data-theme="dark"] .workflow-ui .text-\[\#7b838e\]{color:var(--wd-sidebar-muted)}
+html[data-theme="dark"] .workflow-ui .border-\[\#f0f2f4\]{border-color:var(--wd-line)}
+html[data-theme="dark"] .workflow-ui .hover\:bg-\[\#f8fbfa\]:hover,
+html[data-theme="dark"] .workflow-ui .hover\:bg-\[\#FAFCFF\]:hover{background:var(--wd-hover)}
+html[data-theme="dark"] .workflow-ui .wd-badge-green{background:var(--wd-hover);color:#bfdbfe;border-color:var(--wd-line)}
+html[data-theme="dark"] .workflow-ui .wd-badge-blue{background:var(--wd-hover);color:#bfdbfe;border-color:var(--wd-line)}
 .wd-list-row .wd-check{opacity:0;pointer-events:none;transition:opacity .14s ease}.wd-list-row:hover .wd-check,.wd-list-row[data-selected="true"] .wd-check,.wd-list-row:focus-within .wd-check{opacity:1;pointer-events:auto}@media (hover:none){.wd-list-row .wd-check{opacity:0}.wd-list-row[data-selected="true"] .wd-check{opacity:1;pointer-events:auto}}
 .workflow-action-row{opacity:.08;transition:opacity .16s ease}.workflow-action-row:hover,.workflow-action-row:focus-within{opacity:1}
 @media (max-width:900px){.secondary-sidebar,.workflow-secondary-sidebar{display:none!important}.workflow-shell-header{padding-inline:12px!important}.workflow-shell-nav{gap:2px!important}.workflow-shell-nav a{padding-inline:10px!important}.workflow-fields-layout{grid-template-columns:1fr!important}.workflow-fields-palette{display:none!important}.workflow-fields-workspace{width:100%!important}.workflow-elements-pane{display:none!important}.workflow-canvas-pane{width:100%!important;min-width:0!important}.workflow-canvas-pane>.relative{min-width:1100px!important}.workflow-design-shell{border-radius:14px!important}.workflow-inspector{position:fixed!important;inset-inline:0!important;bottom:0!important;top:auto!important;width:100%!important;max-height:78vh!important;border-radius:18px 18px 0 0!important;box-shadow:0 -12px 40px rgba(15,23,42,.16)!important}.workflow-inspector:not(.is-open){transform:translateY(105%)!important}.workflow-mobile-inspector-toggle{bottom:14px!important}.wf-primary-button{min-height:40px}.wf-secondary-button{min-height:40px}}

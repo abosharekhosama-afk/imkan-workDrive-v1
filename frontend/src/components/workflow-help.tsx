@@ -13,16 +13,47 @@ export function WorkflowHelp({ compact = false, title, description, tips, helpKe
   const helpDescription = description ?? entry?.description ?? (ar ? "تعرف على وظيفة هذه الواجهة قبل إعدادها." : "Learn what this area does before configuring it.");
   const helpTips = tips ?? entry?.tips ?? [];
   return <>
-    <button type="button" onClick={() => setOpen(true)} className={`${compact ? "h-9 w-9" : "min-h-10 px-4"} wf-primary-button workflow-help-button`} aria-label={ar ? "مساعدة" : "Help"}>
-      <span className="flex h-5 w-5 items-center justify-center rounded-full border border-slate-300 text-[11px] font-bold">?</span>{!compact && <span>{ar ? "مساعدة" : "Help"}</span>}
+    <button
+      type="button"
+      onClick={() => setOpen(true)}
+      className={compact ? "wf-primary-button h-9 w-9 !min-h-9 !p-0" : "wf-primary-button"}
+      aria-label={ar ? "مساعدة" : "Help"}
+    >
+      <span className="flex h-5 w-5 items-center justify-center rounded-full border border-current text-[12px] font-bold leading-none">?</span>
+      {!compact && <span>{ar ? "مساعدة" : "Help"}</span>}
     </button>
-    {open ? <div className="fixed inset-0 z-[220] flex items-center justify-center bg-slate-950/35 p-4" onMouseDown={() => setOpen(false)}>
-      <div className="w-[min(620px,94vw)] overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl" onMouseDown={(e) => e.stopPropagation()}>
-        <div className="flex items-center justify-between border-b border-slate-100 px-6 py-4"><div><div className="text-[10px] font-semibold uppercase tracking-[.16em] text-[#1B66EA]">{ar ? "دليل سريع" : "Quick guide"}</div><h2 className="mt-1 text-[17px] font-semibold text-slate-900">{helpTitle}</h2><p className="mt-1 text-[10.5px] leading-5 text-slate-500">{helpDescription}</p></div><button type="button" onClick={() => setOpen(false)} className="h-8 w-8 rounded-lg text-slate-500 hover:bg-slate-100">×</button></div>
-        <div className="grid gap-3 p-6 sm:grid-cols-2">
-          {(entry?.steps ?? [ar ? "راجع الحقول والحالات والانتقالات ثم فعّل بعد المراجعة." : "Review fields, states and transitions before activation."]).map((step, i) => <div key={i} className="wf-card p-4"><div className="text-[12px] font-semibold text-slate-900">{i + 1}. {ar ? "خطوة" : "Step"}</div><p className="mt-1.5 text-[11px] leading-5 text-slate-600">{step}</p></div>)}
-          {helpTips.length ? <div className="sm:col-span-2 wf-card p-4"><div className="text-[10px] font-semibold text-[#1B66EA]">{ar ? "نصائح" : "Tips"}</div><ul className="mt-2 space-y-1.5 text-[10.5px] leading-5 text-slate-600">{helpTips.map((tip, i) => <li key={i}>• {tip}</li>)}</ul></div> : null}</div>
+    {open ? (
+      /* Same modal surface as every Files-UI dialog (.imkan-modal-backdrop / .imkan-modal-surface). */
+      <div
+        className="imkan-modal-backdrop z-[220] p-4"
+        role="presentation"
+        onMouseDown={(e) => { if (e.target === e.currentTarget) setOpen(false); }}
+      >
+        <div role="dialog" aria-modal="true" aria-label={helpTitle} className="imkan-modal-surface max-h-[90vh] overflow-y-auto">
+          <div className="flex items-start justify-between gap-3 border-b border-[color:var(--wd-line)] px-4 py-3">
+            <div className="min-w-0">
+              <div className="text-[11px] font-bold uppercase tracking-[.16em] text-[color:var(--wd-primary-ink)]">{ar ? "دليل سريع" : "Quick guide"}</div>
+              <h2 className="imkan-heading mt-1">{helpTitle}</h2>
+              <p className="mt-1 text-[12px] leading-5 text-[color:var(--wd-text-muted)]">{helpDescription}</p>
+            </div>
+            <button type="button" onClick={() => setOpen(false)} className="wf-icon-button shrink-0" aria-label={ar ? "إغلاق" : "Close"}>×</button>
+          </div>
+          <div className="flex flex-col gap-3 p-4">
+            {(entry?.steps ?? [ar ? "راجع الحقول والحالات والانتقالات ثم فعّل بعد المراجعة." : "Review fields, states and transitions before activation."]).map((step, i) => (
+              <div key={i} className="wf-card p-4">
+                <div className="text-[13px] font-bold text-[color:var(--wd-text)]">{i + 1}. {ar ? "خطوة" : "Step"}</div>
+                <p className="mt-1.5 text-[12.5px] text-[color:var(--wd-text-muted)]">{step}</p>
+              </div>
+            ))}
+            {helpTips.length ? (
+              <div className="wf-card p-4">
+                <div className="text-[12px] font-bold text-[color:var(--wd-primary-ink)]">{ar ? "نصائح" : "Tips"}</div>
+                <ul className="mt-2 flex flex-col gap-1.5 text-[12.5px] leading-5 text-[color:var(--wd-text-muted)]">{helpTips.map((tip, i) => <li key={i}>• {tip}</li>)}</ul>
+              </div>
+            ) : null}
+          </div>
+        </div>
       </div>
-    </div> : null}
+    ) : null}
   </>;
 }

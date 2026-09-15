@@ -24,18 +24,19 @@ export function WorkflowShell({ children, title, subtitle, active }: { children:
     ["dynamic-values", "/files/workflows/dynamic-values", ar ? "القيم الديناميكية" : "Dynamic values"],
   ] as const;
   return (
-    <div className="workflow-ui flex min-h-0 flex-1 flex-col bg-[#F7F9FC]">
-      <div className="workflow-shell-header border-b border-slate-200 bg-white px-5 py-3 shadow-[0_1px_2px_rgba(15,23,42,.03)]">
+    <div className="workflow-ui flex min-h-0 flex-1 flex-col bg-[color:var(--wd-canvas)]">
+      {/* Shell header — same visual language as the Files-UI page header (.wd-page-head). */}
+      <div className="workflow-shell-header border-b border-[color:var(--wd-line)] bg-[color:var(--wd-bg)] px-5 py-4">
         <div className="flex items-center justify-between gap-4">
           <div className="flex min-w-0 items-center gap-3">
-            <Link href="/files/workflows" className="flex h-9 w-9 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-600 transition hover:-translate-y-0.5 hover:border-slate-300 hover:shadow-sm" aria-label={ar ? "سير العمل" : "Workflows"}>↗</Link>
+            <Link href="/files/workflows" className="wf-icon no-underline" aria-label={ar ? "سير العمل" : "Workflows"}>↗</Link>
             <div className="min-w-0">
-              <div className="text-[10px] font-semibold uppercase tracking-[.16em] text-[#1B66EA]">{ar ? "مساحة سير العمل" : "Workflow workspace"}</div>
-              <h1 className="truncate text-[16px] font-semibold text-slate-900">{title ?? (ar ? "سير العمل" : "Workflows")}</h1>
-              {subtitle ? <p className="truncate text-[10.5px] text-slate-500">{subtitle}</p> : null}
+              <div className="text-[11px] font-bold uppercase tracking-[.16em] text-[color:var(--wd-primary-ink)]">{ar ? "مساحة سير العمل" : "Workflow workspace"}</div>
+              <h1 className="mt-0.5 truncate text-[21px] font-bold leading-tight text-[color:var(--wd-text)]">{title ?? (ar ? "سير العمل" : "Workflows")}</h1>
+              {subtitle ? <p className="mt-1 truncate text-[12.5px] text-[color:var(--wd-text-muted)]">{subtitle}</p> : null}
             </div>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex shrink-0 items-center gap-2">
             <WorkflowHelp />
             <Link href="/files/workflows/builder" className="wf-primary-button">＋ {ar ? "سير عمل جديد" : "New workflow"}</Link>
           </div>
@@ -43,7 +44,7 @@ export function WorkflowShell({ children, title, subtitle, active }: { children:
         <nav className="workflow-shell-nav mt-3 flex items-center gap-1 overflow-x-auto" aria-label={ar ? "تنقل سير العمل" : "Workflow navigation"}>
           {items.map(([key, href, text]) => {
             const selected = active === key || (!active && pathname === href.split("?")[0]);
-            return <Link key={key} href={href} className={`whitespace-nowrap rounded-lg px-3 py-2 text-[11px] font-medium transition ${selected ? "bg-[#EEF4FF] text-[#1B66EA] shadow-sm" : "text-slate-500 hover:bg-slate-50 hover:text-slate-800"}`}>{text}</Link>;
+            return <Link key={key} href={href} className={`whitespace-nowrap rounded-full px-3 py-1.5 text-[12px] font-medium transition-colors ${selected ? "bg-[color:var(--wd-menu-hover)] text-[color:var(--wd-primary-ink)]" : "text-[color:var(--wd-text-muted)] hover:bg-[color:var(--wd-hover)] hover:text-[color:var(--wd-text)]"}`}>{text}</Link>;
           })}
         </nav>
       </div>
