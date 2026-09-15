@@ -661,11 +661,36 @@ model StorageQuota {
 }
 
 
-enum WorkflowStatus { DRAFT ACTIVE INACTIVE }
-enum WorkflowMode { MANUAL AUTOMATIC }
-enum WorkflowResourceType { FILE FOLDER }
-enum WorkflowTaskStatus { PENDING APPROVED REJECTED CANCELLED }
-enum WorkflowRunStatus { RUNNING WAITING COMPLETED REJECTED FAILED }
+enum WorkflowStatus {
+  DRAFT
+  ACTIVE
+  INACTIVE
+}
+
+enum WorkflowMode {
+  MANUAL
+  AUTOMATIC
+}
+
+enum WorkflowResourceType {
+  FILE
+  FOLDER
+}
+
+enum WorkflowTaskStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  CANCELLED
+}
+
+enum WorkflowRunStatus {
+  RUNNING
+  WAITING
+  COMPLETED
+  REJECTED
+  FAILED
+}
 
 model Workflow {
   id             String         @id @default(uuid()) @db.Char(36)
