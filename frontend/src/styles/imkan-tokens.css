@@ -1,0 +1,61 @@
+/* ────────────────────────────────────────────────────────────────────────────
+   IMKAN One Token Contract — Fallback Edition
+   ────────────────────────────────────────────────────────────────────────────
+
+   IMKAN One Design System is the VISUAL AUTHORITY for this application.
+   Zoho WorkDrive is a FUNCTIONAL / UX RESEARCH REFERENCE only.
+
+   ⚠️  OFFICIAL PACKAGE STATUS
+   The @imkan/design-system NPM package is NOT installed in this repository.
+   ALL values below (except --imkan-color-primary) are LOCAL FALLBACKS.
+   They exist solely so the application can compile and render without the
+   private IMKAN One package.  Replace this entire :root block with the
+   authoritative import when the official package becomes available.
+
+   ⚠️  FONT STATUS
+   Zoho Puvi (English) and IBM Plex Sans Arabic (Arabic) are NOT packaged
+   in this repository.  --imkan-font-latin and --imkan-font-arabic fall
+   back to system-ui.  Replace with the official font family names when
+   the font packages are added.
+
+   RULES (from DESIGN-GOVERNANCE.md):
+   - No second product theme.
+   - No second primary color.
+   - No application-specific branding.
+   - No invented token values presented as IMKAN One tokens.
+   ──────────────────────────────────────────────────────────────────────────── */
+
+:root {
+  /* ── Color: Core ───────────────────────────────────────────────────────── */
+  --imkan-color-bg:      #ffffff;   /* FALLBACK */
+  --imkan-color-fg:      #222222;   /* FALLBACK */
+  --imkan-color-muted:   #667085;   /* FALLBACK */
+  --imkan-color-surface: #f7f8fa;   /* FALLBACK */
+  --imkan-color-primary: #00a884;   /* ✅ AUTHORITY — IMKAN One primary */
+
+  /* ── Color: Semantic Aliases ─────────────────────────────────────────────
+     These reference existing core tokens.  No new values are invented.
+     They provide semantic intent (border, focus) for CSS utility classes.
+     ──────────────────────────────────────────────────────────────────── */
+  --imkan-color-border: #e5e7eb;    /* FALLBACK alias */
+  --imkan-color-focus:  var(--imkan-color-primary);  /* FALLBACK alias — primary used for focus rings */
+
+  /* ── Typography ────────────────────────────────────────────────────────── */
+  --imkan-font-latin:  system-ui, sans-serif;   /* FALLBACK — replace with "Zoho Puvi" when available */
+  --imkan-font-arabic: system-ui, sans-serif;   /* FALLBACK — replace with "IBM Plex Sans Arabic" when available */
+  --imkan-font-size-ui:         14px;            /* ✅ AUTHORITY — IMKAN One UI scale */
+  --imkan-font-size-secondary:  12px;            /* ✅ AUTHORITY — IMKAN One secondary scale */
+  --imkan-font-size-meta:       10px;            /* ✅ AUTHORITY — IMKAN One meta scale */
+}
+
+/* ── Dark Mode ─────────────────────────────────────────────────────────────
+   All values remain FALLBACKS.  --imkan-color-primary is unchanged.
+   ──────────────────────────────────────────────────────────────────────── */
+/* ── Base Typography ─────────────────────────────────────────────────────── */
+html,
+body {
+  background: var(--imkan-color-bg);
+  color: var(--imkan-color-fg);
+  font-family: var(--imkan-font-latin), var(--imkan-font-arabic);
+  font-size: var(--imkan-font-size-ui);
+}
