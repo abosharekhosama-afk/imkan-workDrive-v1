@@ -180,9 +180,8 @@ model Organization {
   workflows         Workflow[]
   workflowStates    WorkflowState[]
   workflowTransitions WorkflowTransition[]
-  workflowTasks     WorkflowTask[]         @relation("WorkflowTaskAssignee")
+  workflowTasks     WorkflowTask[]
   workflowRuns      WorkflowRun[]
-  startedWorkflowRuns WorkflowRun[]         @relation("WorkflowRunStarter")
   invitations       OrganizationInvitation[]
   tags              Tag[]
   trashEntries      TrashEntry[]
@@ -219,6 +218,9 @@ model User {
   trashDeletedBy    TrashEntry[]             @relation("TrashEntryDeletedBy")
   trashRestoredBy   TrashEntry[]             @relation("TrashEntryRestoredBy")
   fileActivities    FileActivity[]
+  ownedWorkflows    Workflow[]     @relation("WorkflowOwner")
+  workflowTasks     WorkflowTask[]  @relation("WorkflowTaskAssignee")
+  startedWorkflowRuns WorkflowRun[]  @relation("WorkflowRunStarter")
 
   @@unique([orgId, email])
   @@index([orgId])
@@ -666,24 +668,20 @@ enum WorkflowStatus {
   ACTIVE
   INACTIVE
 }
-
 enum WorkflowMode {
   MANUAL
   AUTOMATIC
 }
-
 enum WorkflowResourceType {
   FILE
   FOLDER
 }
-
 enum WorkflowTaskStatus {
   PENDING
   APPROVED
   REJECTED
   CANCELLED
 }
-
 enum WorkflowRunStatus {
   RUNNING
   WAITING
