@@ -5,6 +5,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { SharesService } from '../shares/shares.service';
 import type { AccessTokenPayload } from '../auth/jwt.types';
 import { dynamicValueCatalog, evaluateCondition, walkDynamicValues, resolveDynamicValue } from './workflow-runtime';
+import { CustomFunctionExecutor } from './custom-function.executor';
 
 export type WorkflowFileEvent = {
   eventType?: string; fileId: string; name: string; mimeType?: string | null; fileType?: string | null; size?: string;
@@ -25,6 +26,12 @@ export class WorkflowEngineService implements OnModuleInit, OnModuleDestroy {
   constructor(private readonly prisma: PrismaService, private readonly shares: SharesService, private readonly functionExecutor: CustomFunctionExecutor) {}
   onModuleInit() { this.timer = setInterval(() => void this.drain(), 1500); void this.drain(); }
   onModuleDestroy() { if (this.timer) clearInterval(this.timer); }
+  private async recordAudit(orgId: string, actorId: string | null | undefined, action: string, resourceType: string, resourceId: string, metadata?: Record<string, unknown>) {
+    await this.prisma.auditLog.create({
+      data: { orgId, actorId: actorId ?? null, action, resourceType, resourceId, metadata: metadata as Prisma.InputJsonValue | undefined },
+    });
+  }
+
   async executeTrigger(user: AccessTokenPayload, event: WorkflowFileEvent) { return this.onFileEvent(user, event); }
   async onFileUploaded(user: AccessTokenPayload, event: WorkflowFileEvent) { return this.onFileEvent(user, { ...event, eventType: 'upload' }); }
 

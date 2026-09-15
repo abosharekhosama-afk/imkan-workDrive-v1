@@ -5,6 +5,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import type { AccessTokenPayload } from '../auth/jwt.types';
 import { WorkflowEngineService } from './workflow-engine.service';
 import { dynamicValueCatalog, walkDynamicValues } from './workflow-runtime';
+import type { WorkflowRuntimeEvent } from './workflow-runtime';
 import { CustomFunctionExecutor } from './custom-function.executor';
 
 type ActionInput = { type?: unknown; config?: unknown };
@@ -372,7 +373,7 @@ export class WorkflowsService {
       if (!fieldValues || Object.keys(fieldValues).length === 0) fieldValues = {};
     }
     const event = (body.event ?? {}) as Record<string, unknown>;
-    const runtimeEvent = { fileId: String(event.fileId ?? 'preview-file'), name: String(event.name ?? 'preview.txt'), mimeType: event.mimeType == null ? 'text/plain' : String(event.mimeType), fileType: event.fileType == null ? 'DOCUMENT' : String(event.fileType), size: String(event.size ?? '0'), userId: String(event.userId ?? user.sub), folderId: event.folderId == null ? null : String(event.folderId), extension: event.extension == null ? '.txt' : String(event.extension), resourceType: event.resourceType === 'FOLDER' ? 'FOLDER' : 'FILE' as const };
+    const runtimeEvent: WorkflowRuntimeEvent = { fileId: String(event.fileId ?? 'preview-file'), name: String(event.name ?? 'preview.txt'), mimeType: event.mimeType == null ? 'text/plain' : String(event.mimeType), fileType: event.fileType == null ? 'DOCUMENT' : String(event.fileType), size: String(event.size ?? '0'), userId: String(event.userId ?? user.sub), folderId: event.folderId == null ? null : String(event.folderId), extension: event.extension == null ? '.txt' : String(event.extension), resourceType: event.resourceType === 'FOLDER' ? 'FOLDER' : 'FILE' as const };
     const rendered = walkDynamicValues(selected.template, runtimeEvent, fieldValues, { workflowId, runId: 'preview', user: { id: user.sub } });
     const variables = Array.isArray(selected.variables) ? selected.variables as Array<{ path?: string }> : [];
     const catalog = dynamicValueCatalog([]).map((x) => x.path);
@@ -399,7 +400,7 @@ export class WorkflowsService {
   async deleteTemplate(user: AccessTokenPayload, id: string) {
     const row = await this.prisma.workflowDataTemplate.findFirst({ where: { id, orgId: user.org_id } });
     if (!row) throw new NotFoundException('Workflow data template not found');
-    const actionSteps = await this.prisma.workflowStep.findMany({ where: { workflow: { orgId: user.org_id }, kind: 'ACTIONS' }, select: { config: true } }).catch(() => []);
+    const actionSteps: Array<{ config: unknown }> = await this.prisma.workflowStep.findMany({ where: { workflow: { orgId: user.org_id }, kind: 'ACTIONS' }, select: { config: true } }).catch(() => [] as Array<{ config: unknown }>);
     const referenced = actionSteps.some((step) => JSON.stringify(step.config ?? {}).includes(id));
     if (referenced) throw new BadRequestException('This template is referenced by a workflow and cannot be deleted');
     await this.prisma.workflowDataTemplate.delete({ where: { id } });
