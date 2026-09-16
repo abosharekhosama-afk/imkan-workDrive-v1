@@ -13,8 +13,8 @@ export function WorkflowHelp({ compact = false, title, description, tips, helpKe
   const helpDescription = description ?? entry?.description ?? (ar ? "تعرف على وظيفة هذه الواجهة قبل إعدادها." : "Learn what this area does before configuring it.");
   const helpTips = tips ?? entry?.tips ?? [];
   return <>
-    <button type="button" onClick={() => setOpen(true)} className={`${compact ? "wd-icon-btn h-9 w-9" : "wd-pill wd-pill-record"} workflow-help-button`} aria-label={ar ? "مساعدة" : "Help"}>
-      <span className="flex h-5 w-5 items-center justify-center rounded-full border border-slate-300 text-[11px] font-bold">?</span>{!compact && <span>{ar ? "مساعدة" : "Help"}</span>}
+    <button type="button" onClick={() => setOpen(true)} className="workflow-help-button flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-slate-500 transition hover:bg-slate-100 hover:text-slate-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#1B66EA]/30" aria-label={ar ? "مساعدة" : "Help"}>
+      <span className="flex h-5 w-5 items-center justify-center text-[12px] font-semibold leading-none">?</span>
     </button>
     {open ? <div className="fixed inset-0 z-[220] flex items-center justify-center bg-slate-950/35 p-4" onMouseDown={() => setOpen(false)}>
       <div className="w-[min(620px,94vw)] overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl" onMouseDown={(e) => e.stopPropagation()}>

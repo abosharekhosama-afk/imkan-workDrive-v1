@@ -10,6 +10,10 @@ export function WorkflowShell({ children, title, subtitle, active }: { children:
   const { locale } = useLocale();
   const pathname = usePathname();
   const ar = locale === "ar";
+  const helpKeyByActive = {
+    all: "workflow.workspace", mine: "workflow.workspace", drafts: "workflow.workspace", templates: "workflow.templates", functions: "workflow.functions", waiting: "workflow.tasks", runs: "workflow.runs", diagnostics: "workflow.diagnostics", queue: "workflow.queue", audit: "workflow.audit", "dynamic-values": "workflow.dynamic-values",
+  } as const;
+  const contextualHelpKey = helpKeyByActive[active ?? "all"];
   const items = [
     ["all", "/files/workflows", ar ? "كل سير العمل" : "All workflows"],
     ["mine", "/files/workflows?scope=mine", ar ? "سير العمل الخاص بي" : "My workflows"],
@@ -28,7 +32,6 @@ export function WorkflowShell({ children, title, subtitle, active }: { children:
       <div className="workflow-shell-header border-b border-slate-200 bg-white px-5 py-3 shadow-[0_1px_2px_rgba(15,23,42,.03)]">
         <div className="flex items-center justify-between gap-4">
           <div className="flex min-w-0 items-center gap-3">
-            <Link href="/files/workflows" className="flex h-9 w-9 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-600 transition hover:-translate-y-0.5 hover:border-slate-300 hover:shadow-sm" aria-label={ar ? "سير العمل" : "Workflows"}>↗</Link>
             <div className="min-w-0">
               <div className="text-[10px] font-semibold uppercase tracking-[.16em] text-[#1B66EA]">{ar ? "مساحة سير العمل" : "Workflow workspace"}</div>
               <h1 className="truncate text-[16px] font-semibold text-slate-900">{title ?? (ar ? "سير العمل" : "Workflows")}</h1>
@@ -36,7 +39,7 @@ export function WorkflowShell({ children, title, subtitle, active }: { children:
             </div>
           </div>
           <div className="flex items-center gap-2">
-            <WorkflowHelp />
+            <WorkflowHelp compact helpKey={contextualHelpKey} />
             <Link href="/files/workflows/builder" className="wd-pill wd-pill-new">＋ {ar ? "سير عمل جديد" : "New workflow"}</Link>
           </div>
         </div>

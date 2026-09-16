@@ -42,8 +42,8 @@ export default function QueuePage() {
       title={ar ? "مركز الطابور" : "Queue center"}
       subtitle={ar ? "مراقبة Jobs الفعلية والمحاولات والـLease والأخطاء." : "Monitor real jobs, attempts, leases and errors."}
     >
-      <main className="h-full overflow-y-auto p-5" dir={ar ? "rtl" : "ltr"}>
-        <div className="mx-auto max-w-[1400px]">
+      <main className="h-full overflow-y-auto p-3 sm:p-4" dir={ar ? "rtl" : "ltr"}>
+        <div className="w-full">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
               <h2 className="text-[18px] font-semibold">{ar ? "عمليات الطابور" : "Queue operations"}</h2>
@@ -58,7 +58,7 @@ export default function QueuePage() {
             </div>
           </div>
 
-          {error && <div className="wd-card mt-4 p-4 text-[11px] text-red-600">{error}</div>}
+          {error && <div className="wd-card w-full mt-4 p-4 text-[11px] text-red-600">{error}</div>}
 
           <div className="workflow-table-scroll wd-card mt-5">
             <div className="min-w-[980px]">
@@ -92,7 +92,7 @@ export default function QueuePage() {
                 </div>
                 <button className="wd-icon-btn" onClick={() => setSelected(null)}>×</button>
               </div>
-              <div className="wd-card mt-4 space-y-2 p-4 text-[10px]">
+              <div className="wd-card w-full mt-4 space-y-2 p-4 text-[10px]">
                 <div>{ar ? "الحالة" : "Status"}: <b>{selected.status}</b></div>
                 <div>Run: {selected.runId}</div>
                 <div>{ar ? "المحاولات" : "Attempts"}: {selected.attempts}/{selected.maxAttempts}</div>

@@ -127,10 +127,17 @@ const EXTENSION_MIME: Record<string, string> = {
 
 const OCTET_STREAM = "application/octet-stream";
 
+function normalizeMediaType(mimeType: string): string {
+  // MediaRecorder commonly returns values such as
+  // "video/webm;codecs=vp9,opus". The upload API expects the MIME media type
+  // only ("video/webm"), so parameters must never reach the request schema.
+  return mimeType.trim().toLowerCase().split(";", 1)[0].trim();
+}
+
 export function isTrustworthyMimeType(mimeType: string | null | undefined): boolean {
   if (!mimeType) return false;
-  const normalized = mimeType.trim().toLowerCase();
-  if (!normalized || !normalized.includes("/")) return false;
+  const normalized = normalizeMediaType(mimeType);
+  if (!/^[a-z0-9][a-z0-9!#$&^_.+-]{0,126}\/[a-z0-9][a-z0-9!#$&^_.+-]{0,126}$/i.test(normalized)) return false;
   // Generic containers carry no renderable signal.
   return normalized !== OCTET_STREAM && normalized !== "binary/octet-stream" && normalized !== "application/download";
 }
@@ -159,6 +166,6 @@ export function getFileExtension(fileName: string): string {
 
 /** Preferred entry point: explicit browser type wins, otherwise sniff by name. */
 export function resolveMimeType(mimeType: string | null | undefined, fileName: string): string {
-  if (isTrustworthyMimeType(mimeType)) return mimeType!.trim();
+  if (isTrustworthyMimeType(mimeType)) return normalizeMediaType(mimeType!);
   return guessMimeFromName(fileName) ?? OCTET_STREAM;
 }

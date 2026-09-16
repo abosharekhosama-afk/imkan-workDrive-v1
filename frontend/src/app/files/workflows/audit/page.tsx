@@ -81,8 +81,8 @@ export default function AuditPage() {
       title={ar ? "سجل التدقيق" : "Audit center"}
       subtitle={ar ? "تتبع تغييرات الإعدادات وأحداث التشغيل." : "Track configuration and runtime changes."}
     >
-      <main className="h-full overflow-y-auto p-5" dir={ar ? "rtl" : "ltr"}>
-        <div className="mx-auto max-w-[1400px]">
+      <main className="h-full overflow-y-auto p-3 sm:p-4" dir={ar ? "rtl" : "ltr"}>
+        <div className="w-full">
           <div className="flex items-center justify-between">
             <div>
               <h2 className="text-[18px] font-semibold">{ar ? "سجل تدقيق مركزي" : "Central audit log"}</h2>
@@ -95,7 +95,7 @@ export default function AuditPage() {
 
           {error && <div className="wd-card mt-4 p-4 text-[11px] text-red-600">{error}</div>}
 
-          <div className="mt-5 grid gap-3">
+          <div className="mt-4 grid w-full gap-3">
             {rows.length === 0 ? (
               <div className="wd-card p-12 text-center text-[11px] text-slate-400">
                 {ar ? "لا توجد أحداث تدقيق بعد." : "No audit events yet."}
@@ -127,7 +127,7 @@ export default function AuditPage() {
             )}
           </div>
 
-          <section className="wd-card mt-6 p-4">
+          <section className="wd-card mt-5 w-full p-4">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <div>
                 <h3 className="text-[13px] font-semibold">{ar ? "مقارنة إصدارات سير العمل" : "Workflow version diff"}</h3>

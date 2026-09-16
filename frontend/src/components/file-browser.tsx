@@ -704,6 +704,14 @@ export function FileBrowser({
         </form>
       </Modal>
     ) : null}
+    {/* Keep the real upload inputs mounted even when the visible drop zone is
+        not shown. The top-bar New > Upload / Upload folder actions dispatch
+        these events, so they must have a live listener in every folder view. */}
+    <UploadZone
+      folderId={folderId ?? null}
+      onUploaded={() => { void load(); }}
+      triggerOnly
+    />
     {toast ? <Toast message={toast} onDismiss={() => setToast(null)} /> : null}
     </section>
   );
