@@ -449,7 +449,11 @@ export class FoldersService {
     const ids: string[] = []; let current: string | null = folderId;
     for (let i = 0; i < 100 && current; i++) {
       ids.push(current);
-      const parent = await this.prisma.folder.findFirst({ where: { id: current, orgId: user.org_id }, select: { parentId: true } });
+      const parent: { parentId: string | null } | null =
+        await this.prisma.folder.findFirst({
+          where: { id: current, orgId: user.org_id },
+          select: { parentId: true },
+        });
       current = parent?.parentId ?? null;
     }
     if (!ids.length) return false;
