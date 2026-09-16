@@ -93,16 +93,16 @@ export default function AuditPage() {
             <WorkflowHelp compact helpKey="workflow.audit" />
           </div>
 
-          {error && <div className="wf-card mt-4 p-4 text-[11px] text-red-600">{error}</div>}
+          {error && <div className="wd-card mt-4 p-4 text-[11px] text-red-600">{error}</div>}
 
           <div className="mt-5 grid gap-3">
             {rows.length === 0 ? (
-              <div className="wf-card p-12 text-center text-[11px] text-slate-400">
+              <div className="wd-card p-12 text-center text-[11px] text-slate-400">
                 {ar ? "لا توجد أحداث تدقيق بعد." : "No audit events yet."}
               </div>
             ) : (
               rows.map((a) => (
-                <article key={a.id} className="wf-card p-4">
+                <article key={a.id} className="wd-card p-4">
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <div>
                       <span className="rounded-full bg-[#EEF4FF] px-2 py-1 text-[9px] font-semibold text-[#1B66EA]">
@@ -127,7 +127,7 @@ export default function AuditPage() {
             )}
           </div>
 
-          <section className="wf-card mt-6 p-4">
+          <section className="wd-card mt-6 p-4">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <div>
                 <h3 className="text-[13px] font-semibold">{ar ? "مقارنة إصدارات سير العمل" : "Workflow version diff"}</h3>
@@ -148,7 +148,7 @@ export default function AuditPage() {
               </select>
             </div>
 
-            <button className="wf-primary-button mt-3" disabled={!workflowId.trim()} onClick={loadVersions}>
+            <button className="wd-pill wd-pill-new mt-3" disabled={!workflowId.trim()} onClick={loadVersions}>
               {ar ? "تحميل الإصدارات" : "Load versions"}
             </button>
 
@@ -168,7 +168,7 @@ export default function AuditPage() {
                   })}
                 </div>
 
-                <button className="wf-primary-button mt-3" disabled={!v1 || !v2 || v1 === v2} onClick={compareVersions}>
+                <button className="wd-pill wd-pill-new mt-3" disabled={!v1 || !v2 || v1 === v2} onClick={compareVersions}>
                   {ar ? "قارن الإصدارات فعلياً" : "Compare snapshots"}
                 </button>
 

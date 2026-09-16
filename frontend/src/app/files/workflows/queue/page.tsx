@@ -58,9 +58,9 @@ export default function QueuePage() {
             </div>
           </div>
 
-          {error && <div className="wf-card mt-4 p-4 text-[11px] text-red-600">{error}</div>}
+          {error && <div className="wd-card mt-4 p-4 text-[11px] text-red-600">{error}</div>}
 
-          <div className="workflow-table-scroll wf-card mt-5">
+          <div className="workflow-table-scroll wd-card mt-5">
             <div className="min-w-[980px]">
               <div className="grid grid-cols-[1.5fr_1fr_110px_90px_110px_170px_1.3fr] border-b border-slate-100 bg-slate-50/70 px-4 py-3 text-[9px] font-semibold text-slate-400">
                 <span>{ar ? "سير العمل" : "Workflow"}</span><span>Run</span><span>Status</span><span>{ar ? "محاولات" : "Attempts"}</span><span>{ar ? "الأولوية" : "Priority"}</span><span>Lease / Run at</span><span>{ar ? "آخر خطأ" : "Last error"}</span>
@@ -90,9 +90,9 @@ export default function QueuePage() {
                   <div className="text-[9px] uppercase tracking-[.15em] text-slate-400">{ar ? "تفاصيل Job" : "Job details"}</div>
                   <h3 className="mt-1 text-[15px] font-semibold">{selected.workflow?.name || selected.workflowId}</h3>
                 </div>
-                <button className="wf-icon-button" onClick={() => setSelected(null)}>×</button>
+                <button className="wd-icon-btn" onClick={() => setSelected(null)}>×</button>
               </div>
-              <div className="wf-card mt-4 space-y-2 p-4 text-[10px]">
+              <div className="wd-card mt-4 space-y-2 p-4 text-[10px]">
                 <div>{ar ? "الحالة" : "Status"}: <b>{selected.status}</b></div>
                 <div>Run: {selected.runId}</div>
                 <div>{ar ? "المحاولات" : "Attempts"}: {selected.attempts}/{selected.maxAttempts}</div>
@@ -103,7 +103,7 @@ export default function QueuePage() {
               </div>
               <div className="mt-4 grid grid-cols-2 gap-2">
                 {(["retry", "requeue", "recover", "dead-letter"] as const).map((action) => (
-                  <button key={action} disabled={!!busy} onClick={() => runAction(action)} className="wf-primary-button">
+                  <button key={action} disabled={!!busy} onClick={() => runAction(action)} className="wd-pill wd-pill-new">
                     {busy === action ? "…" : action}
                   </button>
                 ))}

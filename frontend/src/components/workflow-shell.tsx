@@ -37,7 +37,7 @@ export function WorkflowShell({ children, title, subtitle, active }: { children:
           </div>
           <div className="flex items-center gap-2">
             <WorkflowHelp />
-            <Link href="/files/workflows/builder" className="wf-primary-button">＋ {ar ? "سير عمل جديد" : "New workflow"}</Link>
+            <Link href="/files/workflows/builder" className="wd-pill wd-pill-new">＋ {ar ? "سير عمل جديد" : "New workflow"}</Link>
           </div>
         </div>
         <nav className="workflow-shell-nav mt-3 flex items-center gap-1 overflow-x-auto" aria-label={ar ? "تنقل سير العمل" : "Workflow navigation"}>
