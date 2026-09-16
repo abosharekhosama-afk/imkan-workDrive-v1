@@ -89,7 +89,13 @@ function RenderItem({ item }: { item: ActionDropdownItem }) {
           role="menuitem"
           data-danger={item.destructive || undefined}
           className="wd-menu-item min-h-[34px] text-start"
-          onClick={() => item.onSelect()}
+          onClick={(event) => {
+            // Prevent a row/card Link from interpreting an action click as
+            // resource navigation (which can produce /files/<fileId> 404s).
+            event.preventDefault();
+            event.stopPropagation();
+            item.onSelect();
+          }}
         >
           {item.icon ?? getIconForLabel(item.label) ? (
             <span className="flex-shrink-0 w-5 h-5 flex items-center justify-center text-current">
@@ -126,7 +132,12 @@ function RenderItem({ item }: { item: ActionDropdownItem }) {
                 type="button"
                 role="menuitem"
                 className="wd-menu-item min-h-[34px] text-start"
-                onClick={() => { setSubOpen(false); sub.onSelect(); }}
+                onClick={(event) => {
+                  event.preventDefault();
+                  event.stopPropagation();
+                  setSubOpen(false);
+                  sub.onSelect();
+                }}
               >
                 <span className="w-5" />
                 <span className="flex-1 truncate">{sub.label}</span>
@@ -150,6 +161,12 @@ export function ActionDropdown({ label, items, trigger }: ActionDropdownProps) {
         aria-label={label}
         className="wd-icon-btn"
         aria-haspopup="menu"
+        onClick={(event) => {
+          // Row actions can live inside clickable resource cards/links.
+          // Prevent the resource navigation from firing when opening actions.
+          event.preventDefault();
+          event.stopPropagation();
+        }}
       >
         <span aria-hidden="true" className="text-[length:var(--imkan-font-size-ui)]">⋯</span>
       </button>
