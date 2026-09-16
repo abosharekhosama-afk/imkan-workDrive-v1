@@ -4,7 +4,14 @@ export type Organization = { id: string; name: string; createdAt: string; member
 export type OrgMember = { id: string; name: string | null; email: string; role: OrgRole; createdAt: string };
 export type Invitation = { id: string; email: string; role: OrgRole; expiresAt: string; acceptedAt: string | null; revokedAt: string | null; createdAt: string; invitedBy: { id: string; name: string | null; email: string } };
 export type InvitationCreated = { id: string; email: string; role: OrgRole; expiresAt: string; inviteUrl: string };
+export type OrganizationAccount = { id: string; email: string; name: string | null; role: OrgRole };
 export function getOrganization(){return apiRequest<Organization>('/organization');}
+export function createOrganizationAccount(input: { name: string; email: string; password: string; role: OrgRole }): Promise<OrganizationAccount> {
+  return apiRequest<OrganizationAccount>('/organization/accounts', {
+    method: 'POST',
+    body: JSON.stringify(input),
+  });
+}
 export function updateOrganization(name:string){return apiRequest<{id:string;name:string;createdAt:string}>('/organization',{method:'PATCH',body:JSON.stringify({name})});}
 export function listOrganizationMembers(){return apiRequest<OrgMember[]>('/organization/members');}
 export function updateOrganizationMember(id:string,role:OrgRole){return apiRequest<OrgMember>(`/organization/members/${id}`,{method:'PATCH',body:JSON.stringify({role})});}
