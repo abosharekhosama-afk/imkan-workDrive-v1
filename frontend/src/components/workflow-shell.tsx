@@ -28,8 +28,8 @@ export function WorkflowShell({ children, title, subtitle, active }: { children:
     ["dynamic-values", "/files/workflows/dynamic-values", ar ? "القيم الديناميكية" : "Dynamic values"],
   ] as const;
   return (
-    <div className="workflow-ui flex min-h-0 flex-1 flex-col bg-[#F7F9FC]">
-      <div className="workflow-shell-header border-b border-slate-200 bg-white px-5 py-3 shadow-[0_1px_2px_rgba(15,23,42,.03)]">
+    <div className="workflow-ui flex min-h-0 flex-1 flex-col bg-white">
+      <div className="workflow-shell-header bg-white px-4 py-3">
         <div className="flex items-center justify-between gap-4">
           <div className="flex min-w-0 items-center gap-3">
             <div className="min-w-0">

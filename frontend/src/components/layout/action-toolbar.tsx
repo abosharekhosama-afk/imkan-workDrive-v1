@@ -185,7 +185,10 @@ export function ActionToolbar({
           {label("nav.record")} <Icons.chevD size={13} />
         </button>
         <ZohoMenu open={openMenu === "record"} onClose={close} labelledBy="tb-record-btn"
-          onSelect={(k) => { window.dispatchEvent(new CustomEvent("workdrive:record", { detail: { kind: k, folderId: currentFolderId ?? null } })); close(); }}
+          onSelect={(k) => {
+            close();
+            window.dispatchEvent(new CustomEvent("workdrive:record", { detail: { kind: k, folderId: currentFolderId ?? null } }));
+          }}
           items={[
             { key: "screen", labelKey: "menu.screenRecord", icon: <Icons.camera size={16} /> },
             { key: "video", labelKey: "menu.videoRecord", icon: <Icons.video size={16} /> },
@@ -196,6 +199,7 @@ export function ActionToolbar({
         </button>
         <ZohoMenu open={openMenu === "new"} onClose={close} labelledBy="tb-new-btn" widthPx={405}
           onSelect={(k) => {
+            close();
             if (k === "folder") WorkdriveEvents.createFolder();
             else if (k === "upload") WorkdriveEvents.upload();
             else if (k === "uploadFolder") WorkdriveEvents.uploadFolder();

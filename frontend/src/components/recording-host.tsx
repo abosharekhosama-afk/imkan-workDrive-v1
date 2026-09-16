@@ -120,22 +120,17 @@ export function RecordingHost() {
   const formatted = `${String(Math.floor(seconds / 60)).padStart(2, "0")}:${String(seconds % 60).padStart(2, "0")}`;
 
   return (
-    <div className="fixed inset-0 z-[130] flex items-center justify-center p-4" role="dialog" aria-modal="true">
-      <div className="absolute inset-0 bg-black/40" onClick={() => !recording && !busy && setDetail(null)} />
-      <div className="relative w-[min(440px,94vw)] overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl">
-        <div className="border-b border-slate-100 px-5 py-4"><h2 className="text-[16px] font-semibold text-slate-900">{title}</h2><p className="mt-1 text-[11px] text-slate-500">{locale === "ar" ? "سيتم حفظ التسجيل تلقائياً في المجلد الحالي." : "The recording will be saved automatically in the current folder."}</p></div>
-        <div className="p-5">
-          <div className={`flex min-h-36 flex-col items-center justify-center rounded-xl border ${recording ? "border-red-200 bg-red-50" : "border-slate-200 bg-slate-50"}`}>
-            <div className={`mb-3 flex h-12 w-12 items-center justify-center rounded-full ${recording ? "bg-red-100 text-red-600" : "bg-white text-slate-500"}`}><span className="text-[18px]">●</span></div>
-            <div className="text-[20px] font-semibold tabular-nums text-slate-800">{formatted}</div>
-            <p className="mt-1 text-[11px] text-slate-500">{recording ? (locale === "ar" ? "جارٍ التسجيل…" : "Recording…") : busy ? (locale === "ar" ? "جارٍ حفظ التسجيل…" : "Saving recording…") : (locale === "ar" ? "جاهز" : "Ready")}</p>
-          </div>
-          {error ? <div className="mt-3 rounded-lg bg-red-50 px-3 py-2 text-[11px] text-red-700">{error}</div> : null}
-          <div className="mt-4 flex justify-end gap-2">
-            <button type="button" className="imkan-button-secondary" disabled={recording || busy} onClick={() => setDetail(null)}>{locale === "ar" ? "إلغاء" : "Cancel"}</button>
-            {!recording ? <button type="button" className="imkan-button" disabled={busy} onClick={() => void start()}>{locale === "ar" ? "بدء التسجيل" : "Start recording"}</button> : <button type="button" className="imkan-button" onClick={stopAndSave}>{locale === "ar" ? "إيقاف وحفظ" : "Stop & save"}</button>}
-          </div>
+    <div className="fixed inset-x-0 bottom-4 z-[180] flex justify-center px-3 pointer-events-none" dir={locale === "ar" ? "rtl" : "ltr"}>
+      <div className="pointer-events-auto flex w-[min(760px,calc(100vw-24px))] items-center gap-3 rounded-xl border border-slate-200 bg-white/95 px-3 py-2 shadow-[0_10px_35px_rgba(15,23,42,.14)] backdrop-blur" role="status" aria-live="polite">
+        <div className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${recording ? "bg-red-50 text-red-600" : "bg-slate-50 text-slate-500"}`}><span className="text-[12px]">●</span></div>
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-2"><strong className="truncate text-[11px] font-semibold text-slate-900">{title}</strong><span className={`shrink-0 rounded-full px-2 py-0.5 text-[8.5px] font-semibold ${recording ? "bg-red-50 text-red-600" : busy ? "bg-amber-50 text-amber-700" : "bg-slate-100 text-slate-500"}`}>{recording ? (locale === "ar" ? "جارٍ التسجيل" : "Recording") : busy ? (locale === "ar" ? "جارٍ الحفظ" : "Saving") : (locale === "ar" ? "جاهز" : "Ready")}</span></div>
+          <div className="mt-0.5 text-[12px] font-semibold tabular-nums text-slate-700">{formatted}</div>
         </div>
+        {error ? <div className="hidden max-w-[260px] truncate text-[9.5px] text-red-600 sm:block" title={error}>{error}</div> : null}
+        {!recording && !busy ? <button type="button" className="imkan-button" onClick={() => void start()}>{locale === "ar" ? "بدء" : "Start"}</button> : null}
+        {recording ? <button type="button" className="imkan-button" onClick={stopAndSave}>{locale === "ar" ? "إيقاف وحفظ" : "Stop & save"}</button> : null}
+        {!recording && !busy ? <button type="button" className="imkan-button-secondary" onClick={() => setDetail(null)}>{locale === "ar" ? "إلغاء" : "Cancel"}</button> : null}
       </div>
     </div>
   );

@@ -81,8 +81,8 @@ export default function AuditPage() {
       title={ar ? "سجل التدقيق" : "Audit center"}
       subtitle={ar ? "تتبع تغييرات الإعدادات وأحداث التشغيل." : "Track configuration and runtime changes."}
     >
-      <main className="h-full overflow-y-auto p-3 sm:p-4" dir={ar ? "rtl" : "ltr"}>
-        <div className="w-full">
+      <main className="h-full min-h-0 overflow-y-auto bg-white p-2 sm:p-3" dir={ar ? "rtl" : "ltr"}>
+        <div className="flex min-h-full w-full flex-col">
           <div className="flex items-center justify-between">
             <div>
               <h2 className="text-[18px] font-semibold">{ar ? "سجل تدقيق مركزي" : "Central audit log"}</h2>
@@ -178,7 +178,7 @@ export default function AuditPage() {
                       <span>Path</span><span>A</span><span>B</span>
                     </div>
                     {diff.map((item) => (
-                      <div key={item.path} className="grid min-w-[760px] grid-cols-[1.4fr_1fr_1fr] border-b border-slate-100 px-3 py-2 text-[8.5px]">
+                      <div key={item.path} className="grid min-w-[760px] grid-cols-[1.4fr_1fr_1fr] border-b border-slate-100/80 px-3 py-2 text-[8.5px]">
                         <code>{item.path}</code>
                         <pre className="whitespace-pre-wrap text-red-600">{JSON.stringify(item.a)}</pre>
                         <pre className="whitespace-pre-wrap text-emerald-700">{JSON.stringify(item.b)}</pre>

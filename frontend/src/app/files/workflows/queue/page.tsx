@@ -42,8 +42,8 @@ export default function QueuePage() {
       title={ar ? "مركز الطابور" : "Queue center"}
       subtitle={ar ? "مراقبة Jobs الفعلية والمحاولات والـLease والأخطاء." : "Monitor real jobs, attempts, leases and errors."}
     >
-      <main className="h-full overflow-y-auto p-3 sm:p-4" dir={ar ? "rtl" : "ltr"}>
-        <div className="w-full">
+      <main className="h-full min-h-0 overflow-y-auto bg-white p-2 sm:p-3" dir={ar ? "rtl" : "ltr"}>
+        <div className="flex min-h-full w-full flex-col">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
               <h2 className="text-[18px] font-semibold">{ar ? "عمليات الطابور" : "Queue operations"}</h2>
@@ -60,7 +60,7 @@ export default function QueuePage() {
 
           {error && <div className="wd-card w-full mt-4 p-4 text-[11px] text-red-600">{error}</div>}
 
-          <div className="workflow-table-scroll wd-card mt-5">
+          <div className="workflow-table-scroll wd-card mt-4 min-h-[calc(100vh-220px)]">
             <div className="min-w-[980px]">
               <div className="grid grid-cols-[1.5fr_1fr_110px_90px_110px_170px_1.3fr] border-b border-slate-100 bg-slate-50/70 px-4 py-3 text-[9px] font-semibold text-slate-400">
                 <span>{ar ? "سير العمل" : "Workflow"}</span><span>Run</span><span>Status</span><span>{ar ? "محاولات" : "Attempts"}</span><span>{ar ? "الأولوية" : "Priority"}</span><span>Lease / Run at</span><span>{ar ? "آخر خطأ" : "Last error"}</span>
@@ -68,7 +68,7 @@ export default function QueuePage() {
               {rows.length === 0 ? (
                 <div className="p-12 text-center text-[11px] text-slate-400">{ar ? "لا توجد Jobs مطابقة." : "No matching jobs."}</div>
               ) : rows.map((job) => (
-                <div key={job.id} className="grid grid-cols-[1.5fr_1fr_110px_90px_110px_170px_1.3fr] items-center border-b border-slate-100 px-4 py-3 text-[10px]">
+                <div key={job.id} className="grid grid-cols-[1.5fr_1fr_110px_90px_110px_170px_1.3fr] items-center border-b border-slate-100/80 px-4 py-3 text-[10px]">
                   <span className="font-semibold">{job.workflow?.name ?? job.workflowId}</span>
                   <Link href={`/files/workflows/runs?id=${job.runId}`} className="text-[#1B66EA]">{job.runId.slice(0, 8)}…</Link>
                   <button type="button" onClick={() => setSelected(job)} className="text-start underline decoration-slate-300 underline-offset-2">{job.status}</button>
