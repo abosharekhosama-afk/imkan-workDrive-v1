@@ -7,6 +7,7 @@ import { ForbiddenException } from '@nestjs/common';
 import { SharesService } from '../shares/shares.service';
 import type { AccessTokenPayload } from '../auth/jwt.types';
 import { dynamicValueCatalog, evaluateCondition, walkDynamicValues, resolveDynamicValue } from './workflow-runtime';
+import { CustomFunctionExecutor } from './custom-function.executor';
 
 export type WorkflowFileEvent = {
   eventType?: string; fileId: string; name: string; mimeType?: string | null; fileType?: string | null; size?: string;
@@ -28,6 +29,19 @@ export class WorkflowEngineService implements OnModuleInit, OnModuleDestroy {
   constructor(private readonly prisma: PrismaService, private readonly shares: SharesService, private readonly functionExecutor: CustomFunctionExecutor, private readonly permissions: PermissionService) {}
   onModuleInit() { this.timer = setInterval(() => void this.drain(), 1500); void this.drain(); }
   onModuleDestroy() { if (this.timer) clearInterval(this.timer); }
+  private async recordAudit(orgId: string, actorId: string, action: string, resourceType: string, resourceId: string, metadata?: Record<string, unknown>) {
+    await this.prisma.auditLog.create({
+      data: {
+        orgId,
+        actorId,
+        action,
+        resourceType,
+        resourceId,
+        ...(metadata ? { metadata: metadata as Prisma.InputJsonValue } : {}),
+      },
+    });
+  }
+
   async executeTrigger(user: AccessTokenPayload, event: WorkflowFileEvent) { return this.onFileEvent(user, event); }
   async onFileUploaded(user: AccessTokenPayload, event: WorkflowFileEvent) { return this.onFileEvent(user, { ...event, eventType: 'upload' }); }
 
@@ -96,7 +110,7 @@ export class WorkflowEngineService implements OnModuleInit, OnModuleDestroy {
       const resolved = await this.resolveParticipantRules(user.org_id, startParticipantRules);
       if (!resolved.length) throw new BadRequestException('No active workflow participant was selected');
     }
-    const normalizedInput = { fieldValues, participantRules: startParticipantRules ?? null, comment: typeof input.comment === 'string' ? input.comment.trim().slice(0, 4000) : '' };
+    const normalizedInput = { fieldValues, ...(startParticipantRules ? { participantRules: startParticipantRules } : {}), comment: typeof input.comment === 'string' ? input.comment.trim().slice(0, 4000) : '' };
     return this.enqueue(user, workflow.id, { ...event, eventType: 'manual', userId: user.sub, resourceType, startInput: normalizedInput }, definition, workflow.activeVersionId ?? undefined);
   }
 
@@ -135,7 +149,7 @@ export class WorkflowEngineService implements OnModuleInit, OnModuleDestroy {
     const eventKey = `${event.resourceType ?? 'FILE'}:${event.fileId}:${event.eventType ?? 'manual'}:${event.sourceWorkflowId ?? 'system'}`;
     try {
       const firstState = definition.states[0];
-      const run = await this.prisma.workflowRun.create({ data: { orgId: user.org_id, workflowId, versionId: versionId ?? null, createdById: user.sub, eventKey, status: 'QUEUED', trigger: event, currentStateId: firstState?.id ?? null, result: { fieldValues: event.startInput?.fieldValues ?? {}, startInput: event.startInput ?? null } as unknown as Prisma.InputJsonValue } });
+      const run = await this.prisma.workflowRun.create({ data: { orgId: user.org_id, workflowId, versionId: versionId ?? null, createdById: user.sub, eventKey, status: 'QUEUED', trigger: event as unknown as Prisma.InputJsonValue, currentStateId: firstState?.id ?? null, result: { fieldValues: event.startInput?.fieldValues ?? {}, startInput: event.startInput ?? null } as unknown as Prisma.InputJsonValue } });
       await this.prisma.workflowJob.create({ data: { id: randomUUID(), orgId: user.org_id, workflowId, runId: run.id, status: 'QUEUED', runAt: new Date(), priority: 0, idempotencyKey: `trigger:${workflowId}:${eventKey}` } }); return run;
     } catch (error) { if ((error as { code?: string })?.code === 'P2002') return undefined; throw error; }
   }

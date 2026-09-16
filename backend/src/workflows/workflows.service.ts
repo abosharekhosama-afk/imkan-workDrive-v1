@@ -237,10 +237,18 @@ export class WorkflowsService {
     if (type !== 'FILE' && type !== 'FOLDER') throw new BadRequestException('resourceType must be FILE or FOLDER');
     const ids = [...new Set(String(resourceIds ?? '').split(',').map((id) => id.trim()).filter(Boolean))].slice(0, 100);
     if (!ids.length) return [];
-    const resources = type === 'FILE'
-      ? await this.prisma.file.findMany({ where: { id: { in: ids }, orgId: user.org_id, deletedAt: null }, select: { id: true, orgId: true, ownerId: true, folder: { select: { teamFolderId: true } } } })
-      : await this.prisma.folder.findMany({ where: { id: { in: ids }, orgId: user.org_id }, select: { id: true, orgId: true, ownerId: true, teamFolderId: true } });
-    const readable = new Set(resources.filter((resource) => this.permissions.canRead(user, { orgId: resource.orgId, ownerId: resource.ownerId, teamFolderId: type === 'FILE' ? resource.folder?.teamFolderId ?? null : resource.teamFolderId ?? null })).map((resource) => resource.id));
+    const readable = new Set<string>();
+    if (type === 'FILE') {
+      const resources = await this.prisma.file.findMany({ where: { id: { in: ids }, orgId: user.org_id, deletedAt: null }, select: { id: true, orgId: true, ownerId: true, folder: { select: { teamFolderId: true } } } });
+      for (const resource of resources) {
+        if (this.permissions.canRead(user, { orgId: resource.orgId, ownerId: resource.ownerId, teamFolderId: resource.folder?.teamFolderId ?? null })) readable.add(resource.id);
+      }
+    } else {
+      const resources = await this.prisma.folder.findMany({ where: { id: { in: ids }, orgId: user.org_id }, select: { id: true, orgId: true, ownerId: true, teamFolderId: true } });
+      for (const resource of resources) {
+        if (this.permissions.canRead(user, { orgId: resource.orgId, ownerId: resource.ownerId, teamFolderId: resource.teamFolderId ?? null })) readable.add(resource.id);
+      }
+    }
     if (!readable.size) return [];
     const runs = await this.prisma.workflowRun.findMany({
       where: { orgId: user.org_id },
@@ -450,7 +458,7 @@ export class WorkflowsService {
       if (!fieldValues || Object.keys(fieldValues).length === 0) fieldValues = {};
     }
     const event = (body.event ?? {}) as Record<string, unknown>;
-    const runtimeEvent = { fileId: String(event.fileId ?? 'preview-file'), name: String(event.name ?? 'preview.txt'), mimeType: event.mimeType == null ? 'text/plain' : String(event.mimeType), fileType: event.fileType == null ? 'DOCUMENT' : String(event.fileType), size: String(event.size ?? '0'), userId: String(event.userId ?? user.sub), folderId: event.folderId == null ? null : String(event.folderId), extension: event.extension == null ? '.txt' : String(event.extension), resourceType: event.resourceType === 'FOLDER' ? 'FOLDER' : 'FILE' as const };
+    const runtimeEvent: import('./workflow-engine.service').WorkflowFileEvent = { fileId: String(event.fileId ?? 'preview-file'), name: String(event.name ?? 'preview.txt'), mimeType: event.mimeType == null ? 'text/plain' : String(event.mimeType), fileType: event.fileType == null ? 'DOCUMENT' : String(event.fileType), size: String(event.size ?? '0'), userId: String(event.userId ?? user.sub), folderId: event.folderId == null ? null : String(event.folderId), extension: event.extension == null ? '.txt' : String(event.extension), resourceType: event.resourceType === 'FOLDER' ? 'FOLDER' : 'FILE' };
     const rendered = walkDynamicValues(selected.template, runtimeEvent, fieldValues, { workflowId, runId: 'preview', user: { id: user.sub } });
     const variables = Array.isArray(selected.variables) ? selected.variables as Array<{ path?: string }> : [];
     const catalog = dynamicValueCatalog([]).map((x) => x.path);
@@ -480,7 +488,7 @@ export class WorkflowsService {
     this.requireWorkflowAdmin(user);
     const row = await this.prisma.workflowDataTemplate.findFirst({ where: { id, orgId: user.org_id } });
     if (!row) throw new NotFoundException('Workflow data template not found');
-    const actionSteps = await this.prisma.workflowStep.findMany({ where: { workflow: { orgId: user.org_id }, kind: 'ACTIONS' }, select: { config: true } }).catch(() => []);
+    const actionSteps: Array<{ config: Prisma.JsonValue }> = await this.prisma.workflowStep.findMany({ where: { workflow: { orgId: user.org_id }, kind: 'ACTIONS' }, select: { config: true } }).catch(() => [] as Array<{ config: Prisma.JsonValue }>);
     const referenced = actionSteps.some((step) => JSON.stringify(step.config ?? {}).includes(id));
     if (referenced) throw new BadRequestException('This template is referenced by a workflow and cannot be deleted');
     await this.prisma.workflowDataTemplate.delete({ where: { id } });

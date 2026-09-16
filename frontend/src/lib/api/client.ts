@@ -52,6 +52,19 @@ export function getApiBaseUrl(): string {
   return normalized;
 }
 
+
+/** Redirect to login when an API call proves the current session is expired.
+ * Returns true when the error was handled, allowing callers to stop rendering
+ * the failed request state.
+ */
+export function redirectToLoginOnExpiredSession(error: unknown): boolean {
+  if (!(error instanceof ApiError) || error.status !== 401) return false;
+  if (typeof window !== "undefined" && !window.location.pathname.startsWith("/auth")) {
+    window.location.href = "/auth/login";
+  }
+  return true;
+}
+
 export async function getAccessToken(): Promise<string | null> {
   // 1. إذا كان الكود يعمل في المتصفح (Client-side)
   if (typeof window !== "undefined") {
