@@ -57,6 +57,11 @@ export function getApiBaseUrl(): string {
  * Returns true when the error was handled, allowing callers to stop rendering
  * the failed request state.
  */
+/** Return true when an API error represents an unauthorized/expired session. */
+export function isUnauthorizedError(error: unknown): boolean {
+  return error instanceof ApiError && error.status === 401;
+}
+
 export function redirectToLoginOnExpiredSession(error: unknown): boolean {
   if (!(error instanceof ApiError) || error.status !== 401) return false;
   if (typeof window !== "undefined" && !window.location.pathname.startsWith("/auth")) {

@@ -29,11 +29,11 @@ export class WorkflowEngineService implements OnModuleInit, OnModuleDestroy {
   constructor(private readonly prisma: PrismaService, private readonly shares: SharesService, private readonly functionExecutor: CustomFunctionExecutor, private readonly permissions: PermissionService) {}
   onModuleInit() { this.timer = setInterval(() => void this.drain(), 1500); void this.drain(); }
   onModuleDestroy() { if (this.timer) clearInterval(this.timer); }
-  private async recordAudit(orgId: string, actorId: string, action: string, resourceType: string, resourceId: string, metadata?: Record<string, unknown>) {
+  private async recordAudit(orgId: string, actorId: string | null, action: string, resourceType: string, resourceId: string, metadata?: Record<string, unknown>) {
     await this.prisma.auditLog.create({
       data: {
         orgId,
-        actorId,
+        actorId: actorId ?? null,
         action,
         resourceType,
         resourceId,
