@@ -9,7 +9,7 @@ import { dynamicValueCatalog, evaluateCondition, walkDynamicValues, resolveDynam
 import { CustomFunctionExecutor } from './custom-function.executor';
 
 export type WorkflowFileEvent = {
-  eventType?: string; fileId: string; name: string; mimeType?: string | null; fileType?: string | null; size?: string;
+  eventType?: string; fileId: string; resourceId?: string; name: string; mimeType?: string | null; fileType?: string | null; size?: string;
   userId: string; folderId?: string | null; extension?: string | null; sourceWorkflowId?: string; resourceType?: 'FILE' | 'FOLDER';
   startInput?: { fieldValues?: Record<string, unknown>; participantRules?: ParticipantRule[]; comment?: string };
 };
@@ -67,7 +67,7 @@ export class WorkflowEngineService implements OnModuleInit, OnModuleDestroy {
     if (workflow.resourceType !== resourceType) {
       throw new BadRequestException(`This workflow is configured for ${workflow.resourceType.toLowerCase()} resources`);
     }
-    const resourceId = String(event.fileId ?? '').trim();
+    const resourceId = String(event.resourceId ?? event.fileId ?? '').trim();
     if (!resourceId) throw new BadRequestException('A file or folder is required to start this workflow');
     if (resourceType === 'FILE') {
       const file = await this.prisma.file.findFirst({ where: { id: resourceId, orgId: user.org_id, deletedAt: null }, include: { folder: { select: { teamFolderId: true } } } });
@@ -115,7 +115,7 @@ export class WorkflowEngineService implements OnModuleInit, OnModuleDestroy {
       if (!resolved.length) throw new BadRequestException('No active workflow participant was selected');
     }
     const normalizedInput = { fieldValues, ...(startParticipantRules ? { participantRules: startParticipantRules } : {}), comment: typeof input.comment === 'string' ? input.comment.trim().slice(0, 4000) : '' };
-    return this.enqueue(user, workflow.id, { ...event, fileId: resourceId, eventType: 'manual', userId: user.sub, resourceType, startInput: normalizedInput }, definition, workflow.activeVersionId ?? undefined);
+    return this.enqueue(user, workflow.id, { ...event, fileId: resourceId, resourceId, eventType: 'manual', userId: user.sub, resourceType, startInput: normalizedInput }, definition, workflow.activeVersionId ?? undefined);
   }
 
   private definitionFromWorkflow(workflow: { steps: Array<{ kind: string; config: unknown }>; states?: Array<{ id: string; terminal: boolean }>; transitions?: WorkflowTransitionLike[] }): WorkflowDefinition {

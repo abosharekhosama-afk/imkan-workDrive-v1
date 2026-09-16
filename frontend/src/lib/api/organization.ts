@@ -1,7 +1,7 @@
 import { apiRequest, getApiBaseUrl } from './client';
-export type OrgRole = 'ADMIN' | 'MEMBER';
+export type OrgRole = 'SUPER_ADMIN' | 'ADMIN' | 'MEMBER';
 export type Organization = { id: string; name: string; createdAt: string; members: number; pendingInvitations: number; role: OrgRole };
-export type OrgMember = { id: string; name: string | null; email: string; role: OrgRole; createdAt: string };
+export type OrgMember = { id: string; userId?: string; name: string | null; email: string; role: OrgRole; status?: string; joinedAt?: string | null; createdAt: string; };
 export type Invitation = { id: string; email: string; role: OrgRole; expiresAt: string; acceptedAt: string | null; revokedAt: string | null; createdAt: string; invitedBy: { id: string; name: string | null; email: string } };
 export type InvitationCreated = { id: string; email: string; role: OrgRole; expiresAt: string; inviteUrl: string };
 export type OrganizationAccount = { id: string; email: string; name: string | null; role: OrgRole };

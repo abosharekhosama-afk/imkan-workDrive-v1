@@ -29,8 +29,8 @@ export function parseCreateShare(body: unknown): CreateShareInput {
   if ('orgId' in record || 'org_id' in record) {
     throw new ForbiddenException('orgId must not be supplied by the client');
   }
-  if (record.resource_type !== 'FILE') {
-    throw new BadRequestException('Only files can be shared');
+  if (record.resource_type !== 'FILE' && record.resource_type !== 'FOLDER') {
+    throw new BadRequestException('resource_type must be FILE or FOLDER');
   }
   if (
     typeof record.resource_id !== 'string' ||

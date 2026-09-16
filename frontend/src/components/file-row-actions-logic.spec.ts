@@ -105,3 +105,13 @@ test("permissionAllowsEdit matches edit-capable share roles only", () => {
   assert.equal(permissionAllowsEdit("ORGANIZE"), true);
 });
 
+
+
+test("folders do not expose the file-share action when sharing backend supports files only", () => {
+  const actions = buildFileRowActions({
+    resourceType: "FOLDER",
+    canMutate: true,
+    canShare: false,
+  });
+  assert.equal(actions.includes("share"), false);
+});

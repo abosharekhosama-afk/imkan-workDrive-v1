@@ -426,22 +426,38 @@ export class FoldersService {
 
   private async canReadFolder(
     user: AccessTokenPayload,
-    folder: { orgId: string; ownerId: string; teamFolderId?: string | null },
+    folder: { id: string; orgId: string; ownerId: string; teamFolderId?: string | null },
   ): Promise<boolean> {
     if (folder.orgId !== user.org_id) return false;
-    if (!folder.teamFolderId) return this.permissions.canRead(user, this.toAccessibleResource(folder));
+    if (!folder.teamFolderId) {
+      if (this.permissions.canRead(user, this.toAccessibleResource(folder))) return true;
+      return this.hasFolderShareAccess(user, folder.id);
+    }
     const teamFolder = await this.prisma.teamFolder.findFirst({
       where: { id: folder.teamFolderId, orgId: folder.orgId },
       select: { isPublicToOrg: true },
     });
     const teamFolderRole = await this.resolveCallerRole(user, folder.teamFolderId);
-    return this.permissions.canRead(user, {
-      orgId: folder.orgId,
-      ownerId: folder.teamFolderId,
-      teamFolderId: folder.teamFolderId,
-      teamFolderRole,
-      isPublicToOrg: teamFolder?.isPublicToOrg ?? false,
+    if (this.permissions.canRead(user, {
+      orgId: folder.orgId, ownerId: folder.teamFolderId, teamFolderId: folder.teamFolderId,
+      teamFolderRole, isPublicToOrg: teamFolder?.isPublicToOrg ?? false,
+    })) return true;
+    return this.hasFolderShareAccess(user, folder.id);
+  }
+
+  private async hasFolderShareAccess(user: AccessTokenPayload, folderId: string): Promise<boolean> {
+    const ids: string[] = []; let current: string | null = folderId;
+    for (let i = 0; i < 100 && current; i++) {
+      ids.push(current);
+      const parent = await this.prisma.folder.findFirst({ where: { id: current, orgId: user.org_id }, select: { parentId: true } });
+      current = parent?.parentId ?? null;
+    }
+    if (!ids.length) return false;
+    const share = await this.prisma.folderShare.findFirst({
+      where: { orgId: user.org_id, folderId: { in: ids }, status: 'ACTIVE', recipients: { some: { userId: user.sub, orgId: user.org_id } }, OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }] },
+      select: { id: true },
     });
+    return !!share;
   }
 
   private toAccessibleResource(folder: {

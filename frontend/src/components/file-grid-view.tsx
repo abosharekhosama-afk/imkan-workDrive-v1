@@ -84,10 +84,10 @@ export function FileGridView({
   return (
     <div className="zoho-grid-view"role="list"aria-label={label("view.grid")}>
       {folders.map((folder) => {
-        const folderContext = buildFolderContext(canMutate, canShare);
+        const folderContext = buildFolderContext(canMutate, false);
         const folderHandlers: FileActionHandlers = {
           onOpen: () => onOpenFolder(folder.id),
-          onShare: onShare ? () => onShare("FOLDER", folder.id) : undefined,
+          onShare: undefined,
           onRename: canMutate && onRename ? () => onRename("FOLDER", folder.id, folder.name) : undefined,
           onMove: canMutate && onMove ? () => onMove("FOLDER", folder.id, folder.name) : undefined,
           onViewDetails: onViewDetails ? () => onViewDetails("FOLDER", folder.id, folder.name) : undefined,

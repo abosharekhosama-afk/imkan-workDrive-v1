@@ -22,6 +22,7 @@ export type SharedItem = {
   /** Active-file byte size (omitted on folder rows). */
   size?: number | null;
   recipients?: SharedRecipient[];
+  linkUrl?: string;
 };
 
 export function listSharedWithMe(): Promise<SharedItem[]> {

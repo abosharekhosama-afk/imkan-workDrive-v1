@@ -248,6 +248,8 @@ export default function SharedWithMePage() {
       {moveTarget ? (
         <MoveModal
           resourceName={moveTarget.name}
+          resourceType={moveTarget.type}
+          resourceId={moveTarget.id}
           onClose={() => setMoveTarget(null)}
           onMove={async (destinationFolderId) => {
             if (moveTarget.type === "FOLDER") {

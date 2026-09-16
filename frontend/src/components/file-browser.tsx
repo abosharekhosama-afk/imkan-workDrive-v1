@@ -464,8 +464,8 @@ export function FileBrowser({
             onShare={() => {
               const id = Array.from(selectedIds)[0];
               if (!id) return;
-              const type = folders.some((f) => f.id === id) ? "FOLDER" : "FILE";
-              setShareTarget({ type, id });
+              if (!files.some((f) => f.id === id)) return;
+              setShareTarget({ type: "FILE", id });
             }}
             onCopyLink={() => {
               const id = Array.from(selectedIds)[0];
@@ -589,6 +589,8 @@ export function FileBrowser({
       {moveTarget ? (
         <MoveModal
           resourceName={moveTarget.name}
+          resourceType={moveTarget.type}
+          resourceId={moveTarget.id}
           onClose={() => setMoveTarget(null)}
           onMove={async (destinationFolderId) => {
             if (moveTarget.type === "FOLDER") {
@@ -603,6 +605,8 @@ export function FileBrowser({
       {copyTarget ? (
         <MoveModal
           resourceName={copyTarget.name}
+          resourceType={copyTarget.type}
+          resourceId={copyTarget.id}
           mode="copy"
           onClose={() => setCopyTarget(null)}
           onMove={async (destinationFolderId) => {

@@ -36,9 +36,8 @@ interface FileActionsMenuProps {
  * Unified row-level "⋯" actions menu mirroring the full Zoho WorkDrive
  * 5-section hierarchy: Open/Properties → Share (nested submenu) / Permalink
  * → Move/Copy/Workflow/Organize → Search/Download/Rename/Follow/More
- * → Move to Trash. Backend-less parity actions fall back to a toast so no
- * button ever appears dead; `handlers.onMove` doubles as the Copy To…
- * opener while `handlers.onCopy` (when present) takes precedence.
+ * → Move to Trash. Copy and move are separate callbacks so each action
+ * reaches its own destination picker and backend endpoint.
  */
 export function FileActionsMenu({ context, handlers, onCopyLink }: FileActionsMenuProps) {
   const { label } = useLocale();

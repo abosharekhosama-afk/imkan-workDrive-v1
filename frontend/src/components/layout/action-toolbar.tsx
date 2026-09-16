@@ -151,7 +151,15 @@ export function ActionToolbar({
   const close = () => setOpenMenu(null);
   const dispatchRecord = (kind: "screen" | "video" | "audio") => {
     setOpenMenu(null);
-    window.setTimeout(() => window.dispatchEvent(new CustomEvent("workdrive:record", { detail: { kind, folderId: currentFolderId ?? null } })), 0);
+    window.setTimeout(() => window.dispatchEvent(new CustomEvent("workdrive:record", {
+      detail: { kind, folderId: currentFolderId ?? null },
+    })), 0);
+  };
+  const dispatchFolderCreate = () => {
+    setOpenMenu(null);
+    window.setTimeout(() => window.dispatchEvent(new CustomEvent("workdrive:new-folder", {
+      detail: { folderId: currentFolderId ?? null },
+    })), 0);
   };
   const isColOn = (k: ColumnKey) => cols[k] ?? true;
 
@@ -180,7 +188,7 @@ export function ActionToolbar({
         </div>
       ) : null}
 
-      <button type="button" onClick={() => window.dispatchEvent(new Event("workdrive:new-folder"))} title={label("menu.folder")} aria-label={label("menu.folder")}
+      <button type="button" onClick={dispatchFolderCreate} title={label("menu.folder")} aria-label={label("menu.folder")}
         className="wd-icon-btn text-[color:var(--wd-primary-dark)]">
         <Icons.folder size={16} />
       </button>
@@ -202,9 +210,9 @@ export function ActionToolbar({
         </button>
         <ZohoMenu open={openMenu === "new"} onClose={close} labelledBy="tb-new-btn" widthPx={405}
           onSelect={(k) => {
-            if (k === "folder") WorkdriveEvents.createFolder();
-            else if (k === "upload") WorkdriveEvents.upload();
-            else if (k === "uploadFolder") WorkdriveEvents.uploadFolder();
+            if (k === "folder") WorkdriveEvents.createFolder(currentFolderId ?? null);
+            else if (k === "upload") WorkdriveEvents.upload(currentFolderId ?? null);
+            else if (k === "uploadFolder") WorkdriveEvents.uploadFolder(currentFolderId ?? null);
             else if (k === "workflow") { close(); router.push("/files/workflows/builder"); }
             else if (k === "templates") { close(); router.push(currentFolderId ? `/files/templates?folderId=${encodeURIComponent(currentFolderId)}` : "/files/templates"); }
             else if (k === "externalApps") WorkdriveEvents.externalApps();

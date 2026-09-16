@@ -34,9 +34,8 @@ export default function SharedLinksPage() {
     };
   }, []);
 
-  const handleCopy = async (resourceId?: string) => {
-    if (!resourceId) return;
-    const url = `${window.location.origin}/files/${resourceId}`;
+  const handleCopy = async (url?: string) => {
+    if (!url) return;
     try {
       await navigator.clipboard.writeText(url);
       setToast(label("share.copied"));
@@ -130,7 +129,7 @@ export default function SharedLinksPage() {
                     <td className="px-3 py-2.5 text-end">
                       <button
                         type="button"
-                        onClick={() => handleCopy(link.resourceId ?? link.id)}
+                        onClick={() => void handleCopy(link.linkUrl)}
                         className="rounded-md px-2.5 py-1.5 text-[12.5px] text-[#1B66EA] hover:bg-[#EEF3FD]"
                       >
                         {label("share.copyLink")}

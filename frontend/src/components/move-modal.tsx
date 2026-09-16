@@ -15,8 +15,8 @@ const SIDE_SECTIONS: Array<{ key: string; labelKey: string; icon: React.ReactNod
   { key: "team", labelKey: "admin.teamFolders", icon: <Icons.inbox size={14} className="text-[color:var(--wd-primary)]" /> },
 ];
 
-export function MoveModal({ resourceName, mode = "move", onClose, onMove }: {
-  resourceName: string; mode?: "move" | "copy"; onClose: () => void; onMove: (destinationFolderId: string | null) => Promise<void>;
+export function MoveModal({ resourceName, resourceType = "FILE", resourceId, mode = "move", onClose, onMove }: {
+  resourceName: string; resourceType?: "FILE" | "FOLDER"; resourceId?: string; mode?: "move" | "copy"; onClose: () => void; onMove: (destinationFolderId: string | null) => Promise<void>;
 }) {
   const { label } = useLocale();
   const [folders, setFolders] = useState<FlatFolder[]>([]);
@@ -53,9 +53,10 @@ export function MoveModal({ resourceName, mode = "move", onClose, onMove }: {
   };
   useEffect(() => { void loadTree(); }, [label]);
 
-  const filtered = search.trim()
+  const invalidDestinationIds = new Set(resourceType === "FOLDER" && resourceId ? [resourceId] : []);
+  const filtered = (search.trim()
     ? folders.filter((f) => f.name.toLowerCase().includes(search.trim().toLowerCase()))
-    : folders;
+    : folders).filter((f) => !invalidDestinationIds.has(f.id));
 
   async function createNewFolder() {
     const name = newName.trim(); if (!name) return;

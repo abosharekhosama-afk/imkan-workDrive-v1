@@ -162,7 +162,7 @@ export default function FavoritesPage() {
                       context={{
                         resourceType: item.resourceType,
                         canMutate: true,
-                        canShare: true,
+                        canShare: item.resourceType === "FILE",
                         canFavorite: true,
                         isFavorite: true,
                       }}
@@ -234,6 +234,8 @@ export default function FavoritesPage() {
       {moveTarget ? (
         <MoveModal
           resourceName={moveTarget.name}
+          resourceType={moveTarget.type}
+          resourceId={moveTarget.id}
           onClose={() => setMoveTarget(null)}
           onMove={async (destinationFolderId) => {
             if (moveTarget.type === "FOLDER") {

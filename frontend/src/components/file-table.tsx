@@ -243,7 +243,7 @@ export function FileTable({
             <tr key={folder.id} draggable={Boolean(canMutate)} onDoubleClick={() => onOpen?.("FOLDER", folder.id, folder.name)} onContextMenu={(e) => { e.preventDefault(); setCtxMenu({ x: e.clientX, y: e.clientY, node: (<FileContextMenu
               handlers={{
                 onOpen: onOpen ? () => onOpen("FOLDER", folder.id, folder.name) : undefined,
-                onShare: canShare ? () => onShare("FOLDER", folder.id) : undefined,
+                onShare: undefined,
                 onRename: canMutate ? () => onRename("FOLDER", folder.id, folder.name) : undefined,
                 onMove: onMove && canMutate ? () => onMove("FOLDER", folder.id, folder.name) : undefined,
                     onCopy: onCopy && canMutate ? () => onCopy("FOLDER", folder.id, folder.name) : undefined,
@@ -283,13 +283,13 @@ export function FileTable({
                   context={{
                     resourceType: "FOLDER",
                     canMutate,
-                    canShare,
+                    canShare: false,
                     canFavorite: onFavorite != null,
                     isFavorite: favoriteIds.has(folder.id),
                   }}
                   handlers={{
                     onOpen: onOpen ? () => onOpen("FOLDER", folder.id, folder.name) : undefined,
-                    onShare: canShare ? () => onShare("FOLDER", folder.id) : undefined,
+                    onShare: undefined,
                     onRename: canMutate ? () => onRename("FOLDER", folder.id, folder.name) : undefined,
                     onMove: onMove && canMutate ? () => onMove("FOLDER", folder.id, folder.name) : undefined,
                     onCopy: onCopy && canMutate ? () => onCopy("FOLDER", folder.id, folder.name) : undefined,

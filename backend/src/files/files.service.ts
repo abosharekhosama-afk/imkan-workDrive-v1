@@ -1569,6 +1569,8 @@ export class FilesService {
     const teamFolderId = file.folder?.teamFolderId ?? null;
     if (!teamFolderId) {
       if (this.permissions.canRead(user, this.toAccessibleResource(file))) return true;
+      const folderShare = await this.hasFolderShareAccess(user, (file as any).id);
+      if (folderShare) return true;
       const share = await this.prisma.fileShare.findFirst({
         where: {
           fileId: (file as any).id,
@@ -1583,6 +1585,19 @@ export class FilesService {
     }
     const resource = await this.toTeamFolderResource(user, file.orgId, teamFolderId);
     return this.permissions.canRead(user, resource);
+  }
+
+  private async hasFolderShareAccess(user: AccessTokenPayload, fileId: string): Promise<boolean> {
+    const file = await this.prisma.file.findFirst({ where: { id: fileId, orgId: user.org_id }, select: { folderId: true } });
+    let current = file?.folderId ?? null; const ids: string[] = [];
+    for (let i = 0; i < 100 && current; i++) {
+      ids.push(current);
+      const parent = await this.prisma.folder.findFirst({ where: { id: current, orgId: user.org_id }, select: { parentId: true } });
+      current = parent?.parentId ?? null;
+    }
+    if (!ids.length) return false;
+    const share = await this.prisma.folderShare.findFirst({ where: { orgId: user.org_id, folderId: { in: ids }, status: 'ACTIVE', recipients: { some: { userId: user.sub, orgId: user.org_id } }, OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }] }, select: { id: true } });
+    return !!share;
   }
 
   private async toTeamFolderResource(

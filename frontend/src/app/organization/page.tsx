@@ -55,8 +55,10 @@ export default function OrganizationPage() {
   const [accountPassword, setAccountPassword] = useState("");
   const [accountRole, setAccountRole] = useState<"MEMBER" | "ADMIN">("MEMBER");
   const [accountSuccess, setAccountSuccess] = useState("");
+  const [loading, setLoading] = useState(true);
 
   async function load() {
+    setLoading(true);
     try {
       const [o, m, i] = await Promise.all([
         getOrganization(),
@@ -69,6 +71,8 @@ export default function OrganizationPage() {
       setInvitations(i);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Unable to load organization");
+    } finally {
+      setLoading(false);
     }
   }
 
@@ -184,6 +188,10 @@ export default function OrganizationPage() {
       }) satisfies Record<InvitationState, { className: string; key: string }>,
     [],
   );
+
+  if (loading) {
+    return <div className="wd-page"><div className="wd-alert" role="status">Loading organization…</div></div>;
+  }
 
   if (org?.role !== "ADMIN" && org?.role !== "SUPER_ADMIN") {
     return (
@@ -413,7 +421,7 @@ export default function OrganizationPage() {
                       className="wd-input"
                       style={{ height: 30, width: "auto", paddingInline: 8 }}
                       value={m.role}
-                      disabled={m.id === currentUserId}
+                      disabled={m.userId === currentUserId}
                       onChange={async (e) => {
                         try {
                           await updateOrganizationMember(m.id, e.target.value as OrgRole);
@@ -434,7 +442,7 @@ export default function OrganizationPage() {
                     <button
                       type="button"
                       className="wd-btn wd-btn-danger wd-btn-sm"
-                      disabled={m.id === currentUserId}
+                      disabled={m.userId === currentUserId}
                       onClick={async () => {
                         if (!window.confirm(label("org.removeConfirm"))) return;
                         try {

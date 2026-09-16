@@ -18,12 +18,23 @@ export function UploadZone({ folderId, onUploaded, triggerOnly = false }: { fold
   // Top-bar Quick Action button delegates to this zone's real file input so
   // drag-and-drop, progress and toasts all live in one pipeline.
   useEffect(() => {
-    const trigger = () => inputRef.current?.click();
-    const triggerFolder = () => folderInputRef.current?.click();
+    const trigger = (event: Event) => {
+      const requestedFolderId = (event as CustomEvent<{ folderId?: string | null }>).detail?.folderId;
+      // The toolbar is the source of truth for the current folder. Ignore
+      // stale events targeted at another folder instead of uploading into the
+      // wrong location.
+      if (requestedFolderId !== undefined && requestedFolderId !== folderId) return;
+      inputRef.current?.click();
+    };
+    const triggerFolder = (event: Event) => {
+      const requestedFolderId = (event as CustomEvent<{ folderId?: string | null }>).detail?.folderId;
+      if (requestedFolderId !== undefined && requestedFolderId !== folderId) return;
+      folderInputRef.current?.click();
+    };
     window.addEventListener("workdrive:trigger-upload", trigger);
     window.addEventListener("workdrive:trigger-upload-folder", triggerFolder);
     return () => { window.removeEventListener("workdrive:trigger-upload", trigger); window.removeEventListener("workdrive:trigger-upload-folder", triggerFolder); };
-  }, []);
+  }, [folderId]);
 
   const upload = useCallback(async (item: UploadQueueItem) => {
     setItems((current) => updateUploadQueueItem(current, item.id, { status: "processing", progress: null, error: undefined }));

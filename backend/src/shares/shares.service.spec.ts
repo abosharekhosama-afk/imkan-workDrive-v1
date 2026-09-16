@@ -30,6 +30,8 @@ describe('SharesService', () => {
       updateMany: jest.fn(),
       findMany: jest.fn(),
     },
+    folderShare: { create: jest.fn(), findFirst: jest.fn(), update: jest.fn(), updateMany: jest.fn(), findMany: jest.fn() },
+    folderShareRecipient: { findFirst: jest.fn(), deleteMany: jest.fn(), findMany: jest.fn() },
     fileShareRecipient: {
       findFirst: jest.fn(),
       deleteMany: jest.fn(),

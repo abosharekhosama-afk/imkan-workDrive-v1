@@ -51,14 +51,23 @@ function PublicShareForm() {
       {error ? <p className="mt-3">{error}</p> : null}
       {result ? (
         <div className="mt-3 text-[length:var(--imkan-font-size-secondary)]">
-          <p>
-            {result.resource_type} {result.resource_id}
-          </p>
-          {result.download_url ? (
-            <a href={result.download_url} className="underline">
-              {label("files.download")}
-            </a>
-          ) : null}
+          {result.resource_type === "FILE" ? (
+            result.download_url ? <a href={result.download_url} className="underline">{label("files.download")}</a> : null
+          ) : (
+            <div className="mt-4 rounded-xl border border-slate-200 bg-white p-3">
+              <div className="mb-2 font-medium">{label("share.folderContents")}</div>
+              {result.items?.length ? (
+                <div className="divide-y divide-slate-100">
+                  {result.items.map((item) => (
+                    <div key={`${item.resource_type}:${item.resource_id}`} className="flex items-center justify-between gap-3 py-2">
+                      <span className="truncate">{item.path ?? item.name}</span>
+                      {item.resource_type === "FILE" && item.download_url ? <a href={item.download_url} className="shrink-0 underline">{label("files.download")}</a> : null}
+                    </div>
+                  ))}
+                </div>
+              ) : <p className="text-slate-500">{label("shared.noSharedItems")}</p>}
+            </div>
+          )}
         </div>
       ) : null}
     </section>

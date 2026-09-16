@@ -1,16 +1,26 @@
 "use client";
 import { useEffect, useMemo, useState } from "react";
 import { useLocale } from "./locale-provider";
-import { getWorkflow, listWorkflowParticipantOptions, listWorkflows, startWorkflow, type Workflow, type WorkflowParticipantOptions } from "../lib/api/workflows";
+import { listWorkflowParticipantOptions, listWorkflows, startWorkflow, type Workflow, type WorkflowParticipantOptions } from "../lib/api/workflows";
 import { Modal } from "./modal";
 
 type Field = { id:string; name:string; description?:string; type:string; required?:boolean; defaultValue?:string; max?:number; options?:string[] };
 type Rule = { type:"USER"|"GROUP"|"ROLE"; ids?:string[]; roles?:string[] };
 
 export function WorkflowPicker({resourceType,resourceId,resourceName,onClose,onStarted}:{resourceType:"FILE"|"FOLDER";resourceId:string;resourceName:string;onClose:()=>void;onStarted:()=>void}){
- const {label}=useLocale(); const [rows,setRows]=useState<Workflow[]>([]); const [loading,setLoading]=useState(true); const [selected,setSelected]=useState<Workflow|null>(null); const [detail,setDetail]=useState<Workflow|null>(null); const [options,setOptions]=useState<WorkflowParticipantOptions|null>(null); const [fieldValues,setFieldValues]=useState<Record<string,unknown>>({}); const [users,setUsers]=useState<string[]>([]); const [groups,setGroups]=useState<string[]>([]); const [roles,setRoles]=useState<string[]>([]); const [comment,setComment]=useState(""); const [busy,setBusy]=useState(false); const [error,setError]=useState("");
+ const {label}=useLocale(); const [rows,setRows]=useState<Workflow[]>([]); const [loading,setLoading]=useState(true); const [detail,setDetail]=useState<Workflow|null>(null); const [options,setOptions]=useState<WorkflowParticipantOptions|null>(null); const [fieldValues,setFieldValues]=useState<Record<string,unknown>>({}); const [users,setUsers]=useState<string[]>([]); const [groups,setGroups]=useState<string[]>([]); const [roles,setRoles]=useState<string[]>([]); const [comment,setComment]=useState(""); const [busy,setBusy]=useState(false); const [error,setError]=useState("");
  useEffect(()=>{ void listWorkflows().then(r=>setRows(r.filter(x=>x.mode==="MANUAL"&&x.resourceType===resourceType&&x.status==="ACTIVE"))).catch(e=>setError(e instanceof Error?e.message:"Unable to load workflows")).finally(()=>setLoading(false)); },[resourceType]);
- const loadDetail=async(w:Workflow)=>{setError("");setSelected(w);try{const [full,opts]=await Promise.all([getWorkflow(w.id),listWorkflowParticipantOptions()]);setDetail(full);setOptions(opts);const fields=(full.steps.find(s=>s.kind==="WORKFLOW_FIELDS")?.config.value as Field[]|undefined)??[];setFieldValues(Object.fromEntries(fields.filter(f=>f.defaultValue!==undefined).map(f=>[f.id,f.defaultValue])));}catch(e){setError(e instanceof Error?e.message:"Unable to load workflow details");}};
+ const loadDetail=async(w:Workflow)=>{setError("");try{
+   // The list endpoint already returns the complete workflow definition needed
+   // by the start dialog. Do not re-fetch /workflows/:id here: that second
+   // request could race with activation/deactivation and was the source of the
+   // observed 404 immediately after choosing a workflow. The server still
+   // re-validates the workflow and resource when Start is pressed.
+   const opts=await listWorkflowParticipantOptions();
+   setDetail(w);setOptions(opts);
+   const fields=(w.steps.find(s=>s.kind==="WORKFLOW_FIELDS")?.config.value as Field[]|undefined)??[];
+   setFieldValues(Object.fromEntries(fields.filter(f=>f.defaultValue!==undefined).map(f=>[f.id,f.defaultValue])));
+  }catch(e){setError(e instanceof Error?e.message:"Unable to load workflow details");}};
  const fields=useMemo(()=>((detail?.steps.find(s=>s.kind==="WORKFLOW_FIELDS")?.config.value as Field[]|undefined)??[]),[detail]);
  const needsStarterParticipants=useMemo(()=>detail?.transitions.some(t=>t.actions.some(a=>a.type==="request_approval"&&a.config?.allowStarterParticipants===true))??false,[detail]);
  const rules:Rule[]=[...(users.length?[{type:"USER" as const,ids:users}]:[]),...(groups.length?[{type:"GROUP" as const,ids:groups}]:[]),...(roles.length?[{type:"ROLE" as const,roles}]:[])];
@@ -24,6 +34,7 @@ export function WorkflowPicker({resourceType,resourceId,resourceName,onClose,onS
   try{
     await startWorkflow(detail.id,{
       fileId:resourceId,
+      resourceId,
       folderId:resourceType === "FOLDER" ? resourceId : undefined,
       name:resourceName,
       resourceType,

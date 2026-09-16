@@ -258,6 +258,8 @@ model Organization {
   fileVersions        FileVersion[]
   storageObjects      StorageObject[]
   shares              FileShare[]
+  folderShares        FolderShare[]
+  folderShareRecipients FolderShareRecipient[]
   shareRecipients     FileShareRecipient[]
   auditLogs           AuditLog[]
   favorites           Favorite[]
@@ -317,6 +319,8 @@ model User {
   favorites              Favorite[]
   accessEvents           AccessEvent[]
   shareRecipients        FileShareRecipient[]
+  folderShareRecipients   FolderShareRecipient[]
+  folderSharesCreated     FolderShare[] @relation("FolderShareCreator")
   sharesCreated          FileShare[]            @relation("FileShareCreator")
   sessions               Session[]
   notifications          Notification[]
@@ -403,6 +407,7 @@ model Folder {
   files        File[]
   trashEntries TrashEntry[]
   permissions  FolderPermission[]
+  shares       FolderShare[]
 
   @@index([orgId, parentId])
   @@index([orgId, teamFolderId])
@@ -450,6 +455,7 @@ model File {
   tags           FileTag[]
   trashEntries   TrashEntry[]
   shares         FileShare[]
+  folderShares   FolderShare[]
   malwareScans   MalwareScan[]
 
   @@index([orgId, folderId])
@@ -639,6 +645,50 @@ model FileShareRecipient {
   @@unique([shareId, userId])
   @@index([orgId, userId])
   @@map("file_share_recipients")
+}
+
+
+/// Share of a folder: direct recipients or a public link. The share grants
+/// access to the complete descendant tree while it remains active.
+model FolderShare {
+  id           String          @id @default(uuid()) @db.Char(36)
+  orgId        String          @map("org_id") @db.Char(36)
+  folderId     String          @map("folder_id") @db.Char(36)
+  createdById  String          @map("created_by_id") @db.Char(36)
+  permission   SharePermission @default(VIEW)
+  status       ShareStatus     @default(ACTIVE)
+  linkToken    String          @unique @map("link_token")
+  passwordHash String?         @map("password_hash")
+  expiresAt    DateTime?       @map("expires_at")
+  canDownload  Boolean         @default(true) @map("can_download")
+  createdAt    DateTime        @default(now()) @map("created_at")
+  revokedAt    DateTime?       @map("revoked_at")
+
+  organization Organization            @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  folder       Folder                  @relation(fields: [folderId], references: [id], onDelete: Cascade)
+  createdBy    User                    @relation("FolderShareCreator", fields: [createdById], references: [id])
+  recipients   FolderShareRecipient[]
+
+  @@index([orgId, folderId])
+  @@index([orgId, status])
+  @@index([orgId, createdById])
+  @@map("folder_shares")
+}
+
+model FolderShareRecipient {
+  id        String      @id @default(uuid()) @db.Char(36)
+  orgId     String      @map("org_id") @db.Char(36)
+  shareId   String      @map("share_id") @db.Char(36)
+  userId    String      @map("user_id") @db.Char(36)
+  createdAt DateTime    @default(now()) @map("created_at")
+
+  organization Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  share        FolderShare @relation(fields: [shareId], references: [id], onDelete: Cascade)
+  user         User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([shareId, userId])
+  @@index([orgId, userId])
+  @@map("folder_share_recipients")
 }
 
 /// User-facing file timeline (activity feed). Not a security audit trail.
