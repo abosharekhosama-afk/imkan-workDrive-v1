@@ -1,9 +1,8 @@
-import { BadRequestException, Injectable, Logger, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, Injectable, Logger, NotFoundException, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { randomUUID } from 'node:crypto';
 import { PrismaService } from '../prisma/prisma.service';
 import { PermissionService } from '../permissions/permission.service';
-import { ForbiddenException } from '@nestjs/common';
 import { SharesService } from '../shares/shares.service';
 import type { AccessTokenPayload } from '../auth/jwt.types';
 import { dynamicValueCatalog, evaluateCondition, walkDynamicValues, resolveDynamicValue } from './workflow-runtime';
@@ -61,17 +60,22 @@ export class WorkflowEngineService implements OnModuleInit, OnModuleDestroy {
 
   async startManual(user: AccessTokenPayload, workflowId: string, event: WorkflowFileEvent) {
     const workflow = await this.prisma.workflow.findFirst({ where: { id: workflowId, orgId: user.org_id, status: 'ACTIVE' }, include: { steps: { orderBy: { position: 'asc' } }, states: { orderBy: { position: 'asc' } }, transitions: true, activeVersion: true } });
-    if (!workflow) throw new Error('Active workflow not found');
-    if (workflow.mode !== 'MANUAL') throw new Error('Only manual workflows can be started explicitly');
+    if (!workflow) throw new NotFoundException('Active workflow not found');
+    if (workflow.mode !== 'MANUAL') throw new BadRequestException('Only manual workflows can be started explicitly');
 
-    const resourceType = event.resourceType ?? 'FILE';
+    const resourceType = event.resourceType === 'FOLDER' ? 'FOLDER' : 'FILE';
+    if (workflow.resourceType !== resourceType) {
+      throw new BadRequestException(`This workflow is configured for ${workflow.resourceType.toLowerCase()} resources`);
+    }
+    const resourceId = String(event.fileId ?? '').trim();
+    if (!resourceId) throw new BadRequestException('A file or folder is required to start this workflow');
     if (resourceType === 'FILE') {
-      const file = await this.prisma.file.findFirst({ where: { id: event.fileId, orgId: user.org_id, deletedAt: null }, include: { folder: { select: { teamFolderId: true } } } });
+      const file = await this.prisma.file.findFirst({ where: { id: resourceId, orgId: user.org_id, deletedAt: null }, include: { folder: { select: { teamFolderId: true } } } });
       if (!file) throw new ForbiddenException('File is not available for this workflow');
       const allowed = this.permissions.canWrite(user, { orgId: file.orgId, ownerId: file.ownerId, teamFolderId: file.folder?.teamFolderId ?? null });
       if (!allowed) throw new ForbiddenException('You do not have write permission for this file');
     } else {
-      const folder = await this.prisma.folder.findFirst({ where: { id: event.fileId, orgId: user.org_id } });
+      const folder = await this.prisma.folder.findFirst({ where: { id: resourceId, orgId: user.org_id } });
       if (!folder) throw new ForbiddenException('Folder is not available for this workflow');
       const allowed = this.permissions.canWrite(user, { orgId: folder.orgId, ownerId: folder.ownerId, teamFolderId: folder.teamFolderId ?? null });
       if (!allowed) throw new ForbiddenException('You do not have write permission for this folder');
@@ -111,7 +115,7 @@ export class WorkflowEngineService implements OnModuleInit, OnModuleDestroy {
       if (!resolved.length) throw new BadRequestException('No active workflow participant was selected');
     }
     const normalizedInput = { fieldValues, ...(startParticipantRules ? { participantRules: startParticipantRules } : {}), comment: typeof input.comment === 'string' ? input.comment.trim().slice(0, 4000) : '' };
-    return this.enqueue(user, workflow.id, { ...event, eventType: 'manual', userId: user.sub, resourceType, startInput: normalizedInput }, definition, workflow.activeVersionId ?? undefined);
+    return this.enqueue(user, workflow.id, { ...event, fileId: resourceId, eventType: 'manual', userId: user.sub, resourceType, startInput: normalizedInput }, definition, workflow.activeVersionId ?? undefined);
   }
 
   private definitionFromWorkflow(workflow: { steps: Array<{ kind: string; config: unknown }>; states?: Array<{ id: string; terminal: boolean }>; transitions?: WorkflowTransitionLike[] }): WorkflowDefinition {

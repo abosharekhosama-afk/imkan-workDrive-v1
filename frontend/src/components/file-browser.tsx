@@ -249,11 +249,8 @@ export function FileBrowser({
 
   useEffect(() => {
     const focusNewFolder = () => setNewFolderOpen(true);
-    const triggerUpload = () => window.dispatchEvent(new Event("workdrive:trigger-upload"));
     const kind = searchParams.get("new");
     if (kind === "folder") setNewFolderOpen(true);
-    if (kind === "upload") window.setTimeout(triggerUpload, 50);
-    if (kind === "upload-folder") window.setTimeout(() => window.dispatchEvent(new Event("workdrive:trigger-upload-folder")), 50);
     const refreshAfterCreation = () => { void load(); };
     window.addEventListener("workdrive:new-folder", focusNewFolder);
     window.addEventListener("workdrive:content-changed", refreshAfterCreation);
@@ -261,7 +258,7 @@ export function FileBrowser({
       window.removeEventListener("workdrive:new-folder", focusNewFolder);
       window.removeEventListener("workdrive:content-changed", refreshAfterCreation);
     };
-  }, [searchParams]);
+  }, [searchParams, load]);
 
   // Inspector deep-link: "Version history" inside the details pane opens the drawer.
   // The handler is read through a ref so the listener subscribes exactly once
@@ -671,7 +668,16 @@ export function FileBrowser({
         <div className="space-y-4"><div><div className="text-[11px] text-slate-500">Resource</div><div className="text-sm font-medium">{workflowStatusTarget.resourceName}</div></div><div><div className="text-[11px] text-slate-500">Workflow</div><div className="text-sm font-medium">{workflowStatusTarget.status.workflowName}</div></div><div className="grid grid-cols-2 gap-3"><div><div className="text-[11px] text-slate-500">Status</div><div className="text-sm">{workflowStatusTarget.status.status}</div></div><div><div className="text-[11px] text-slate-500">Current state</div><div className="text-sm">{workflowStatusTarget.status.state?.name ?? '—'}</div></div></div>{workflowStatusTarget.status.myPendingTask ? <div className="rounded-md border border-slate-200 bg-slate-50 p-3"><div className="text-[11px] font-medium text-slate-500">Your action</div><div className="mt-1 text-sm">{workflowStatusTarget.status.myPendingTask.title}</div>{workflowStatusTarget.status.myPendingTask.dueAt ? <div className="mt-1 text-[11px] text-slate-500">Due {new Date(workflowStatusTarget.status.myPendingTask.dueAt).toLocaleString()}</div> : null}</div> : null}</div>
       </Modal>
     ) : null}
-    {workflowTarget ? <WorkflowPicker resourceType={workflowTarget.type} resourceId={workflowTarget.id} resourceName={workflowTarget.name} onClose={()=>setWorkflowTarget(null)} onStarted={()=>setToast("Workflow started")} /> : null}
+    {workflowTarget ? <WorkflowPicker
+      resourceType={workflowTarget.type}
+      resourceId={workflowTarget.id}
+      resourceName={workflowTarget.name}
+      onClose={()=>setWorkflowTarget(null)}
+      onStarted={() => {
+        setToast(label("common.success"));
+        void load();
+      }}
+    /> : null}
     {detailsTarget ? <FileDetailsModal data={detailsTarget} onClose={() => setDetailsTarget(null)} /> : null}
     {newFolderOpen ? (
       <Modal title={label("menu.newFolder")} onClose={() => setNewFolderOpen(false)}>

@@ -124,7 +124,14 @@ export function FileContextMenu({
         <div key={`g-${gi}`} className={gi > 0 ? "wd-menu-sep !my-1" : ""}>
           {group.map((it) => (
             <button key={it.key} type="button" role="menuitem"
-              onClick={() => { if (!it.submenu) { it.onSelect?.(); onClose(); } }}
+              onClick={(event) => {
+                event.preventDefault();
+                event.stopPropagation();
+                if (!it.submenu) {
+                  onClose();
+                  it.onSelect?.();
+                }
+              }}
               onMouseEnter={() => openSubmenu(Boolean(it.submenu))}
               data-active={it.submenu && openSub ? true : undefined}
               data-danger={it.danger || undefined}
@@ -140,7 +147,12 @@ export function FileContextMenu({
           style={{ left: left + menuW + 2, top: top + 36, width: 244 }}>
           {share.submenuItems.map((si) => (
             <button key={si.key} type="button" role="menuitem"
-              onClick={() => { si.onSelect?.(); onClose(); }}
+              onClick={(event) => {
+              event.preventDefault();
+              event.stopPropagation();
+              onClose();
+              si.onSelect?.();
+            }}
               className="wd-menu-item min-h-[34px] text-start">
               <span className="min-w-0 flex-1 truncate">{si.label}</span>
             </button>
