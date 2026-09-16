@@ -455,7 +455,6 @@ model File {
   tags           FileTag[]
   trashEntries   TrashEntry[]
   shares         FileShare[]
-  folderShares   FolderShare[]
   malwareScans   MalwareScan[]
 
   @@index([orgId, folderId])
