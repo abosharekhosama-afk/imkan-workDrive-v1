@@ -12,9 +12,14 @@ export class PrismaService extends PrismaClient implements OnModuleDestroy {
         $allModels: {
           async $allOperations({ model, operation, args, query }) {
             const orgId = getTenantStore()?.orgId;
-            if (!orgId) {
+
+            // استثناء الموديلات التي لا تحتوي على orgId
+            const excludedModels = ['User', 'Organization'];
+
+            if (!orgId || excludedModels.includes(model)) {
               return query(args);
             }
+
             const scoped = applyOrgScopeForOperation(
               model,
               operation,

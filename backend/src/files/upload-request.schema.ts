@@ -1,17 +1,13 @@
 import { BadRequestException, ForbiddenException } from '@nestjs/common';
 
-export const ALLOWED_UPLOAD_MIME_TYPES = new Set([
-  'application/pdf',
-  'application/zip',
-  'image/png',
-  'image/jpeg',
-  'image/gif',
-  'image/webp',
-  'text/plain',
-  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-  'application/vnd.openxmlformats-officedocument.presentationml.presentation',
-]);
+/**
+ * Universal upload support (P0): every well-formed `type/subtype` MIME type is
+ * accepted — images, documents, media, archives, code and unknown binary
+ * formats alike. The only rejected values are structurally invalid strings;
+ * content-type correctness is resolved later by `resolveMimeType` on the
+ * client and by magic-byte checks in the storage pipeline.
+ */
+const MIME_TYPE_RE = /^[a-zA-Z0-9][a-zA-Z0-9!#$&^_.+-]{0,126}\/[a-zA-Z0-9][a-zA-Z0-9!#$&^_.+-]{0,126}$/;
 
 export type UploadRequestInput = {
   name: string;
@@ -48,7 +44,7 @@ export function parseUploadRequest(body: unknown): UploadRequestInput {
   }
   if (
     typeof record.mime_type !== 'string' ||
-    !ALLOWED_UPLOAD_MIME_TYPES.has(record.mime_type)
+    !MIME_TYPE_RE.test(record.mime_type)
   ) {
     throw new BadRequestException('Invalid mime_type');
   }

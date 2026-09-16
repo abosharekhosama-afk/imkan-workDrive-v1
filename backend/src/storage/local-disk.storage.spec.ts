@@ -2,8 +2,8 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import {
-  BadRequestException,
   ForbiddenException,
+  NotFoundException,
   UnauthorizedException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
@@ -93,8 +93,10 @@ describe('LocalDiskStorageAdapter', () => {
       () => storage.createDownloadUrl(ownedByA),
     );
     const token = new URL(download.url).searchParams.get('token');
+    // A signed GET for bytes that were never uploaded (or vanished from the
+    // disk) must be a client-visible 404, never an unhandled ENOENT crash.
     await expect(storage.getObjectFromToken(token!)).rejects.toBeInstanceOf(
-      BadRequestException,
+      NotFoundException,
     );
   });
 });

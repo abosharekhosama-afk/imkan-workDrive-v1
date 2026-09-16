@@ -1,6 +1,8 @@
 import { getApiBaseUrl } from './client';
 
-export type AuthUser = { id: string; name: string | null; email: string; org_id: string; role: string };
+export type AuthUser = { id: string; name: string | null; email: string; org_id: string; role: string; membershipId?: string; membershipStatus?: string };
+export type OrganizationMembershipSummary = { id: string; organizationId: string; role: string; status: string; isPrimary: boolean; organization: { id: string; name: string } };
+
 export type AuthResult = { access_token: string; user: AuthUser };
 
 async function request<T>(path: string, body?: unknown): Promise<T> {
@@ -57,3 +59,5 @@ export function forgotPassword(email: string) { return request<{ok:boolean;reset
 export function resetPassword(token:string,password:string) { return request<{ok:boolean}>('/auth/reset-password',{token,password}); }
 export function logout(token:string) { return fetch(`${getApiBaseUrl()}/auth/logout`,{method:'POST',headers:{Authorization:`Bearer ${token}`}}); }
 export function logoutAll(token:string) { return fetch(`${getApiBaseUrl()}/auth/logout-all`,{method:'POST',headers:{Authorization:`Bearer ${token}`}}); }
+export function listMemberships(token?: string) { return token ? fetch(`${getApiBaseUrl()}/auth/memberships`, { headers: { Authorization: `Bearer ${token}` } }).then(async r => { if (!r.ok) throw new Error('Unable to load organizations'); return r.json() as Promise<OrganizationMembershipSummary[]>; }) : Promise.reject(new Error('Missing token')); }
+export function switchOrganization(token: string, organizationId: string) { return fetch(`${getApiBaseUrl()}/auth/organizations/switch`, { method: 'POST', headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ organizationId }) }).then(async r => { if (!r.ok) throw new Error(await r.text()); return r.json() as Promise<AuthResult>; }); }

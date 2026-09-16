@@ -1,10 +1,16 @@
 import {
   BadRequestException,
+  ConflictException,
   ForbiddenException,
   Injectable,
+  Logger,
   NotFoundException,
 } from '@nestjs/common';
-import { TeamFolderRole } from '@prisma/client';
+import { TeamFolderRole, MembershipStatus } from '@prisma/client';
+import {
+  TEAM_FOLDER_ERRORS,
+  isPrismaUniqueConstraintError,
+} from './team-folder.errors';
 import type { AccessTokenPayload } from '../auth/jwt.types';
 import {
   PermissionService,
@@ -22,16 +28,22 @@ export type TeamFolderListItem = {
   name: string;
   rootFolderId: string | null;
   role: TeamFolderRole | 'ORG_ADMIN';
+  /** Latest activity across the folder tree (folders + active files). */
+  updatedAt: string | null;
+  /** Summed byte size of active files in the folder tree. */
+  totalSize: number | null;
 };
 
 type ReadableTeamFolder = {
-  folder: { id: string; orgId: string; name: string };
+  folder: { id: string; orgId: string; name: string; isPublicToOrg?: boolean };
   role: TeamFolderRole | null;
   resource: AccessibleResource;
 };
 
 @Injectable()
 export class TeamFoldersService {
+  private readonly logger = new Logger(TeamFoldersService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly permissions: PermissionService,
@@ -78,26 +90,60 @@ export class TeamFoldersService {
   async list(
     user: AccessTokenPayload,
   ): Promise<{ teamFolders: TeamFolderListItem[] }> {
-    const folders = await this.prisma.teamFolder.findMany();
+    const folders = await this.prisma.teamFolder.findMany({ where: { orgId: user.org_id } });
     const visible: TeamFolderListItem[] = [];
     for (const folder of folders) {
       const role = await this.resolveCallerRole(user, folder.id);
       if (
         !this.permissions.canRead(
           user,
-          this.toAccessibleResource(folder.orgId, folder.id, role),
+          this.toAccessibleResource(folder.orgId, folder.id, role, folder.isPublicToOrg),
         )
       ) {
         continue;
       }
+      const stats = await this.computeTeamFolderStats(folder.id);
       visible.push({
         id: folder.id,
         name: folder.name,
         rootFolderId: await this.findRootFolderId(folder.id),
-        role: user.role === 'ADMIN' ? 'ORG_ADMIN' : (role as TeamFolderRole),
+        role: (user.role === 'ADMIN' || user.role === 'SUPER_ADMIN') ? 'ORG_ADMIN' : (role as TeamFolderRole),
+        updatedAt: stats.updatedAt,
+        totalSize: stats.totalSize,
       });
     }
     return { teamFolders: visible };
+  }
+
+  /**
+   * Last Modified / File Size for the Team Folders table. The TeamFolder
+   * model carries no timestamps, so both values derive from the folder tree:
+   * the newest folder/file update and the summed size of active files.
+   */
+  private async computeTeamFolderStats(
+    teamFolderId: string,
+  ): Promise<{ updatedAt: string | null; totalSize: number | null }> {
+    const folders = await this.prisma.folder.findMany({
+      where: { teamFolderId },
+      select: { updatedAt: true },
+    });
+    const fileAggregate = await this.prisma.file.aggregate({
+      _max: { updatedAt: true },
+      _sum: { size: true },
+      where: {
+        folder: { teamFolderId },
+        deletedAt: null,
+        status: 'ACTIVE',
+      },
+    });
+    const candidates: Date[] = folders.map((row) => row.updatedAt);
+    if (fileAggregate._max.updatedAt) candidates.push(fileAggregate._max.updatedAt);
+    const latest = candidates.length > 0 ? new Date(Math.max(...candidates.map((d) => d.getTime()))) : null;
+    const summedSize = fileAggregate._sum.size;
+    return {
+      updatedAt: latest ? latest.toISOString() : null,
+      totalSize: summedSize === null ? null : Number(summedSize),
+    };
   }
 
   async getById(user: AccessTokenPayload, id: string) {
@@ -174,34 +220,83 @@ export class TeamFoldersService {
     id: string,
     input: AddTeamFolderMemberInput,
   ) {
-    const { folder, resource } = await this.requireReadableTeamFolder(user, id);
-    this.assertCanManageMembers(user, resource);
-    this.assertCanAssignRole(user, resource, input.role);
-    const target = await this.requireSameOrgUser(
-      user,
-      folder.orgId,
-      input.userId,
-    );
-    const existing = await this.prisma.teamFolderMember.findFirst({
-      where: { teamFolderId: folder.id, userId: target.id },
+    const logContext = JSON.stringify({
+      operation: 'addMember',
+      actorId: user.sub,
+      orgId: user.org_id,
+      teamFolderId: id,
+      targetUserId: input.userId,
+      requestedRole: input.role,
     });
-    if (existing) {
-      throw new BadRequestException('Member already exists');
-    }
-    const created = await this.prisma.teamFolderMember.create({
-      data: {
+    this.logger.log(`Team Folder member assignment started ${logContext}`);
+    try {
+      const { folder, resource } = await this.requireReadableTeamFolder(user, id);
+      this.assertCanManageMembers(user, resource);
+      this.assertCanAssignRole(user, resource, input.role);
+      const target = await this.requireSameOrgUser(
+        user,
+        folder.orgId,
+        input.userId,
+      );
+
+      // Idempotency: intercept duplicate assignments up front so callers get
+      // a clear MEMBER_ALREADY_EXISTS response instead of an unhandled
+      // unique-constraint exception ("تعذر إكمال الطلب").
+      const existing = await this.prisma.teamFolderMember.findFirst({
+        where: { teamFolderId: folder.id, userId: target.id },
+      });
+      if (existing) {
+        this.logger.warn(
+          `Duplicate Team Folder membership suppressed ${JSON.stringify({ operation: 'addMember', teamFolderId: folder.id, userId: target.id })}`,
+        );
+        throw new ConflictException(TEAM_FOLDER_ERRORS.MEMBER_ALREADY_EXISTS);
+      }
+
+      // Atomic write: membership insert + audit entry commit or roll back
+      // together, preventing half-applied membership states.
+      const created = await this.prisma.$transaction(async (tx) => {
+        const member = await tx.teamFolderMember.create({
+          data: {
+            teamFolderId: folder.id,
+            userId: target.id,
+            orgId: folder.orgId,
+            role: input.role,
+          },
+        });
+        await tx.auditLog.create({
+          data: {
+            orgId: user.org_id,
+            actorId: user.sub,
+            action: 'TEAM_FOLDER_MEMBER_ADDED',
+            resourceType: 'TEAM_FOLDER',
+            resourceId: folder.id,
+          },
+        });
+        return member;
+      });
+
+      this.logger.log(
+        `Team Folder member assigned ${JSON.stringify({ operation: 'addMember', teamFolderId: folder.id, userId: created.userId, role: created.role })}`,
+      );
+      return {
         teamFolderId: folder.id,
-        userId: target.id,
-        orgId: folder.orgId,
-        role: input.role,
-      },
-    });
-    await this.auditMemberChange(user, folder.id, 'TEAM_FOLDER_MEMBER_ADDED');
-    return {
-      teamFolderId: folder.id,
-      userId: created.userId,
-      role: created.role,
-    };
+        userId: created.userId,
+        role: created.role,
+      };
+    } catch (error) {
+      if (isPrismaUniqueConstraintError(error)) {
+        // Race fallback: the same membership was inserted between the
+        // pre-check and the write. Surface it as a friendly conflict.
+        this.logger.warn(
+          `Duplicate Team Folder membership suppressed (unique constraint) ${logContext}`,
+        );
+        throw new ConflictException(TEAM_FOLDER_ERRORS.MEMBER_ALREADY_EXISTS);
+      }
+      this.logger.error(
+        `Team Folder member assignment failed ${logContext} error=${error instanceof Error ? `${error.name}: ${error.message}` : String(error)}`,
+      );
+      throw error;
+    }
   }
 
   async updateMember(
@@ -216,21 +311,45 @@ export class TeamFoldersService {
     this.assertCanChangeExistingRole(user, resource, membership.role);
     this.assertCanAssignRole(user, resource, input.role);
     await this.assertNotLastAdmin(folder.id, membership.role, input.role);
-    const updated = await this.prisma.teamFolderMember.update({
-      where: {
-        teamFolderId_userId: {
-          teamFolderId: folder.id,
-          userId: membership.userId,
-        },
-      },
-      data: { role: input.role },
-    });
-    await this.auditMemberChange(user, folder.id, 'TEAM_FOLDER_MEMBER_UPDATED');
-    return {
-      teamFolderId: folder.id,
-      userId: updated.userId,
-      role: updated.role,
-    };
+    try {
+      const updated = await this.prisma.$transaction(async (tx) => {
+        const row = await tx.teamFolderMember.update({
+          where: {
+            teamFolderId_userId: {
+              teamFolderId: folder.id,
+              userId: membership.userId,
+            },
+          },
+          data: { role: input.role },
+        });
+        await tx.auditLog.create({
+          data: {
+            orgId: user.org_id,
+            actorId: user.sub,
+            action: 'TEAM_FOLDER_MEMBER_UPDATED',
+            resourceType: 'TEAM_FOLDER',
+            resourceId: folder.id,
+          },
+        });
+        return row;
+      });
+      this.logger.log(
+        `Team Folder member role updated ${JSON.stringify({ operation: 'updateMember', teamFolderId: folder.id, userId: updated.userId, role: updated.role })}`,
+      );
+      return {
+        teamFolderId: folder.id,
+        userId: updated.userId,
+        role: updated.role,
+      };
+    } catch (error) {
+      if (isPrismaUniqueConstraintError(error)) {
+        throw new ConflictException(TEAM_FOLDER_ERRORS.MEMBER_ALREADY_EXISTS);
+      }
+      this.logger.error(
+        `Team Folder member role update failed ${JSON.stringify({ operation: 'updateMember', teamFolderId: folder.id, userId })} error=${error instanceof Error ? `${error.name}: ${error.message}` : String(error)}`,
+      );
+      throw error;
+    }
   }
 
   async removeMember(user: AccessTokenPayload, id: string, userId: string) {
@@ -239,15 +358,35 @@ export class TeamFoldersService {
     const membership = await this.requireMembership(folder.id, userId);
     this.assertCanChangeExistingRole(user, resource, membership.role);
     await this.assertNotLastAdmin(folder.id, membership.role, null);
-    await this.prisma.teamFolderMember.delete({
-      where: {
-        teamFolderId_userId: {
-          teamFolderId: folder.id,
-          userId: membership.userId,
-        },
-      },
-    });
-    await this.auditMemberChange(user, folder.id, 'TEAM_FOLDER_MEMBER_REMOVED');
+    try {
+      await this.prisma.$transaction(async (tx) => {
+        await tx.teamFolderMember.delete({
+          where: {
+            teamFolderId_userId: {
+              teamFolderId: folder.id,
+              userId: membership.userId,
+            },
+          },
+        });
+        await tx.auditLog.create({
+          data: {
+            orgId: user.org_id,
+            actorId: user.sub,
+            action: 'TEAM_FOLDER_MEMBER_REMOVED',
+            resourceType: 'TEAM_FOLDER',
+            resourceId: folder.id,
+          },
+        });
+      });
+      this.logger.log(
+        `Team Folder member removed ${JSON.stringify({ operation: 'removeMember', teamFolderId: folder.id, userId: membership.userId })}`,
+      );
+    } catch (error) {
+      this.logger.error(
+        `Team Folder member removal failed ${JSON.stringify({ operation: 'removeMember', teamFolderId: folder.id, userId })} error=${error instanceof Error ? `${error.name}: ${error.message}` : String(error)}`,
+      );
+      throw error;
+    }
     return {
       teamFolderId: folder.id,
       userId: membership.userId,
@@ -259,14 +398,14 @@ export class TeamFoldersService {
     user: AccessTokenPayload,
     id: string,
   ): Promise<ReadableTeamFolder> {
-    const folder = await this.prisma.teamFolder.findFirst({ where: { id } });
+    const folder = await this.prisma.teamFolder.findFirst({ where: { id, orgId: user.org_id } });
     if (!folder) {
-      throw new NotFoundException('Team Folder not found');
+      throw new NotFoundException(TEAM_FOLDER_ERRORS.FOLDER_NOT_FOUND);
     }
     const role = await this.resolveCallerRole(user, folder.id);
-    const resource = this.toAccessibleResource(folder.orgId, folder.id, role);
+    const resource = this.toAccessibleResource(folder.orgId, folder.id, role, folder.isPublicToOrg);
     if (!this.permissions.canRead(user, resource)) {
-      throw new NotFoundException('Team Folder not found');
+      throw new NotFoundException(TEAM_FOLDER_ERRORS.FOLDER_NOT_FOUND);
     }
     return { folder, role, resource };
   }
@@ -276,7 +415,7 @@ export class TeamFoldersService {
     resource: AccessibleResource,
   ): void {
     if (!this.permissions.canManageMembers(user, resource)) {
-      throw new ForbiddenException('Not allowed to manage members');
+      throw new ForbiddenException(TEAM_FOLDER_ERRORS.INSUFFICIENT_PERMISSIONS);
     }
   }
 
@@ -286,7 +425,9 @@ export class TeamFoldersService {
     role: TeamFolderRole,
   ): void {
     if (!this.permissions.canAssignTeamFolderRole(user, resource, role)) {
-      throw new BadRequestException('Not allowed to assign this role');
+      throw new BadRequestException(
+        TEAM_FOLDER_ERRORS.ROLE_ASSIGNMENT_FORBIDDEN,
+      );
     }
   }
 
@@ -298,7 +439,9 @@ export class TeamFoldersService {
     if (
       !this.permissions.canAssignTeamFolderRole(user, resource, currentRole)
     ) {
-      throw new BadRequestException('Not allowed to change this member');
+      throw new BadRequestException(
+        TEAM_FOLDER_ERRORS.ROLE_ASSIGNMENT_FORBIDDEN,
+      );
     }
   }
 
@@ -308,12 +451,14 @@ export class TeamFoldersService {
     userId: string,
   ) {
     const target = await this.prisma.user.findFirst({ where: { id: userId } });
-    if (
-      !target ||
-      target.orgId !== user.org_id ||
-      target.orgId !== teamFolderOrgId
-    ) {
-      throw new NotFoundException('User not found');
+    if (!target) {
+      throw new NotFoundException(TEAM_FOLDER_ERRORS.USER_NOT_FOUND);
+    }
+    const membership = await this.prisma.organizationMembership.findFirst({
+      where: { userId: target.id, organizationId: user.org_id, status: MembershipStatus.ACTIVE },
+    });
+    if (!membership || membership.organizationId !== teamFolderOrgId) {
+      throw new NotFoundException(TEAM_FOLDER_ERRORS.USER_NOT_IN_ORGANIZATION);
     }
     return target;
   }
@@ -323,7 +468,7 @@ export class TeamFoldersService {
       where: { teamFolderId, userId },
     });
     if (!membership) {
-      throw new NotFoundException('Member not found');
+      throw new NotFoundException(TEAM_FOLDER_ERRORS.MEMBER_NOT_FOUND);
     }
     return membership;
   }
@@ -343,7 +488,7 @@ export class TeamFoldersService {
       where: { teamFolderId, role: TeamFolderRole.ADMIN },
     });
     if (adminCount <= 1) {
-      throw new BadRequestException('Cannot remove the last Team Folder ADMIN');
+      throw new BadRequestException(TEAM_FOLDER_ERRORS.LAST_FOLDER_ADMIN);
     }
   }
 
@@ -386,7 +531,7 @@ export class TeamFoldersService {
   }
 
   private async toTeamFolderResponse(
-    folder: { id: string; orgId: string; name: string },
+    folder: { id: string; orgId: string; name: string; isPublicToOrg?: boolean },
     role: TeamFolderRole | null,
     user: AccessTokenPayload,
   ) {
@@ -395,7 +540,7 @@ export class TeamFoldersService {
       orgId: folder.orgId,
       name: folder.name,
       rootFolderId: await this.findRootFolderId(folder.id),
-      role: user.role === 'ADMIN' ? 'ORG_ADMIN' : (role as TeamFolderRole),
+      role: (user.role === 'ADMIN' || user.role === 'SUPER_ADMIN') ? 'ORG_ADMIN' : (role as TeamFolderRole),
     };
   }
 
@@ -420,12 +565,14 @@ export class TeamFoldersService {
     orgId: string,
     teamFolderId: string,
     teamFolderRole: TeamFolderRole | null,
+    isPublicToOrg = false,
   ): AccessibleResource {
     return {
       orgId,
       ownerId: teamFolderId,
       teamFolderId,
       teamFolderRole,
+      isPublicToOrg,
     };
   }
 }

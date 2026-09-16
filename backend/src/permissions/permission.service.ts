@@ -1,5 +1,5 @@
 import { Inject, Injectable, Optional } from '@nestjs/common';
-import { TeamFolderRole } from '@prisma/client';
+import { TeamFolderRole, OrgRole } from '@prisma/client';
 import type { AccessTokenPayload } from '../auth/jwt.types';
 
 export const TEAM_FOLDER_MEMBERSHIP = 'TEAM_FOLDER_MEMBERSHIP';
@@ -22,7 +22,6 @@ export type AccessibleResource = {
   isPublicToOrg?: boolean;
 };
 
-/** @deprecated Use AccessibleResource. Kept so existing call sites keep compiling. */
 export type ShareableResource = AccessibleResource;
 
 const ASSIGNABLE_BY_ORGANIZER: ReadonlySet<TeamFolderRole> = new Set([
@@ -39,42 +38,88 @@ export class PermissionService {
   ) {}
 
   canCreateTeamFolder(user: AccessTokenPayload): boolean {
-    return user.role === 'ADMIN';
+    return user.role === OrgRole.ADMIN || user.role === OrgRole.SUPER_ADMIN;
   }
 
   canRead(user: AccessTokenPayload, resource: AccessibleResource): boolean {
     if (!this.isSameTenant(user, resource)) {
       return false;
     }
-    if (this.isOrgAdmin(user)) {
-      return true;
-    }
+    // Privacy invariant (P0): personal (non-team-folder) resources are strictly
+    // owner-only. Organization admins and super admins must NOT implicitly
+    // read them — they only gain visibility through explicit shares or team
+    // folder (workspace) membership.
     if (!this.isTeamFolderResource(resource)) {
-      return true;
+      return user.sub === resource.ownerId;
     }
+    if (this.isOrgSuperAdmin(user) || this.isOrgAdmin(user)) return true;
     return this.resolveTeamFolderRole(user, resource) !== null;
   }
 
+
+
+
+  canWrite(user: AccessTokenPayload, resource: AccessibleResource): boolean {
+  if (!this.isSameTenant(user, resource)) {
+    return false;
+  }
+
+  // 1. الملفات الشخصية: المالك يملك صلاحية التعديل والحذف دائماً مهما كانت رتبته
+  if (!this.isTeamFolderResource(resource)) {
+    return user.sub === resource.ownerId;
+  }
+
+  // 2. ملفات الفرق: الأدمنز والسوبر أدمنز يملكون الصلاحية دائماً
+  if (this.isOrgSuperAdmin(user) || this.isOrgAdmin(user)) {
+    return true;
+  }
+
+  // 3. باقي الأعضاء في مجلدات الفرق حسب الأدوار المحددة
+  const role = this.resolveTeamFolderRole(user, resource);
+  return (
+    role === TeamFolderRole.ADMIN ||
+    role === TeamFolderRole.ORGANIZER ||
+    role === TeamFolderRole.EDITOR
+  );
+}
+
+
+  
+  /*
   canWrite(user: AccessTokenPayload, resource: AccessibleResource): boolean {
     if (!this.isSameTenant(user, resource)) {
       return false;
     }
-    if (this.isOrgAdmin(user)) {
-      return true;
-    }
+    // Personal resources are strictly owner-only (privacy invariant) — even
+    // super admins cannot modify them unless explicitly shared/team-foldered.
     if (!this.isTeamFolderResource(resource)) {
-      return user.role === 'MEMBER' && user.sub === resource.ownerId;
+      return (user.role === OrgRole.MEMBER || user.role === OrgRole.ADMIN) && user.sub === resource.ownerId;
     }
+    if (this.isOrgSuperAdmin(user)) return true;
+    if (this.isOrgAdmin(user)) return true;
     const role = this.resolveTeamFolderRole(user, resource);
     return (
       role === TeamFolderRole.ADMIN ||
       role === TeamFolderRole.ORGANIZER ||
       role === TeamFolderRole.EDITOR
     );
-  }
+  }*/
 
   canShare(user: AccessTokenPayload, resource: AccessibleResource): boolean {
-    return this.canWrite(user, resource);
+    if (!this.isSameTenant(user, resource)) return false;
+    // Personal resources: only the owner (non-VIEWER) may share.
+    if (!this.isTeamFolderResource(resource)) return user.role !== 'VIEWER' && user.sub === resource.ownerId;
+    if (this.isOrgSuperAdmin(user)) return true;
+    if (this.isOrgAdmin(user)) return true;
+    const role = this.resolveTeamFolderRole(user, resource);
+    return role === TeamFolderRole.ADMIN || role === TeamFolderRole.ORGANIZER || role === TeamFolderRole.EDITOR;
+  }
+
+  canComment(user: AccessTokenPayload, resource: AccessibleResource): boolean {
+    if (!this.canRead(user, resource)) return false;
+    if (!this.isTeamFolderResource(resource)) return user.sub === resource.ownerId;
+    const role = this.resolveTeamFolderRole(user, resource);
+    return role === TeamFolderRole.ADMIN || role === TeamFolderRole.ORGANIZER || role === TeamFolderRole.EDITOR || role === TeamFolderRole.COMMENTER;
   }
 
   canManageTeamFolder(
@@ -87,9 +132,7 @@ export class PermissionService {
     ) {
       return false;
     }
-    if (this.isOrgAdmin(user)) {
-      return true;
-    }
+    if (this.isOrgSuperAdmin(user) || this.isOrgAdmin(user)) return true;
     return this.resolveTeamFolderRole(user, resource) === TeamFolderRole.ADMIN;
   }
 
@@ -103,9 +146,7 @@ export class PermissionService {
     ) {
       return false;
     }
-    if (this.isOrgAdmin(user)) {
-      return true;
-    }
+    if (this.isOrgSuperAdmin(user) || this.isOrgAdmin(user)) return true;
     const role = this.resolveTeamFolderRole(user, resource);
     return role === TeamFolderRole.ADMIN || role === TeamFolderRole.ORGANIZER;
   }
@@ -118,9 +159,7 @@ export class PermissionService {
     if (!this.canManageMembers(user, resource)) {
       return false;
     }
-    if (this.isOrgAdmin(user)) {
-      return true;
-    }
+    if (this.isOrgSuperAdmin(user) || this.isOrgAdmin(user)) return true;
     const actorRole = this.resolveTeamFolderRole(user, resource);
     if (actorRole === TeamFolderRole.ADMIN) {
       return true;
@@ -131,15 +170,23 @@ export class PermissionService {
     return false;
   }
 
+  isOrgAdmin(user: AccessTokenPayload): boolean {
+    return user.role === OrgRole.ADMIN;
+  }
+
+  isOrgSuperAdmin(user: AccessTokenPayload): boolean {
+    return user.role === OrgRole.SUPER_ADMIN;
+  }
+
+  isOrgAdminOrSuperAdmin(user: AccessTokenPayload): boolean {
+    return user.role === OrgRole.ADMIN || user.role === OrgRole.SUPER_ADMIN;
+  }
+
   private isSameTenant(
     user: AccessTokenPayload,
     resource: AccessibleResource,
   ): boolean {
     return user.org_id === resource.orgId;
-  }
-
-  private isOrgAdmin(user: AccessTokenPayload): boolean {
-    return user.role === 'ADMIN';
   }
 
   private isTeamFolderResource(resource: AccessibleResource): boolean {
@@ -153,8 +200,6 @@ export class PermissionService {
     user: AccessTokenPayload,
     resource: AccessibleResource,
   ): TeamFolderRole | null {
-    void resource.isPublicToOrg;
-
     if (Object.prototype.hasOwnProperty.call(resource, 'teamFolderRole')) {
       return resource.teamFolderRole ?? null;
     }

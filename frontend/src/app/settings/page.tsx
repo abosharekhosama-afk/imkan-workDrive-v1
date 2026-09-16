@@ -145,7 +145,7 @@ export default function SettingsPage() {
           {sessions.length === 0 ? (
             <p className="imkan-muted">{label("settings.noSessions")}</p>
           ) : (
-            <table className="imkan-table">
+            <div className="overflow-x-auto w-full max-w-full"><table className="imkan-table">
               <thead>
                 <tr className="imkan-table-row">
                   <th className="px-3 py-2 text-start font-medium">{label("settings.sessionId")}</th>
@@ -179,7 +179,7 @@ export default function SettingsPage() {
                   </tr>
                 ))}
               </tbody>
-            </table>
+            </table></div>
           )}
           <div className="imkan-field-actions">
             <button className="imkan-button-destructive" onClick={all}>

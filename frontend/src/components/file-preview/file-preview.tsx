@@ -5,6 +5,7 @@ import { useLocale } from "../locale-provider";
 import { PreviewToolbar } from "../preview-toolbar";
 import { getPreviewMimeCategory, getLanguageFromMime, type PreviewMimeCategory } from "../../lib/api/preview";
 import { useBlobPreview } from "../../lib/preview-blob";
+import { useRangedStream } from "../../lib/use-ranged-stream";
 
 interface FilePreviewProps {
   fileId: string;
@@ -19,6 +20,12 @@ interface FilePreviewProps {
   onPageChange?: (page: number) => void;
   onZoomChange?: (zoom: number) => void;
   onRotationChange?: (rotation: number) => void;
+  /**
+   * When true, media (`video/*`, `audio/*`) is loaded through progressive
+   * HTTP-Range hops against `/files/:id/stream` instead of a single blob
+   * download, so playback starts before the whole file has transferred.
+   */
+  rangeStream?: boolean;
 }
 
 interface PreviewComponentProps {
@@ -40,7 +47,7 @@ interface PreviewComponentProps {
 
 function UnsupportedPreview({ fileName, mimeType, previewUrl, onOpenInNewTab, onDownload, objectUrl, blobError, blobLoading, onBlobRetry }: PreviewComponentProps) {
   const { label } = useLocale();
-  const typeLabelKey = "preview.type." + getPreviewMimeCategory(mimeType) as "preview.type.pdf" | "preview.type.image" | "preview.type.video" | "preview.type.text";
+  const typeLabelKey = ("preview.type." + getPreviewMimeCategory(mimeType)) as "preview.type.pdf" | "preview.type.image" | "preview.type.video" | "preview.type.audio" | "preview.type.text";
   
   if (blobLoading) {
     return <LoadingPreview fileName={fileName} />;
@@ -118,11 +125,25 @@ export function FilePreview({
   onPageChange,
   onZoomChange,
   onRotationChange,
+  rangeStream = false,
 }: FilePreviewProps) {
   const { label } = useLocale();
   const category = getPreviewMimeCategory(mimeType);
-  
-  const { objectUrl, error: blobError, isLoading: blobLoading, retry: onBlobRetry } = useBlobPreview(previewUrl, mimeType);
+  const isStreamableMedia = rangeStream && (category === "video" || category === "audio");
+
+  const ranged = useRangedStream(isStreamableMedia ? previewUrl : undefined, mimeType);
+  const { objectUrl, error: blobError, isLoading: blobLoading, retry: onBlobRetry } = useBlobPreview(previewUrl, mimeType, !isStreamableMedia);
+
+  // When Range streaming owns the resource, media players receive the growing
+  // Blob URL from the stream loader instead of the (disabled) full-blob path.
+  const mediaSource = isStreamableMedia
+    ? {
+        objectUrl: ranged.objectUrl,
+        blobError: ranged.error,
+        blobLoading: ranged.loading,
+        onBlobRetry: ranged.retry,
+      }
+    : { objectUrl, blobError, blobLoading, onBlobRetry };
 
   const renderPreview = (): ReactNode => {
     switch (category) {
@@ -131,7 +152,9 @@ export function FilePreview({
       case "image":
         return <ImagePreview previewUrl={previewUrl} fileName={fileName} mimeType={mimeType} size={size} versionNumber={versionNumber} onZoomChange={onZoomChange} onRotationChange={onRotationChange} objectUrl={objectUrl} blobError={blobError} blobLoading={blobLoading} onBlobRetry={onBlobRetry} />;
       case "video":
-        return <VideoPreview previewUrl={previewUrl} fileName={fileName} mimeType={mimeType} size={size} versionNumber={versionNumber} objectUrl={objectUrl} blobError={blobError} blobLoading={blobLoading} onBlobRetry={onBlobRetry} />;
+        return <VideoPreview previewUrl={previewUrl} fileName={fileName} mimeType={mimeType} size={size} versionNumber={versionNumber} {...mediaSource} />;
+      case "audio":
+        return <AudioPreview previewUrl={previewUrl} fileName={fileName} mimeType={mimeType} size={size} versionNumber={versionNumber} {...mediaSource} />;
       case "text":
         return <TextPreview previewUrl={previewUrl} fileName={fileName} mimeType={mimeType} size={size} versionNumber={versionNumber} objectUrl={objectUrl} blobError={blobError} blobLoading={blobLoading} onBlobRetry={onBlobRetry} />;
       default:
@@ -631,6 +654,43 @@ function VideoPreview({
           )}
         </div>
       )}
+    </div>
+  );
+}
+
+function AudioPreview({
+  fileName,
+  mimeType,
+  size,
+  objectUrl,
+  blobError,
+  blobLoading,
+  onBlobRetry,
+}: PreviewComponentProps) {
+  const { label } = useLocale();
+
+  if (blobLoading) {
+    return <LoadingPreview fileName={fileName} />;
+  }
+
+  if (blobError) {
+    return <ErrorPreview fileName={fileName} error={blobError} onRetry={onBlobRetry} />;
+  }
+
+  if (!objectUrl) {
+    return (
+      <div className="flex-1 flex items-center justify-center bg-[color:var(--imkan-color-surface)]">
+        <div className="text-center p-8 text-[color:var(--imkan-color-muted)]">{label("preview.loading")}</div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex-1 flex flex-col items-center justify-center bg-[color:var(--imkan-color-surface)] gap-4 p-8">
+      <div className="wd-empty-icon" aria-hidden="true">🎧</div>
+      <p className="text-sm font-medium text-[color:var(--imkan-color-fg)]">{fileName}</p>
+      <audio src={objectUrl} controls preload="metadata" className="w-full max-w-md" aria-label={fileName} />
+      <span className="text-xs text-[color:var(--imkan-color-muted)]">{mimeType} · {formatSize(size)}</span>
     </div>
   );
 }

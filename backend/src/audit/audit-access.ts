@@ -1,7 +1,7 @@
 import type { AccessTokenPayload } from '../auth/jwt.types';
 
 export function canReadOrgAudit(user: AccessTokenPayload): boolean {
-  return user.role === 'ADMIN';
+  return user.role === 'ADMIN' || user.role === 'SUPER_ADMIN';
 }
 
 export function auditListWhere(user: AccessTokenPayload) {

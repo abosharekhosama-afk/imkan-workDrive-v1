@@ -38,16 +38,29 @@ describe('SearchService', () => {
     prisma.file.findMany.mockResolvedValue([]);
   });
 
-  it('runs full-text search scoped to the JWT tenant and excludes trash', async () => {
+  it('runs full-text search scoped to the JWT tenant, excludes trash and private My-Folder rows', async () => {
     await service.search(user, 'spec');
     expect(prisma.folder.findMany).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: { orgId: ORG_A, name: { search: 'spec' } },
+        where: {
+          orgId: ORG_A,
+          name: { search: 'spec' },
+          OR: [{ teamFolderId: { not: null } }, { ownerId: USER_A }],
+        },
       }),
     );
     expect(prisma.file.findMany).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: { orgId: ORG_A, deletedAt: null, name: { search: 'spec' } },
+        where: {
+          orgId: ORG_A,
+          deletedAt: null,
+          name: { search: 'spec' },
+          OR: [
+            { folder: null },
+            { folder: { teamFolderId: { not: null } } },
+            { folder: { ownerId: USER_A } },
+          ],
+        },
       }),
     );
   });

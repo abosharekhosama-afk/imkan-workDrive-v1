@@ -19,9 +19,13 @@ describe('FilesService trash restore', () => {
     assertObjectExists: jest.fn(),
     deleteObject: jest.fn(),
     deleteStoredObject: jest.fn(),
+    storeObject: jest.fn(async () => undefined),
+    assertStoredObjectExists: jest.fn(async () => undefined),
   };
   const prisma = {
     file: { findMany: jest.fn(), findFirst: jest.fn(), update: jest.fn() },
+    fileShare: { findFirst: jest.fn(async () => null) },
+    teamFolder: { findFirst: jest.fn(async () => null) },
     teamFolderMember: { findFirst: jest.fn() },
     auditLog: { create: jest.fn() },
     trashEntry: { create: jest.fn(), updateMany: jest.fn() },
@@ -52,7 +56,7 @@ describe('FilesService trash restore', () => {
 
   it('lists only trashed files for the JWT tenant', async () => {
     prisma.file.findMany.mockResolvedValue([
-      { id: FILE_A, deletedAt: new Date() },
+      { id: FILE_A, orgId: ORG_A, ownerId: USER_A, deletedAt: new Date(), folder: PERSONAL_FOLDER },
     ]);
     await service.listTrash(user);
     expect(prisma.file.findMany).toHaveBeenCalledWith(

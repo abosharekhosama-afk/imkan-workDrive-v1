@@ -136,10 +136,10 @@ describe('Team Folder ACL live integration (same-org non-member, MySQL)', () => 
 
     await prisma.organization.create({ data: { id: orgId, name: runTag } });
     await prisma.user.create({
-      data: { id: admin.id, orgId, email: admin.email, role: admin.role },
+      data: { id: admin.id, email: admin.email },
     });
     await prisma.user.create({
-      data: { id: member.id, orgId, email: member.email, role: member.role },
+      data: { id: member.id, email: member.email },
     });
 
     viewer = {
@@ -187,7 +187,7 @@ describe('Team Folder ACL live integration (same-org non-member, MySQL)', () => 
       soloAdmin,
     ]) {
       await prisma.user.create({
-        data: { id: row.id, orgId, email: row.email, role: row.role },
+        data: { id: row.id, email: row.email },
       });
     }
 
@@ -204,10 +204,33 @@ describe('Team Folder ACL live integration (same-org non-member, MySQL)', () => 
     await prisma.user.create({
       data: {
         id: adminB.id,
-        orgId: orgBId,
         email: adminB.email,
-        role: adminB.role,
       },
+    });
+
+    await prisma.organizationMembership.createMany({
+      data: [
+        admin,
+        member,
+        viewer,
+        editor,
+        organizer,
+        tfAdmin,
+        invitee,
+        soloAdmin,
+      ].map((user) => ({
+        id: randomUUID(),
+        userId: user.id,
+        organizationId: orgId,
+        role: user.role,
+        status: 'ACTIVE' as const,
+      })).concat({
+        id: randomUUID(),
+        userId: adminB.id,
+        organizationId: orgBId,
+        role: adminB.role,
+        status: 'ACTIVE' as const,
+      }),
     });
 
     for (const user of [admin, member, viewer, editor, organizer, tfAdmin, invitee, soloAdmin, adminB]) {
@@ -373,7 +396,14 @@ describe('Team Folder ACL live integration (same-org non-member, MySQL)', () => 
         where: { orgId: targetOrgId },
       });
       await prisma.teamFolder.deleteMany({ where: { orgId: targetOrgId } });
-      await prisma.user.deleteMany({ where: { orgId: targetOrgId } });
+      await prisma.organizationMembership.deleteMany({ where: { organizationId: targetOrgId } });
+      await prisma.user.deleteMany({
+        where: {
+          id: {
+            in: [admin.id, member.id, viewer.id, editor.id, organizer.id, tfAdmin.id, invitee.id, soloAdmin.id, adminB.id],
+          },
+        },
+      });
       await prisma.organization.deleteMany({ where: { id: targetOrgId } });
     }
     if (prisma) {

@@ -31,7 +31,7 @@
   --imkan-color-fg:      #222222;   /* FALLBACK */
   --imkan-color-muted:   #667085;   /* FALLBACK */
   --imkan-color-surface: #f7f8fa;   /* FALLBACK */
-  --imkan-color-primary: #00a884;   /* ✅ AUTHORITY — IMKAN One primary */
+  --imkan-color-primary: #2C66DD;   /* ✅ AUTHORITY — IMKAN One primary */
 
   /* ── Color: Semantic Aliases ─────────────────────────────────────────────
      These reference existing core tokens.  No new values are invented.

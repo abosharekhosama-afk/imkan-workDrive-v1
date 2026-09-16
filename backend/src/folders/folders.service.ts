@@ -4,7 +4,7 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { TeamFolderRole } from '@prisma/client';
+import { FileType, FileStatus, TeamFolderRole } from '@prisma/client';
 import type { AccessTokenPayload } from '../auth/jwt.types';
 import {
   PermissionService,
@@ -16,6 +16,7 @@ import { STORAGE_SERVICE, type StorageService } from '../storage/storage.types';
 import { CreateFolderInput } from './create-folder.schema';
 import type { BulkFolderOperationInput, FolderMoveCopyInput } from './operation.schema';
 import { randomUUID } from 'node:crypto';
+import { WorkflowEngineService } from '../workflows/workflow-engine.service';
 
 @Injectable()
 export class FoldersService {
@@ -23,7 +24,13 @@ export class FoldersService {
     private readonly prisma: PrismaService,
     private readonly permissions: PermissionService,
     @Inject(STORAGE_SERVICE) private readonly storage: StorageService,
+    private readonly workflowEngine: WorkflowEngineService,
   ) {}
+
+
+  private dispatchWorkflowFolderEvent(user: AccessTokenPayload, eventType: string, folder: { id: string; name: string; parentId?: string | null }) {
+    void this.workflowEngine.executeTrigger(user, { eventType, fileId: folder.id, name: folder.name, mimeType: null, fileType: 'OTHER', size: '0', userId: user.sub, folderId: folder.parentId ?? null, resourceType: 'FOLDER' }).catch(() => undefined);
+  }
 
 
   async move(user: AccessTokenPayload, id: string, input: FolderMoveCopyInput) {
@@ -32,6 +39,7 @@ export class FoldersService {
     if (input.destinationFolderId) await this.assertDestination(user, input.destinationFolderId, id);
     const updated = await this.prisma.folder.update({ where: { id }, data: { parentId: input.destinationFolderId } });
     await this.prisma.auditLog.create({ data: { orgId: user.org_id, actorId: user.sub, action: 'FOLDER_MOVED', resourceType: 'FOLDER', resourceId: id } });
+    this.dispatchWorkflowFolderEvent(user, 'move', updated);
     return updated;
   }
 
@@ -51,7 +59,9 @@ export class FoldersService {
     };
     const copiedId=await copyTree(folder.id,input.destinationFolderId);
     await this.prisma.auditLog.create({ data: { orgId: user.org_id, actorId: user.sub, action: 'FOLDER_COPIED', resourceType: 'FOLDER', resourceId: copiedId } });
-    return this.prisma.folder.findUnique({where:{id:copiedId}});
+    const copied = await this.prisma.folder.findUnique({where:{id:copiedId}});
+    if (copied) this.dispatchWorkflowFolderEvent(user, 'copy', copied);
+    return copied;
   }
 
   async permanentDelete(user: AccessTokenPayload, id: string) {
@@ -78,9 +88,47 @@ export class FoldersService {
   private async assertDestination(user:AccessTokenPayload,id:string,movingId:string){ if(id===movingId) throw new BadRequestException('Invalid destination'); const destination=await this.prisma.folder.findFirst({where:{id}}); if(!destination||destination.orgId!==user.org_id) throw new NotFoundException('Destination folder not found'); if(!(await this.canReadFolder(user,destination))||!this.permissions.canWrite(user,await this.toFolderAccessResource(user,destination))) throw new ForbiddenException('Not allowed to use destination folder'); let current=destination.parentId; while(current){ if(current===movingId) throw new BadRequestException('Cannot move a folder into its descendant'); const p=await this.prisma.folder.findFirst({where:{id:current},select:{parentId:true}}); current=p?.parentId??null; } }
   private async collectDescendantFiles(rootId:string){ const ids:string[]=[]; const walk=async(id:string)=>{ ids.push(id); const children=await this.prisma.folder.findMany({where:{parentId:id},select:{id:true}}); for(const c of children) await walk(c.id); }; await walk(rootId); return this.prisma.file.findMany({where:{folderId:{in:ids}},include:{versions:true}}); }
 
+  /**
+   * Aggregates subtree metrics for the given root folders: total active file
+   * size (recursive) and the latest contained-file updatedAt. Returned as two
+   * plain maps keyed by folder id so listings can show folder Size / Modified
+   * without mutating the `FolderRecord` shape used elsewhere.
+   */
+  private async folderTreeAggregates(rootIds:string[]):Promise<{ folderSizes:Record<string,number>; folderUpdatedAt:Record<string,string|null> }>{
+    const folderSizes:Record<string,number>={}; const folderUpdatedAt:Record<string,string|null>={};
+    if(rootIds.length===0) return { folderSizes, folderUpdatedAt };
+    const visited=new Set(rootIds); const parentOf=new Map<string,string|null>();
+    let frontier=[...rootIds];
+    while(frontier.length>0){
+      const children=await this.prisma.folder.findMany({where:{parentId:{in:frontier}},select:{id:true,parentId:true}});
+      const next:string[]=[];
+      for(const c of children){ if(visited.has(c.id)) continue; visited.add(c.id); parentOf.set(c.id,c.parentId); next.push(c.id); }
+      frontier=next;
+    }
+    const directSize=new Map<string,number>(); const directUpdated=new Map<string,string|null>();
+    if(visited.size>0){
+      const files=await this.prisma.file.findMany({where:{folderId:{in:[...visited]},deletedAt:null},select:{folderId:true,size:true,updatedAt:true}});
+      for(const f of files){
+        const folderId=f.folderId; if(!folderId) continue;
+        directSize.set(folderId,(directSize.get(folderId)??0)+Number(f.size??0));
+        const iso=typeof f.updatedAt==='string'?f.updatedAt:new Date(f.updatedAt).toISOString();
+        const prev=directUpdated.get(folderId) ?? null;
+        if(!prev||iso>prev) directUpdated.set(folderId,iso);
+      }
+    }
+    const total=new Map<string,number>(); const latest=new Map<string,string|null>();
+    for(const id of visited){ total.set(id,directSize.get(id)??0); latest.set(id,directUpdated.get(id)??null); }
+    const childrenByParent=new Map<string,string[]>();
+    for(const [child,parent] of parentOf){ if(!parent) continue; const arr=childrenByParent.get(parent)??[]; arr.push(child); childrenByParent.set(parent,arr); }
+    const merge=(id:string):void=>{ const kids=childrenByParent.get(id)??[]; for(const k of kids){ merge(k); const kSize=total.get(k)??0; total.set(id,(total.get(id)??0)+kSize); const kl=latest.get(k)??null; const il=latest.get(id)??null; if(kl&&(!il||kl>il)) latest.set(id,kl); } };
+    for(const id of rootIds) merge(id);
+    for(const id of rootIds){ folderSizes[id]=total.get(id)??0; folderUpdatedAt[id]=latest.get(id)??null; }
+    return { folderSizes, folderUpdatedAt };
+  }
+
   async create(user: AccessTokenPayload, input: CreateFolderInput) {
     const teamFolderId = await this.resolveCreateTeamFolderId(user, input);
-    return this.prisma.folder.create({
+    const created = await this.prisma.folder.create({
       data: {
         name: input.name,
         parentId: input.parentId,
@@ -89,9 +137,31 @@ export class FoldersService {
         orgId: user.org_id,
       },
     });
+    this.dispatchWorkflowFolderEvent(user, 'create', created);
+    return created;
   }
 
-  async listContents(user: AccessTokenPayload, parentId?: string) {
+  async getMyFolder(user: AccessTokenPayload) {
+    const membership = await this.prisma.organizationMembership.findFirst({
+      where: { userId: user.sub, organizationId: user.org_id, status: 'ACTIVE' },
+      select: { personalFolderId: true },
+    });
+    if (!membership?.personalFolderId) {
+      throw new NotFoundException('Personal folder not found');
+    }
+    return this.getById(user, membership.personalFolderId);
+  }
+
+  async listContents(user: AccessTokenPayload, parentId?: string, filters: {
+    type?: string;
+    status?: string;
+    ownerId?: string;
+    date?: string;
+    dateField?: string;
+    dateFrom?: string;
+    dateTo?: string;
+    query?: string;
+  } = {}) {
     if (parentId) {
       const parent = await this.prisma.folder.findFirst({
         where: { id: parentId },
@@ -100,18 +170,41 @@ export class FoldersService {
         throw new NotFoundException('Folder not found');
       }
     }
-    const folderWhere = parentId ? { parentId } : { parentId: null };
-    const fileWhere = parentId
-      ? { folderId: parentId, deletedAt: null }
-      : { folderId: null, deletedAt: null };
+    const folderWhere: Record<string, unknown> = { ...(parentId ? { parentId } : { parentId: null }), orgId: user.org_id };
+    const fileWhere: Record<string, unknown> = { ...(parentId ? { folderId: parentId } : { folderId: null }), orgId: user.org_id, deletedAt: null };
+    const normalizedType = String(filters.type ?? '').trim().toLowerCase();
+    const typeMap: Record<string, FileType[]> = {
+      document: [FileType.DOCUMENT, FileType.TEXT, FileType.CODE],
+      spreadsheet: [FileType.SPREADSHEET],
+      presentation: [FileType.PRESENTATION],
+      image: [FileType.IMAGE],
+      pdf: [FileType.PDF],
+    };
+    if (normalizedType && typeMap[normalizedType]) fileWhere.fileType = { in: typeMap[normalizedType] };
+    if (filters.ownerId) fileWhere.ownerId = filters.ownerId;
+    const status = String(filters.status ?? '').trim().toUpperCase();
+    if (status && Object.values(FileStatus).includes(status as FileStatus)) fileWhere.status = status as FileStatus;
+    const query = String(filters.query ?? '').trim();
+    if (query) { fileWhere.name = { contains: query }; folderWhere.name = { contains: query }; }
+    const dateFrom = filters.dateFrom || (filters.date ? new Date(`${filters.date}T00:00:00.000Z`).toISOString() : undefined);
+    const dateTo = filters.dateTo || (filters.date ? new Date(`${filters.date}T23:59:59.999Z`).toISOString() : undefined);
+    if (dateFrom || dateTo) {
+      const range: Record<string, string> = {};
+      if (dateFrom) range.gte = dateFrom;
+      if (dateTo) range.lte = dateTo;
+      const dateField = filters.dateField === 'created' ? 'createdAt' : 'updatedAt';
+      fileWhere[dateField] = range;
+      folderWhere[dateField] = range;
+    }
+    if (normalizedType && normalizedType !== 'folder') { folderWhere.id = '__filtered_out__'; }
     const [folders, files] = await Promise.all([
       this.prisma.folder.findMany({
-        where: folderWhere,
-        include: { owner: { select: { id: true, name: true, email: true } } },
+        where: folderWhere as any,
+        include: { owner: { select: { id: true, name: true, email: true, avatarUrl: true } } },
       }),
       this.prisma.file.findMany({
-        where: fileWhere,
-        include: { owner: { select: { id: true, name: true, email: true } } },
+        where: fileWhere as any,
+        include: { owner: { select: { id: true, name: true, email: true, avatarUrl: true } }, folder: { select: { teamFolderId: true } } },
       }),
     ]);
     const visibleFolders: typeof folders = [];
@@ -120,18 +213,27 @@ export class FoldersService {
         visibleFolders.push(folder);
       }
     }
-    return { folders: visibleFolders, files };
+    const visibleFiles: typeof files = [];
+    const pendingApprovalIds = status === 'PENDING_APPROVAL'
+      ? new Set((await this.prisma.workflowTask.findMany({ where: { orgId: user.org_id, status: 'PENDING' }, include: { run: { select: { trigger: true } } }, take: 500 })).map((task) => { const trigger = task.run.trigger as { fileId?: unknown }; return typeof trigger.fileId === 'string' ? trigger.fileId : null; }).filter((id): id is string => Boolean(id)))
+      : null;
+    for (const file of files) {
+      if (await this.canReadFile(user, file) && (!pendingApprovalIds || pendingApprovalIds.has(file.id))) visibleFiles.push(file);
+    }
+    const roots = visibleFolders.map((folder) => folder.id);
+    const aggregates = await this.folderTreeAggregates(roots);
+    return { folders: visibleFolders, files: visibleFiles, ...aggregates };
   }
 
-  async getById(user: AccessTokenPayload, id: string) {
+  async getById(user: AccessTokenPayload, id: string, filters: Parameters<FoldersService['listContents']>[2] = {}) {
     const folder = await this.prisma.folder.findFirst({
       where: { id },
-      include: { owner: { select: { id: true, name: true, email: true } } },
+      include: { owner: { select: { id: true, name: true, email: true, avatarUrl: true } } },
     });
     if (!folder || !(await this.canReadFolder(user, folder))) {
       throw new NotFoundException('Folder not found');
     }
-    const contents = await this.listContents(user, id);
+    const contents = await this.listContents(user, id, filters);
     return { ...folder, ...contents };
   }
 
@@ -160,6 +262,7 @@ export class FoldersService {
         resourceId: folder.id,
       },
     });
+    this.dispatchWorkflowFolderEvent(user, 'rename', updated);
     return updated;
   }
 
@@ -231,12 +334,12 @@ export class FoldersService {
     if (!teamFolder || teamFolder.orgId !== user.org_id) {
       throw new NotFoundException('Team Folder not found');
     }
-    const teamFolderRole = await this.resolveCallerRole(user, teamFolder.id);
-    const resource = this.toTeamFolderResource(
-      teamFolder.orgId,
-      teamFolder.id,
-      teamFolderRole,
-    );
+    //const teamFolderRole = await this.resolveCallerRole(user, teamFolder.id);
+    const resource = await this.toTeamFolderResource(
+    user,
+    teamFolder.orgId,
+    teamFolder.id,
+  );
     if (!this.permissions.canRead(user, resource)) {
       throw new NotFoundException('Team Folder not found');
     }
@@ -257,59 +360,88 @@ export class FoldersService {
     return membership?.role ?? null;
   }
 
-  private toTeamFolderResource(
-    orgId: string,
-    teamFolderId: string,
-    teamFolderRole: TeamFolderRole | null,
-  ): AccessibleResource {
-    return {
-      orgId,
-      ownerId: teamFolderId,
-      teamFolderId,
-      teamFolderRole,
-    };
-  }
+  private async toTeamFolderResource(
+  user: AccessTokenPayload,
+  orgId: string,
+  teamFolderId: string,
+): Promise<AccessibleResource> {
+  const [teamFolder, teamFolderRole] = await Promise.all([
+    this.prisma.teamFolder.findFirst({
+      where: { id: teamFolderId, orgId },
+      select: { isPublicToOrg: true },
+    }),
+    this.resolveCallerRole(user, teamFolderId),
+  ]);
+
+  return {
+    orgId,
+    ownerId: teamFolderId,
+    teamFolderId,
+    teamFolderRole,
+    isPublicToOrg: teamFolder?.isPublicToOrg ?? false,
+  };
+}
 
   private async toFolderAccessResource(
     user: AccessTokenPayload,
     folder: { orgId: string; ownerId: string; teamFolderId?: string | null },
   ): Promise<AccessibleResource> {
-    if (!folder.teamFolderId) {
-      return this.toAccessibleResource(folder);
-    }
-    const teamFolderRole = await this.resolveCallerRole(
-      user,
-      folder.teamFolderId,
-    );
-    return this.toTeamFolderResource(
-      folder.orgId,
-      folder.teamFolderId,
+    if (!folder.teamFolderId) return this.toAccessibleResource(folder);
+    const teamFolder = await this.prisma.teamFolder.findFirst({
+      where: { id: folder.teamFolderId, orgId: folder.orgId },
+      select: { isPublicToOrg: true },
+    });
+    const teamFolderRole = await this.resolveCallerRole(user, folder.teamFolderId);
+    return {
+      orgId: folder.orgId,
+      ownerId: folder.teamFolderId,
+      teamFolderId: folder.teamFolderId,
       teamFolderRole,
-    );
+      isPublicToOrg: teamFolder?.isPublicToOrg ?? false,
+    };
+  }
+
+  private async canReadFile(
+    user: AccessTokenPayload,
+    file: { orgId: string; ownerId: string; folder?: { teamFolderId: string | null } | null },
+  ): Promise<boolean> {
+    if (file.orgId !== user.org_id) return false;
+    const teamFolderId = file.folder?.teamFolderId ?? null;
+    if (teamFolderId) {
+      return this.permissions.canRead(user, await this.toTeamFolderResource(user, file.orgId, teamFolderId));
+    }
+    if (this.permissions.canRead(user, this.toAccessibleResource(file))) return true;
+    const share = await this.prisma.fileShare.findFirst({
+      where: {
+        fileId: (file as any).id,
+        orgId: user.org_id,
+        status: 'ACTIVE',
+        recipients: { some: { userId: user.sub, orgId: user.org_id } },
+        OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }],
+      },
+      select: { id: true },
+    });
+    return !!share;
   }
 
   private async canReadFolder(
     user: AccessTokenPayload,
     folder: { orgId: string; ownerId: string; teamFolderId?: string | null },
   ): Promise<boolean> {
-    if (folder.orgId !== user.org_id) {
-      return false;
-    }
-    if (!folder.teamFolderId) {
-      return this.permissions.canRead(user, this.toAccessibleResource(folder));
-    }
-    const teamFolderRole = await this.resolveCallerRole(
-      user,
-      folder.teamFolderId,
-    );
-    return this.permissions.canRead(
-      user,
-      this.toTeamFolderResource(
-        folder.orgId,
-        folder.teamFolderId,
-        teamFolderRole,
-      ),
-    );
+    if (folder.orgId !== user.org_id) return false;
+    if (!folder.teamFolderId) return this.permissions.canRead(user, this.toAccessibleResource(folder));
+    const teamFolder = await this.prisma.teamFolder.findFirst({
+      where: { id: folder.teamFolderId, orgId: folder.orgId },
+      select: { isPublicToOrg: true },
+    });
+    const teamFolderRole = await this.resolveCallerRole(user, folder.teamFolderId);
+    return this.permissions.canRead(user, {
+      orgId: folder.orgId,
+      ownerId: folder.teamFolderId,
+      teamFolderId: folder.teamFolderId,
+      teamFolderRole,
+      isPublicToOrg: teamFolder?.isPublicToOrg ?? false,
+    });
   }
 
   private toAccessibleResource(folder: {

@@ -19,6 +19,7 @@ import { QuotaModule } from './quota/quota.module';
 import { CommentsModule } from './comments/comments.module';
 import { NotificationsModule } from './notifications/notifications.module';
 import { OrganizationModule } from './organization/organization.module';
+import { FolderPermissionsModule } from './folder-permissions/folder-permissions.module';
 import { WorkflowsModule } from './workflows/workflows.module';
 
 @Module({
@@ -40,6 +41,7 @@ import { WorkflowsModule } from './workflows/workflows.module';
     QuotaModule,
     AdminModule,
     OrganizationModule,
+    FolderPermissionsModule,
     WorkflowsModule,
   ],
   controllers: [AppController],

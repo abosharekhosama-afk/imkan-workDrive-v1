@@ -4,20 +4,14 @@ import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import { useLocale } from "../../../components/locale-provider";
 import { listRecent, type RecentRecord } from "../../../lib/api/recent";
-import { fileIconSymbol } from "../../../components/file-icon-logic";
+import { fileIconKind, FileTypeIcon } from "../../../components/file-icon";
+import { formatBytes, resolveItemSize } from "../../../lib/api/quota";
 
 function formatDateTime(value: string): string {
   return new Intl.DateTimeFormat(undefined, {
     dateStyle: "medium",
     timeStyle: "short",
   }).format(new Date(value));
-}
-
-function formatSize(size: number | null | undefined): string {
-  if (size == null) return "—";
-  const kb = Number(size) / 1024;
-  if (kb < 1024) return `${Math.max(1, Math.round(kb))} KB`;
-  return `${(kb / 1024).toFixed(1)} MB`;
 }
 
 export default function RecentPage() {
@@ -92,7 +86,7 @@ export default function RecentPage() {
               <span className="wd-skel-bar" style={{ width: 130 }} />
             </div>
           ))}
-          <span className="sr-only" role="status">Loading</span>
+          <span className="sr-only" role="status">{label("common.loading")}</span>
         </div>
       ) : items.length === 0 ? (
         <div className="wd-card">
@@ -103,7 +97,7 @@ export default function RecentPage() {
           </div>
         </div>
       ) : (
-        <div className="wd-card overflow-x-auto">
+        <div className="wd-card overflow-x-auto w-full max-w-full">
           <table className="wd-table min-w-[46rem]">
             <thead>
               <tr>
@@ -128,7 +122,7 @@ export default function RecentPage() {
                     <td>
                       <div className="wd-name-cell">
                         <span className="icon" aria-hidden="true">
-                          {fileIconSymbol(isFolder ? "folder" : "file", item.mimeType ?? undefined, item.name)}
+                          <FileTypeIcon size={18} kind={fileIconKind(isFolder ? "folder" : "file", item.mimeType ?? undefined, item.name)} />
                         </span>
                         <span>
                           <Link href={targetHref} className="wd-name-link">{item.name}</Link>
@@ -137,7 +131,7 @@ export default function RecentPage() {
                       </div>
                     </td>
                     <td className="num imkan-muted">
-                      {isFolder ? "—" : formatSize(item.size)}
+                      {isFolder ? "—" : formatBytes(resolveItemSize(item) ?? 0)}
                     </td>
                     <td className="imkan-muted">
                       {item.location ?? label("files.breadcrumb.root")}

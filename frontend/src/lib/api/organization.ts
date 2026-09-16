@@ -1,4 +1,4 @@
-import { apiRequest } from './client';
+import { apiRequest, getApiBaseUrl } from './client';
 export type OrgRole = 'ADMIN' | 'MEMBER';
 export type Organization = { id: string; name: string; createdAt: string; members: number; pendingInvitations: number; role: OrgRole };
 export type OrgMember = { id: string; name: string | null; email: string; role: OrgRole; createdAt: string };
@@ -13,4 +13,4 @@ export function listOrganizationInvitations(){return apiRequest<Invitation[]>('/
 export function inviteOrganizationMember(email:string,role:OrgRole){return apiRequest<InvitationCreated>('/organization/invitations',{method:'POST',body:JSON.stringify({email,role})});}
 export function revokeOrganizationInvitation(id:string){return apiRequest<{id:string;revoked:boolean}>(`/organization/invitations/${id}`,{method:'DELETE'});}
 export function acceptOrganizationInvitation(token:string){return apiRequest<{accepted:boolean;organizationId:string;role:OrgRole}>('/organization/invitations/accept',{method:'POST',body:JSON.stringify({token})});}
-export function validateOrganizationInvitation(token:string){return fetch(`${process.env.NEXT_PUBLIC_API_BASE_URL ?? 'http://localhost:3001'}/organization/invitations/validate?token=${encodeURIComponent(token)}`).then(async r=>{if(!r.ok) throw new Error(await r.text());return r.json() as Promise<{email:string;role:OrgRole;expiresAt:string;organization:{id:string;name:string}}>});}
+export function validateOrganizationInvitation(token:string){return fetch(`${getApiBaseUrl()}/organization/invitations/validate?token=${encodeURIComponent(token)}`).then(async r=>{if(!r.ok) throw new Error(await r.text());return r.json() as Promise<{email:string;role:OrgRole;expiresAt:string;organization:{id:string;name:string}}>});}

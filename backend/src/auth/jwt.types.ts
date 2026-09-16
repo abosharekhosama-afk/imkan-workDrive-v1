@@ -3,6 +3,8 @@ export type AccessTokenPayload = {
   org_id: string;
   email: string;
   role: string;
+  membershipId?: string;
+  membershipStatus?: string;
   jti?: string;
 };
 

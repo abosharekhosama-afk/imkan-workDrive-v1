@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useLocale } from "./locale-provider";
 import { Modal } from "./modal";
+import { friendlyErrorMessageKey } from "../lib/friendly-error";
 
 export function DeleteModal({
   onClose,
@@ -18,8 +19,8 @@ export function DeleteModal({
     try {
       await onConfirm();
       onClose();
-    } catch {
-      setError(label("error.generic"));
+    } catch (cause) {
+      setError(label(friendlyErrorMessageKey(cause)));
     }
   }
 

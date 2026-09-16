@@ -1,17 +1,51 @@
 "use client";
 
-import { useCallback, useEffect, useState, type FormEvent } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type FormEvent,
+} from "react";
 import { useLocale } from "./locale-provider";
 import { Modal } from "./modal";
 import {
   addTeamFolderMember,
   listTeamFolderMembers,
   removeTeamFolderMember,
+  updateTeamFolderMember,
   type TeamFolderMember,
   type TeamFolderRole,
 } from "../lib/api/team-folders";
+import { listOrganizationMembers, type OrgMember } from "../lib/api/organization";
 import { canManageMembers } from "../lib/permissions";
 import { ApiError } from "../lib/api/client";
+import {
+  availableOrgMembers,
+  displayNameOf,
+  filterMembersByQuery,
+  initialsOf,
+  membershipErrorKey,
+} from "./members-modal-logic";
+
+/** Visual role badges (label text is localized separately in the row). */
+const ROLE_BADGES: Record<TeamFolderRole, string> = {
+  ADMIN: "zoho-role-badge admin",
+  ORGANIZER: "zoho-role-badge organizer",
+  EDITOR: "zoho-role-badge editor",
+  VIEWER: "zoho-role-badge viewer",
+};
+
+const ROLE_ORDER: TeamFolderRole[] = ["ADMIN", "ORGANIZER", "EDITOR", "VIEWER"];
+
+/** Display labels are Owner/Admin/Member/Viewer per the Zoho role taxonomy. */
+const BADGE_LABEL_KEY: Record<TeamFolderRole, "teamFolders.badge.OWNER" | "teamFolders.badge.ADMIN" | "teamFolders.badge.MEMBER" | "teamFolders.badge.VIEWER"> = {
+  ORGANIZER: "teamFolders.badge.OWNER",
+  ADMIN: "teamFolders.badge.ADMIN",
+  EDITOR: "teamFolders.badge.MEMBER",
+  VIEWER: "teamFolders.badge.VIEWER",
+};
 
 export function MembersModal({
   teamFolderId,
@@ -26,115 +60,326 @@ export function MembersModal({
 }) {
   const { label } = useLocale();
   const [members, setMembers] = useState<TeamFolderMember[]>([]);
+  const [orgMembers, setOrgMembers] = useState<OrgMember[]>([]);
+  const [loadingOrg, setLoadingOrg] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [targetUserId, setTargetUserId] = useState("");
+  const [success, setSuccess] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+  const [dropdownOpen, setDropdownOpen] = useState(false);
+  const [query, setQuery] = useState("");
+  const [memberSearch, setMemberSearch] = useState("");
+  const [selected, setSelected] = useState<OrgMember | null>(null);
   const [targetRole, setTargetRole] = useState<TeamFolderRole>("VIEWER");
+  const [pendingRole, setPendingRole] = useState<string | null>(null);
+  const containerRef = useRef<HTMLDivElement | null>(null);
 
   const canManage = canManageMembers(userRole);
 
-  const load = useCallback(async () => {
+  /** Rich member profiles (name/avatar/status) resolved from org members. */
+  const profileIndex = useMemo(() => {
+    const index = new Map<string, OrgMember>();
+    for (const orgMember of orgMembers) {
+      if (orgMember.userId && !index.has(orgMember.userId)) index.set(orgMember.userId, orgMember);
+      if (orgMember.id && !index.has(orgMember.id)) index.set(orgMember.id, orgMember);
+    }
+    return index;
+  }, [orgMembers]);
+
+  const reportError = useCallback(
+    (cause: unknown) => {
+      const status = cause instanceof ApiError ? cause.status : undefined;
+      const code = cause instanceof ApiError ? cause.code : undefined;
+      const key = membershipErrorKey(status, code);
+      setError(key ? label(key as Parameters<typeof label>[0]) : label("error.generic"));
+    },
+    [label],
+  );
+
+  const loadFolderMembers = useCallback(async () => {
     try {
       setError(null);
       const res = await listTeamFolderMembers(teamFolderId);
       setMembers(res.members);
     } catch (cause) {
-      setError(
-        cause instanceof ApiError && cause.status === 401
-          ? label("error.unauthenticated")
-          : label("error.generic"),
-      );
+      reportError(cause);
     }
-  }, [teamFolderId, label]);
+  }, [teamFolderId, reportError]);
+
+  const loadOrgMembers = useCallback(async () => {
+    setLoadingOrg(true);
+    try {
+      const list = await listOrganizationMembers({ status: "ACTIVE" });
+      setOrgMembers(list);
+    } catch (cause) {
+      reportError(cause);
+    } finally {
+      setLoadingOrg(false);
+    }
+  }, [reportError]);
 
   useEffect(() => {
-    void load();
-  }, [load]);
+    void loadFolderMembers();
+    void loadOrgMembers();
+  }, [loadFolderMembers, loadOrgMembers]);
+
+  useEffect(() => {
+    if (!dropdownOpen) return;
+    function handlePointer(event: MouseEvent) {
+      if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
+        setDropdownOpen(false);
+      }
+    }
+    function handleKey(event: KeyboardEvent) {
+      if (event.key === "Escape") setDropdownOpen(false);
+    }
+    document.addEventListener("mousedown", handlePointer);
+    document.addEventListener("keydown", handleKey);
+    return () => {
+      document.removeEventListener("mousedown", handlePointer);
+      document.removeEventListener("keydown", handleKey);
+    };
+  }, [dropdownOpen]);
+
+  const available = useMemo(
+    () => availableOrgMembers(orgMembers, members),
+    [orgMembers, members],
+  );
+  const visibleOptions = useMemo(
+    () => filterMembersByQuery(available, query),
+    [available, query],
+  );
+  /** Existing members enriched with org profiles, filterable from the header search. */
+  const memberProfiles = useMemo(
+    () => members.map((m) => ({ ...m, name: profileIndex.get(m.userId)?.name ?? null })),
+    [members, profileIndex],
+  );
+  const visibleMembers = useMemo(
+    () => filterMembersByQuery(memberProfiles, memberSearch),
+    [memberProfiles, memberSearch],
+  );
+
+const roleLabel = (role: TeamFolderRole) =>
+    label(`teamFolders.role.${role}` as Parameters<typeof label>[0]);
 
   async function onAdd(event: FormEvent) {
     event.preventDefault();
-    if (!targetUserId.trim()) return;
+    if (!selected || submitting) return;
+    setError(null);
+    setSuccess(null);
+    if (members.some((m) => m.userId === selected.userId)) {
+      setError(label("teamFolders.member.error.MEMBER_ALREADY_EXISTS"));
+      return;
+    }
+    setSubmitting(true);
     try {
-      setError(null);
-      await addTeamFolderMember(teamFolderId, targetUserId.trim(), targetRole);
-      setTargetUserId("");
-      await load();
+      await addTeamFolderMember(teamFolderId, selected.userId, targetRole);
+      setSelected(null);
+      setQuery("");
+      setDropdownOpen(false);
+      setSuccess(label("teamFolders.member.added"));
+      await loadFolderMembers();
     } catch (cause) {
-      setError(
-        cause instanceof ApiError && cause.status === 401
-          ? label("error.unauthenticated")
-          : label("error.generic"),
-      );
+      reportError(cause);
+    } finally {
+      setSubmitting(false);
     }
   }
 
   async function onRemove(userId: string) {
+    setError(null);
+    setSuccess(null);
     try {
-      setError(null);
       await removeTeamFolderMember(teamFolderId, userId);
-      await load();
+      await loadFolderMembers();
     } catch (cause) {
-      setError(
-        cause instanceof ApiError && cause.status === 401
-          ? label("error.unauthenticated")
-          : label("error.generic"),
-      );
+      reportError(cause);
     }
   }
 
-  return (
-    <Modal title={`${label("teamFolders.members.heading")} — ${teamFolderName}`} onClose={onClose}>
+  async function onChangeRole(userId: string, role: TeamFolderRole) {
+    if (pendingRole) return;
+    setError(null);
+    setSuccess(null);
+    setPendingRole(userId);
+    try {
+      await updateTeamFolderMember(teamFolderId, userId, role);
+      await loadFolderMembers();
+    } catch (cause) {
+      reportError(cause);
+    } finally {
+      setPendingRole(null);
+    }
+  }
+
+return (
+    <Modal title={label("teamFolders.members.heading")} onClose={onClose}>
       <div className="text-[length:var(--imkan-font-size-ui)]">
-        {error ? <p className="mb-3 text-red-500">{error}</p> : null}
+        <header className="zoho-member-head">
+          <div className="zoho-member-head-text">
+            <h3 className="zoho-member-title">{teamFolderName}</h3>
+            <span className="zoho-member-subtitle">{label("teamFolders.members")}</span>
+          </div>
+          <span className="zoho-member-count">{members.length}</span>
+        </header>
+        <input
+          type="search"
+          value={memberSearch}
+          onChange={(event) => setMemberSearch(event.target.value)}
+          placeholder={label("teamFolders.member.select.search")}
+          className="imkan-input mb-3 w-full"
+        />
+        {error ? (
+          <p className="zoho-alert-danger mb-3" role="alert">{error}</p>
+        ) : null}
+        {success && !error ? (
+          <p className="zoho-alert-success mb-3" role="status">{success}</p>
+        ) : null}
+
+        {members.length === 0 ? (
+          <p className="mb-4 text-[length:var(--imkan-font-size-secondary)] text-[color:var(--imkan-color-muted)]">
+            {label("teamFolders.members.empty")}
+          </p>
+        ) : visibleMembers.length === 0 ? (
+          <p className="mb-4 text-[length:var(--imkan-font-size-secondary)] text-[color:var(--imkan-color-muted)]">
+            {label("teamFolders.members.noMatch")}
+          </p>
+        ) : (
+          <ul className="zoho-member-list">
+            {visibleMembers.map((m) => {
+              const profile = profileIndex.get(m.userId);
+              const displayName = profile?.name || m.email.split("@")[0] || m.userId;
+              const status = profile?.status?.toLowerCase() ?? "active";
+              return (
+                <li key={m.userId} className="zoho-member-row">
+                  <span className="zoho-member-avatar-wrap">
+                    {profile?.avatarUrl ? (
+                      // eslint-disable-next-line @next/next/no-img-element -- org avatars come from storage URLs
+                      <img src={profile.avatarUrl} alt="" className="zoho-member-avatar" />
+                    ) : (
+                      <span className="zoho-member-avatar">{initialsOf(displayName)}</span>
+                    )}
+                    <span className={`zoho-member-status ${status}`} aria-hidden="true" />
+                  </span>
+                  <span className="zoho-member-info">
+                    <strong>{displayName}</strong>
+                    <small>{m.email}</small>
+                  </span>
+                  {canManage ? (
+                    <>
+                      <span className={ROLE_BADGES[m.role]} title={roleLabel(m.role)}>
+                        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M12 19V5M5 12l7-7 7 7" /></svg>
+                        {roleLabel(m.role)}
+                        <select
+                          aria-label={`${label("teamFolders.member.role")}: ${displayName}`}
+                          value={m.role}
+                          disabled={pendingRole === m.userId}
+                          onChange={(e) => void onChangeRole(m.userId, e.target.value as TeamFolderRole)}
+                          className="zoho-role-select sr-only"
+                        >
+                          {ROLE_ORDER.map((role) => (
+                            <option key={role} value={role}>{roleLabel(role)}</option>
+                          ))}
+                        </select>
+                      </span>
+                      <button type="button" className="zoho-member-remove" onClick={() => void onRemove(m.userId)} disabled={pendingRole === m.userId} aria-label={`${label("teamFolders.member.remove")}: ${displayName}`} title={label("teamFolders.member.remove")}>
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><polyline points="3 6 5 6 21 6" /><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" /></svg>
+                      </button>
+                    </>
+                  ) : (
+                    <span className={ROLE_BADGES[m.role]}>{label(BADGE_LABEL_KEY[m.role])}</span>
+                  )}
+                </li>
+              );
+            })}
+          </ul>
+        )}
         {canManage ? (
-          <form onSubmit={onAdd} className="mb-4 flex flex-wrap items-end gap-2">
-            <label className="flex flex-1 flex-col gap-1 text-[length:var(--imkan-font-size-secondary)]">
-              {label("teamFolders.member.email")}
-              <input
-                value={targetUserId}
-                onChange={(e) => setTargetUserId(e.target.value)}
-                placeholder="User UUID"
-                className="imkan-input"
-              />
-            </label>
+          <footer className="zoho-member-invite">
+            <h4 className="zoho-member-invite-title">{label("teamFolders.invite.title")}</h4>
+            <form onSubmit={onAdd} className="zoho-member-add mb-0">
+            <div ref={containerRef} className="relative flex flex-1 flex-col gap-1 text-[length:var(--imkan-font-size-secondary)]">
+              <button
+                type="button"
+                aria-haspopup="listbox"
+                aria-expanded={dropdownOpen}
+                onClick={() => setDropdownOpen((open) => !open)}
+                className="zoho-member-select"
+              >
+                {selected ? (
+                  <span className="flex min-w-0 items-center gap-2">
+                    <span className="zoho-member-avatar sm">{initialsOf(displayNameOf(selected))}</span>
+                    <span className="truncate">{displayNameOf(selected)}</span>
+                    <span className="ms-1 text-[length:var(--imkan-font-size-secondary)] text-[color:var(--imkan-color-muted)]">({selected.email})</span>
+                  </span>
+                ) : (
+                  <span className="text-[color:var(--imkan-color-muted)]">
+                    {loadingOrg
+                      ? label("teamFolders.member.select.loading")
+                      : label("teamFolders.member.select.placeholder")}
+                  </span>
+                )}
+                <span aria-hidden="true">▾</span>
+              </button>
+              {dropdownOpen ? (
+                <div role="listbox" className="zoho-member-dropdown">
+                  <input
+                    type="search"
+                    value={query}
+                    onChange={(event) => setQuery(event.target.value)}
+                    placeholder={label("teamFolders.member.select.search")}
+                    className="imkan-input mb-1 w-full"
+                  />
+                  {visibleOptions.map((option) => (
+                    <button
+                      type="button"
+                      role="option"
+                      aria-selected={selected?.userId === option.userId}
+                      key={option.userId}
+                      onClick={() => {
+                        setSelected(option);
+                        setQuery("");
+                        setDropdownOpen(false);
+                      }}
+                      className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-start hover:bg-[color:var(--imkan-color-primary)]/5"
+                    >
+                      <span className="zoho-member-avatar sm">{initialsOf(displayNameOf(option))}</span>
+                      <span className="min-w-0">
+                        <span className="block truncate font-medium">{displayNameOf(option)}</span>
+                        <span className="block truncate text-xs text-[color:var(--imkan-color-muted)]">{option.email}</span>
+                      </span>
+                    </button>
+                  ))}
+                  {visibleOptions.length === 0 ? (
+                    <p className="px-2 py-2 text-xs text-[color:var(--imkan-color-muted)]">
+                      {loadingOrg
+                        ? label("teamFolders.member.select.loading")
+                        : available.length === 0 && query.trim() === ""
+                          ? label("teamFolders.member.select.allAssigned")
+                          : label("teamFolders.member.select.empty")}
+                    </p>
+                  ) : null}
+                </div>
+              ) : null}
+            </div>
             <label className="flex flex-col gap-1 text-[length:var(--imkan-font-size-secondary)]">
               {label("teamFolders.member.role")}
               <select
                 value={targetRole}
                 onChange={(e) => setTargetRole(e.target.value as TeamFolderRole)}
-                className="border border-[color:var(--imkan-color-muted)] bg-background px-2 py-1"
+                className="zoho-role-select"
               >
-                <option value="VIEWER">{label("teamFolders.role.VIEWER")}</option>
-                <option value="EDITOR">{label("teamFolders.role.EDITOR")}</option>
-                <option value="ORGANIZER">{label("teamFolders.role.ORGANIZER")}</option>
-                <option value="ADMIN">{label("teamFolders.role.ADMIN")}</option>
+                {ROLE_ORDER.map((role) => (
+                  <option key={role} value={role}>{roleLabel(role)}</option>
+                ))}
               </select>
             </label>
-            <button type="submit" className="imkan-button">{label("teamFolders.member.add")}</button>
+            <button type="submit" disabled={!selected || submitting} className="imkan-button disabled:opacity-50 inline-flex items-center gap-1.5">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14" /></svg>
+              {label("teamFolders.member.add")}
+            </button>
           </form>
+          </footer>
         ) : null}
-        {members.length === 0 ? (
-          <p className="mb-4 text-[length:var(--imkan-font-size-secondary)] text-[color:var(--imkan-color-muted)]">
-            {label("teamFolders.members.empty")}
-          </p>
-        ) : (
-          <ul className="mb-4 divide-y">
-            {members.map((m) => (
-              <li key={m.userId} className="flex items-center justify-between py-2 text-sm">
-                <div>
-                  <span className="font-medium">{m.email || m.userId}</span>
-                  <span className="ml-2 text-xs text-[color:var(--imkan-color-muted)]">
-                    ({label(`teamFolders.role.${m.role}` as Parameters<typeof label>[0]) ?? m.role})
-                  </span>
-                </div>
-                {canManage ? (
-                  <button type="button" className="imkan-button-secondary" onClick={() => void onRemove(m.userId)}>
-                    {label("teamFolders.member.remove")}
-                  </button>
-                ) : null}
-              </li>
-            ))}
-          </ul>
-        )}
         <div className="flex justify-end">
           <button type="button" className="imkan-button-secondary" onClick={onClose}>{label("share.cancel")}</button>
         </div>

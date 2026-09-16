@@ -2,6 +2,7 @@ import {
   BadRequestException,
   ForbiddenException,
   Injectable,
+  NotFoundException,
   UnauthorizedException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
@@ -16,6 +17,7 @@ import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { Inject } from '@nestjs/common';
 import { getTenantStore } from '../auth/tenant-context';
 import { buildTenantObjectKey, parseTenantObjectKey } from './object-key';
+import { contentDispositionInline } from '../common/content-disposition';
 import {
   S3_CLIENT,
   S3_PRESIGNER,
@@ -46,11 +48,8 @@ export class S3CompatibleStorageAdapter implements StorageService {
     request: StorageObjectRequest,
   ): Promise<SignedUrlResult> {
     const orgId = this.authorize(request);
-    const objectKey = buildTenantObjectKey(
-      orgId,
-      request.fileId,
-      request.versionId,
-    );
+    const objectKey =
+      request.storageKey ?? buildTenantObjectKey(orgId, request.fileId, request.versionId);
     const expiresInSeconds = this.expiresInSeconds();
     const command = new PutObjectCommand({
       Bucket: this.bucket(),
@@ -67,15 +66,25 @@ export class S3CompatibleStorageAdapter implements StorageService {
     request: StorageObjectRequest,
   ): Promise<SignedUrlResult> {
     const orgId = this.authorize(request);
-    const objectKey = buildTenantObjectKey(
-      orgId,
-      request.fileId,
-      request.versionId,
-    );
+    const objectKey =
+      request.storageKey ?? buildTenantObjectKey(orgId, request.fileId, request.versionId);
     const expiresInSeconds = this.expiresInSeconds();
     const command = new GetObjectCommand({
       Bucket: this.bucket(),
       Key: objectKey,
+      // Inline previews must serve the stored content type and an inline
+      // disposition, otherwise R2/S3 replays the upload-time headers and
+      // browsers download the asset instead of rendering it (403/CORS class
+      // of preview failures). These response overrides are part of the
+      // signature, so they cannot be tampered with.
+      ...(request.disposition === 'inline'
+        ? {
+            ResponseContentType: request.contentType,
+            ResponseContentDisposition: contentDispositionInline(
+              request.fileName ?? 'preview',
+            ),
+          }
+        : {}),
     });
     const url = await this.presign(this.client, command, {
       expiresIn: expiresInSeconds,
@@ -94,13 +103,28 @@ export class S3CompatibleStorageAdapter implements StorageService {
     await this.client.send(new DeleteObjectCommand({ Bucket: this.bucket(), Key: storageKey }));
   }
 
-  async assertObjectExists(request: StorageObjectRequest): Promise<void> {
+  /** Server-side ingestion for direct multipart uploads (version upload). */
+  async storeObject(request: StorageObjectRequest, bytes: Buffer): Promise<void> {
     const orgId = this.authorize(request);
     const objectKey = buildTenantObjectKey(
       orgId,
       request.fileId,
       request.versionId,
     );
+    await this.client.send(
+      new PutObjectCommand({
+        Bucket: this.bucket(),
+        Key: objectKey,
+        ContentType: request.contentType,
+        Body: bytes,
+      }),
+    );
+  }
+
+  async assertObjectExists(request: StorageObjectRequest): Promise<void> {
+    const orgId = this.authorize(request);
+    const objectKey =
+      request.storageKey ?? buildTenantObjectKey(orgId, request.fileId, request.versionId);
     try {
       await this.client.send(
         new HeadObjectCommand({
@@ -110,6 +134,26 @@ export class S3CompatibleStorageAdapter implements StorageService {
       );
     } catch {
       throw new BadRequestException('Uploaded object was not found');
+    }
+  }
+
+  /**
+   * Storage-integrity gate for version restore: the physical bytes behind an
+   * existing tenant storage key must still be present. Cross-tenant keys are
+   * rejected up front (zero-trust), and a missing object surfaces as a clean
+   * 404 so the restore transaction is never entered against phantom data.
+   */
+  async assertStoredObjectExists(storageKey: string): Promise<void> {
+    const parsed = parseTenantObjectKey(storageKey);
+    if (parsed.orgId !== this.requireOrgId()) {
+      throw new ForbiddenException('Resource does not belong to this organization');
+    }
+    try {
+      await this.client.send(
+        new HeadObjectCommand({ Bucket: this.bucket(), Key: storageKey }),
+      );
+    } catch {
+      throw new NotFoundException('File object not found on storage');
     }
   }
 

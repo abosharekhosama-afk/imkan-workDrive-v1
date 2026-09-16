@@ -8,14 +8,53 @@ export class ApiError extends Error {
   }
 }
 
+/**
+ * Resolve the public backend origin used by the browser.
+ *
+ * NEXT_PUBLIC_API_URL is the preferred production variable. The older
+ * NEXT_PUBLIC_API_BASE_URL remains supported for compatibility.
+ * A same-origin Vercel URL is never a valid backend URL for this app's
+ * split frontend/backend deployment, so it is rejected instead of silently
+ * sending API POSTs such as /auth/signup to the Next.js frontend.
+ */
 export function getApiBaseUrl(): string {
-  return process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:3001";
+  const preferred = process.env.NEXT_PUBLIC_API_URL?.trim();
+  const legacy = process.env.NEXT_PUBLIC_API_BASE_URL?.trim();
+  const configured = preferred || legacy;
+
+  if (!configured) {
+    if (typeof window === "undefined") return "http://localhost:3001";
+    throw new Error(
+      "Backend API URL is not configured. Set NEXT_PUBLIC_API_URL in the Vercel project settings."
+    );
+  }
+
+  const normalized = configured.replace(/\/+$/, "");
+
+  if (typeof window !== "undefined") {
+    try {
+      const configuredUrl = new URL(normalized, window.location.origin);
+      const currentOrigin = window.location.origin.replace(/\/+$/, "");
+
+      if (configuredUrl.origin === currentOrigin) {
+        throw new Error(
+          "Backend API URL points to the frontend origin. Set NEXT_PUBLIC_API_URL to the deployed NestJS/Render backend URL."
+        );
+      }
+    } catch (error) {
+      if (error instanceof Error && error.message.startsWith("Backend API URL points")) {
+        throw error;
+      }
+      // Preserve the configured value so fetch can report an actionable URL error.
+    }
+  }
+
+  return normalized;
 }
 
 export async function getAccessToken(): Promise<string | null> {
   // 1. إذا كان الكود يعمل في المتصفح (Client-side)
   if (typeof window !== "undefined") {
-    // قراءة التوكن من localstorage أو من document.cookie
     const localToken =
       window.localStorage.getItem("workdrive_access_token") ||
       window.localStorage.getItem("access_token") ||
@@ -28,7 +67,6 @@ export async function getAccessToken(): Promise<string | null> {
   }
 
   // 2. إذا كان الكود يعمل على السيرفر (Server-side / SSR)
-  // استدعاء الموديول ديناميكياً فقط على السيرفر لتجنب خطأ الـ Build في الـ Client
   try {
     const { cookies } = await import("next/headers");
     const cookieStore = await cookies();

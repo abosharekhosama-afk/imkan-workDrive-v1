@@ -14,6 +14,13 @@ export type SharedItem = {
   name?: string | null;
   owner?: { id: string; name: string | null; email: string } | null;
   status?: string;
+  /** True when the share grants download rights to the recipient. */
+  canDownload?: boolean;
+  createdAt?: string | null;
+  updatedAt?: string | null;
+  mimeType?: string | null;
+  /** Active-file byte size (omitted on folder rows). */
+  size?: number | null;
   recipients?: SharedRecipient[];
 };
 

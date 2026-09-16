@@ -60,7 +60,7 @@ export default function AuditPage() {
         <EmptyState title={label("audit.empty")} />
       ) : (
         <div className="wd-card">
-          <div className="wd-table-wrap">
+          <div className="wd-table-wrap overflow-x-auto w-full max-w-full">
             <table className="wd-table">
               <thead>
                 <tr>

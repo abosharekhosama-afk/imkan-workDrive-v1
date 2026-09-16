@@ -7,20 +7,21 @@ import { Test, TestingModule } from '@nestjs/testing';
 import * as jwt from 'jsonwebtoken';
 import request from 'supertest';
 import { App } from 'supertest/types';
-import { PrismaClient } from '@prisma/client';
+import { MembershipStatus, OrgRole, PrismaClient } from '@prisma/client';
 import { AppModule } from '../src/app.module';
-import { SEED_ORGANIZATION, SEED_USERS } from '../src/auth/seed-data';
 
 const JWT_SECRET =
   process.env.JWT_SECRET ??
   'dev_jwt_secret_must_change_in_production_min32chars';
-const ORG_A = SEED_ORGANIZATION.id;
-const ADMIN = SEED_USERS[0];
 
-function sign(user: (typeof SEED_USERS)[number]): string {
-  const token = sessionTokens.get(user.id);
+const ORG_A = '00000000-0000-4000-8000-000000000001';
+const ADMIN_ID = '00000000-0000-4000-8000-000000000011';
+const ADMIN_EMAIL = 'admin@example.imkan';
+
+function sign(userId: string, orgId: string, email: string, role: OrgRole): string {
+  const token = sessionTokens.get(userId);
   if (!token) {
-    throw new Error(`No prepared session for ${user.email}`);
+    throw new Error(`No prepared session for ${email}`);
   }
   return token;
 }
@@ -30,24 +31,27 @@ const sessionIds: string[] = [];
 
 async function ensureSession(
   prismaClient: PrismaClient,
-  user: (typeof SEED_USERS)[number],
+  userId: string,
+  orgId: string,
+  email: string,
+  role: OrgRole,
 ): Promise<void> {
   const jti = randomUUID();
   const token = jwt.sign(
-    { sub: user.id, org_id: ORG_A, email: user.email, role: user.role, jti },
+    { sub: userId, org_id: orgId, email, role, jti },
     JWT_SECRET,
   );
   await prismaClient.session.create({
     data: {
       id: jti,
-      orgId: ORG_A,
-      userId: user.id,
+      orgId,
+      userId,
       tokenHash: createHash('sha256').update(token).digest('hex'),
       expiresAt: new Date(Date.now() + 3_600_000),
     },
   });
   sessionIds.push(jti);
-  sessionTokens.set(user.id, token);
+  sessionTokens.set(userId, token);
 }
 
 describe('Storage integration (local disk, e2e)', () => {
@@ -73,12 +77,24 @@ describe('Storage integration (local disk, e2e)', () => {
     await app.init();
 
     prisma = new PrismaClient();
-    await ensureSession(prisma, ADMIN);
+    await prisma.organization.create({ data: { id: ORG_A, name: 'Storage E2E Org' } });
+    await prisma.user.create({ data: { id: ADMIN_ID, email: ADMIN_EMAIL, status: 'ACTIVE' } });
+    await prisma.organizationMembership.create({
+      data: {
+        userId: ADMIN_ID,
+        organizationId: ORG_A,
+        role: OrgRole.ADMIN,
+        status: MembershipStatus.ACTIVE,
+        isPrimary: true,
+      },
+    });
+    await ensureSession(prisma, ADMIN_ID, ORG_A, ADMIN_EMAIL, OrgRole.ADMIN);
     const folder = await prisma.folder.create({
       data: {
         orgId: ORG_A,
         name: `storage-e2e-${Date.now()}`,
-        ownerId: ADMIN.id,
+        ownerId: ADMIN_ID,
+        folderType: 'PERSONAL',
       },
     });
     folderId = folder.id;
@@ -113,7 +129,7 @@ describe('Storage integration (local disk, e2e)', () => {
   }
 
   it('uploads bytes to local disk and downloads them back', async () => {
-    const token = sign(ADMIN);
+    const token = sign(ADMIN_ID, ORG_A, ADMIN_EMAIL, OrgRole.ADMIN);
     const payload = Buffer.from('integration-bytes');
     const sha256 = createHash('sha256').update(payload).digest('hex');
 
@@ -156,7 +172,7 @@ describe('Storage integration (local disk, e2e)', () => {
   });
 
   it('rejects upload-complete when bytes were never stored', async () => {
-    const token = sign(ADMIN);
+    const token = sign(ADMIN_ID, ORG_A, ADMIN_EMAIL, OrgRole.ADMIN);
     const payload = Buffer.from('missing-bytes');
     const sha256 = createHash('sha256').update(payload).digest('hex');
 
@@ -180,7 +196,7 @@ describe('Storage integration (local disk, e2e)', () => {
   });
 
   it('returns a public download URL after share verification', async () => {
-    const token = sign(ADMIN);
+    const token = sign(ADMIN_ID, ORG_A, ADMIN_EMAIL, OrgRole.ADMIN);
     const payload = Buffer.from('shared-bytes');
     const sha256 = createHash('sha256').update(payload).digest('hex');
 
@@ -213,6 +229,7 @@ describe('Storage integration (local disk, e2e)', () => {
         resource_type: 'FILE',
         resource_id: uploadRequest.body.file_id,
         can_download: true,
+        permission: 'VIEW',
       })
       .expect(201);
 

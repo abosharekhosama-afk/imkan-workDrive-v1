@@ -31,12 +31,14 @@ describe('JwtAuthGuard', () => {
   } as unknown as Reflector;
   const prisma = {
     session: { findFirst: jest.fn(), update: jest.fn() },
+    organizationMembership: { findFirst: jest.fn() },
   };
   const guard = new JwtAuthGuard(config, reflector, prisma as never);
 
   beforeEach(() => {
     jest.clearAllMocks();
     prisma.session.findFirst.mockResolvedValue(null);
+    prisma.organizationMembership.findFirst.mockResolvedValue(null);
   });
 
   it('rejects missing Authorization header', async () => {
@@ -68,6 +70,13 @@ describe('JwtAuthGuard', () => {
     );
     prisma.session.findFirst.mockResolvedValue({
       id: '00000000-0000-4000-8000-0000000000a1',
+    });
+    prisma.organizationMembership.findFirst.mockResolvedValue({
+      id: 'membership-a',
+      userId: 'user-1',
+      organizationId: 'org-a',
+      status: 'ACTIVE',
+      role: 'ADMIN',
     });
     const ctx = mockContext(`Bearer ${token}`);
     await expect(guard.canActivate(ctx)).resolves.toBe(true);

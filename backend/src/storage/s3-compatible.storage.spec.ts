@@ -1,6 +1,6 @@
 import { ForbiddenException, UnauthorizedException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { PutObjectCommand, GetObjectCommand } from '@aws-sdk/client-s3';
+import { PutObjectCommand, GetObjectCommand, HeadObjectCommand } from '@aws-sdk/client-s3';
 import { runWithTenant } from '../auth/tenant-context';
 import { S3CompatibleStorageAdapter } from './s3-compatible.storage';
 import { StorageObjectRequest } from './storage.types';
@@ -12,7 +12,11 @@ const VERSION_ID = '00000000-0000-4000-8000-000000000031';
 const USER_ID = '00000000-0000-4000-8000-000000000011';
 
 describe('S3CompatibleStorageAdapter', () => {
-  const presign = jest.fn(async () => 'https://signed.example/object');
+  type S3Command = PutObjectCommand | GetObjectCommand | HeadObjectCommand;
+
+  const presign = jest
+    .fn<Promise<string>, [unknown, S3Command, { expiresIn: number }]>()
+    .mockResolvedValue('https://signed.example/object');
   const client = { send: jest.fn() };
   const config = {
     get: (key: string) => {
@@ -101,11 +105,11 @@ describe('S3CompatibleStorageAdapter', () => {
   });
 
   it('never uses a foreign orgId in the object key even if ownerOrgId is forged after check', async () => {
-    const key = await runWithTenant({ orgId: ORG_A, userId: USER_ID }, () =>
+    const result = await runWithTenant({ orgId: ORG_A, userId: USER_ID }, () =>
       storage.createUploadUrl(ownedByA),
     );
-    expect(key.objectKey.startsWith(`tenant_${ORG_A}/`)).toBe(true);
-    expect(key.objectKey.includes(ORG_B)).toBe(false);
+    expect(result.objectKey.startsWith(`tenant_${ORG_A}/`)).toBe(true);
+    expect(result.objectKey.includes(ORG_B)).toBe(false);
   });
 
   it('verifies the tenant object exists via HeadObject', async () => {

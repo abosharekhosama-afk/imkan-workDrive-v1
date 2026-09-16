@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useLocale } from "../../components/locale-provider";
 import { getCurrentUserId } from "../../lib/api/jwt";
 import {
+  createOrganizationAccount,
   getOrganization,
   inviteOrganizationMember,
   listOrganizationInvitations,
@@ -17,9 +18,20 @@ import {
   type OrgRole,
   type Organization,
 } from "../../lib/api/organization";
+import { ApiError } from "../../lib/api/client";
 
 function initialsOf(value: string): string {
   return value.slice(0, 2).toUpperCase();
+}
+
+/**
+ * دالة آمنة لتنسيق التواريخ تجنباً لخطأ RangeError: Invalid time value
+ */
+function formatDate(dateInput: string | Date | null | undefined): string {
+  if (!dateInput) return "—";
+  const date = new Date(dateInput);
+  if (isNaN(date.getTime())) return "—";
+  return new Intl.DateTimeFormat(undefined, { dateStyle: "medium" }).format(date);
 }
 
 type InvitationState = "pending" | "accepted" | "revoked" | "expired";
@@ -38,6 +50,11 @@ export default function OrganizationPage() {
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [busy, setBusy] = useState(false);
+  const [accountName, setAccountName] = useState("");
+  const [accountEmail, setAccountEmail] = useState("");
+  const [accountPassword, setAccountPassword] = useState("");
+  const [accountRole, setAccountRole] = useState<"MEMBER" | "ADMIN">("MEMBER");
+  const [accountSuccess, setAccountSuccess] = useState("");
 
   async function load() {
     try {
@@ -92,6 +109,49 @@ export default function OrganizationPage() {
     }
   }
 
+  /**
+   * Creates a brand-new user account inside the organization.
+   * Backend enforces the SUPER_ADMIN-only rule; any non-Super Admin receives a
+   * 403 FORBIDDEN_NOT_SUPER_ADMIN response with the localized denial message.
+   */
+  async function createAccount() {
+    setBusy(true);
+    setError("");
+    setNotice("");
+    setAccountSuccess("");
+    try {
+      await createOrganizationAccount({
+        name: accountName.trim(),
+        email: accountEmail.trim(),
+        password: accountPassword,
+        role: accountRole,
+      });
+      const createdEmail = accountEmail.trim().toLowerCase();
+      setAccountSuccess(createdEmail);
+      setAccountName("");
+      setAccountEmail("");
+      setAccountPassword("");
+      setAccountRole("MEMBER");
+      await load();
+    } catch (e) {
+      if (e instanceof ApiError && e.code === "FORBIDDEN_NOT_SUPER_ADMIN") {
+        setError(label("org.createAccount.denied"));
+      } else if (e instanceof ApiError && e.code === "ACCOUNT_EXISTS") {
+        setError(label("org.createAccount.exists"));
+      } else if (e instanceof ApiError && e.status === 401) {
+        setError(label("error.unauthenticated"));
+      } else if (e instanceof ApiError && e.status === 400 && e.message) {
+        setError(e.message);
+      } else if (e instanceof Error && e.message) {
+        setError(e.message);
+      } else {
+        setError(label("error.generic"));
+      }
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function copyInvite() {
     try {
       await navigator.clipboard.writeText(inviteUrl);
@@ -105,7 +165,12 @@ export default function OrganizationPage() {
   function invitationState(item: Invitation): InvitationState {
     if (item.acceptedAt) return "accepted";
     if (item.revokedAt) return "revoked";
-    if (new Date(item.expiresAt) < new Date()) return "expired";
+    if (item.expiresAt) {
+      const expDate = new Date(item.expiresAt);
+      if (!isNaN(expDate.getTime()) && expDate < new Date()) {
+        return "expired";
+      }
+    }
     return "pending";
   }
 
@@ -120,7 +185,7 @@ export default function OrganizationPage() {
     [],
   );
 
-  if (org?.role !== "ADMIN") {
+  if (org?.role !== "ADMIN" && org?.role !== "SUPER_ADMIN") {
     return (
       <div className="wd-page">
         <div className="wd-alert">{label("org.adminRequired")}</div>
@@ -150,6 +215,86 @@ export default function OrganizationPage() {
 
       {error ? <div className="wd-alert" role="alert">{error}</div> : null}
       {!error && notice ? <div className="wd-alert wd-alert-success" role="status">{label(notice as Parameters<typeof label>[0])}</div> : null}
+
+      {org?.role === "SUPER_ADMIN" ? (
+        <section className="wd-card">
+          <div className="wd-card-head">
+            <div>
+              <h2>{label("org.createAccount.heading")}</h2>
+              <p>{label("org.createAccount.description")}</p>
+            </div>
+          </div>
+          <form
+            className="wd-card-body"
+            onSubmit={(event) => {
+              event.preventDefault();
+              void createAccount();
+            }}
+          >
+            <div className="wd-field">
+              <label htmlFor="account-name">{label("org.createAccount.name")}</label>
+              <input
+                id="account-name"
+                className="wd-input"
+                value={accountName}
+                onChange={(e) => setAccountName(e.target.value)}
+                autoComplete="off"
+              />
+            </div>
+            <div className="wd-field">
+              <label htmlFor="account-email">{label("org.createAccount.email")}</label>
+              <input
+                id="account-email"
+                className="wd-input"
+                type="email"
+                value={accountEmail}
+                placeholder="member@example.com"
+                autoComplete="off"
+                onChange={(e) => setAccountEmail(e.target.value)}
+              />
+            </div>
+            <div className="wd-field">
+              <label htmlFor="account-password">{label("org.createAccount.password")}</label>
+              <input
+                id="account-password"
+                className="wd-input"
+                type="password"
+                value={accountPassword}
+                minLength={8}
+                required
+                autoComplete="new-password"
+                onChange={(e) => setAccountPassword(e.target.value)}
+              />
+            </div>
+            <div className="wd-field">
+              <label htmlFor="account-role">{label("org.createAccount.role")}</label>
+              <select
+                id="account-role"
+                className="wd-input"
+                value={accountRole}
+                onChange={(e) => setAccountRole(e.target.value as "MEMBER" | "ADMIN")}
+              >
+                <option value="MEMBER">{label("org.role.MEMBER")}</option>
+                <option value="ADMIN">{label("org.role.ADMIN")}</option>
+              </select>
+            </div>
+            <div style={{ display: "flex", justifyContent: "flex-end" }}>
+              <button
+                type="submit"
+                className="wd-btn wd-btn-primary"
+                disabled={busy || !accountName.trim() || !accountEmail.trim() || accountPassword.length < 8}
+              >
+                {label("org.createAccount.submit")}
+              </button>
+            </div>
+            {accountSuccess ? (
+              <div className="wd-alert wd-alert-success" role="status" style={{ marginTop: 4 }}>
+                {label("org.createAccount.success")} <strong>{accountSuccess}</strong>
+              </div>
+            ) : null}
+          </form>
+        </section>
+      ) : null}
 
       <div className="wd-grid-2">
         <section className="wd-card">
@@ -241,7 +386,7 @@ export default function OrganizationPage() {
             </h2>
           </div>
         </div>
-        <div className="overflow-x-auto">
+        <div className="overflow-x-auto w-full max-w-full">
           <table className="wd-table min-w-[40rem]">
             <thead>
               <tr>
@@ -283,7 +428,7 @@ export default function OrganizationPage() {
                     </select>
                   </td>
                   <td className="imkan-muted">
-                    {new Intl.DateTimeFormat(undefined, { dateStyle: "medium" }).format(new Date(m.createdAt))}
+                    {formatDate(m.joinedAt ?? m.createdAt)}
                   </td>
                   <td className="num">
                     <button
@@ -328,7 +473,7 @@ export default function OrganizationPage() {
             </h2>
           </div>
         </div>
-        <div className="overflow-x-auto">
+        <div className="overflow-x-auto w-full max-w-full">
           <table className="wd-table min-w-[42rem]">
             <thead>
               <tr>
@@ -352,7 +497,7 @@ export default function OrganizationPage() {
                       <span className={badge.className}>{label(badge.key as Parameters<typeof label>[0])}</span>
                     </td>
                     <td className="imkan-muted">
-                      {new Intl.DateTimeFormat(undefined, { dateStyle: "medium" }).format(new Date(i.createdAt))}
+                      {formatDate(i.createdAt)}
                     </td>
                     <td className="imkan-muted">{i.invitedBy?.name || i.invitedBy?.email || "—"}</td>
                     <td className="num">

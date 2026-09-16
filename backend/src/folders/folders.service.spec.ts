@@ -7,6 +7,9 @@ import { PermissionService } from '../permissions/permission.service';
 import { FoldersService } from './folders.service';
 
 describe('FoldersService', () => {
+  const mockStorage = {
+    buildObjectKey: jest.fn(),
+  };
   const prisma = {
     folder: {
       create: jest.fn(),
@@ -27,7 +30,7 @@ describe('FoldersService', () => {
     },
     auditLog: { create: jest.fn() },
   };
-  const service = new FoldersService(prisma as never, new PermissionService());
+  const service = new FoldersService(prisma as never, new PermissionService(), mockStorage as never);
   const orgA = '00000000-0000-4000-8000-000000000001';
   const user = {
     sub: '00000000-0000-4000-8000-000000000011',

@@ -50,9 +50,41 @@ export class JwtAuthGuard implements CanActivate {
       if (!payload.sub || !payload.org_id || !payload.jti) {
         throw new UnauthorizedException('Token is missing tenant claims');
       }
-      const session = await this.prisma.session.findFirst({ where: { id: payload.jti, userId: payload.sub, orgId: payload.org_id, tokenHash: require('node:crypto').createHash('sha256').update(token).digest('hex'), revokedAt: null, expiresAt: { gt: new Date() } } });
+      
+      // Verify session
+      const session = await this.prisma.session.findFirst({ 
+        where: { 
+          id: payload.jti, 
+          userId: payload.sub, 
+          orgId: payload.org_id, 
+          tokenHash: require('node:crypto').createHash('sha256').update(token).digest('hex'), 
+          revokedAt: null, 
+          expiresAt: { gt: new Date() } 
+        } 
+      });
       if (!session) throw new UnauthorizedException('Session is no longer valid');
-      request.user = payload;
+      
+      // Verify membership is active
+      const membership = await this.prisma.organizationMembership.findFirst({
+        where: {
+          userId: payload.sub,
+          organizationId: payload.org_id,
+          status: 'ACTIVE',
+          ...(payload.membershipId ? { id: payload.membershipId } : {}),
+        },
+        select: { id: true, role: true, status: true },
+      });
+      if (!membership) throw new UnauthorizedException('Organization membership is no longer active');
+
+      // Organization role is owned by OrganizationMembership. Refresh the
+      // derived JWT claim so role changes take effect without stale sessions.
+      request.user = {
+        ...payload,
+        role: membership.role,
+        membershipId: membership.id,
+        membershipStatus: membership.status,
+      };
+
       void this.prisma.session.update({ where: { id: session.id }, data: { lastSeenAt: new Date() } });
       return true;
     } catch (error) {

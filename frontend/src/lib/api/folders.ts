@@ -1,12 +1,19 @@
 import { apiRequest } from "./client";
 import type { FolderContents, FolderDetail, FolderRecord } from "./types";
 
-export function listRootContents(): Promise<FolderContents> {
-  return apiRequest<FolderContents>("/folders");
+export type ContentFilters = { type?: string; status?: string; owner?: string; date?: string; dateField?: string; dateFrom?: string; dateTo?: string; query?: string };
+function withFilters(path: string, filters?: ContentFilters) {
+  if (!filters) return path;
+  const q = new URLSearchParams();
+  for (const [key, value] of Object.entries(filters)) if (value) q.set(key, value);
+  return q.toString() ? `${path}?${q.toString()}` : path;
+}
+export function listRootContents(filters?: ContentFilters): Promise<FolderContents> {
+  return apiRequest<FolderContents>(withFilters("/folders", filters));
 }
 
-export function getFolder(id: string): Promise<FolderDetail> {
-  return apiRequest<FolderDetail>(`/folders/${id}`);
+export function getFolder(id: string, filters?: ContentFilters): Promise<FolderDetail> {
+  return apiRequest<FolderDetail>(withFilters(`/folders/${id}`, filters));
 }
 
 export function createFolder(name: string, parentId?: string): Promise<FolderRecord> {

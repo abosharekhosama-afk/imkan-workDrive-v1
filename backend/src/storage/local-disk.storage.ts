@@ -4,6 +4,7 @@ import {
   BadRequestException,
   ForbiddenException,
   Injectable,
+  NotFoundException,
   UnauthorizedException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
@@ -32,11 +33,8 @@ export class LocalDiskStorageAdapter implements StorageService {
     request: StorageObjectRequest,
   ): Promise<SignedUrlResult> {
     const orgId = this.authorize(request);
-    const objectKey = buildTenantObjectKey(
-      orgId,
-      request.fileId,
-      request.versionId,
-    );
+    const objectKey =
+      request.storageKey ?? buildTenantObjectKey(orgId, request.fileId, request.versionId);
     const expiresInSeconds = this.expiresInSeconds();
     const token = signObjectAccess(this.signingSecret(), {
       method: 'PUT',
@@ -56,17 +54,16 @@ export class LocalDiskStorageAdapter implements StorageService {
     request: StorageObjectRequest,
   ): Promise<SignedUrlResult> {
     const orgId = this.authorize(request);
-    const objectKey = buildTenantObjectKey(
-      orgId,
-      request.fileId,
-      request.versionId,
-    );
+    const objectKey =
+      request.storageKey ?? buildTenantObjectKey(orgId, request.fileId, request.versionId);
     const expiresInSeconds = this.expiresInSeconds();
     const token = signObjectAccess(this.signingSecret(), {
       method: 'GET',
       objectKey,
       exp: Math.floor(Date.now() / 1000) + expiresInSeconds,
       contentType: request.contentType,
+      disposition: request.disposition,
+      fileName: request.fileName,
     });
     return {
       url: `${this.publicBaseUrl()}/storage/objects?token=${encodeURIComponent(token)}`,
@@ -78,15 +75,30 @@ export class LocalDiskStorageAdapter implements StorageService {
 
   async assertObjectExists(request: StorageObjectRequest): Promise<void> {
     const orgId = this.authorize(request);
-    const objectKey = buildTenantObjectKey(
-      orgId,
-      request.fileId,
-      request.versionId,
-    );
+    const objectKey =
+      request.storageKey ?? buildTenantObjectKey(orgId, request.fileId, request.versionId);
     try {
       await access(this.resolveObjectPath(objectKey));
     } catch {
       throw new BadRequestException('Uploaded object was not found');
+    }
+  }
+
+  /**
+   * Storage-integrity gate for version restore: the physical bytes behind an
+   * existing tenant storage key must still be present. Cross-tenant keys are
+   * rejected up front (zero-trust), and a missing object surfaces as a clean
+   * 404 so the restore transaction is never entered against phantom data.
+   */
+  async assertStoredObjectExists(storageKey: string): Promise<void> {
+    const parsed = parseTenantObjectKey(storageKey);
+    if (parsed.orgId !== this.requireOrgId()) {
+      throw new ForbiddenException('Resource does not belong to this organization');
+    }
+    try {
+      await access(this.resolveObjectPath(storageKey));
+    } catch {
+      throw new NotFoundException('File object not found on storage');
     }
   }
 
@@ -115,9 +127,27 @@ export class LocalDiskStorageAdapter implements StorageService {
     await writeFile(path, bytes);
   }
 
+  /** Server-side ingestion for direct multipart uploads (version upload). */
+  async storeObject(request: StorageObjectRequest, bytes: Buffer): Promise<void> {
+    const orgId = this.authorize(request);
+    const objectKey = buildTenantObjectKey(
+      orgId,
+      request.fileId,
+      request.versionId,
+    );
+    const path = this.resolveObjectPath(objectKey);
+    await mkdir(dirname(path), { recursive: true });
+    await writeFile(path, bytes);
+  }
+
   async getObjectFromToken(
     token: string,
-  ): Promise<{ bytes: Buffer; contentType: string }> {
+  ): Promise<{
+    bytes: Buffer;
+    contentType: string;
+    disposition: 'inline' | 'attachment';
+    fileName?: string;
+  }> {
     const payload = verifyObjectAccess(this.signingSecret(), token, 'GET');
     const path = this.resolveObjectPath(payload.objectKey);
     try {
@@ -125,14 +155,27 @@ export class LocalDiskStorageAdapter implements StorageService {
       return {
         bytes,
         contentType: payload.contentType ?? 'application/octet-stream',
+        disposition: payload.disposition ?? 'attachment',
+        fileName: payload.fileName,
       };
     } catch {
-      throw new BadRequestException('Uploaded object was not found');
+      // A valid token whose bytes are gone from the disk is a client-visible
+      // 404 (the object no longer exists), not a malformed-request 400.
+      throw new NotFoundException('File object not found on storage disk');
     }
   }
 
   verifyToken(token: string, method: ObjectAccessMethod) {
     return verifyObjectAccess(this.signingSecret(), token, method);
+  }
+
+  /**
+   * Resolves the physical path for an already-verified token. Only used by the
+   * storage controller to stream Range windows off the local disk.
+   */
+  resolvePathForToken(token: string): string {
+    const payload = verifyObjectAccess(this.signingSecret(), token, 'GET');
+    return this.resolveObjectPath(payload.objectKey);
   }
 
   resolveObjectPath(objectKey: string): string {

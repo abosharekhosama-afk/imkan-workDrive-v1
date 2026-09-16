@@ -15,12 +15,20 @@ export class SearchService {
   ) {}
 
   async search(user: AccessTokenPayload, query: string) {
+    // My-Folder isolation (privacy P0): personal folders/files are visible only
+    // to their own owner; org shares and team folders stay searchable. The
+    // narrow Prisma predicates below are defense-in-depth on top of canRead.
     const [folders, files] = await Promise.all([
       this.prisma.folder.findMany({
         where: {
           orgId: user.org_id,
           name: { search: query },
+          OR: [
+            { teamFolderId: { not: null } },
+            { ownerId: user.sub },
+          ],
         },
+        include: { owner: { select: { id: true, name: true, email: true, avatarUrl: true } } },
         take: 50,
       }),
       this.prisma.file.findMany({
@@ -28,8 +36,16 @@ export class SearchService {
           orgId: user.org_id,
           deletedAt: null,
           name: { search: query },
+          OR: [
+            { folder: null },
+            { folder: { teamFolderId: { not: null } } },
+            { folder: { ownerId: user.sub } },
+          ],
         },
-        include: { folder: { select: { teamFolderId: true } } },
+        include: {
+          folder: { select: { teamFolderId: true } },
+          owner: { select: { id: true, name: true, email: true, avatarUrl: true } },
+        },
         take: 50,
       }),
     ]);

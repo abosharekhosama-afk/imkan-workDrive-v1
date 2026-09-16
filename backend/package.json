@@ -20,7 +20,10 @@
     "test:e2e": "jest --config ./test/jest-e2e.json",
     "prisma:validate": "prisma validate",
     "prisma:generate": "prisma generate",
-    "db:seed": "prisma db seed"
+    "db:seed": "prisma db seed",
+    "workflow:worker": "ts-node -r tsconfig-paths/register src/workflow-worker.ts",
+    "test:workflow": "jest workflow-runtime.spec.ts workflow-queue.spec.ts --runInBand",
+    "test:workflow-v17": "jest workflows/custom-function.executor.spec.ts --runInBand"
   },
   "prisma": {
     "seed": "ts-node --compiler-options {\"module\":\"CommonJS\"} prisma/seed.ts"

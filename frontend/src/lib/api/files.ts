@@ -55,3 +55,16 @@ export function permanentDeleteFile(id: string) { return apiRequest(`/files/${id
 export function bulkMoveFiles(ids: string[], destinationFolderId: string | null) { return apiRequest(`/files/bulk/move`, { method: "POST", body: JSON.stringify({ ids, destinationFolderId }) }); }
 export function bulkTrashFiles(ids: string[]) { return apiRequest(`/files/bulk/trash`, { method: "POST", body: JSON.stringify({ ids }) }); }
 export function emptyTrash() { return apiRequest(`/files/trash/empty`, { method: "POST" }); }
+
+export type FileDetailsResponse = {
+  id: string; resourceType: 'FILE'; name: string; originalName: string;
+  mimeType: string | null; extension: string | null; size: number;
+  createdAt: string; updatedAt: string;
+  owner: { id: string; name: string | null; email: string };
+  location: { id: string; name: string } | null;
+  visibility: string; status: string;
+  metadata: Record<string, unknown> | null;
+  tags: Array<{ id: string; name: string }>;
+};
+
+export function getFileDetails(id: string) { return apiRequest<FileDetailsResponse>(`/files/${id}/details`); }

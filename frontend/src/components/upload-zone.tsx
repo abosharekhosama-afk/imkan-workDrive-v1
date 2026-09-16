@@ -2,23 +2,34 @@
 
 import { useLocale } from "./locale-provider";
 import { filesFromDrop, uploadFileToFolder } from "../lib/api/upload-file";
+import { createFolder } from "../lib/api/folders";
 import type { ChangeEvent, DragEvent } from "react";
-import { useCallback, useState } from "react";
-import { Toast } from "./toast";
-import { createUploadQueueItems, formatUploadSize, updateUploadQueueItem, type UploadQueueItem } from "./upload-queue-logic";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { createUploadQueueItems, updateUploadQueueItem, type UploadQueueItem } from "./upload-queue-logic";
+import { UploadProgressToast } from "./upload-progress-toast";
 
-export function UploadZone({ folderId, onUploaded }: { folderId: string | null; onUploaded: () => void }) {
+export function UploadZone({ folderId, onUploaded, triggerOnly = false }: { folderId: string | null; onUploaded: () => void; triggerOnly?: boolean }) {
   const { label } = useLocale();
   const [active, setActive] = useState(false);
   const [items, setItems] = useState<UploadQueueItem[]>([]);
-  const [toast, setToast] = useState<string | null>(null);
+  const inputRef = useRef<HTMLInputElement | null>(null);
+  const folderInputRef = useRef<HTMLInputElement | null>(null);
+
+  // Top-bar Quick Action button delegates to this zone's real file input so
+  // drag-and-drop, progress and toasts all live in one pipeline.
+  useEffect(() => {
+    const trigger = () => inputRef.current?.click();
+    const triggerFolder = () => folderInputRef.current?.click();
+    window.addEventListener("workdrive:trigger-upload", trigger);
+    window.addEventListener("workdrive:trigger-upload-folder", triggerFolder);
+    return () => { window.removeEventListener("workdrive:trigger-upload", trigger); window.removeEventListener("workdrive:trigger-upload-folder", triggerFolder); };
+  }, []);
 
   const upload = useCallback(async (item: UploadQueueItem) => {
     setItems((current) => updateUploadQueueItem(current, item.id, { status: "processing", progress: null, error: undefined }));
     try {
       await uploadFileToFolder(folderId, item.file, (progress) => setItems((current) => updateUploadQueueItem(current, item.id, { progress })));
       setItems((current) => updateUploadQueueItem(current, item.id, { status: "completed", progress: 100 }));
-      setToast(label("upload.completed"));
       onUploaded();
     } catch {
       setItems((current) => updateUploadQueueItem(current, item.id, { status: "failed", error: label("upload.failed") }));
@@ -31,28 +42,60 @@ export function UploadZone({ folderId, onUploaded }: { folderId: string | null; 
     void added.reduce((chain, item) => chain.then(() => upload(item)), Promise.resolve());
   }, [upload]);
 
-  function status(item: UploadQueueItem) {
-    if (item.status === "processing") return label("upload.processing");
-    if (item.status === "completed") return label("upload.completed");
-    if (item.status === "failed") return item.error ?? label("upload.failed");
-    return label("upload.queued");
+  async function onFolderChange(event: ChangeEvent<HTMLInputElement>) {
+    const files = Array.from(event.target.files ?? []);
+    event.target.value = "";
+    if (!files.length) return;
+    const folderCache = new Map<string, string>();
+    const ensureFolder = async (path: string) => {
+      if (!path) return folderId;
+      const cached = folderCache.get(path); if (cached) return cached;
+      const parts = path.split("/").filter(Boolean);
+      let parent = folderId; let built = "";
+      for (const part of parts) {
+        built = built ? `${built}/${part}` : part;
+        const existing = folderCache.get(built);
+        if (existing) { parent = existing; continue; }
+        const created = await createFolder(part, parent ?? undefined);
+        folderCache.set(built, created.id); parent = created.id;
+      }
+      return parent;
+    };
+    const items = createUploadQueueItems(files);
+    setItems((current) => [...current, ...items]);
+    for (let i = 0; i < items.length; i++) {
+      const item = items[i];
+      setItems((current) => updateUploadQueueItem(current, item.id, { status: "processing", progress: null }));
+      try {
+        const relative = (files[i] as File & { webkitRelativePath?: string }).webkitRelativePath ?? files[i].name;
+        const parts = relative.split("/").filter(Boolean);
+        const target = await ensureFolder(parts.length > 1 ? parts.slice(0, -1).join("/") : "");
+        await uploadFileToFolder(target ?? folderId, item.file, (progress) => setItems((current) => updateUploadQueueItem(current, item.id, { progress })));
+        setItems((current) => updateUploadQueueItem(current, item.id, { status: "completed", progress: 100 }));
+        onUploaded();
+      } catch {
+        setItems((current) => updateUploadQueueItem(current, item.id, { status: "failed", error: label("upload.failed") }));
+      }
+    }
   }
-
-  async function onChange(event: ChangeEvent<HTMLInputElement>) { enqueue(Array.from(event.target.files ?? [])); event.target.value = ""; }
-  async function onDrop(event: DragEvent<HTMLLabelElement>) { event.preventDefault(); setActive(false); enqueue(filesFromDrop(event.dataTransfer)); }
-  function remove(id: string) { setItems((current) => current.filter((item) => item.id !== id)); }
+  function onChange(event: ChangeEvent<HTMLInputElement>) { enqueue(Array.from(event.target.files ?? [])); event.target.value = ""; }
+  function onDrop(event: DragEvent<HTMLLabelElement>) { event.preventDefault(); setActive(false); enqueue(filesFromDrop(event.dataTransfer)); }
   function retry(item: UploadQueueItem) { void upload(item); }
+  function remove(id: string) { setItems((current) => current.filter((item) => item.id !== id)); }
 
-  return <div className="flex flex-col gap-2">
-    <label className={`imkan-focusable inline-flex cursor-pointer items-center gap-2 border-dashed px-3 py-2 text-[length:var(--imkan-font-size-ui)] ${active ? "border-[color:var(--imkan-color-primary)] bg-[color:var(--imkan-color-surface)]" : "border-[color:var(--imkan-color-border)]"}`}
-      onDragOver={(event) => { event.preventDefault(); setActive(true); }} onDragLeave={() => setActive(false)} onDrop={(event) => void onDrop(event)}>
+  return <div className={triggerOnly ? "sr-only" : "zoho-upload-zone"}>
+    {triggerOnly ? null : <label className={`zoho-dashed-drop${active ? " active" : ""}`}
+      onDragOver={(event) => { event.preventDefault(); setActive(true); }} onDragLeave={() => setActive(false)} onDrop={(event) => onDrop(event)}>
       {active ? label("files.drop") : label("files.upload")}
-      <input type="file" multiple className="sr-only" aria-label={label("files.upload")} onChange={(event) => void onChange(event)} />
-    </label>
-    {items.length > 0 ? <section className="imkan-panel min-w-64 p-3" aria-label={label("upload.queue")}>
-      <div className="mb-2 flex items-center justify-between gap-2"><h2 className="imkan-heading">{label("upload.queue")}</h2><button type="button" className="imkan-button-secondary" onClick={() => setItems((current) => current.filter((item) => item.status !== "completed"))}>{label("upload.clearCompleted")}</button></div>
-      <ul className="flex flex-col gap-2">{items.map((item) => <li key={item.id} className="imkan-divider flex-wrap items-center justify-between gap-2 pb-2"><div className="min-w-0 flex-1"><p className="truncate">{item.file.name}</p><p className="imkan-meta">{formatUploadSize(item.file.size)} · {status(item)}</p>{item.progress !== null ? <progress value={item.progress} max="100" className="mt-1 block inline-size-full" aria-label={`${item.file.name} ${item.progress}%`} /> : null}</div><div className="flex gap-2">{item.status === "failed" ? <button type="button" className="imkan-button-secondary" onClick={() => retry(item)}>{label("upload.retry")}</button> : null}{item.status !== "processing" ? <button type="button" className="imkan-button-secondary" onClick={() => remove(item.id)}>{label("upload.remove")}</button> : null}</div></li>)}</ul>
-    </section> : null}
-    {toast ? <Toast message={toast} onDismiss={() => setToast(null)} /> : null}
+      <input ref={inputRef} type="file" multiple className="sr-only" aria-label={label("files.upload")} onChange={(event) => onChange(event)} />
+      <input ref={folderInputRef} type="file" multiple {...({ webkitdirectory: "", directory: "" } as React.InputHTMLAttributes<HTMLInputElement>)} className="sr-only" aria-label={label("menu.uploadFolder")} onChange={(event) => void onFolderChange(event)} />
+    </label>}
+    {triggerOnly ? <><input ref={inputRef} type="file" multiple className="sr-only" aria-label={label("files.upload")} onChange={(event) => onChange(event)} /><input ref={folderInputRef} type="file" multiple {...({ webkitdirectory: "", directory: "" } as React.InputHTMLAttributes<HTMLInputElement>)} className="sr-only" aria-label={label("menu.uploadFolder")} onChange={(event) => void onFolderChange(event)} /></> : null}
+    <UploadProgressToast
+      items={items}
+      onClearCompleted={() => setItems((current) => current.filter((item) => item.status !== "completed"))}
+      onRetry={retry}
+      onRemove={remove}
+    />
   </div>;
 }

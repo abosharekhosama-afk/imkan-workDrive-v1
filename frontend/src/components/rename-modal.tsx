@@ -3,6 +3,7 @@
 import { useState, type FormEvent } from "react";
 import { useLocale } from "./locale-provider";
 import { Modal } from "./modal";
+import { friendlyErrorMessageKey } from "../lib/friendly-error";
 
 export function RenameModal({
   currentName,
@@ -22,8 +23,8 @@ export function RenameModal({
     try {
       await onSubmit(name);
       onClose();
-    } catch {
-      setError(label("error.generic"));
+    } catch (cause) {
+      setError(label(friendlyErrorMessageKey(cause)));
     }
   }
 

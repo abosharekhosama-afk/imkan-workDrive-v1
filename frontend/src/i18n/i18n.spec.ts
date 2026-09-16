@@ -44,3 +44,31 @@ test("Team Folder UI keys are localized in English and Arabic", () => {
     assert.match(arabic[key] ?? "", /\S/);
   }
 });
+
+test("English and Arabic dictionaries have identical key sets", () => {
+  const english = Object.keys(readDictionary("en")).sort();
+  const arabic = Object.keys(readDictionary("ar")).sort();
+  assert.deepEqual(arabic, english);
+});
+
+test("Organization and admin UI keys are localized in both languages", () => {
+  const english = readDictionary("en");
+  const arabic = readDictionary("ar");
+  const requiredKeys = [
+    "nav.organization",
+    "org.myWorkDrive",
+    "org.noOtherOrgs",
+    "files.itemsCount",
+    "admin.consoleMeta",
+    "admin.subtitle",
+    "admin.storageHealth",
+    "admin.securityPolicy",
+    "admin.groups",
+    "admin.auditTrail",
+  ] as const;
+
+  for (const key of requiredKeys) {
+    assert.match(english[key] ?? "", /\S/);
+    assert.match(arabic[key] ?? "", /\S/);
+  }
+});

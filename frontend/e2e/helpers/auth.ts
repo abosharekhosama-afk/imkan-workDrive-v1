@@ -1,68 +1,65 @@
-import jwt from "jsonwebtoken";
+import { getApiBaseUrl } from './client';
 
-export const SEED_ORG_ID = "00000000-0000-4000-8000-000000000001";
-export const SEED_ORG_B_ID = "00000000-0000-4000-8000-000000000002";
+export type AuthUser = { id: string; name: string | null; email: string; org_id: string; role: string; membershipId?: string; membershipStatus?: string };
+export type OrganizationMembershipSummary = { id: string; organizationId: string; role: string; status: string; isPrimary: boolean; organization: { id: string; name: string } };
+export type AuthResult = { access_token: string; user: AuthUser };
 
-export const SEED_ADMIN = {
-  id: "00000000-0000-4000-8000-000000000011",
-  email: "admin@example.imkan",
-  role: "ADMIN",
-} as const;
-
-export const SEED_MEMBER = {
-  id: "00000000-0000-4000-8000-000000000012",
-  email: "organizer@example.imkan",
-  role: "MEMBER",
-} as const;
-
-export const FOREIGN_ADMIN = {
-  id: "00000000-0000-4000-8000-000000000099",
-  orgId: SEED_ORG_B_ID,
-  email: "foreign@example.imkan",
-  role: "ADMIN",
-} as const;
-
-const JWT_SECRET =
-  process.env.JWT_SECRET ?? "dev_jwt_secret_must_change_in_production_min32chars";
-
-export function signAccessToken(user: {
-  id: string;
-  orgId: string;
-  email: string;
-  role: string;
-}): string {
-  return jwt.sign(
-    { sub: user.id, org_id: user.orgId, email: user.email, role: user.role },
-    JWT_SECRET,
-  );
-}
-
-export function adminAccessToken(): string {
-  return signAccessToken({
-    id: SEED_ADMIN.id,
-    orgId: SEED_ORG_ID,
-    email: SEED_ADMIN.email,
-    role: SEED_ADMIN.role,
+async function request<T>(path: string, body?: unknown): Promise<T> {
+  const baseUrl = getApiBaseUrl();
+  const response = await fetch(`${baseUrl}${path}`, {
+    method: body === undefined ? 'GET' : 'POST',
+    headers: body === undefined ? undefined : { 'Content-Type': 'application/json' },
+    body: body === undefined ? undefined : JSON.stringify(body),
   });
+
+  if (!response.ok) {
+    const raw = await response.text();
+    let message = "";
+    try {
+      const parsed = JSON.parse(raw) as { message?: string | string[]; error?: string };
+      message = Array.isArray(parsed.message) ? parsed.message.join(", ") : parsed.message || parsed.error || "";
+    } catch {
+      message = raw;
+    }
+    throw new Error(message || "Request failed");
+  }
+  return response.json() as Promise<T>;
 }
 
-export function memberAccessToken(): string {
-  return signAccessToken({
-    id: SEED_MEMBER.id,
-    orgId: SEED_ORG_ID,
-    email: SEED_MEMBER.email,
-    role: SEED_MEMBER.role,
+export function login(email: string, password: string) { return request<AuthResult>('/auth/login', { email, password }); }
+export function signup(name: string, email: string, password: string, inviteToken?: string) { return request<AuthResult>('/auth/signup', { name, email, password, ...(inviteToken ? { inviteToken } : {}) }); }
+export async function googleUrl() { return request<{ url: string }>('/auth/google'); }
+
+export async function me(token: string) {
+  if (!token) throw new Error('No token provided');
+  const response = await fetch(`${getApiBaseUrl()}/auth/me`, { 
+    headers: { Authorization: `Bearer ${token}` } 
   });
+  if (!response.ok) throw new Error('Session expired');
+  return response.json() as Promise<AuthUser>;
 }
 
-export function foreignTenantAccessToken(): string {
-  return signAccessToken(FOREIGN_ADMIN);
+export function saveSession(result: AuthResult) { 
+  if (typeof window !== 'undefined') {
+    localStorage.setItem('workdrive_access_token', result.access_token); 
+    localStorage.setItem('workdrive_user', JSON.stringify(result.user)); 
+
+    const isSecure = window.location.protocol === 'https:' ? '; Secure' : '';
+    document.cookie = `workdrive_access_token=${result.access_token}; path=/; max-age=28800; SameSite=Lax${isSecure}`;
+  }
 }
 
-export async function setAccessToken(page: import("@playwright/test").Page, token: string) {
-  await page.addInitScript((value: string) => {
-    window.localStorage.setItem("workdrive_access_token", value);
-  }, token);
+export function clearSession() { 
+  if (typeof window !== 'undefined') {
+    localStorage.removeItem('workdrive_access_token'); 
+    localStorage.removeItem('workdrive_user'); 
+    document.cookie = 'workdrive_access_token=; path=/; max-age=0; SameSite=Lax;';
+  }
 }
 
-export const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://127.0.0.1:3001";
+export function forgotPassword(email: string) { return request<{ok:boolean;reset_token?:string}>('/auth/forgot-password',{email}); }
+export function resetPassword(token:string,password:string) { return request<{ok:boolean}>('/auth/reset-password',{token,password}); }
+export function logout(token:string) { return fetch(`${getApiBaseUrl()}/auth/logout`,{method:'POST',headers:{Authorization:`Bearer ${token}`}}); }
+export function logoutAll(token:string) { return fetch(`${getApiBaseUrl()}/auth/logout-all`,{method:'POST',headers:{Authorization:`Bearer ${token}`}}); }
+export function listMemberships(token?: string) { return token ? fetch(`${getApiBaseUrl()}/auth/memberships`, { headers: { Authorization: `Bearer ${token}` } }).then(async r => { if (!r.ok) throw new Error('Unable to load organizations'); return r.json() as Promise<OrganizationMembershipSummary[]>; }) : Promise.reject(new Error('Missing token')); }
+export function switchOrganization(token: string, organizationId: string) { return fetch(`${getApiBaseUrl()}/auth/organizations/switch`, { method: 'POST', headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ organizationId }) }).then(async r => { if (!r.ok) throw new Error(await r.text()); return r.json() as Promise<AuthResult>; }); }

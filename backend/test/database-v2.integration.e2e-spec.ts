@@ -4,6 +4,7 @@ import * as path from 'node:path';
 import {
   AccessAction,
   AuditAction,
+  MembershipStatus,
   NotificationType,
   OrgRole,
   PrismaClient,
@@ -49,6 +50,8 @@ describe('Database V2 lifecycle', () => {
   let shareId: string;
   let tagId: string;
   let commentId: string;
+  let adminMembershipId: string;
+  let memberMembershipId: string;
 
   beforeAll(async () => {
     await cleanup();
@@ -56,11 +59,33 @@ describe('Database V2 lifecycle', () => {
       data: { id: ORG_ID, name: 'V2 Integration Org' },
     });
     await prisma.user.create({
-      data: { id: ADMIN_ID, orgId: ORG_ID, email: 'v2-admin@test.imkan', role: OrgRole.ADMIN },
+      data: { id: ADMIN_ID, email: 'v2-admin@test.imkan', status: 'ACTIVE' },
     });
     await prisma.user.create({
-      data: { id: MEMBER_ID, orgId: ORG_ID, email: 'v2-member@test.imkan', role: OrgRole.MEMBER },
+      data: { id: MEMBER_ID, email: 'v2-member@test.imkan', status: 'ACTIVE' },
     });
+    const adminMembership = await prisma.organizationMembership.create({
+      data: {
+        id: 'v2it0000-0000-4000-8000-000000000111',
+        userId: ADMIN_ID,
+        organizationId: ORG_ID,
+        role: OrgRole.ADMIN,
+        status: MembershipStatus.ACTIVE,
+        isPrimary: true,
+      },
+    });
+    adminMembershipId = adminMembership.id;
+    const memberMembership = await prisma.organizationMembership.create({
+      data: {
+        id: 'v2it0000-0000-4000-8000-000000000112',
+        userId: MEMBER_ID,
+        organizationId: ORG_ID,
+        role: OrgRole.MEMBER,
+        status: MembershipStatus.ACTIVE,
+        isPrimary: true,
+      },
+    });
+    memberMembershipId = memberMembership.id;
     await prisma.storageQuota.create({
       data: { orgId: ORG_ID, quotaBytes: 10737418240n, usedBytes: 0n },
     });
@@ -91,14 +116,15 @@ describe('Database V2 lifecycle', () => {
     await prisma.teamFolderMember.deleteMany({ where: { orgId: ORG_ID } }).catch(() => undefined);
     await prisma.teamFolder.deleteMany({ where: { orgId: ORG_ID } }).catch(() => undefined);
     await prisma.storageQuota.deleteMany({ where: { orgId: ORG_ID } }).catch(() => undefined);
-    await prisma.user.deleteMany({ where: { orgId: ORG_ID } }).catch(() => undefined);
+    await prisma.organizationMembership.deleteMany({ where: { organizationId: ORG_ID } }).catch(() => undefined);
+    await prisma.user.deleteMany({ where: { id: { in: [ADMIN_ID, MEMBER_ID] } } }).catch(() => undefined);
     await prisma.organization.deleteMany({ where: { id: ORG_ID } }).catch(() => undefined);
   }
 
   test('1. creates a file with a storage object and first version', async () => {
     folderId = randomUUID();
     await prisma.folder.create({
-      data: { id: folderId, orgId: ORG_ID, name: 'V2 Folder', ownerId: ADMIN_ID },
+      data: { id: folderId, orgId: ORG_ID, name: 'V2 Folder', ownerId: ADMIN_ID, folderType: 'PERSONAL' },
     });
 
     fileId = randomUUID();

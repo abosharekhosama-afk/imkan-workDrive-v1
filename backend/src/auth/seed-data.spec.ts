@@ -1,5 +1,5 @@
 import { OrgRole } from '@prisma/client';
-import { SEED_ORGANIZATION, SEED_USERS } from './seed-data';
+import { SEED_ORGANIZATION, SEED_USERS, SEED_MEMBERSHIPS } from './seed-data';
 
 describe('T-202 seed data', () => {
   it('defines one organization and three users', () => {
@@ -10,7 +10,7 @@ describe('T-202 seed data', () => {
       'organizer@example.imkan',
       'viewer@example.imkan',
     ]);
-    expect(SEED_USERS[0].role).toBe(OrgRole.ADMIN);
+    expect(SEED_MEMBERSHIPS[0].role).toBe(OrgRole.SUPER_ADMIN);
     expect(new Set(SEED_USERS.map((user) => user.id)).size).toBe(3);
   });
 });

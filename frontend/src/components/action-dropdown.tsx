@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import {
   Popover,
   PopoverTrigger,
@@ -14,6 +15,7 @@ export type ActionDropdownItem = {
   destructive?: boolean;
   icon?: React.ReactNode;
   dividerBefore?: boolean;
+  submenu?: ActionDropdownItem[];
 };
 
 interface ActionGroup {
@@ -48,6 +50,10 @@ const actionIcons: Record<string, React.ReactNode> = {
   "Preview": <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><path d="M2 3a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V3z" /><path d="M9 9h6" /><path d="M9 13h6" /><path d="M9 17h6" /></svg>,
   "سجل الإصدارات": <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><circle cx="12" cy="12" r="3" /><path d="M12 1v6" /><path d="M12 17v6" /><path d="M4.93 4.93l4.24 4.24" /><path d="M14.83 14.83l4.24 4.24" /><path d="M2 12h6" /><path d="M16 12h6" /></svg>,
   "Version History": <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><circle cx="12" cy="12" r="3" /><path d="M12 1v6" /><path d="M12 17v6" /><path d="M4.93 4.93l4.24 4.24" /><path d="M14.83 14.83l4.24 4.24" /><path d="M2 12h6" /><path d="M16 12h6" /></svg>,
+  "عرض التفاصيل": <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true"><circle cx="12" cy="12" r="9" /><path d="M12 8h.01" /><path d="M11 12h1v4h1" /></svg>,
+  "View details": <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true"><circle cx="12" cy="12" r="9" /><path d="M12 8h.01" /><path d="M11 12h1v4h1" /></svg>,
+  "فتح": <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" /></svg>,
+  "Open": <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" /></svg>,
 };
 
 function getIconForLabel(label: string): React.ReactNode | undefined {
@@ -73,6 +79,66 @@ function groupItems(items: ActionDropdownItem[]): ActionGroup[] {
   return groups;
 }
 
+function RenderItem({ item }: { item: ActionDropdownItem }) {
+  const [subOpen, setSubOpen] = useState(false);
+  if (!item.submenu) {
+    return (
+      <PopoverClose asChild>
+        <button
+          type="button"
+          role="menuitem"
+          data-danger={item.destructive || undefined}
+          className="wd-menu-item min-h-[34px] text-start"
+          onClick={() => item.onSelect()}
+        >
+          {item.icon ?? getIconForLabel(item.label) ? (
+            <span className="flex-shrink-0 w-5 h-5 flex items-center justify-center text-current">
+              {item.icon ?? getIconForLabel(item.label)}
+            </span>
+          ) : (
+            <span className="w-5" />
+          )}
+          <span className="flex-1 truncate">{item.label}</span>
+        </button>
+      </PopoverClose>
+    );
+  }
+  return (
+    <div className="relative" onMouseEnter={() => setSubOpen(true)} onMouseLeave={() => setSubOpen(false)}>
+      <button
+        type="button"
+        role="menuitem"
+        aria-haspopup="menu"
+        aria-expanded={subOpen}
+        className="wd-menu-item min-h-[34px] text-start"
+        data-active={subOpen || undefined}
+        onClick={() => setSubOpen((v) => !v)}
+      >
+        <span className="w-5" />
+        <span className="flex-1 truncate">{item.label}</span>
+        <span aria-hidden="true" className="text-[length:var(--imkan-font-size-secondary)]">›</span>
+      </button>
+      {subOpen ? (
+        <div className="wd-menu absolute left-full top-0 min-w-[220px]" role="menu">
+          {item.submenu.map((sub) => (
+            <PopoverClose key={sub.label} asChild>
+              <button
+                type="button"
+                role="menuitem"
+                className="wd-menu-item min-h-[34px] text-start"
+                onClick={() => { setSubOpen(false); sub.onSelect(); }}
+              >
+                <span className="w-5" />
+                <span className="flex-1 truncate">{sub.label}</span>
+              </button>
+            </PopoverClose>
+          ))}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 export function ActionDropdown({ label, items, trigger }: ActionDropdownProps) {
   const { label: t } = useLocale();
   const groupedItems = groupItems(items);
@@ -82,7 +148,7 @@ export function ActionDropdown({ label, items, trigger }: ActionDropdownProps) {
       <button
         type="button"
         aria-label={label}
-        className="imkan-button-secondary p-1.5"
+        className="wd-icon-btn"
         aria-haspopup="menu"
       >
         <span aria-hidden="true" className="text-[length:var(--imkan-font-size-ui)]">⋯</span>
@@ -97,35 +163,13 @@ export function ActionDropdown({ label, items, trigger }: ActionDropdownProps) {
         side="bottom"
         align="end"
         sideOffset={4}
-        className="imkan-popover z-50 w-56 p-1 shadow-xl bg-white rounded-lg border border-[color:var(--imkan-color-border)]"
-        style={{ minWidth: "224px" }}
+        className="wd-menu z-[100] w-64"
+        style={{ minWidth: "252px" }}
       >
         {groupedItems.map((group, groupIndex) => (
           <div key={groupIndex} className={groupIndex > 0 ? "border-t border-[color:var(--imkan-color-border)] pt-1" : ""}>
             {group.items.map((item) => (
-              <PopoverClose key={item.label} asChild>
-                <button
-                  type="button"
-                  role="menuitem"
-                  className={`w-full flex items-center gap-2 px-3 py-2 text-start text-[length:var(--imkan-font-size-secondary)] rounded-sm hover:bg-[color:var(--imkan-color-surface)] transition-colors ${
-                    item.destructive
-                      ? "text-[color:var(--imkan-color-error)] hover:bg-[color:var(--imkan-color-error)]/10"
-                      : "text-[color:var(--imkan-color-foreground)]"
-                  }`}
-                  onClick={() => {
-                    item.onSelect();
-                  }}
-                >
-                  {item.icon ?? getIconForLabel(item.label) ? (
-                    <span className="flex-shrink-0 w-5 h-5 flex items-center justify-center text-[color:var(--imkan-color-muted)]">
-                      {item.icon ?? getIconForLabel(item.label)}
-                    </span>
-                  ) : (
-                    <span className="w-5" />
-                  )}
-                  <span className="flex-1 truncate">{item.label}</span>
-                </button>
-              </PopoverClose>
+              <RenderItem key={item.label} item={item} />
             ))}
           </div>
         ))}

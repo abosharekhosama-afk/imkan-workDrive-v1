@@ -17,6 +17,10 @@ export type TeamFolderListItem = {
   name: string;
   rootFolderId: string | null;
   role: TeamFolderUserRole;
+  /** Latest activity across the folder tree (folders + active files). */
+  updatedAt?: string | null;
+  /** Summed byte size of active files in the folder tree. */
+  totalSize?: number | null;
 };
 
 export type TeamFolderMember = {

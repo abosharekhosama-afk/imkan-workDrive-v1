@@ -4,7 +4,7 @@ import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { INestApplication } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
-import { OrgRole, PrismaClient } from '@prisma/client';
+import { MembershipStatus, OrgRole, PrismaClient } from '@prisma/client';
 import * as jwt from 'jsonwebtoken';
 import request from 'supertest';
 import { App } from 'supertest/types';
@@ -174,6 +174,7 @@ describe('IDOR live integration (cross-tenant, MySQL)', () => {
         resource_type: 'FILE',
         resource_id: fileAId,
         can_download: true,
+        permission: 'VIEW',
       })
       .expect(201);
 
@@ -198,9 +199,17 @@ describe('IDOR live integration (cross-tenant, MySQL)', () => {
     await prisma.user.create({
       data: {
         id: adminId,
-        orgId,
         email: `${label}@example.imkan`,
+        status: 'ACTIVE',
+      },
+    });
+    await prisma.organizationMembership.create({
+      data: {
+        userId: adminId,
+        organizationId: orgId,
         role: OrgRole.ADMIN,
+        status: MembershipStatus.ACTIVE,
+        isPrimary: true,
       },
     });
     return {
@@ -261,7 +270,15 @@ describe('IDOR live integration (cross-tenant, MySQL)', () => {
     await prisma.storageObject.deleteMany({ where: { orgId } });
     await prisma.session.deleteMany({ where: { orgId } });
     await prisma.storageQuota.deleteMany({ where: { orgId } });
-    await prisma.user.deleteMany({ where: { orgId } });
+    const memberRows = await prisma.organizationMembership.findMany({
+      where: { organizationId: orgId },
+      select: { userId: true },
+    });
+    const memberUserIds = memberRows.map((row) => row.userId);
+    await prisma.organizationMembership.deleteMany({ where: { organizationId: orgId } });
+    if (memberUserIds.length) {
+      await prisma.user.deleteMany({ where: { id: { in: memberUserIds } } });
+    }
     await prisma.organization.deleteMany({ where: { id: orgId } });
   }
 
@@ -349,6 +366,7 @@ describe('IDOR live integration (cross-tenant, MySQL)', () => {
           resource_type: 'FILE',
           resource_id: fileAId,
           can_download: true,
+          permission: 'VIEW',
         })
         .expect(404);
     });

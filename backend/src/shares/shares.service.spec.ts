@@ -19,7 +19,7 @@ const TEAM_FOLDER_A = '00000000-0000-4000-8000-000000000061';
 const TF_FOLDER = { teamFolderId: TEAM_FOLDER_A };
 
 describe('SharesService', () => {
-  const prisma = {
+  const prisma: any = {
     file: { findFirst: jest.fn() },
     folder: { findFirst: jest.fn() },
     teamFolderMember: { findFirst: jest.fn() },
@@ -35,10 +35,15 @@ describe('SharesService', () => {
       deleteMany: jest.fn(),
       findMany: jest.fn(),
     },
+    securityPolicy: { findFirst: jest.fn() },
+    teamFolder: { findFirst: jest.fn() },
     user: { findMany: jest.fn() },
     fileActivity: { create: jest.fn() },
     auditLog: { create: jest.fn() },
     $transaction: jest.fn(async (arg: unknown) => {
+      if (typeof arg === 'function') {
+        return arg(prisma);
+      }
       if (Array.isArray(arg)) return Promise.all(arg as unknown[]);
       return arg;
     }),
@@ -55,6 +60,8 @@ describe('SharesService', () => {
     assertObjectExists: jest.fn(),
     deleteObject: jest.fn(),
     deleteStoredObject: jest.fn(),
+    storeObject: jest.fn(async () => undefined),
+    assertStoredObjectExists: jest.fn(async () => undefined),
   };
   const config = {
     get: () => 'https://workdrive.example',
@@ -94,7 +101,7 @@ describe('SharesService', () => {
       prisma.file.findFirst.mockResolvedValue({
         id: FILE_A,
         orgId: ORG_A,
-        ownerId: OWNER,
+        ownerId: OTHER,
         deletedAt: null,
         folder: PERSONAL_FOLDER,
       });
@@ -102,6 +109,7 @@ describe('SharesService', () => {
       const result = await service.createShare(admin, {
         resourceType: ResourceType.FILE,
         resourceId: FILE_A,
+        permission: 'VIEW',
         expiresAt: new Date(Date.now() + 86_400_000),
         recipientUserIds: [],
         password: 's3cret-link',
@@ -156,6 +164,7 @@ describe('SharesService', () => {
         service.createShare(admin, {
           resourceType: ResourceType.FILE,
           resourceId: FILE_A,
+          permission: 'VIEW',
           canDownload: true,
           recipientUserIds: [],
         }),
@@ -175,6 +184,7 @@ describe('SharesService', () => {
         service.createShare(viewer, {
           resourceType: ResourceType.FILE,
           resourceId: FILE_A,
+          permission: 'VIEW',
           canDownload: true,
           recipientUserIds: [],
         }),
@@ -194,6 +204,7 @@ describe('SharesService', () => {
         service.createShare(member, {
           resourceType: ResourceType.FILE,
           resourceId: FILE_A,
+          permission: 'VIEW',
           canDownload: true,
           recipientUserIds: [],
         }),
@@ -214,6 +225,7 @@ describe('SharesService', () => {
         service.createShare(member, {
           resourceType: ResourceType.FILE,
           resourceId: FILE_A,
+          permission: 'VIEW',
           canDownload: true,
           recipientUserIds: [],
         }),
@@ -233,7 +245,7 @@ describe('SharesService', () => {
       prisma.file.findFirst.mockResolvedValue({
         id: FILE_A,
         orgId: ORG_A,
-        ownerId: OWNER,
+        ownerId: OTHER,
         deletedAt: null,
         folder: PERSONAL_FOLDER,
       });

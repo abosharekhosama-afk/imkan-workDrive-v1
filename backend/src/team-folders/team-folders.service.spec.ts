@@ -45,8 +45,9 @@ describe('TeamFoldersService', () => {
       findMany: jest.fn(),
       deleteMany: jest.fn(),
     },
-    file: { findFirst: jest.fn() },
+    file: { findFirst: jest.fn(), aggregate: jest.fn() },
     user: { findFirst: jest.fn() },
+    organizationMembership: { findFirst: jest.fn() },
     auditLog: { create: jest.fn() },
   };
   const service = new TeamFoldersService(
@@ -105,6 +106,13 @@ describe('TeamFoldersService', () => {
       async (fn: (tx: typeof prisma) => unknown) => fn(prisma),
     );
     prisma.teamFolder.findFirst.mockResolvedValue(teamFolder);
+    prisma.user.findFirst.mockImplementation(async ({ where }: { where: { id: string } }) => ({ id: where.id, email: `${where.id}@example.imkan` }));
+    prisma.organizationMembership.findFirst.mockImplementation(async ({ where }: { where: { userId: string } }) => ({ userId: where.userId, organizationId: ORG_A, status: 'ACTIVE' }));
+    prisma.folder.findMany.mockResolvedValue([]);
+    prisma.file.aggregate.mockResolvedValue({
+      _max: { updatedAt: null },
+      _sum: { size: null },
+    });
   });
 
   it('forbids a MEMBER from creating a Team Folder', async () => {
@@ -222,7 +230,36 @@ describe('TeamFoldersService', () => {
     prisma.folder.findFirst.mockResolvedValue({ id: ROOT_A });
     const result = await service.list(admin);
     expect(result.teamFolders).toEqual([
-      { id: TF_A, name: 'Legal', rootFolderId: ROOT_A, role: 'ORG_ADMIN' },
+      { id: TF_A, name: 'Legal', rootFolderId: ROOT_A, role: 'ORG_ADMIN', updatedAt: null, totalSize: null },
+    ]);
+  });
+
+  it('derives Last Modified and size stats for the Team Folders table', async () => {
+    prisma.teamFolder.findMany.mockResolvedValue([
+      { id: TF_A, orgId: ORG_A, name: 'Legal' },
+    ]);
+    prisma.teamFolderMember.findFirst.mockResolvedValue(null);
+    prisma.folder.findFirst.mockResolvedValue({ id: ROOT_A });
+    const folderDate = new Date('2026-01-01T00:00:00.000Z');
+    const fileDate = new Date('2026-02-02T00:00:00.000Z');
+    prisma.folder.findMany.mockResolvedValue([
+      { updatedAt: folderDate },
+      { updatedAt: new Date('2025-12-01T00:00:00.000Z') },
+    ]);
+    prisma.file.aggregate.mockResolvedValue({
+      _max: { updatedAt: fileDate },
+      _sum: { size: 1536n },
+    });
+    const result = await service.list(admin);
+    expect(result.teamFolders).toEqual([
+      {
+        id: TF_A,
+        name: 'Legal',
+        rootFolderId: ROOT_A,
+        role: 'ORG_ADMIN',
+        updatedAt: fileDate.toISOString(),
+        totalSize: 1536,
+      },
     ]);
   });
 
@@ -317,7 +354,7 @@ describe('TeamFoldersService', () => {
 
   it('lets a TF ADMIN manage members', async () => {
     mockCallerRole({ [TF_ADMIN_ID]: TeamFolderRole.ADMIN });
-    prisma.user.findFirst.mockResolvedValue({ id: INVITEE_ID, orgId: ORG_A });
+    prisma.user.findFirst.mockResolvedValue({ id: INVITEE_ID });
     prisma.teamFolderMember.create.mockResolvedValue(
       membership(INVITEE_ID, TeamFolderRole.EDITOR),
     );
@@ -348,7 +385,12 @@ describe('TeamFoldersService', () => {
 
   it('rejects a cross-tenant target user when adding a member', async () => {
     mockCallerRole({ [TF_ADMIN_ID]: TeamFolderRole.ADMIN });
-    prisma.user.findFirst.mockResolvedValue({ id: FOREIGN_ID, orgId: ORG_B });
+    prisma.user.findFirst.mockResolvedValue({ id: FOREIGN_ID });
+    prisma.organizationMembership.findFirst.mockResolvedValue({
+      userId: FOREIGN_ID,
+      organizationId: ORG_B,
+      status: 'ACTIVE',
+    });
 
     await expect(
       service.addMember(tfAdmin, TF_A, {
@@ -368,7 +410,7 @@ describe('TeamFoldersService', () => {
         user: { email: 'tf-admin@example.imkan' },
       },
     ]);
-    prisma.user.findFirst.mockResolvedValue({ id: INVITEE_ID, orgId: ORG_A });
+    prisma.user.findFirst.mockResolvedValue({ id: INVITEE_ID });
     prisma.teamFolderMember.create.mockResolvedValue(
       membership(INVITEE_ID, TeamFolderRole.ADMIN),
     );

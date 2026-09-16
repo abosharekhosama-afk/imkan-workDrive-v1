@@ -7,6 +7,7 @@ import {
   ParseUUIDPipe,
   Patch,
   Post,
+  Query,
 } from '@nestjs/common';
 import { AccessAction, ResourceType } from '@prisma/client';
 import { CurrentUser } from '../auth/current-user.decorator';
@@ -30,16 +31,34 @@ export class FoldersController {
   }
 
   @Get()
-  listRoots(@CurrentUser() user: AccessTokenPayload) {
-    return this.folders.listContents(user);
+  listRoots(
+    @CurrentUser() user: AccessTokenPayload,
+    @Query('type') type?: string,
+    @Query('status') status?: string,
+    @Query('owner') ownerId?: string,
+    @Query('date') date?: string,
+    @Query('dateField') dateField?: string,
+    @Query('dateFrom') dateFrom?: string,
+    @Query('dateTo') dateTo?: string,
+    @Query('query') query?: string,
+  ) {
+    return this.folders.listContents(user, undefined, { type, status, ownerId, date, dateField, dateFrom, dateTo, query });
   }
 
   @Get(':id')
   async getById(
     @CurrentUser() user: AccessTokenPayload,
     @Param('id', new ParseUUIDPipe({ version: '4' })) id: string,
+    @Query('type') type?: string,
+    @Query('status') status?: string,
+    @Query('owner') ownerId?: string,
+    @Query('date') date?: string,
+    @Query('dateField') dateField?: string,
+    @Query('dateFrom') dateFrom?: string,
+    @Query('dateTo') dateTo?: string,
+    @Query('query') query?: string,
   ) {
-    const result = await this.folders.getById(user, id);
+    const result = await this.folders.getById(user, id, { type, status, ownerId, date, dateField, dateFrom, dateTo, query });
     void this.recent
       .record(user, ResourceType.FOLDER, id, AccessAction.VIEW)
       .catch(() => undefined);

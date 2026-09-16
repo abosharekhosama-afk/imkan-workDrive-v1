@@ -7,5 +7,6 @@ import { SharesService } from './shares.service';
   imports: [StorageModule],
   controllers: [SharesController],
   providers: [SharesService],
+  exports: [SharesService], // <-- أضف هذا السطر
 })
 export class SharesModule {}
