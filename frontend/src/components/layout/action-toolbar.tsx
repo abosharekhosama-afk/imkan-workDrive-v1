@@ -1,5 +1,6 @@
 "use client";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import { useLocale } from "../locale-provider";
 import { persistViewMode, type ViewMode } from "../view-mode-logic";
 import { Icons } from "./icons";
@@ -64,6 +65,7 @@ export function ActionToolbar({
   onOpenFolder?: (folderId: string) => void;
 }) {
   const { label } = useLocale();
+  const router = useRouter();
   const [openMenu, setOpenMenu] = useState<"new" | "record" | "filter" | "columns" | "sort" | "view" | "tree" | null>(null);
 
   // Folder-tree navigation state (collapsible tree with guarded lazy children).
@@ -147,6 +149,10 @@ export function ActionToolbar({
   }
   const toggle = (m: "new" | "record" | "filter" | "columns" | "sort" | "view" | "tree") => setOpenMenu((c) => (c === m ? null : m));
   const close = () => setOpenMenu(null);
+  const dispatchRecord = (kind: "screen" | "video" | "audio") => {
+    setOpenMenu(null);
+    window.setTimeout(() => window.dispatchEvent(new CustomEvent("workdrive:record", { detail: { kind, folderId: currentFolderId ?? null } })), 0);
+  };
   const isColOn = (k: ColumnKey) => cols[k] ?? true;
 
   return (
@@ -185,10 +191,7 @@ export function ActionToolbar({
           {label("nav.record")} <Icons.chevD size={13} />
         </button>
         <ZohoMenu open={openMenu === "record"} onClose={close} labelledBy="tb-record-btn"
-          onSelect={(k) => {
-            close();
-            window.dispatchEvent(new CustomEvent("workdrive:record", { detail: { kind: k, folderId: currentFolderId ?? null } }));
-          }}
+          onSelect={(k) => { if (k === "screen" || k === "video" || k === "audio") dispatchRecord(k); }}
           items={[
             { key: "screen", labelKey: "menu.screenRecord", icon: <Icons.camera size={16} /> },
             { key: "video", labelKey: "menu.videoRecord", icon: <Icons.video size={16} /> },
@@ -199,14 +202,13 @@ export function ActionToolbar({
         </button>
         <ZohoMenu open={openMenu === "new"} onClose={close} labelledBy="tb-new-btn" widthPx={405}
           onSelect={(k) => {
-            close();
             if (k === "folder") WorkdriveEvents.createFolder();
             else if (k === "upload") WorkdriveEvents.upload();
             else if (k === "uploadFolder") WorkdriveEvents.uploadFolder();
-            else if (k === "workflow") WorkdriveEvents.newWorkflow();
-            else if (k === "templates") window.location.href = currentFolderId ? `/files/templates?folderId=${encodeURIComponent(currentFolderId)}` : "/files/templates";
+            else if (k === "workflow") { close(); router.push("/files/workflows/builder"); }
+            else if (k === "templates") { close(); router.push(currentFolderId ? `/files/templates?folderId=${encodeURIComponent(currentFolderId)}` : "/files/templates"); }
             else if (k === "externalApps") WorkdriveEvents.externalApps();
-            else if (k === "record") window.dispatchEvent(new CustomEvent("workdrive:record", { detail: { kind: "video", folderId: currentFolderId ?? null } }));
+            else if (k === "record") dispatchRecord("video");
             else if (["doc", "sheet", "slide", "link", "code"].includes(k)) window.dispatchEvent(new CustomEvent("workdrive:new-file", { detail: { kind: k, folderId: currentFolderId ?? null } }));
             else if (k === "cloud") window.dispatchEvent(new CustomEvent("workdrive:external-apps", { detail: { source: "cloud-import" } }));
             else openWip(label("menu.zia"));

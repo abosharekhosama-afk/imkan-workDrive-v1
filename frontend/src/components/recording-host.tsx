@@ -8,6 +8,12 @@ export type RecordingKind = "screen" | "video" | "audio";
 
 type Detail = { kind: RecordingKind; folderId: string | null };
 
+function normalizeRecordingMime(value: string | undefined, kind: RecordingKind) {
+  const fallback = kind === "audio" ? "audio/webm" : "video/webm";
+  const base = String(value || fallback).split(";", 1)[0].trim().toLowerCase();
+  return /^(audio|video)\/[a-z0-9.+-]+$/.test(base) ? base : fallback;
+}
+
 const MIME_TYPES: Record<RecordingKind, string[]> = {
   screen: ["video/webm;codecs=vp9,opus", "video/webm;codecs=vp8,opus", "video/webm"],
   video: ["video/webm;codecs=vp9,opus", "video/webm;codecs=vp8,opus", "video/webm"],
@@ -103,7 +109,7 @@ export function RecordingHost() {
       const stamp = new Date().toISOString().replace(/[:.]/g, "-");
       const prefix = target.kind === "screen" ? "Screen recording" : target.kind === "video" ? "Video recording" : "Audio recording";
       const extension = blob.type.includes("mp4") ? "mp4" : blob.type.includes("ogg") ? "ogg" : "webm";
-      const mime = blob.type || (target.kind === "audio" ? "audio/webm" : "video/webm");
+      const mime = normalizeRecordingMime(blob.type, target.kind);
       await uploadFileToFolder(target.folderId, new File([blob], `${prefix} ${stamp}.${extension}`, { type: mime }));
       window.dispatchEvent(new Event("workdrive:content-changed"));
       setDetail(null);
@@ -120,14 +126,13 @@ export function RecordingHost() {
   const formatted = `${String(Math.floor(seconds / 60)).padStart(2, "0")}:${String(seconds % 60).padStart(2, "0")}`;
 
   return (
-    <div className="fixed inset-x-0 bottom-4 z-[180] flex justify-center px-3 pointer-events-none" dir={locale === "ar" ? "rtl" : "ltr"}>
-      <div className="pointer-events-auto flex w-[min(760px,calc(100vw-24px))] items-center gap-3 rounded-xl border border-slate-200 bg-white/95 px-3 py-2 shadow-[0_10px_35px_rgba(15,23,42,.14)] backdrop-blur" role="status" aria-live="polite">
-        <div className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${recording ? "bg-red-50 text-red-600" : "bg-slate-50 text-slate-500"}`}><span className="text-[12px]">●</span></div>
+    <div className="fixed bottom-4 left-1/2 z-[220] -translate-x-1/2 px-3" role="status" aria-live="polite">
+      <div className="flex w-[min(720px,calc(100vw-24px))] items-center gap-3 rounded-xl border border-slate-200 bg-white/95 px-3 py-2.5 shadow-[0_10px_30px_rgba(15,23,42,.14)] backdrop-blur" dir={locale === "ar" ? "rtl" : "ltr"}>
+        <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${recording ? "bg-red-50 text-red-600" : "bg-slate-100 text-slate-600"}`}>●</span>
         <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-2"><strong className="truncate text-[11px] font-semibold text-slate-900">{title}</strong><span className={`shrink-0 rounded-full px-2 py-0.5 text-[8.5px] font-semibold ${recording ? "bg-red-50 text-red-600" : busy ? "bg-amber-50 text-amber-700" : "bg-slate-100 text-slate-500"}`}>{recording ? (locale === "ar" ? "جارٍ التسجيل" : "Recording") : busy ? (locale === "ar" ? "جارٍ الحفظ" : "Saving") : (locale === "ar" ? "جاهز" : "Ready")}</span></div>
-          <div className="mt-0.5 text-[12px] font-semibold tabular-nums text-slate-700">{formatted}</div>
+          <div className="flex items-center gap-2 text-[11px] font-semibold text-slate-900"><span className="truncate">{title}</span><span className="tabular-nums text-slate-500">{formatted}</span></div>
+          <div className="mt-0.5 truncate text-[9.5px] text-slate-500">{recording ? (locale === "ar" ? "جارٍ التسجيل في الخلفية…" : "Recording in the background…") : busy ? (locale === "ar" ? "جارٍ حفظ التسجيل…" : "Saving recording…") : error || (locale === "ar" ? "جاهز لبدء التسجيل" : "Ready to start")}</div>
         </div>
-        {error ? <div className="hidden max-w-[260px] truncate text-[9.5px] text-red-600 sm:block" title={error}>{error}</div> : null}
         {!recording && !busy ? <button type="button" className="imkan-button" onClick={() => void start()}>{locale === "ar" ? "بدء" : "Start"}</button> : null}
         {recording ? <button type="button" className="imkan-button" onClick={stopAndSave}>{locale === "ar" ? "إيقاف وحفظ" : "Stop & save"}</button> : null}
         {!recording && !busy ? <button type="button" className="imkan-button-secondary" onClick={() => setDetail(null)}>{locale === "ar" ? "إلغاء" : "Cancel"}</button> : null}
