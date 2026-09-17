@@ -1401,8 +1401,8 @@ html[data-theme="dark"] .zoho-workflow-status-badge{border-color:#38414d;backgro
    reference at a 1920px viewport. Keep both header levels compact and aligned
    to the same 60px rhythm. */
 .team-context-header{
-  min-height:60px !important;
-  height:60px;
+  min-height:48px !important;
+  height:48px;
   box-sizing:border-box;
   padding:0 16px !important;
   gap:8px;
