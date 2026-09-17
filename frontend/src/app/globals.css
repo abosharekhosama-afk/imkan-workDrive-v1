@@ -1393,7 +1393,7 @@ html[data-theme="dark"] .zoho-workflow-status-badge{border-color:#38414d;backgro
 .team-context-menu-sep{height:1px;margin:5px 0;background:#edf0f2}
 .team-context-header--manage .team-context-title{max-width:calc(100% - 12px)}
 @media(max-width:900px){.team-context-name{max-width:30vw}.team-org-switch{display:none}}
-@media(max-width:680px){.team-context-header{min-height:60px;padding-inline:10px}.team-context-name{max-width:34vw;font-size:16px}.team-context-role{display:none}.team-context-members{font-size:11px}.team-context-actions .wd-icon-btn{display:none}.team-context-actions .wd-icon-btn:nth-last-child(-n+2){display:inline-flex}}
+@media(max-width:680px){.team-context-header{min-height:48px;padding-inline:10px}.team-context-name{max-width:34vw;font-size:16px}.team-context-role{display:none}.team-context-members{font-size:11px}.team-context-actions .wd-icon-btn{display:none}.team-context-actions .wd-icon-btn:nth-last-child(-n+2){display:inline-flex}}
 
 .wd-toolbar.team-folder-toolbar{height:36px;padding:4px 4px 4px 16px}
 
@@ -1434,8 +1434,8 @@ html[data-theme="dark"] .zoho-workflow-status-badge{border-color:#38414d;backgro
 .team-context-close{display:none !important}
 
 .team-folders-toolbar{
-  height:60px;
-  min-height:60px;
+  height:48px;
+  min-height:48px;
   box-sizing:border-box;
   padding-inline:18px !important;
   gap:10px !important;
@@ -1900,7 +1900,7 @@ html[data-theme="dark"] .zoho-workflow-status-badge{border-color:#38414d;backgro
   .team-folder-meta{display:none}
   .team-folder-members span{font-size:0}
   .team-folder-members span:after{content:"👥";font-size:14px}
-  .team-context-header{height:60px;min-height:60px}
+  .team-context-header{height:48px;min-height:48px}
   .team-context-name{max-width:30vw;font-size:14px}
   .team-context-members{font-size:11px}
 }
