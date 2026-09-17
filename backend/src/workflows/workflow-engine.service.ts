@@ -82,8 +82,16 @@ export class WorkflowEngineService implements OnModuleInit, OnModuleDestroy {
     }
 
     const definition = workflow.activeVersion ? this.definitionFromSnapshot(workflow.activeVersion.snapshot) : this.definitionFromWorkflow(workflow);
-    const input = event.startInput ?? {};
-    const fieldValues: Record<string, unknown> = input.fieldValues && typeof input.fieldValues === 'object' ? { ...input.fieldValues } : {};
+    // Manual starts are accepted through startInput. Keep a compatibility
+    // fallback for older clients that posted fieldValues/participantRules at
+    // the event root, but always persist the normalized startInput below.
+    const rootEvent = event as WorkflowFileEvent & { fieldValues?: unknown; participantRules?: unknown; comment?: unknown };
+    const input = event.startInput && typeof event.startInput === 'object' ? event.startInput : {
+      fieldValues: rootEvent.fieldValues,
+      participantRules: rootEvent.participantRules,
+      comment: rootEvent.comment,
+    };
+    const fieldValues: Record<string, unknown> = input.fieldValues && typeof input.fieldValues === 'object' ? { ...input.fieldValues as Record<string, unknown> } : {};
     const fields = definition.fields ?? [];
     const errors: string[] = [];
     for (const field of fields) {

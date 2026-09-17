@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useMemo, useState } from "react";
 import { useLocale } from "./locale-provider";
-import { listWorkflowParticipantOptions, listWorkflows, startWorkflow, type Workflow, type WorkflowParticipantOptions } from "../lib/api/workflows";
+import { getWorkflow, listWorkflowParticipantOptions, listWorkflows, startWorkflow, type Workflow, type WorkflowParticipantOptions } from "../lib/api/workflows";
 import { Modal } from "./modal";
 
 type Field = { id:string; name:string; description?:string; type:string; required?:boolean; defaultValue?:string; max?:number; options?:string[] };
@@ -30,26 +30,25 @@ function hasStarterParticipants(workflow: Workflow): boolean {
 export function WorkflowPicker({resourceType,resourceId,resourceName,onClose,onStarted}:{resourceType:"FILE"|"FOLDER";resourceId:string;resourceName:string;onClose:()=>void;onStarted:()=>void}){
  const {label}=useLocale(); const [rows,setRows]=useState<Workflow[]>([]); const [loading,setLoading]=useState(true); const [detail,setDetail]=useState<Workflow|null>(null); const [options,setOptions]=useState<WorkflowParticipantOptions|null>(null); const [fieldValues,setFieldValues]=useState<Record<string,unknown>>({}); const [users,setUsers]=useState<string[]>([]); const [groups,setGroups]=useState<string[]>([]); const [roles,setRoles]=useState<string[]>([]); const [comment,setComment]=useState(""); const [busy,setBusy]=useState(false); const [error,setError]=useState("");
  useEffect(()=>{ void listWorkflows().then(r=>setRows(r.filter(x=>x.mode==="MANUAL"&&x.resourceType===resourceType&&x.status==="ACTIVE"))).catch(e=>setError(e instanceof Error?e.message:"Unable to load workflows")).finally(()=>setLoading(false)); },[resourceType]);
- const loadDetail=async(w:Workflow)=>{setError("");try{
-   // The list endpoint already returns the complete workflow definition needed
-   // by the start dialog. Do not navigate to /workflows or re-fetch the
-   // workflow detail route here. The server re-validates the workflow and
-   // resource when Start is pressed.
-   setDetail(w);
-   const fields=(w.steps.find(s=>s.kind==="WORKFLOW_FIELDS")?.config.value as Field[]|undefined)??[];
+ const loadDetail=async(w:Workflow)=>{setError("");setOptions(null);setUsers([]);setGroups([]);setRoles([]);setComment("");try{
+   // Always fetch the canonical workflow definition before starting it. The
+   // collection endpoint can contain a lightweight/stale step projection,
+   // while GET /workflows/:id returns the exact active definition that the
+   // backend will validate at start time. This also guarantees required fields
+   // are rendered before the POST /start request is made.
+   const full=await getWorkflow(w.id);
+   if(full.mode!=="MANUAL"||full.status!=="ACTIVE"||full.resourceType!==resourceType){
+     throw new Error(resourceType==="FOLDER"?"This workflow is not available for folders.":"This workflow is not available for files.");
+   }
+   setDetail(full);
+   const rawFields=full.steps.find(s=>s.kind==="WORKFLOW_FIELDS")?.config.value;
+   const fields=Array.isArray(rawFields)?rawFields.filter((f):f is Field=>!!f&&typeof f==="object"&&typeof (f as Field).id==="string"&&typeof (f as Field).name==="string"):[];
    setFieldValues(Object.fromEntries(fields.filter(f=>f.defaultValue!==undefined).map(f=>[f.id,f.defaultValue])));
 
-   // Participant options are only required when this workflow explicitly lets
-   // the starter choose approval participants. Keeping this request lazy is
-   // important for deployments where /workflows is an API origin: selecting a
-   // normal manual workflow must never trigger an unrelated navigation-like
-   // request before the picker is ready.
-   const needsParticipants=hasStarterParticipants(w);
-   if (needsParticipants) {
+   const needsParticipants=hasStarterParticipants(full);
+   if(needsParticipants){
      const opts=await listWorkflowParticipantOptions();
      setOptions(opts);
-   } else {
-     setOptions(null);
    }
   }catch(e){setDetail(null);setOptions(null);setError(e instanceof Error?e.message:"Unable to load workflow details");}};
  const fields=useMemo(()=>((detail?.steps.find(s=>s.kind==="WORKFLOW_FIELDS")?.config.value as Field[]|undefined)??[]),[detail]);
@@ -61,6 +60,15 @@ export function WorkflowPicker({resourceType,resourceId,resourceName,onClose,onS
     setError(resourceType==="FOLDER" ? "This workflow is not available for folders." : "This workflow is not available for files.");
     return;
   }
+  const missing=fields.filter(f=>f.required===true&&(fieldValues[f.id]===undefined||fieldValues[f.id]===null||(typeof fieldValues[f.id]==="string"&&!String(fieldValues[f.id]).trim())));
+  if(missing.length){
+    setError(`Required workflow fields: ${missing.map(f=>f.name).join(", ")}`);
+    return;
+  }
+  if(needsStarterParticipants&&!rules.length){
+    setError("Select at least one workflow participant before starting.");
+    return;
+  }
   setBusy(true);setError("");
   try{
     await startWorkflow(detail.id,{
@@ -70,9 +78,11 @@ export function WorkflowPicker({resourceType,resourceId,resourceName,onClose,onS
       name:resourceName,
       resourceType,
       userId:"",
-      fieldValues,
-      participantRules:needsStarterParticipants?rules:undefined,
-      comment
+      startInput:{
+        fieldValues,
+        participantRules:needsStarterParticipants?rules:undefined,
+        comment
+      }
     });
       onStarted();
       onClose();}catch(e){setError(e instanceof Error?e.message:label("error.generic"));}finally{setBusy(false)}};
