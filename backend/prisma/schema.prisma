@@ -436,12 +436,7 @@ model File {
   createdAt      DateTime       @default(now()) @map("created_at")
   updatedAt      DateTime       @updatedAt @map("updated_at")
   lastAccessedAt DateTime?      @map("last_accessed_at")
-  /// Physical storage key backing the current (ACTIVE) version. Written on
-  /// version restore so prevew/stream/download resolve the real bytes of a
-  /// historical version instead of a key re-derived from the new version's
-  /// UUID (fixes preview corruption after restore).
   storageKey      String?      @map("storage_key")
-  /// StorageObject backing the current (ACTIVE) version; populated on restore.
   storageObjectId String?      @map("storage_object_id") @db.Char(36)
 
   organization   Organization    @relation(fields: [orgId], references: [id])
@@ -646,9 +641,6 @@ model FileShareRecipient {
   @@map("file_share_recipients")
 }
 
-
-/// Share of a folder: direct recipients or a public link. The share grants
-/// access to the complete descendant tree while it remains active.
 model FolderShare {
   id           String          @id @default(uuid()) @db.Char(36)
   orgId        String          @map("org_id") @db.Char(36)
@@ -690,7 +682,6 @@ model FolderShareRecipient {
   @@map("folder_share_recipients")
 }
 
-/// User-facing file timeline (activity feed). Not a security audit trail.
 model FileActivity {
   id        String      @id @default(uuid()) @db.Char(36)
   orgId     String      @map("org_id") @db.Char(36)
@@ -769,7 +760,6 @@ model AccessEvent {
   @@map("access_events")
 }
 
-/// Security/system audit trail. Kept separate from the user-facing FileActivity.
 model AuditLog {
   id           String   @id @default(uuid()) @db.Char(36)
   orgId        String   @map("org_id") @db.Char(36)
@@ -1074,9 +1064,9 @@ model CloudImportJob {
   userId         String               @map("user_id") @db.Char(36)
   connectionId   String               @map("connection_id") @db.Char(36)
   provider       String
-  connection     CloudConnection @relation(fields: [connectionId], references: [id], onDelete: Cascade)
+  connection     CloudConnection      @relation(fields: [connectionId], references: [id], onDelete: Cascade)
   folderId       String?              @map("folder_id") @db.Char(36)
-  remoteFileId   String               @map("remote_file_id") @db.VarChar(2048)
+  remoteFileId   String               @map("remote_file_id") @db.VarChar(500)
   remoteName     String               @map("remote_name")
   remoteMimeType String               @map("remote_mime_type")
   status         CloudImportJobStatus @default(PENDING)
@@ -1165,7 +1155,7 @@ model WorkflowRun {
   orgId          String   @map("org_id") @db.Char(36)
   workflowId     String   @map("workflow_id") @db.Char(36)
   versionId      String?  @map("version_id") @db.Char(36)
-  createdById    String?  @map("created_by_id") @db.Char(36) // 👈 تم إضافة حقل المعرف
+  createdById    String?  @map("created_by_id") @db.Char(36)
   eventKey       String   @map("event_key") @db.Char(128)
   status         String   @default("QUEUED")
   trigger        Json
@@ -1178,7 +1168,7 @@ model WorkflowRun {
   organization Organization  @relation(fields: [orgId], references: [id], onDelete: Cascade)
   workflow     Workflow      @relation(fields: [workflowId], references: [id], onDelete: Cascade)
   version      WorkflowVersion? @relation(fields: [versionId], references: [id], onDelete: SetNull)
-  createdBy    User?         @relation(fields: [createdById], references: [id], onDelete: SetNull) // 👈 تم إضافة العلاقة العكسية مع User
+  createdBy    User?         @relation(fields: [createdById], references: [id], onDelete: SetNull)
   currentState WorkflowState? @relation(fields: [currentStateId], references: [id], onDelete: SetNull)
   jobs         WorkflowJob[]
   tasks        WorkflowTask[]
@@ -1243,7 +1233,7 @@ model WorkflowJob {
   lockedBy String? @map("locked_by")
   leaseUntil DateTime? @map("lease_until")
   priority Int @default(0)
-  idempotencyKey String? @unique @map("idempotency_key")
+  idempotencyKey String? @unique @map("idempotency_key") @db.VarChar(191)
   lastError String? @db.Text @map("last_error")
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
@@ -1422,7 +1412,7 @@ model WorkflowFunctionExecution {
   inputSummary Json?   @map("input_summary")
   outputSummary Json? @map("output_summary")
   error       String?  @db.Text
-  idempotencyKey String? @unique @map("idempotency_key")
+  idempotencyKey String? @unique @map("idempotency_key") @db.VarChar(191)
   createdAt   DateTime @default(now()) @map("created_at")
   completedAt DateTime? @map("completed_at")
   organization Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
