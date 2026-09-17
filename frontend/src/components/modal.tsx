@@ -14,6 +14,8 @@ interface ModalProps {
 export function Modal({ title, onClose, children, footer, closeLabel }: ModalProps) {
   const titleId = useId();
   const surfaceRef = useRef<HTMLDivElement>(null);
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
 
   useEffect(() => {
     const previous = document.activeElement as HTMLElement | null;
@@ -31,7 +33,7 @@ export function Modal({ title, onClose, children, footer, closeLabel }: ModalPro
     const onKeyDown = (event: KeyboardEvent) => {
       if (isModalDismissKey(event.key)) {
         event.preventDefault();
-        onClose();
+        onCloseRef.current();
         return;
       }
       if (event.key !== "Tab") return;
@@ -58,7 +60,7 @@ export function Modal({ title, onClose, children, footer, closeLabel }: ModalPro
       surface?.removeEventListener("keydown", onKeyDown);
       previous?.focus();
     };
-  }, [onClose]);
+  }, []);
 
   return (
     <div 

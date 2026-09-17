@@ -105,15 +105,15 @@ export function NewItemHost() {
   if (!detail && teamFolderOpen) {
     return (
       <Modal title={locale === "ar" ? "إنشاء مجلد فريق" : "New team folder"} onClose={() => !teamFolderBusy && setTeamFolderOpen(false)}>
-        <div className="space-y-3">
-          <label className="flex flex-col gap-1 text-[11px] text-slate-500">
+        <div className="space-y-4">
+          <label className="flex flex-col gap-1.5 text-[11px] font-medium text-slate-600">
             {locale === "ar" ? "اسم مجلد الفريق" : "Team folder name"}
-            <input autoFocus value={teamFolderName} onChange={(e) => setTeamFolderName(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") void createTeamFolderFromToolbar(); }} className="imkan-input" disabled={teamFolderBusy} />
+            <input autoFocus value={teamFolderName} onChange={(e) => setTeamFolderName(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); void createTeamFolderFromToolbar(); } }} className="imkan-input w-full" disabled={teamFolderBusy} />
           </label>
           {error ? <div className="rounded-lg bg-red-50 px-3 py-2 text-[11px] text-red-700">{error}</div> : null}
           <div className="flex justify-end gap-2 border-t border-slate-100 pt-3">
-            <button type="button" className="imkan-button-secondary" disabled={teamFolderBusy} onClick={() => setTeamFolderOpen(false)}>{locale === "ar" ? "إلغاء" : "Cancel"}</button>
-            <button type="button" className="imkan-button" disabled={teamFolderBusy || !teamFolderName.trim()} onClick={() => void createTeamFolderFromToolbar()}>{teamFolderBusy ? (locale === "ar" ? "جارٍ الإنشاء…" : "Creating…") : (locale === "ar" ? "إنشاء" : "Create")}</button>
+            <button type="button" className="wd-pill wd-pill-record" disabled={teamFolderBusy} onClick={() => setTeamFolderOpen(false)}>{locale === "ar" ? "إلغاء" : "Cancel"}</button>
+            <button type="button" className="wd-pill wd-pill-new" disabled={teamFolderBusy || !teamFolderName.trim()} onClick={() => void createTeamFolderFromToolbar()}>{teamFolderBusy ? (locale === "ar" ? "جارٍ الإنشاء…" : "Creating…") : (locale === "ar" ? "إنشاء" : "Create")}</button>
           </div>
         </div>
       </Modal>

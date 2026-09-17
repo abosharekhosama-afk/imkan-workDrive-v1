@@ -226,7 +226,7 @@ export default function OrganizationPage() {
       {!error && notice ? <div className="wd-alert wd-alert-success" role="status">{label(notice as Parameters<typeof label>[0])}</div> : null}
 
       {org?.role === "SUPER_ADMIN" ? (
-        <section className="wd-card">
+        <section className="wd-card min-w-0 w-full">
           <div className="wd-card-head">
             <div>
               <h2>{label("org.createAccount.heading")}</h2>
@@ -305,8 +305,8 @@ export default function OrganizationPage() {
         </section>
       ) : null}
 
-      <div className="wd-grid-2">
-        <section className="wd-card">
+      <div className="wd-grid-2 min-w-0 w-full">
+        <section className="wd-card min-w-0 w-full">
           <div className="wd-card-head">
             <div>
               <h2>{label("org.settings")}</h2>
@@ -332,7 +332,7 @@ export default function OrganizationPage() {
           </form>
         </section>
 
-        <section className="wd-card">
+        <section className="wd-card min-w-0 w-full">
           <div className="wd-card-head">
             <div>
               <h2>{label("org.inviteTitle")}</h2>
@@ -386,7 +386,7 @@ export default function OrganizationPage() {
         </section>
       </div>
 
-      <section className="wd-card">
+      <section className="wd-card min-w-0 w-full">
         <div className="wd-card-head">
           <div>
             <h2>
@@ -473,7 +473,7 @@ export default function OrganizationPage() {
         </div>
       </section>
 
-      <section className="wd-card">
+      <section className="wd-card min-w-0 w-full">
         <div className="wd-card-head">
           <div>
             <h2>

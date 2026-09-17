@@ -89,6 +89,8 @@ function RenderItem({ item }: { item: ActionDropdownItem }) {
           role="menuitem"
           data-danger={item.destructive || undefined}
           className="wd-menu-item min-h-[34px] text-start"
+          onPointerDown={(event) => { event.preventDefault(); event.stopPropagation(); }}
+          onMouseDown={(event) => { event.preventDefault(); event.stopPropagation(); }}
           onClick={(event) => {
             // Prevent a row/card Link from interpreting an action click as
             // resource navigation (which can produce /files/<fileId> 404s).
@@ -177,6 +179,8 @@ export function ActionDropdown({ label, items, trigger }: ActionDropdownProps) {
     <Popover>
       {trigger ?? defaultTrigger}
       <PopoverContent
+        onPointerDown={(event) => event.stopPropagation()}
+        onMouseDown={(event) => event.stopPropagation()}
         side="bottom"
         align="end"
         sideOffset={4}

@@ -48,7 +48,7 @@ const COLUMN_DEFS: Array<[ColumnKey, string, boolean]> = [
 export function ActionToolbar({
   view, onView, sortField, onSortField, sortDir, onSortDir,
   filter, onFilter, columns, onColumns, folders = [], currentFolderId, onOpenFolder,
-  advancedFilter, onAdvancedFilter, owners = [],
+  advancedFilter, onAdvancedFilter, owners = [], context = "files", recordDisabled = false,
 }: {
   view: ViewMode; onView: (v: ViewMode) => void;
   sortField: ColumnKey; onSortField: (k: ColumnKey) => void;
@@ -63,6 +63,10 @@ export function ActionToolbar({
   owners?: Array<{ id: string; name: string | null; email: string }>;
   /** Direct navigation callback (replaces the old workdrive:tree-open CustomEvent). */
   onOpenFolder?: (folderId: string) => void;
+  /** Toolbar target surface. Team folders use the team-folder creation flow. */
+  context?: "files" | "teamFolders";
+  /** Disable recording until a concrete destination folder is selected. */
+  recordDisabled?: boolean;
 }) {
   const { label } = useLocale();
   const router = useRouter();
@@ -164,9 +168,11 @@ export function ActionToolbar({
   };
   const dispatchFolderCreate = () => {
     setOpenMenu(null);
-    window.setTimeout(() => window.dispatchEvent(new CustomEvent("workdrive:new-folder", {
-      detail: { folderId: currentFolderId ?? null },
-    })), 0);
+    window.setTimeout(() => {
+      window.dispatchEvent(new CustomEvent(context === "teamFolders" ? "workdrive:new-team-folder" : "workdrive:new-folder", {
+        detail: { folderId: currentFolderId ?? null },
+      }));
+    }, 0);
   };
   const isColOn = (k: ColumnKey) => cols[k] ?? true;
 
@@ -195,14 +201,16 @@ export function ActionToolbar({
         </div>
       ) : null}
 
-      <button type="button" onClick={dispatchFolderCreate} title={label("menu.folder")} aria-label={label("menu.folder")}
-        className="wd-icon-btn text-[color:var(--wd-primary-dark)]">
-        <Icons.folder size={16} />
-      </button>
+      {context !== "teamFolders" ? (
+        <button type="button" onClick={dispatchFolderCreate} title={label("menu.folder")} aria-label={label("menu.folder")}
+          className="wd-icon-btn text-[color:var(--wd-primary-dark)]">
+          <Icons.folder size={16} />
+        </button>
+      ) : null}
 
       <div className="ms-auto flex items-center gap-1.5">
-        <button id="tb-record-btn" type="button" onClick={() => toggle("record")} aria-expanded={openMenu === "record"} aria-haspopup="menu"
-          className="wd-pill wd-pill-record inline-flex items-center gap-1.5">
+        <button id="tb-record-btn" type="button" disabled={recordDisabled} onClick={() => toggle("record")} aria-expanded={openMenu === "record"} aria-haspopup="menu"
+          className="wd-pill wd-pill-record inline-flex items-center gap-1.5 disabled:cursor-not-allowed disabled:opacity-45">
           {label("nav.record")} <Icons.chevD size={13} />
         </button>
         <ZohoMenu open={openMenu === "record"} onClose={close} labelledBy="tb-record-btn"
@@ -217,7 +225,7 @@ export function ActionToolbar({
         </button>
         <ZohoMenu open={openMenu === "new"} onClose={close} labelledBy="tb-new-btn" widthPx={405}
           onSelect={(k) => {
-            if (k === "folder") WorkdriveEvents.createFolder(currentFolderId ?? null);
+            if (k === "folder") dispatchFolderCreate();
             else if (k === "upload") WorkdriveEvents.upload(currentFolderId ?? null);
             else if (k === "uploadFolder") WorkdriveEvents.uploadFolder(currentFolderId ?? null);
             else if (k === "workflow") { close(); router.push("/files/workflows/builder"); }

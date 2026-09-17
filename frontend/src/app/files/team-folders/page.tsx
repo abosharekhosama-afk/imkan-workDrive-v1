@@ -89,7 +89,7 @@ export default function TeamFoldersPage() {
   }, [load]);
 
   return (
-    <section>
+    <section className="min-w-0 w-full">
       <div className="flex min-w-0 flex-col border-b border-slate-100 bg-white">
         <div className="flex min-w-0 items-center px-3 py-2">
           <h1 className="truncate text-[length:var(--imkan-font-size-ui)] font-semibold">{label("teamFolders.heading")}</h1>
