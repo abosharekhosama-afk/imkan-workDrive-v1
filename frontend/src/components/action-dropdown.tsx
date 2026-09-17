@@ -5,7 +5,6 @@ import {
   Popover,
   PopoverTrigger,
   PopoverContent,
-  PopoverClose,
 } from "@radix-ui/react-popover";
 import { useLocale } from "./locale-provider";
 
@@ -79,24 +78,27 @@ function groupItems(items: ActionDropdownItem[]): ActionGroup[] {
   return groups;
 }
 
-function RenderItem({ item }: { item: ActionDropdownItem }) {
+function RenderItem({ item, close }: { item: ActionDropdownItem; close: () => void }) {
   const [subOpen, setSubOpen] = useState(false);
   if (!item.submenu) {
     return (
-      <PopoverClose asChild>
         <button
           type="button"
           role="menuitem"
           data-danger={item.destructive || undefined}
           className="wd-menu-item min-h-[34px] text-start"
-          onPointerDown={(event) => { event.stopPropagation(); }}
-          onMouseDown={(event) => { event.stopPropagation(); }}
+          onPointerDown={(event) => { event.preventDefault(); event.stopPropagation(); }}
+          onMouseDown={(event) => { event.preventDefault(); event.stopPropagation(); }}
           onClick={(event) => {
-            // Prevent a row/card Link from interpreting an action click as
-            // resource navigation (which can produce /files/<fileId> 404s).
+            // Action items are commands, never navigation targets. Prevent the
+            // browser/router from following an ancestor link and keep the
+            // command isolated from the resource row. This is especially
+            // important for Assign Workflow, whose picker must remain on the
+            // current /files/... page while its API calls use /workflows.
             event.preventDefault();
             event.stopPropagation();
             item.onSelect();
+            close();
           }}
         >
           {item.icon ?? getIconForLabel(item.label) ? (
@@ -108,7 +110,6 @@ function RenderItem({ item }: { item: ActionDropdownItem }) {
           )}
           <span className="flex-1 truncate">{item.label}</span>
         </button>
-      </PopoverClose>
     );
   }
   return (
@@ -129,7 +130,6 @@ function RenderItem({ item }: { item: ActionDropdownItem }) {
       {subOpen ? (
         <div className="wd-menu absolute left-full top-0 min-w-[220px]" role="menu">
           {item.submenu.map((sub) => (
-            <PopoverClose key={sub.label} asChild>
               <button
                 type="button"
                 role="menuitem"
@@ -139,12 +139,12 @@ function RenderItem({ item }: { item: ActionDropdownItem }) {
                   event.stopPropagation();
                   setSubOpen(false);
                   sub.onSelect();
+                  close();
                 }}
               >
                 <span className="w-5" />
                 <span className="flex-1 truncate">{sub.label}</span>
               </button>
-            </PopoverClose>
           ))}
         </div>
       ) : null}
@@ -155,6 +155,7 @@ function RenderItem({ item }: { item: ActionDropdownItem }) {
 export function ActionDropdown({ label, items, trigger }: ActionDropdownProps) {
   const { label: t } = useLocale();
   const groupedItems = groupItems(items);
+  const [open, setOpen] = useState(false);
 
   const defaultTrigger = (
     <PopoverTrigger asChild>
@@ -180,11 +181,12 @@ export function ActionDropdown({ label, items, trigger }: ActionDropdownProps) {
   );
 
   return (
-    <Popover>
+    <Popover open={open} onOpenChange={setOpen}>
       {trigger ?? defaultTrigger}
       <PopoverContent
         onPointerDown={(event) => event.stopPropagation()}
         onMouseDown={(event) => event.stopPropagation()}
+        onClick={(event) => event.stopPropagation()}
         side="bottom"
         align="end"
         sideOffset={4}
@@ -194,7 +196,7 @@ export function ActionDropdown({ label, items, trigger }: ActionDropdownProps) {
         {groupedItems.map((group, groupIndex) => (
           <div key={groupIndex} className={groupIndex > 0 ? "border-t border-[color:var(--imkan-color-border)] pt-1" : ""}>
             {group.items.map((item) => (
-              <RenderItem key={item.label} item={item} />
+              <RenderItem key={item.label} item={item} close={() => setOpen(false)} />
             ))}
           </div>
         ))}

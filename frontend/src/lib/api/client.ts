@@ -106,6 +106,16 @@ export async function apiRequest<T>(path: string, init: RequestInit = {}): Promi
     return undefined as T;
   }
 
+  // API calls must never silently consume an HTML Next.js page. When a
+  // deployment accidentally points NEXT_PUBLIC_API_URL at the frontend
+  // origin, fetch can return HTTP 200 with an HTML error/document. Treat that
+  // as an API configuration failure instead of letting JSON.parse throw and
+  // taking down the current page.
+  const contentType = response.headers.get("content-type")?.toLowerCase() ?? "";
+  if (!contentType.includes("application/json") && !contentType.includes("application/problem+json")) {
+    throw new ApiError(502, "WORKFLOW_API_INVALID_RESPONSE");
+  }
+
   return (await response.json()) as T;
 }
 

@@ -12,15 +12,26 @@ export function WorkflowPicker({resourceType,resourceId,resourceName,onClose,onS
  useEffect(()=>{ void listWorkflows().then(r=>setRows(r.filter(x=>x.mode==="MANUAL"&&x.resourceType===resourceType&&x.status==="ACTIVE"))).catch(e=>setError(e instanceof Error?e.message:"Unable to load workflows")).finally(()=>setLoading(false)); },[resourceType]);
  const loadDetail=async(w:Workflow)=>{setError("");try{
    // The list endpoint already returns the complete workflow definition needed
-   // by the start dialog. Do not re-fetch /workflows/:id here: that second
-   // request could race with activation/deactivation and was the source of the
-   // observed 404 immediately after choosing a workflow. The server still
-   // re-validates the workflow and resource when Start is pressed.
-   const opts=await listWorkflowParticipantOptions();
-   setDetail(w);setOptions(opts);
+   // by the start dialog. Do not navigate to /workflows or re-fetch the
+   // workflow detail route here. The server re-validates the workflow and
+   // resource when Start is pressed.
+   setDetail(w);
    const fields=(w.steps.find(s=>s.kind==="WORKFLOW_FIELDS")?.config.value as Field[]|undefined)??[];
    setFieldValues(Object.fromEntries(fields.filter(f=>f.defaultValue!==undefined).map(f=>[f.id,f.defaultValue])));
-  }catch(e){setError(e instanceof Error?e.message:"Unable to load workflow details");}};
+
+   // Participant options are only required when this workflow explicitly lets
+   // the starter choose approval participants. Keeping this request lazy is
+   // important for deployments where /workflows is an API origin: selecting a
+   // normal manual workflow must never trigger an unrelated navigation-like
+   // request before the picker is ready.
+   const needsParticipants=w.transitions.some(t=>t.actions.some(a=>a.type==="request_approval"&&a.config?.allowStarterParticipants===true));
+   if (needsParticipants) {
+     const opts=await listWorkflowParticipantOptions();
+     setOptions(opts);
+   } else {
+     setOptions(null);
+   }
+  }catch(e){setDetail(null);setOptions(null);setError(e instanceof Error?e.message:"Unable to load workflow details");}};
  const fields=useMemo(()=>((detail?.steps.find(s=>s.kind==="WORKFLOW_FIELDS")?.config.value as Field[]|undefined)??[]),[detail]);
  const needsStarterParticipants=useMemo(()=>detail?.transitions.some(t=>t.actions.some(a=>a.type==="request_approval"&&a.config?.allowStarterParticipants===true))??false,[detail]);
  const rules:Rule[]=[...(users.length?[{type:"USER" as const,ids:users}]:[]),...(groups.length?[{type:"GROUP" as const,ids:groups}]:[]),...(roles.length?[{type:"ROLE" as const,roles}]:[])];

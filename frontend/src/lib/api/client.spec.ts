@@ -31,3 +31,18 @@ test("apiRequest fails closed without a token", async () => {
     return true;
   });
 });
+
+test("apiRequest rejects an HTML document returned by an API origin", async () => {
+  process.env.NEXT_PUBLIC_DEV_JWT = "jwt-tenant-a";
+  process.env.NEXT_PUBLIC_API_BASE_URL = "http://api.test";
+  globalThis.fetch = async () => new Response("<!doctype html><html></html>", {
+    status: 200,
+    headers: { "Content-Type": "text/html; charset=utf-8" },
+  });
+  await assert.rejects(() => apiRequest("/workflows"), (error: unknown) => {
+    assert.equal(error instanceof ApiError, true);
+    assert.equal((error as ApiError).status, 502);
+    assert.equal((error as ApiError).message, "WORKFLOW_API_INVALID_RESPONSE");
+    return true;
+  });
+});

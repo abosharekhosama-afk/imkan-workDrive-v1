@@ -14,4 +14,11 @@ describe('manual workflow binding UI contract', () => {
     expect(source).toContain('onAssignWorkflow?:');
     expect(source).toContain('onAssignWorkflow: canMutate && onAssignWorkflow');
   });
+
+  it('isolates command menu clicks from ancestor navigation', () => {
+    const source = fs.readFileSync(path.join(process.cwd(), 'src/components/action-dropdown.tsx'), 'utf8');
+    expect(source).toContain('event.preventDefault();');
+    expect(source).toContain('event.stopPropagation();');
+    expect(source).toContain('item.onSelect();');
+  });
 });
