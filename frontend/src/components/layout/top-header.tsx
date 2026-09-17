@@ -22,6 +22,7 @@ export function TopHeader() {
   const [scope, setScope] = useState<ScopeDetail>({ folderId: null, folderName: null });
   const [teamFolder, setTeamFolder] = useState<TeamFolderRecord | null>(null);
   const [teamMemberCount, setTeamMemberCount] = useState(0);
+  const [rememberedTeam, setRememberedTeam] = useState<TeamFolderRecord | null>(null);
   const [manageOpen, setManageOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
   const [notifOpen, setNotifOpen] = useState(false);
@@ -40,6 +41,10 @@ export function TopHeader() {
     if (!token) return;
     listNotifications().then(setNotes).catch(() => undefined);
     setScope(readScope());
+    try {
+      const rawTeam = sessionStorage.getItem("zoho.team.context");
+      if (rawTeam) setRememberedTeam(JSON.parse(rawTeam) as TeamFolderRecord);
+    } catch { /* noop */ }
     const onScope = (e: Event) => setScope((e as CustomEvent<ScopeDetail>).detail ?? { folderId: null, folderName: null });
     window.addEventListener("workdrive:scope", onScope);
     return () => window.removeEventListener("workdrive:scope", onScope);
@@ -55,6 +60,20 @@ export function TopHeader() {
   const isTeamFoldersDirectory = pathname === "/files/team-folders";
   const isFolderRoute = /^\/files\/[^/]+$/.test(pathname);
   const teamContext = isTeamManageRoute || (isFolderRoute && Boolean(scope.folderId));
+  const pageTitle = (() => {
+    if (teamContext && teamFolder) return teamFolder.name;
+    if (isTeamFoldersDirectory) return label("nav.teamFolders");
+    if (pathname === "/organization") return label("nav.organization");
+    if (pathname.startsWith("/files/workflows")) return label("nav.workflows");
+    if (pathname === "/files/favorites") return label("nav.favorites");
+    if (pathname === "/files/recent") return label("nav.recent");
+    if (pathname === "/files/shared-with-me") return label("nav.sharedWithMe");
+    if (pathname === "/files/shared-by-me") return label("nav.sharedByMe");
+    if (pathname === "/files/trash") return label("nav.trash");
+    if (pathname === "/files/templates") return label("nav.templates");
+    if (pathname === "/files") return label("files.breadcrumb.root");
+    return label("app.title");
+  })();
 
   useEffect(() => {
     let live = true;
@@ -72,8 +91,10 @@ export function TopHeader() {
         if (!live) return;
         setTeamFolder(candidate);
         if (candidate) {
+          try { sessionStorage.setItem("zoho.team.context", JSON.stringify(candidate)); } catch { /* noop */ }
+          setRememberedTeam(candidate);
           if (typeof candidate.memberCount === "number") {
-            if (live) setTeamMemberCount(candidate.memberCount);
+            setTeamMemberCount(candidate.memberCount);
           } else {
             const memberRes = await listTeamFolderMembers(candidate.id);
             if (live) setTeamMemberCount(memberRes.members.length);
@@ -98,7 +119,7 @@ export function TopHeader() {
   if (isTeamFoldersDirectory) {
     return (
       <header className="team-context-header">
-        <div className="team-context-title"><span className="team-context-folder"><Icons.folder size={23} /></span><span className="team-context-name">Team Folders</span></div>
+        <div className="team-context-title"><span className="team-context-folder"><Icons.folder size={23} /></span><span className="team-context-name">{pageTitle}</span></div>
         <div className="team-context-actions">
           <OrgSwitcher organizationName={org || "IMKAN"} userRole={role} />
           <button type="button" className="wd-icon-btn" aria-label={label("search.placeholder")} onClick={() => setSearchOpen(true)}><Icons.search size={17} /></button>
@@ -163,7 +184,12 @@ export function TopHeader() {
     <header className="wd-default-topbar flex h-12 shrink-0 items-center gap-2 border-b border-[#EDEDED] bg-white px-4">
       <div className="flex min-w-0 items-center gap-2">
         <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[8px] bg-[#F0F4FF] text-[var(--wd-primary)]"><Icons.folder size={18} /></span>
-        <span className="max-w-[32vw] truncate text-[15px] font-semibold text-[#212121]">{scope.folderName ?? label("files.breadcrumb.root")}</span>
+        <div className="min-w-0">
+          <div className="max-w-[34vw] truncate text-[15px] font-semibold text-[#212121]" title={pageTitle}>{pageTitle}</div>
+          {rememberedTeam && !teamContext && !isTeamFoldersDirectory ? (
+            <div className="max-w-[34vw] truncate text-[10px] text-slate-400" title={rememberedTeam.name}>Team Folder · {rememberedTeam.name} · {rememberedTeam.memberCount ?? teamMemberCount} members</div>
+          ) : null}
+        </div>
       </div>
       <div className="ms-auto flex min-w-0 shrink-0 items-center gap-1.5">
         <OrgSwitcher organizationName={org || "IMKAN"} userRole={role} />

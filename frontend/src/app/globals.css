@@ -1947,3 +1947,37 @@ html[data-theme="dark"] .zoho-workflow-status-badge{border-color:#38414d;backgro
 @media (max-width: 900px) {
   .organization-page { width: 100%; padding-inline: 16px; }
 }
+
+/* Organization surface: use the shell's full content width. The primary
+   sidebar belongs to the shell, not to the page, so admin cards must never
+   inherit a second grid/sidebar constraint. */
+.organization-page {
+  align-self: stretch;
+  width: 100%;
+  max-width: none;
+  min-width: 0;
+  box-sizing: border-box;
+  overflow-x: hidden;
+  padding: 22px 26px 32px;
+}
+.organization-page .wd-grid-2 {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  width: 100%;
+  min-width: 0;
+}
+.organization-page .wd-grid-2 > .wd-card,
+.organization-page > .wd-card {
+  min-width: 0;
+  width: 100%;
+  max-width: none;
+}
+.organization-page .wd-card-body,
+.organization-page .wd-card-head {
+  min-width: 0;
+}
+.organization-page table {
+  width: 100%;
+}
+@media (max-width: 980px) {
+  .organization-page .wd-grid-2 { grid-template-columns: minmax(0, 1fr); }
+}

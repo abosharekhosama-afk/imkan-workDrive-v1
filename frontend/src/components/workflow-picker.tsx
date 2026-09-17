@@ -7,6 +7,26 @@ import { Modal } from "./modal";
 type Field = { id:string; name:string; description?:string; type:string; required?:boolean; defaultValue?:string; max?:number; options?:string[] };
 type Rule = { type:"USER"|"GROUP"|"ROLE"; ids?:string[]; roles?:string[] };
 
+// Backend stores transition actions by execution phase ({before,during,after}),
+// while older workflows may store a plain array. Normalize both shapes before
+// the UI inspects the actions so a valid workflow can never crash on `.some()`.
+function transitionActions(raw: unknown): Workflow["transitions"][number]["actions"] {
+  if (Array.isArray(raw)) return raw as Workflow["transitions"][number]["actions"];
+  if (!raw || typeof raw !== "object") return [];
+  const value = raw as Record<string, unknown>;
+  return [value.before, value.during, value.after]
+    .flatMap((phase) => Array.isArray(phase) ? phase : [])
+    .filter((action): action is { type: string; config?: Record<string, unknown> } => !!action && typeof action === "object" && typeof (action as Record<string, unknown>).type === "string");
+}
+
+function hasStarterParticipants(workflow: Workflow): boolean {
+  return workflow.transitions.some((transition) =>
+    transitionActions(transition.actions).some((action) =>
+      action.type === "request_approval" && action.config?.allowStarterParticipants === true
+    )
+  );
+}
+
 export function WorkflowPicker({resourceType,resourceId,resourceName,onClose,onStarted}:{resourceType:"FILE"|"FOLDER";resourceId:string;resourceName:string;onClose:()=>void;onStarted:()=>void}){
  const {label}=useLocale(); const [rows,setRows]=useState<Workflow[]>([]); const [loading,setLoading]=useState(true); const [detail,setDetail]=useState<Workflow|null>(null); const [options,setOptions]=useState<WorkflowParticipantOptions|null>(null); const [fieldValues,setFieldValues]=useState<Record<string,unknown>>({}); const [users,setUsers]=useState<string[]>([]); const [groups,setGroups]=useState<string[]>([]); const [roles,setRoles]=useState<string[]>([]); const [comment,setComment]=useState(""); const [busy,setBusy]=useState(false); const [error,setError]=useState("");
  useEffect(()=>{ void listWorkflows().then(r=>setRows(r.filter(x=>x.mode==="MANUAL"&&x.resourceType===resourceType&&x.status==="ACTIVE"))).catch(e=>setError(e instanceof Error?e.message:"Unable to load workflows")).finally(()=>setLoading(false)); },[resourceType]);
@@ -24,7 +44,7 @@ export function WorkflowPicker({resourceType,resourceId,resourceName,onClose,onS
    // important for deployments where /workflows is an API origin: selecting a
    // normal manual workflow must never trigger an unrelated navigation-like
    // request before the picker is ready.
-   const needsParticipants=w.transitions.some(t=>t.actions.some(a=>a.type==="request_approval"&&a.config?.allowStarterParticipants===true));
+   const needsParticipants=hasStarterParticipants(w);
    if (needsParticipants) {
      const opts=await listWorkflowParticipantOptions();
      setOptions(opts);
@@ -33,7 +53,7 @@ export function WorkflowPicker({resourceType,resourceId,resourceName,onClose,onS
    }
   }catch(e){setDetail(null);setOptions(null);setError(e instanceof Error?e.message:"Unable to load workflow details");}};
  const fields=useMemo(()=>((detail?.steps.find(s=>s.kind==="WORKFLOW_FIELDS")?.config.value as Field[]|undefined)??[]),[detail]);
- const needsStarterParticipants=useMemo(()=>detail?.transitions.some(t=>t.actions.some(a=>a.type==="request_approval"&&a.config?.allowStarterParticipants===true))??false,[detail]);
+ const needsStarterParticipants=useMemo(()=>detail ? hasStarterParticipants(detail) : false,[detail]);
  const rules:Rule[]=[...(users.length?[{type:"USER" as const,ids:users}]:[]),...(groups.length?[{type:"GROUP" as const,ids:groups}]:[]),...(roles.length?[{type:"ROLE" as const,roles}]:[])];
  const start=async()=>{
   if(!detail)return;
