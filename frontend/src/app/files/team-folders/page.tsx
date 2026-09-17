@@ -55,6 +55,8 @@ export default function TeamFoldersPage() {
   const [menuId, setMenuId] = useState<string | null>(null);
   const [pinnedIds, setPinnedIds] = useState<Set<string>>(new Set());
   const [search, setSearch] = useState("");
+  const [scopeFilter, setScopeFilter] = useState<"joined" | "all" | "public" | "private">("joined");
+  const [filterOpen, setFilterOpen] = useState(false);
   const [renameTarget, setRenameTarget] = useState<TeamFolderListItem | null>(null);
   const [renameName, setRenameName] = useState("");
   const [actionBusy, setActionBusy] = useState(false);
@@ -94,8 +96,9 @@ export default function TeamFoldersPage() {
     const q = search.trim().toLocaleLowerCase();
     return [...teamFolders]
       .filter((tf) => !q || tf.name.toLocaleLowerCase().includes(q))
+      .filter((tf) => scopeFilter === "all" || scopeFilter === "joined" || (scopeFilter === "public" ? tf.isPublicToOrg : !tf.isPublicToOrg))
       .sort((a, b) => Number(pinnedIds.has(b.id)) - Number(pinnedIds.has(a.id)) || a.name.localeCompare(b.name));
-  }, [teamFolders, search, pinnedIds]);
+  }, [teamFolders, search, pinnedIds, scopeFilter]);
 
   const createHref = "/files/team-folders/create";
   const openRename = (tf: TeamFolderListItem) => { setMenuId(null); setRenameTarget(tf); setRenameName(tf.name); };
@@ -116,17 +119,15 @@ export default function TeamFoldersPage() {
 
   return (
     <section className="flex min-h-full min-w-0 flex-col bg-white">
-      <header className="flex min-h-[52px] shrink-0 items-center gap-3 border-b border-slate-100 px-5">
-        <span className="flex h-7 w-7 items-center justify-center text-slate-700"><FolderGlyph /></span>
-        <h1 className="text-[19px] font-semibold tracking-[-0.02em] text-slate-900">{label("teamFolders.heading")}</h1>
-      </header>
-
       <div className="flex shrink-0 items-center gap-3 border-b border-slate-100 px-5 py-3">
-        <button type="button" className="flex h-[35px] items-center gap-2 rounded-[18px] border border-slate-200 bg-white px-3.5 text-[13px] font-medium text-slate-700 shadow-sm hover:bg-slate-50" aria-label={locale === "ar" ? "التصفية" : "Filter"}>
-          <FilterIcon />
-          <span>{locale === "ar" ? "مشترك" : "Joined"}</span>
-          <span className="text-[11px] text-slate-500">⌄</span>
-        </button>
+        <div className="relative">
+          <button type="button" onClick={() => setFilterOpen((v) => !v)} className="flex h-[35px] items-center gap-2 rounded-[18px] border border-slate-200 bg-white px-3.5 text-[13px] font-medium text-slate-700 shadow-sm hover:bg-slate-50" aria-expanded={filterOpen}>
+            <FilterIcon />
+            <span>{scopeFilter === "joined" ? (locale === "ar" ? "مشترك" : "Joined") : scopeFilter === "public" ? "Public" : scopeFilter === "private" ? "Private" : "All"}</span>
+            <span className="text-[11px] text-slate-500">⌄</span>
+          </button>
+          {filterOpen ? <div className="absolute start-0 top-10 z-30 w-40 rounded-xl border border-slate-200 bg-white p-1.5 shadow-lg">{([['joined','Joined'],['all','All'],['public','Public'],['private','Private']] as const).map(([key,text]) => <button key={key} type="button" className={`flex w-full rounded-lg px-3 py-2 text-start text-[13px] ${scopeFilter === key ? "bg-[#EEF4FF] text-[#2457B8]" : "text-slate-700 hover:bg-slate-50"}`} onClick={() => { setScopeFilter(key); setFilterOpen(false); }}>{locale === "ar" && key === "joined" ? "مشترك" : text}</button>)}</div> : null}
+        </div>
         <label className="relative flex h-[35px] w-[285px] max-w-[42vw] items-center">
           <span className="absolute start-3 text-slate-400"><SearchIcon /></span>
           <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder={label("files.searchPlaceholder")} className="h-full w-full rounded-[18px] border border-slate-200 bg-white ps-9 pe-3 text-[13px] text-slate-700 outline-none placeholder:text-slate-400 focus:border-[color:var(--wd-primary)] focus:ring-2 focus:ring-[color:var(--wd-primary)]/10" />
@@ -145,24 +146,24 @@ export default function TeamFoldersPage() {
       {loading ? <SkeletonLoader rows={5} columns={4} /> : visibleFolders.length === 0 ? (
         <EmptyState title={search ? (locale === "ar" ? "لا توجد نتائج" : "No matching Team Folders") : label("teamFolders.empty")} description={search ? undefined : label("teamFolders.emptyDescription")} action={!search ? <Link href={createHref} className="imkan-button">{locale === "ar" ? "إنشاء مجلد فريق" : "Create Team Folder"}</Link> : undefined} />
       ) : (
-        <div className="min-w-0 flex-1 overflow-x-auto">
-          <div className="min-w-[760px] px-5">
-            <div className="grid grid-cols-[minmax(320px,1fr)_72px_72px_150px_44px] items-center border-b border-slate-100 py-3 text-[12px] font-medium text-slate-500" aria-hidden="true">
-              <span>{locale === "ar" ? "الاسم" : "Name"}</span><span /><span /><span>{locale === "ar" ? "الأعضاء" : "Members"}</span><span />
+        <div className="min-h-0 min-w-0 flex-1 overflow-x-auto">
+          <div className="min-h-full min-w-[860px] px-5">
+            <div className="grid grid-cols-[minmax(360px,1fr)_180px_120px_150px_44px] items-center border-b border-slate-100 py-3 text-[12px] font-medium text-slate-500" aria-hidden="true">
+              <span>{locale === "ar" ? "الاسم" : "Name"}</span><span>{locale === "ar" ? "آخر تعديل" : "Last Modified"}</span><span>{locale === "ar" ? "الحجم" : "Size"}</span><span>{locale === "ar" ? "الأعضاء" : "Members"}</span><span />
             </div>
             <div>
               {visibleFolders.map((tf) => (
-                <div key={tf.id} className="group relative grid min-h-[58px] grid-cols-[minmax(320px,1fr)_72px_72px_150px_44px] items-center border-b border-slate-100 text-[13px] text-slate-700 transition hover:bg-slate-50" data-selected={detailsTf?.id === tf.id || undefined}>
+                <div key={tf.id} className="group relative grid min-h-[58px] grid-cols-[minmax(360px,1fr)_180px_120px_150px_44px] items-center border-b border-slate-100 text-[13px] text-slate-700 transition hover:bg-slate-50" data-selected={detailsTf?.id === tf.id || undefined}>
                   <Link href={tf.rootFolderId ? `/files/${tf.rootFolderId}` : createHref} className="flex min-w-0 items-center gap-3 rounded-md py-2 outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--wd-primary)]">
-                    <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-slate-200 bg-white text-slate-700"><FolderGlyph /></span>
+                    <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md border border-[#e3e6ea] bg-white text-[#30353a]"><FolderGlyph /></span>
                     <span className="min-w-0">
                       <span className="flex min-w-0 items-center gap-1.5 font-medium text-slate-800"><span className="truncate">{tf.name}</span>{tf.role !== "ORG_ADMIN" ? <span className="shrink-0 text-slate-400" title={tf.role}>{tf.role === "VIEWER" ? "🔒" : ""}</span> : null}</span>
-                      <span className="mt-0.5 block truncate text-[11px] text-slate-400">{label(`teamFolders.role.${tf.role}` as Parameters<typeof label>[0]) ?? tf.role}</span>
+                      <span className="mt-0.5 block truncate text-[11px] text-slate-400">{label(`teamFolders.role.${tf.role}` as Parameters<typeof label>[0]) ?? tf.role} · {tf.memberCount} {locale === "ar" ? "عضو" : "members"}</span>
                     </span>
                   </Link>
-                  <Link href={`/files/team-folders/${encodeURIComponent(tf.id)}/manage`} className="mx-auto inline-flex h-8 items-center rounded-full border border-slate-200 bg-white px-2.5 text-[12px] font-medium text-slate-700 hover:bg-slate-50" onClick={(e) => e.stopPropagation()}>{locale === "ar" ? "إدارة" : "Manage"}</Link>
-                  <button type="button" className={`mx-auto flex h-8 w-8 items-center justify-center rounded-full transition hover:bg-slate-100 ${pinnedIds.has(tf.id) ? "text-[color:var(--wd-primary)]" : "text-slate-400"}`} onClick={() => setPinnedIds((prev) => { const next = new Set(prev); if (next.has(tf.id)) next.delete(tf.id); else next.add(tf.id); return next; })} title={locale === "ar" ? "تثبيت" : "Pin"} aria-label={locale === "ar" ? "تثبيت" : "Pin"}><PinIcon filled={pinnedIds.has(tf.id)} /></button>
-                  <button type="button" className="flex items-center gap-2 rounded-md px-2 py-1 text-start text-slate-600 hover:bg-slate-100" onClick={() => setActiveMembersTf(tf)} title={locale === "ar" ? "إدارة الأعضاء" : "Manage members"}><MembersIcon /><span className="truncate">1 {locale === "ar" ? "عضو" : "Member"}</span></button>
+                  <span className="px-3 text-[12px] text-slate-500">{tf.updatedAt ? new Intl.DateTimeFormat(undefined, { dateStyle: "medium" }).format(new Date(tf.updatedAt)) : "—"}</span>
+                  <span className="px-3 text-[12px] text-slate-500">{formatBytes(tf.totalSize ?? 0)}</span>
+                  <button type="button" className="flex items-center gap-2 rounded-md px-2 py-1 text-start text-slate-600 hover:bg-slate-100" onClick={() => setActiveMembersTf(tf)} title={locale === "ar" ? "إدارة الأعضاء" : "Manage members"}><MembersIcon /><span className="truncate">{tf.memberCount} {locale === "ar" ? "عضو" : "Member"}{tf.memberCount === 1 ? "" : "s"}</span></button>
                   <div className="relative flex justify-end" data-team-folder-menu>
                     <button type="button" data-team-folder-menu-trigger aria-expanded={menuId === tf.id} className="flex h-8 w-8 items-center justify-center rounded-full text-slate-400 opacity-0 transition hover:bg-slate-100 hover:text-slate-700 group-hover:opacity-100 focus:opacity-100" onClick={(e) => { e.preventDefault(); e.stopPropagation(); setMenuId((id) => id === tf.id ? null : tf.id); }} aria-label={locale === "ar" ? "المزيد" : "More"}><MoreIcon /></button>
                     {menuId === tf.id ? (

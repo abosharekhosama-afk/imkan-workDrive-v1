@@ -1370,3 +1370,29 @@ html[data-theme="dark"] .imkan-modal-surface .imkan-muted{color:var(--wd-sidebar
 .zoho-workflow-status-badge{display:inline-flex;align-items:center;width:max-content;max-width:100%;margin-top:3px;padding:2px 7px;border:1px solid #dce2e6;border-radius:10px;background:#f7f9fa;color:#4f5964;font-size:10px;line-height:14px;cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .zoho-workflow-status-badge:hover{border-color:#b9c4cc;background:#f1f4f6;color:#2f3740}
 html[data-theme="dark"] .zoho-workflow-status-badge{border-color:#38414d;background:#20262d;color:#cbd5df}
+
+/* Team Folder reference chrome: the context header is intentionally taller than
+   the generic workspace header so it matches the two-level WorkDrive layout. */
+.team-context-header{position:relative;z-index:45;display:flex;align-items:center;min-height:86px;padding:0 18px;border-bottom:1px solid #ededed;background:#fff;color:#333;gap:10px}
+.team-context-header--manage{padding-inline-end:44px}
+.team-context-title{display:flex;align-items:center;min-width:0;gap:8px}
+.team-context-folder{display:inline-flex;width:30px;height:30px;align-items:center;justify-content:center;color:#2d333b;flex:0 0 auto}
+.team-context-name{max-width:min(34vw,330px);font-size:19px;font-weight:600;line-height:24px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.team-context-lock{font-size:14px;color:#2d333b;line-height:1}
+.team-context-role,.team-context-members{display:inline-flex;align-items:center;gap:5px;height:28px;padding:0 10px;border-radius:16px;background:#efefef;color:#3f3f3f;font-size:12px;font-weight:500;white-space:nowrap}
+.team-context-members{padding-inline:9px}
+.team-context-manage{display:inline-flex;height:32px;align-items:center;gap:5px;border:1px solid #dfe2e6;border-radius:17px;background:#fff;padding:0 10px;font-size:13px;color:#2f3439}
+.team-context-manage:hover,.team-context-manage[aria-expanded="true"]{background:#f7f8fa}
+.team-context-actions{margin-inline-start:auto;display:flex;align-items:center;gap:4px}
+.team-org-switch{display:flex;align-items:center;gap:7px;margin-inline-end:8px;padding:5px 8px;border-radius:16px;font-size:13px;font-weight:500;color:#262b30}
+.team-org-avatar{display:inline-flex;width:24px;height:24px;align-items:center;justify-content:center;border-radius:5px;background:#202124;color:#fff;font-size:11px;font-weight:700}
+.team-context-close{position:absolute;inset-inline-end:17px;top:50%;transform:translateY(-50%);font-size:29px;line-height:1;color:#2d333b;text-decoration:none}
+.team-context-menu{position:absolute;inset-inline-start:0;top:37px;z-index:120;width:235px;padding:6px;border:1px solid #e0e3e7;border-radius:12px;background:#fff;box-shadow:0 8px 28px rgba(0,0,0,.12)}
+.team-context-menu button{display:flex;width:100%;min-height:36px;align-items:center;padding:0 10px;border:0;border-radius:9px;background:transparent;text-align:start;font-size:13px;color:#3d4248}
+.team-context-menu button:hover{background:#f5f7fa}
+.team-context-menu-sep{height:1px;margin:5px 0;background:#edf0f2}
+.team-context-header--manage .team-context-title{max-width:calc(100% - 12px)}
+@media(max-width:900px){.team-context-name{max-width:30vw}.team-org-switch{display:none}}
+@media(max-width:680px){.team-context-header{min-height:60px;padding-inline:10px}.team-context-name{max-width:34vw;font-size:16px}.team-context-role{display:none}.team-context-members{font-size:11px}.team-context-actions .wd-icon-btn{display:none}.team-context-actions .wd-icon-btn:nth-last-child(-n+2){display:inline-flex}}
+
+.wd-toolbar.team-folder-toolbar{height:36px;padding:4px 4px 4px 16px}

@@ -10,6 +10,12 @@ export type TeamFolderRecord = {
   name: string;
   rootFolderId: string | null;
   role?: TeamFolderUserRole;
+  isPublicToOrg?: boolean;
+  allowExternalSharing?: boolean;
+  allowViewerDownloads?: boolean;
+  memberCount?: number;
+  updatedAt?: string | null;
+  totalSize?: number | null;
 };
 
 export type TeamFolderListItem = {
@@ -17,6 +23,8 @@ export type TeamFolderListItem = {
   name: string;
   rootFolderId: string | null;
   role: TeamFolderUserRole;
+  memberCount: number;
+  isPublicToOrg: boolean;
   /** Latest activity across the folder tree (folders + active files). */
   updatedAt?: string | null;
   /** Summed byte size of active files in the folder tree. */
@@ -51,10 +59,44 @@ export function renameTeamFolder(id: string, name: string): Promise<TeamFolderRe
   });
 }
 
+export function updateTeamFolderSettings(
+  id: string,
+  settings: { isPublicToOrg?: boolean; allowExternalSharing?: boolean; allowViewerDownloads?: boolean },
+): Promise<TeamFolderRecord> {
+  return apiRequest<TeamFolderRecord>(`/team-folders/${id}/settings`, {
+    method: "PATCH",
+    body: JSON.stringify(settings),
+  });
+}
+
 export function deleteTeamFolder(id: string): Promise<{ id: string; deleted: boolean }> {
   return apiRequest<{ id: string; deleted: boolean }>(`/team-folders/${id}`, {
     method: "DELETE",
   });
+}
+
+export type TeamFolderActivity = {
+  id: string; action: string; resourceType: string; resourceId: string; actorId: string | null; createdAt: string;
+  actor?: { id: string; name: string | null; email: string } | null; metadata?: Record<string, unknown>;
+};
+export type TeamFolderTrashItem = {
+  id: string; fileId: string | null; folderId: string | null; deletedAt: string; expiresAt: string;
+  file?: { id: string; name: string; size: number; mimeType: string | null } | null;
+  folder?: { id: string; name: string } | null;
+};
+export type TeamFolderSharedItem = {
+  id: string; resourceType: "FILE" | "FOLDER"; resourceId: string; name: string; mimeType?: string | null; size?: number; permission: string; canDownload: boolean; expiresAt: string | null; createdAt: string;
+  recipients: Array<{ id: string; name: string | null; email: string }>;
+};
+
+export function listTeamFolderActivity(id: string): Promise<TeamFolderActivity[]> {
+  return apiRequest<TeamFolderActivity[]>(`/team-folders/${id}/activity`);
+}
+export function listTeamFolderTrash(id: string): Promise<TeamFolderTrashItem[]> {
+  return apiRequest<TeamFolderTrashItem[]>(`/team-folders/${id}/trash`);
+}
+export function listTeamFolderShared(id: string): Promise<TeamFolderSharedItem[]> {
+  return apiRequest<TeamFolderSharedItem[]>(`/team-folders/${id}/shared`);
 }
 
 export function listTeamFolderMembers(id: string): Promise<{ members: TeamFolderMember[] }> {

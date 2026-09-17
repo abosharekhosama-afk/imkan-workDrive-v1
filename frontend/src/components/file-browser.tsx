@@ -61,6 +61,7 @@ export function FileBrowser({
   const [folders, setFolders] = useState<FolderRecord[]>([]);
   const [files, setFiles] = useState<FileRecord[]>([]);
   const [folderName, setFolderName] = useState<string | undefined>();
+  const [teamFolderId, setTeamFolderId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [newFolderName, setNewFolderName] = useState("");
   const [newFolderOpen, setNewFolderOpen] = useState(false);
@@ -223,16 +224,19 @@ export function FileBrowser({
       if (routeQuery) {
         const result = await searchNames(routeQuery);
         setFolderName(undefined);
+        setTeamFolderId(null);
         applyContents(result);
         await refreshWorkflowStatuses(result);
       } else if (folderId) {
         const detail = await getFolder(folderId, { type: advancedFilter.type === "all" ? undefined : advancedFilter.type, status: advancedFilter.status === "all" ? undefined : advancedFilter.status, owner: advancedFilter.owner || undefined, dateField: advancedFilter.dateField, dateFrom: advancedFilter.dateFrom || undefined, dateTo: advancedFilter.dateTo || undefined });
         setFolderName(detail.name);
+        setTeamFolderId(detail.teamFolderId ?? null);
         applyContents(detail);
         await refreshWorkflowStatuses(detail);
       } else {
         const contents = await listRootContents({ type: advancedFilter.type === "all" ? undefined : advancedFilter.type, status: advancedFilter.status === "all" ? undefined : advancedFilter.status, owner: advancedFilter.owner || undefined, dateField: advancedFilter.dateField, dateFrom: advancedFilter.dateFrom || undefined, dateTo: advancedFilter.dateTo || undefined });
         setFolderName(undefined);
+        setTeamFolderId(null);
         applyContents(contents);
         await refreshWorkflowStatuses(contents);
       }
@@ -456,7 +460,7 @@ export function FileBrowser({
       <ShellScopeSync folderId={folderId} folderName={folderName} />
       <div className="flex min-w-0 flex-1 flex-col bg-white">
         {selectedIds.size === 0 ? (
-          <ActionToolbar view={viewMode} onView={(v) => switchViewMode(v)} sortField={sortField} onSortField={setSortField} sortDir={sortDir} onSortDir={setSortDir} filter={filter} onFilter={setFilter} advancedFilter={advancedFilter} onAdvancedFilter={setAdvancedFilter} owners={owners} columns={columns} onColumns={setColumns} folders={folders} currentFolderId={folderId} onOpenFolder={handleOpenFolder} />
+          <ActionToolbar context={teamFolderId ? "teamFolder" : "files"} view={viewMode} onView={(v) => switchViewMode(v)} sortField={sortField} onSortField={setSortField} sortDir={sortDir} onSortDir={setSortDir} filter={filter} onFilter={setFilter} advancedFilter={advancedFilter} onAdvancedFilter={setAdvancedFilter} owners={owners} columns={columns} onColumns={setColumns} folders={folders} currentFolderId={folderId} onOpenFolder={handleOpenFolder} />
         ) : (
           <SelectionBar
             folderCount={folders.filter((f) => selectedIds.has(f.id)).length}
@@ -481,7 +485,7 @@ export function FileBrowser({
             onClear={() => setSelectedIds(new Set())}
           />
         )}
-        <Breadcrumbs folderId={searchActive ? undefined : folderId} folderName={searchActive ? undefined : folderName} />
+        {teamFolderId ? null : <Breadcrumbs folderId={searchActive ? undefined : folderId} folderName={searchActive ? undefined : folderName} />}
 
       {error ? <AlertBanner message={error} action={<button type="button" className="imkan-button-secondary" onClick={() => void load()}>{label("feedback.retry")}</button>} /> : null}
 

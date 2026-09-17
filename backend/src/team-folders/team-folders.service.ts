@@ -18,6 +18,7 @@ import {
 } from '../permissions/permission.service';
 import { PrismaService } from '../prisma/prisma.service';
 import type { CreateTeamFolderInput } from './create-team-folder.schema';
+import type { UpdateTeamFolderSettingsInput } from './settings.schema';
 import type {
   AddTeamFolderMemberInput,
   UpdateTeamFolderMemberInput,
@@ -28,6 +29,8 @@ export type TeamFolderListItem = {
   name: string;
   rootFolderId: string | null;
   role: TeamFolderRole | 'ORG_ADMIN';
+  memberCount: number;
+  isPublicToOrg: boolean;
   /** Latest activity across the folder tree (folders + active files). */
   updatedAt: string | null;
   /** Summed byte size of active files in the folder tree. */
@@ -35,7 +38,7 @@ export type TeamFolderListItem = {
 };
 
 type ReadableTeamFolder = {
-  folder: { id: string; orgId: string; name: string; isPublicToOrg?: boolean };
+  folder: { id: string; orgId: string; name: string; isPublicToOrg?: boolean; allowExternalSharing?: boolean; allowViewerDownloads?: boolean };
   role: TeamFolderRole | null;
   resource: AccessibleResource;
 };
@@ -69,6 +72,14 @@ export class TeamFoldersService {
           ownerId: user.sub,
         },
       });
+      await tx.teamFolderMember.create({
+        data: {
+          teamFolderId: created.id,
+          userId: user.sub,
+          orgId: user.org_id,
+          role: TeamFolderRole.ADMIN,
+        },
+      });
       await tx.auditLog.create({
         data: {
           orgId: user.org_id,
@@ -90,7 +101,10 @@ export class TeamFoldersService {
   async list(
     user: AccessTokenPayload,
   ): Promise<{ teamFolders: TeamFolderListItem[] }> {
-    const folders = await this.prisma.teamFolder.findMany({ where: { orgId: user.org_id } });
+    const folders = await this.prisma.teamFolder.findMany({
+      where: { orgId: user.org_id },
+      include: { _count: { select: { members: true } } },
+    });
     const visible: TeamFolderListItem[] = [];
     for (const folder of folders) {
       const role = await this.resolveCallerRole(user, folder.id);
@@ -108,6 +122,8 @@ export class TeamFoldersService {
         name: folder.name,
         rootFolderId: await this.findRootFolderId(folder.id),
         role: (user.role === 'ADMIN' || user.role === 'SUPER_ADMIN') ? 'ORG_ADMIN' : (role as TeamFolderRole),
+        memberCount: folder._count.members,
+        isPublicToOrg: folder.isPublicToOrg,
         updatedAt: stats.updatedAt,
         totalSize: stats.totalSize,
       });
@@ -149,6 +165,28 @@ export class TeamFoldersService {
   async getById(user: AccessTokenPayload, id: string) {
     const { folder, role } = await this.requireReadableTeamFolder(user, id);
     return this.toTeamFolderResponse(folder, role, user);
+  }
+
+  async updateSettings(user: AccessTokenPayload, id: string, input: UpdateTeamFolderSettingsInput) {
+    const { folder, role, resource } = await this.requireReadableTeamFolder(user, id);
+    if (!this.permissions.canManageTeamFolder(user, resource)) {
+      throw new ForbiddenException('Not allowed to manage Team Folder settings');
+    }
+    const updated = await this.prisma.teamFolder.update({
+      where: { id: folder.id },
+      data: input,
+    });
+    await this.prisma.auditLog.create({
+      data: {
+        orgId: user.org_id,
+        actorId: user.sub,
+        action: 'TEAM_FOLDER_SETTINGS_UPDATED',
+        resourceType: 'TEAM_FOLDER',
+        resourceId: folder.id,
+        metadata: input,
+      },
+    });
+    return this.toTeamFolderResponse(updated, role, user);
   }
 
   async rename(user: AccessTokenPayload, id: string, name: string) {
@@ -198,6 +236,70 @@ export class TeamFoldersService {
       });
     });
     return { id: folder.id, deleted: true };
+  }
+
+  async listActivity(user: AccessTokenPayload, id: string) {
+    const { folder } = await this.requireReadableTeamFolder(user, id);
+    const { folderIds, fileIds } = await this.collectTreeIds(folder.id);
+    return this.prisma.auditLog.findMany({
+      where: {
+        orgId: user.org_id,
+        OR: [
+          { resourceType: 'TEAM_FOLDER', resourceId: folder.id },
+          { resourceType: 'FOLDER', resourceId: { in: folderIds } },
+          { resourceType: 'FILE', resourceId: { in: fileIds } },
+        ],
+      },
+      orderBy: { createdAt: 'desc' },
+      take: 50,
+      include: { actor: { select: { id: true, name: true, email: true } } },
+    });
+  }
+
+  async listTrash(user: AccessTokenPayload, id: string) {
+    const { folder } = await this.requireReadableTeamFolder(user, id);
+    const { folderIds, fileIds } = await this.collectTreeIds(folder.id);
+    return this.prisma.trashEntry.findMany({
+      where: {
+        orgId: user.org_id,
+        restoredAt: null,
+        OR: [
+          { folderId: { in: folderIds } },
+          { fileId: { in: fileIds } },
+        ],
+      },
+      orderBy: { deletedAt: 'desc' },
+      take: 100,
+      include: {
+        file: { select: { id: true, name: true, size: true, mimeType: true } },
+        folder: { select: { id: true, name: true } },
+        deletedBy: { select: { id: true, name: true, email: true } },
+      },
+    });
+  }
+
+  async listShared(user: AccessTokenPayload, id: string) {
+    const { folder, role, resource } = await this.requireReadableTeamFolder(user, id);
+    if (!this.permissions.canShare(user, resource)) {
+      throw new ForbiddenException('Not allowed to manage shared items in this Team Folder');
+    }
+    const { folderIds, fileIds } = await this.collectTreeIds(folder.id);
+    const [fileShares, folderShares] = await Promise.all([
+      this.prisma.fileShare.findMany({
+        where: { orgId: user.org_id, status: 'ACTIVE', fileId: { in: fileIds } },
+        include: { file: { select: { id: true, name: true, mimeType: true, size: true } }, recipients: { include: { user: { select: { id: true, name: true, email: true } } } } },
+        orderBy: { createdAt: 'desc' },
+      }),
+      this.prisma.folderShare.findMany({
+        where: { orgId: user.org_id, status: 'ACTIVE', folderId: { in: folderIds } },
+        include: { folder: { select: { id: true, name: true } }, recipients: { include: { user: { select: { id: true, name: true, email: true } } } } },
+        orderBy: { createdAt: 'desc' },
+      }),
+    ]);
+    return [
+      ...fileShares.map((share) => ({ id: share.id, resourceType: 'FILE', resourceId: share.fileId, name: share.file.name, mimeType: share.file.mimeType, size: Number(share.file.size), permission: share.permission, canDownload: share.canDownload, expiresAt: share.expiresAt, createdAt: share.createdAt, recipients: share.recipients.map((row) => row.user) })),
+      ...folderShares.map((share) => ({ id: share.id, resourceType: 'FOLDER', resourceId: share.folderId, name: share.folder.name, permission: share.permission, canDownload: share.canDownload, expiresAt: share.expiresAt, createdAt: share.createdAt, recipients: share.recipients.map((row) => row.user) })),
+    ].sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
   }
 
   async listMembers(user: AccessTokenPayload, id: string) {
@@ -394,6 +496,13 @@ export class TeamFoldersService {
     };
   }
 
+  private async collectTreeIds(teamFolderId: string): Promise<{ folderIds: string[]; fileIds: string[] }> {
+    const folders = await this.prisma.folder.findMany({ where: { teamFolderId }, select: { id: true } });
+    const folderIds = folders.map((row) => row.id);
+    const files = folderIds.length === 0 ? [] : await this.prisma.file.findMany({ where: { folderId: { in: folderIds } }, select: { id: true } });
+    return { folderIds, fileIds: files.map((row) => row.id) };
+  }
+
   private async requireReadableTeamFolder(
     user: AccessTokenPayload,
     id: string,
@@ -531,7 +640,14 @@ export class TeamFoldersService {
   }
 
   private async toTeamFolderResponse(
-    folder: { id: string; orgId: string; name: string; isPublicToOrg?: boolean },
+    folder: {
+      id: string;
+      orgId: string;
+      name: string;
+      isPublicToOrg?: boolean;
+      allowExternalSharing?: boolean;
+      allowViewerDownloads?: boolean;
+    },
     role: TeamFolderRole | null,
     user: AccessTokenPayload,
   ) {
@@ -541,6 +657,11 @@ export class TeamFoldersService {
       name: folder.name,
       rootFolderId: await this.findRootFolderId(folder.id),
       role: (user.role === 'ADMIN' || user.role === 'SUPER_ADMIN') ? 'ORG_ADMIN' : (role as TeamFolderRole),
+      memberCount: await this.prisma.teamFolderMember.count({ where: { teamFolderId: folder.id } }),
+      ...(await this.computeTeamFolderStats(folder.id)),
+      isPublicToOrg: folder.isPublicToOrg ?? false,
+      allowExternalSharing: folder.allowExternalSharing ?? true,
+      allowViewerDownloads: folder.allowViewerDownloads ?? true,
     };
   }
 

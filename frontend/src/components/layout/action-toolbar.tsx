@@ -64,7 +64,7 @@ export function ActionToolbar({
   /** Direct navigation callback (replaces the old workdrive:tree-open CustomEvent). */
   onOpenFolder?: (folderId: string) => void;
   /** Toolbar target surface. Team folders use the team-folder creation flow. */
-  context?: "files" | "teamFolders";
+  context?: "files" | "teamFolders" | "teamFolder";
   /** Disable recording until a concrete destination folder is selected. */
   recordDisabled?: boolean;
 }) {
@@ -177,7 +177,7 @@ export function ActionToolbar({
   const isColOn = (k: ColumnKey) => cols[k] ?? true;
 
   return (
-    <div ref={rootRef} className="wd-toolbar relative flex shrink-0 flex-wrap items-center gap-1.5">
+    <div ref={rootRef} className={`wd-toolbar relative flex shrink-0 flex-wrap items-center gap-1.5 ${context === "teamFolder" ? "team-folder-toolbar" : ""}`}>
       <button id="tb-tree-btn" type="button" onClick={() => toggle("tree")} aria-expanded={openMenu === "tree"} aria-haspopup="menu"
         className={`wd-icon-btn !h-[27px] !w-[45px] shadow-[inset_0_0_0_1px_var(--wd-menu-border)] ${openMenu === "tree" ? "bg-[var(--wd-active)] text-[color:var(--wd-primary-ink)]" : ""}`}
         title={label("nav.fileTree")} aria-label={label("nav.fileTree")}>
@@ -255,8 +255,9 @@ export function ActionToolbar({
             { key: "zia", labelKey: "menu.zia", icon: <Icons.spark size={16} /> },
           ]} />
 
-        {/* Merged view picker - single button opening a unified options card. */}
-        <button id="tb-view-btn" type="button" onClick={() => toggle("view")} aria-expanded={openMenu === "view"} aria-haspopup="menu"
+        {/* Merged view picker - hidden in Team Folder file tables; the reference keeps
+            the compact toolbar focused on sort/filter/columns. */}
+        {context !== "teamFolder" ? <><button id="tb-view-btn" type="button" onClick={() => toggle("view")} aria-expanded={openMenu === "view"} aria-haspopup="menu"
           className={`wd-icon-btn ${openMenu === "view" ? "bg-[var(--wd-active)] text-[color:var(--wd-primary-ink)]" : ""}`}
           title={label("view.toggle")} aria-label={label("view.toggle")}>
           {view === "grid" ? <Icons.grid size={15} /> : view === "compact" ? <Icons.compact size={15} /> : <Icons.list size={15} />}
@@ -272,7 +273,7 @@ export function ActionToolbar({
               </button>
             ))}
           </div>
-        ) : null}
+        ) : null}</> : null}
         {/* Sort By popover: SORT BY + SORT ORDER, blue highlight + checkmark. */}
         <button id="tb-sort-btn" type="button" onClick={() => toggle("sort")} aria-expanded={openMenu === "sort"} aria-haspopup="menu"
           className={`wd-icon-btn ${openMenu === "sort" ? "bg-[var(--wd-active)] text-[color:var(--wd-primary-ink)]" : ""}`}

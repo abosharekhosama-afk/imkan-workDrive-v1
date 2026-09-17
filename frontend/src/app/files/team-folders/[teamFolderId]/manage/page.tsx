@@ -13,15 +13,24 @@ import {
   listTeamFolderMembers,
   removeTeamFolderMember,
   renameTeamFolder,
+  updateTeamFolderSettings,
   updateTeamFolderMember,
   type TeamFolderMember,
   type TeamFolderRecord,
   type TeamFolderRole,
+  listTeamFolderActivity,
+  listTeamFolderShared,
+  listTeamFolderTrash,
+  type TeamFolderActivity,
+  type TeamFolderSharedItem,
+  type TeamFolderTrashItem,
 } from "../../../../../lib/api/team-folders";
 import { listOrganizationMembers, type OrgMember } from "../../../../../lib/api/organization";
 import { canManageMembers } from "../../../../../lib/permissions";
 import { formatBytes } from "../../../../../lib/api/quota";
-import { getCurrentUserId } from "../../../../../lib/api/jwt";
+import { permanentDeleteFile } from "../../../../../lib/api/files";
+import { restoreFile } from "../../../../../lib/api/trash";
+import { formatDateLocalized } from "../../../../../lib/localized";
 
 type TabKey = "details" | "members" | "settings" | "trash" | "activity" | "shared" | "templates";
 
@@ -59,6 +68,10 @@ function displayMemberName(member: TeamFolderMember, profiles: OrgMember[]) {
   return profile?.name || member.email.split("@")[0] || member.userId;
 }
 
+function SettingRow({ title, description, checked = false, disabled = false, onChange }: { title: string; description: string; checked?: boolean; disabled?: boolean; onChange?: (checked: boolean) => void }) {
+  return <div className="flex min-h-[112px] items-center justify-between gap-6 py-5"><div><h3 className="text-[15px] font-medium text-[#333]">{title}</h3><p className="mt-2 max-w-[720px] text-[13px] leading-6 text-[#666]">{description}</p></div><button type="button" role="switch" aria-checked={checked} disabled={disabled || !onChange} onClick={() => onChange?.(!checked)} className={`relative h-6 w-11 shrink-0 rounded-full transition ${checked ? "bg-[#2c66dd]" : "bg-[#d9dce0]"} ${disabled || !onChange ? "cursor-not-allowed opacity-55" : ""}`}><span className={`absolute top-1 h-4 w-4 rounded-full bg-white shadow-sm transition ${checked ? "end-1" : "start-1"}`} /></button></div>;
+}
+
 export default function TeamFolderManagePage() {
   const params = useParams<{ teamFolderId: string }>();
   const router = useRouter();
@@ -79,7 +92,11 @@ export default function TeamFolderManagePage() {
   const [inviteSearch, setInviteSearch] = useState("");
   const [selectedUser, setSelectedUser] = useState<OrgMember | null>(null);
   const [inviteRole, setInviteRole] = useState<TeamFolderRole>("EDITOR");
-  const [manageOpen, setManageOpen] = useState(false);
+  const [settingsBusy, setSettingsBusy] = useState(false);
+  const [panelLoading, setPanelLoading] = useState(false);
+  const [activityRows, setActivityRows] = useState<TeamFolderActivity[]>([]);
+  const [trashRows, setTrashRows] = useState<TeamFolderTrashItem[]>([]);
+  const [sharedRows, setSharedRows] = useState<TeamFolderSharedItem[]>([]);
 
   const canManage = role === "ORG_ADMIN" || canManageMembers(role);
   const canRename = role === "ORG_ADMIN" || role === "ADMIN";
@@ -112,6 +129,25 @@ export default function TeamFolderManagePage() {
   useEffect(() => {
     setTab(initialTab);
   }, [initialTab]);
+
+  useEffect(() => {
+    if (tab !== "activity" && tab !== "trash" && tab !== "shared") return;
+    let live = true;
+    setPanelLoading(true);
+    const loadPanel = async () => {
+      try {
+        if (tab === "activity") setActivityRows(await listTeamFolderActivity(id));
+        if (tab === "trash") setTrashRows(await listTeamFolderTrash(id));
+        if (tab === "shared") setSharedRows(await listTeamFolderShared(id));
+      } catch (cause) {
+        if (live) setError(cause instanceof ApiError ? cause.message : (locale === "ar" ? "تعذر تحميل البيانات." : "Unable to load the data."));
+      } finally {
+        if (live) setPanelLoading(false);
+      }
+    };
+    void loadPanel();
+    return () => { live = false; };
+  }, [id, locale, tab]);
 
   const visibleMembers = useMemo(() => {
     const q = memberSearch.trim().toLocaleLowerCase();
@@ -233,6 +269,20 @@ export default function TeamFolderManagePage() {
     }
   };
 
+  const updateSettings = async (patch: { isPublicToOrg?: boolean; allowExternalSharing?: boolean; allowViewerDownloads?: boolean }) => {
+    if ((role !== "ORG_ADMIN" && role !== "ADMIN") || settingsBusy) return;
+    setSettingsBusy(true);
+    setError("");
+    try {
+      const updated = await updateTeamFolderSettings(id, patch);
+      setFolder((current) => current ? { ...current, ...updated } : current);
+    } catch (cause) {
+      setError(cause instanceof ApiError ? cause.message : (locale === "ar" ? "تعذر تحديث الإعداد." : "Unable to update the setting."));
+    } finally {
+      setSettingsBusy(false);
+    }
+  };
+
   if (!folder && !error) {
     return <section className="flex min-h-full items-center justify-center bg-white text-sm text-slate-500">Loading…</section>;
   }
@@ -241,41 +291,9 @@ export default function TeamFolderManagePage() {
 
   return (
     <section className="flex min-h-full min-w-0 flex-col bg-white">
-      <header className="flex h-[68px] shrink-0 items-center border-b border-slate-100 px-6">
-        <div className="flex min-w-0 items-center gap-2.5">
-          <span className="flex h-8 w-8 items-center justify-center text-slate-700"><Icon name="folder" /></span>
-          <h1 className="truncate text-[21px] font-semibold tracking-[-0.025em] text-slate-900">{folder?.name}</h1>
-          <span className="rounded-full bg-slate-100 px-2.5 py-1 text-[12px] font-medium text-slate-700">{role === "ORG_ADMIN" ? "Admin" : role || "Member"}</span>
-          <span className="rounded-full bg-slate-100 px-2 py-1 text-[12px] font-medium text-slate-700">{members.length}</span>
-          <div className="ms-2 h-5 w-px bg-slate-200" />
-          <div className="relative ms-2">
-            <button type="button" onClick={() => setManageOpen((open) => !open)} className="wd-pill-manage inline-flex items-center gap-1.5" aria-expanded={manageOpen} aria-haspopup="menu">
-              <Icon name="settings" /> {locale === "ar" ? "إدارة" : "Manage"} <span aria-hidden="true">⌄</span>
-            </button>
-            {manageOpen ? (
-              <div role="menu" className="absolute start-0 top-9 z-[120] w-[235px] rounded-[16px] border border-slate-200 bg-white p-1.5 shadow-[0_8px_28px_rgba(0,0,0,.12)]">
-                {tabs.map((item) => (
-                  <button key={item.key} type="button" role="menuitem" onClick={() => { setManageOpen(false); selectTab(item.key); }} className={`flex min-h-[38px] w-full items-center gap-3 rounded-[10px] px-3 text-start text-[13px] ${tab === item.key ? "bg-[#EEF4FF] text-[#285CB4]" : "text-slate-700 hover:bg-slate-50"}`}>
-                    <span className={tab === item.key ? "text-[#285CB4]" : "text-slate-500"}><Icon name={item.icon} /></span><span>{locale === "ar" ? item.ar : item.en}</span>
-                  </button>
-                ))}
-                <div className="my-1 border-t border-slate-100" />
-                {folder?.rootFolderId ? <button type="button" role="menuitem" onClick={() => { setManageOpen(false); router.push(rootHref); }} className="flex min-h-[38px] w-full items-center gap-3 rounded-[10px] px-3 text-start text-[13px] text-slate-700 hover:bg-slate-50"><Icon name="folder" /><span>{locale === "ar" ? `البحث في ${folder.name}` : `Search in ${folder.name}`}</span></button> : null}
-                <button type="button" role="menuitem" onClick={() => { setManageOpen(false); void deleteFolder(); }} disabled={!canRename || busy} className="flex min-h-[38px] w-full items-center gap-3 rounded-[10px] px-3 text-start text-[13px] text-slate-700 hover:bg-slate-50 disabled:opacity-40"><Icon name="trash" /><span>{locale === "ar" ? "حذف مجلد الفريق" : "Delete Team Folder"}</span></button>
-                <button type="button" role="menuitem" onClick={() => { setManageOpen(false); void leave(); }} disabled={role === "ORG_ADMIN" || !role || busy} className="flex min-h-[38px] w-full items-center gap-3 rounded-[10px] px-3 text-start text-[13px] text-red-600 hover:bg-red-50 disabled:opacity-40"><span>↪</span><span>{locale === "ar" ? "مغادرة مجلد الفريق" : "Leave Team Folder"}</span></button>
-              </div>
-            ) : null}
-          </div>
-          <Link href={rootHref} className="ms-1 text-[13px] font-medium text-[color:var(--wd-primary)] hover:underline">
-            {locale === "ar" ? "فتح الملفات" : "Open files"}
-          </Link>
-        </div>
-        <Link href="/files/team-folders" className="ms-auto text-[15px] text-slate-500 hover:text-slate-800" aria-label={locale === "ar" ? "إغلاق" : "Close"}>×</Link>
-      </header>
-
       <nav className="grid shrink-0 grid-cols-7 border-b border-slate-200">
         {tabs.map((item) => (
-          <button key={item.key} type="button" onClick={() => selectTab(item.key)} className={`flex min-h-[88px] flex-col items-center justify-center gap-2 border-e border-slate-200 px-2 text-center text-[13px] transition ${tab === item.key ? "border-t-2 border-t-[color:var(--wd-primary)] bg-white text-[color:var(--wd-primary)]" : "border-t-2 border-t-transparent text-slate-600 hover:bg-slate-50"}`}>
+          <button key={item.key} type="button" onClick={() => selectTab(item.key)} className={`flex min-h-[90px] flex-col items-center justify-center gap-2 border-e border-slate-200 px-2 text-center text-[13px] transition ${tab === item.key ? "border-t-2 border-t-[#2457B8] bg-white text-[#2457B8]" : "border-t-2 border-t-transparent text-[#555] hover:bg-slate-50"}`}>
             <Icon name={item.icon} />
             <span>{locale === "ar" ? item.ar : item.en}</span>
           </button>
@@ -299,11 +317,11 @@ export default function TeamFolderManagePage() {
                 <dl className="mt-9 grid grid-cols-[145px_1fr] gap-y-5 text-[13px]">
                   <dt className="text-slate-500">{locale === "ar" ? "النوع" : "Type"}</dt><dd>{locale === "ar" ? "مجلد فريق خاص" : "Private Team Folder"}</dd>
                   <dt className="text-slate-500">{locale === "ar" ? "الدور" : "Role"}</dt><dd>{role === "ORG_ADMIN" ? "Admin" : role || "Member"}</dd>
-                  <dt className="text-slate-500">{locale === "ar" ? "يحتوي على" : "Contains"}</dt><dd>{formatBytes(0) === "0 B" ? "—" : formatBytes(0)}</dd>
+                  <dt className="text-slate-500">{locale === "ar" ? "الحجم" : "Size"}</dt><dd>{formatBytes(folder?.totalSize ?? 0)}</dd>
                 </dl>
               </section>
               <section>
-                <h2 className="mb-6 text-[14px] font-semibold text-slate-800">{members.length} {locale === "ar" ? "عضو" : "Member"}{members.length === 1 ? "" : "s"}</h2>
+                <h2 className="mb-6 text-[14px] font-semibold text-slate-800">{folder?.memberCount ?? members.length} {locale === "ar" ? "عضو" : "Member"}{(folder?.memberCount ?? members.length) === 1 ? "" : "s"}</h2>
                 <div className="space-y-3">
                   {members.slice(0, 6).map((member) => <div key={member.userId} className="flex items-center gap-3 border-b border-slate-100 pb-3"><span className="flex h-9 w-9 items-center justify-center rounded-full bg-slate-100 text-[12px] font-semibold text-slate-600">{displayMemberName(member, profiles).slice(0, 2).toUpperCase()}</span><span className="min-w-0"><strong className="block truncate text-[13px]">{displayMemberName(member, profiles)}</strong><small className="block truncate text-[12px] text-slate-500">{member.email}</small></span></div>)}
                 </div>
@@ -332,21 +350,44 @@ export default function TeamFolderManagePage() {
           ) : null}
 
           {tab === "settings" ? (
-            <section className="rounded-[16px] border border-slate-200 bg-white p-6">
-              <h2 className="text-[17px] font-medium text-slate-900">{locale === "ar" ? "نوع مجلد الفريق" : "Team Folder type"}</h2>
-              <div className="mt-4 flex gap-8 text-[13px]"><label className="flex items-center gap-2"><input type="radio" checked={false} readOnly /> Public</label><label className="flex items-center gap-2"><input type="radio" checked readOnly /> Private</label></div>
-              <p className="mt-3 text-[13px] leading-6 text-slate-500">{locale === "ar" ? "تتبع إعدادات النوع الحالية لعقد Team Folder الموجود." : "The current Team Folder API stores the existing folder type; no unsupported setting is written from this screen."}</p>
-              <div className="mt-7 divide-y divide-slate-100 border-y border-slate-100">
-                {[["Allow file uploads via email", "Enable this option to let members and external users upload by email."], ["Allow Team Folder members to share outside your team", "External sharing controls are not exposed by the current Team Folder API."], ["Show download and print options", "Download and print availability follows the existing file permissions."]].map(([title, desc]) => <div key={title} className="flex min-h-[112px] items-center justify-between gap-6 py-5"><div><h3 className="text-[15px] font-medium text-slate-800">{locale === "ar" ? title : title}</h3><p className="mt-2 max-w-[700px] text-[13px] leading-6 text-slate-500">{desc}</p></div><span className="h-6 w-11 rounded-full bg-slate-200 opacity-60" aria-label="Unavailable setting" /></div>)}
+            <section className="mx-auto w-full max-w-[930px] rounded-[16px] border border-[#e5e5e5] bg-white p-7">
+              <h2 className="text-[17px] font-medium text-[#2d2d2d]">{locale === "ar" ? "نوع مجلد الفريق" : "Team Folder type"}</h2>
+              <div className="mt-4 flex gap-8 text-[13px]">
+                <label className="flex items-center gap-2"><input type="radio" checked={Boolean(folder?.isPublicToOrg)} disabled={role !== "ORG_ADMIN" && role !== "ADMIN" || settingsBusy} onChange={() => void updateSettings({ isPublicToOrg: true })} /> Public</label>
+                <label className="flex items-center gap-2"><input type="radio" checked={!folder?.isPublicToOrg} disabled={role !== "ORG_ADMIN" && role !== "ADMIN" || settingsBusy} onChange={() => void updateSettings({ isPublicToOrg: false })} /> Private</label>
+              </div>
+              <p className="mt-3 text-[13px] leading-6 text-[#666]">{locale === "ar" ? "خاص: يقتصر الوصول على الأعضاء المضافين. عام: يمكن لأعضاء المؤسسة الانضمام." : "Private limits access to added members. Public lets team members join the Team Folder."}</p>
+              <div className="mt-7 divide-y divide-[#ededed] border-y border-[#ededed]">
+                <SettingRow title={locale === "ar" ? "السماح برفع الملفات عبر البريد الإلكتروني" : "Allow file uploads via email"} description={locale === "ar" ? "هذه الخاصية غير ممثلة في نموذج البيانات الحالي." : "This project does not currently persist an email-upload policy for Team Folders."} disabled />
+                <SettingRow title={locale === "ar" ? "السماح لأعضاء مجلد الفريق بالمشاركة خارج الفريق" : "Allow Team Folder members to share outside your team"} description={locale === "ar" ? "يتحكم هذا الإعداد في المشاركة الخارجية لهذا المجلد." : "Controls whether this Team Folder permits external sharing."} checked={folder?.allowExternalSharing ?? true} disabled={role !== "ORG_ADMIN" && role !== "ADMIN" || settingsBusy} onChange={(checked) => void updateSettings({ allowExternalSharing: checked })} />
+                <SettingRow title={locale === "ar" ? "إظهار خيارات التنزيل والطباعة" : "Show download and print options"} description={locale === "ar" ? "يتحكم هذا الإعداد في تنزيل وطباعة المستخدمين ذوي صلاحية العرض." : "Controls download and print access for viewers in this Team Folder."} checked={folder?.allowViewerDownloads ?? true} disabled={role !== "ORG_ADMIN" && role !== "ADMIN" || settingsBusy} onChange={(checked) => void updateSettings({ allowViewerDownloads: checked })} />
               </div>
             </section>
           ) : null}
 
-          {tab === "trash" || tab === "activity" || tab === "shared" || tab === "templates" ? (
-            <section className="rounded-[16px] border border-slate-200 bg-white p-8">
-              <div className="flex items-center gap-3"><Icon name={tabs.find((item) => item.key === tab)?.icon || "info"} /><h2 className="text-[18px] font-medium text-slate-900">{tabs.find((item) => item.key === tab)?.[locale === "ar" ? "ar" : "en"]}</h2></div>
-              <p className="mt-3 max-w-[680px] text-[13px] leading-6 text-slate-500">{locale === "ar" ? "تم إبقاء هذه العملية ضمن الواجهات الحالية للمشروع حتى لا يتم اختراع API غير موجود." : "This operation is kept on the existing project surface so the Team Folder UI does not invent an unsupported API."}</p>
-              <Link href={tab === "trash" ? "/files/trash" : tab === "activity" ? "/files/activity" : tab === "shared" ? "/files/shared-by-me" : "/files/templates"} className="mt-6 inline-flex h-9 items-center rounded-full bg-[color:var(--wd-primary)] px-4 text-[13px] font-semibold text-white">{locale === "ar" ? "فتح" : "Open"}</Link>
+          {tab === "activity" ? (
+            <section className="mx-auto w-full max-w-[930px]">
+              <div className="mb-5 flex items-center justify-center gap-3"><select className="h-9 rounded-full border border-slate-200 bg-white px-4 text-[13px] text-slate-700"><option>All Activities</option></select><button type="button" className="h-9 rounded-full bg-[#ececec] px-4 text-[13px] font-semibold text-[#333]">Export Activity Report</button></div>
+              {panelLoading ? <div className="py-12 text-center text-[13px] text-slate-500">Loading…</div> : activityRows.length === 0 ? <div className="py-16 text-center text-[14px] text-slate-500">{locale === "ar" ? "لا يوجد نشاط بعد" : "No activity yet"}</div> : <div className="relative mx-auto max-w-[610px] border-s border-[#d9dce0] ps-8">{activityRows.map((row) => <div key={row.id} className="relative mb-8"><span className="absolute -start-[9px] top-0 h-[18px] w-[18px] rounded-full border-4 border-white bg-[#e6e7e9]" /><div className="-ms-16 mb-1 w-12 text-end text-[12px] leading-4 text-[#555]">{formatDateLocalized(row.createdAt, locale)}</div><div className="flex items-start gap-3"><span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-slate-100 text-[10px] font-semibold text-slate-600">{(row.actor?.name || row.actor?.email || "You").slice(0,2).toUpperCase()}</span><div><strong className="block text-[13px] text-[#2457B8]">{row.actor?.name || row.actor?.email || "You"}</strong><div className="text-[13px] text-[#333]">{row.action.replaceAll("_", " ")}</div>{row.metadata && typeof row.metadata === "object" && "name" in row.metadata ? <div className="mt-1 text-[13px] text-[#555]">{String(row.metadata.name)}</div> : null}</div></div></div>)}</div>}
+            </section>
+          ) : null}
+
+          {tab === "trash" ? (
+            <section className="mx-auto w-full max-w-[930px]">
+              {panelLoading ? <div className="py-12 text-center text-[13px] text-slate-500">Loading…</div> : trashRows.length === 0 ? <div className="flex min-h-[420px] items-center justify-center"><div className="text-center"><div className="mx-auto mb-4 flex h-20 w-20 items-center justify-center rounded-full bg-slate-50 text-slate-300"><Icon name="trash" /></div><h2 className="text-[15px] font-medium text-[#333]">{locale === "ar" ? "لا توجد عناصر في سلة المهملات" : "No items in Trash"}</h2><p className="mt-2 text-[13px] text-[#777]">{locale === "ar" ? "العناصر المحذوفة من مجلد الفريق ستظهر هنا." : "Deleted items from this Team Folder will appear here."}</p></div></div> : <div className="overflow-hidden rounded-lg border border-slate-200"><div className="grid grid-cols-[1fr_170px_140px] border-b border-slate-200 bg-slate-50 px-4 py-3 text-[12px] font-medium text-slate-500"><span>Name</span><span>Deleted</span><span>Actions</span></div>{trashRows.map((row) => <div key={row.id} className="grid grid-cols-[1fr_170px_140px] items-center border-b border-slate-100 px-4 py-3 text-[13px]"><span>{row.file?.name || row.folder?.name || "—"}</span><span className="text-slate-500">{formatDateLocalized(row.deletedAt, locale)}</span><span className="flex gap-2">{row.fileId ? <><button type="button" className="text-[12px] text-[#2457B8]" onClick={() => void restoreFile(row.fileId!).then(() => listTeamFolderTrash(id).then(setTrashRows))}>Restore</button><button type="button" className="text-[12px] text-red-600" onClick={() => void permanentDeleteFile(row.fileId!).then(() => listTeamFolderTrash(id).then(setTrashRows))}>Delete</button></> : null}</span></div>)}</div>}
+            </section>
+          ) : null}
+
+          {tab === "shared" ? (
+            <section className="mx-auto w-full max-w-[930px]">
+              <div className="mb-4 flex items-center gap-2"><button type="button" className="inline-flex h-9 items-center gap-2 rounded-full border border-slate-200 bg-white px-4 text-[13px]">Direct sharing to external users <span>⌄</span></button><button type="button" className="inline-flex h-9 items-center gap-2 rounded-full border border-slate-200 bg-white px-4 text-[13px]">All File Types <span>⌄</span></button></div>
+              {panelLoading ? <div className="py-12 text-center text-[13px] text-slate-500">Loading…</div> : sharedRows.length === 0 ? <div className="flex min-h-[420px] items-center justify-center text-center"><div><div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-[#f4f7fb] text-[#9aa6b2]"><Icon name="share" /></div><h2 className="text-[15px] font-medium text-[#333]">There are no Shared Items here</h2></div></div> : <div className="divide-y divide-slate-100 border-y border-slate-100">{sharedRows.map((row) => <div key={row.id} className="flex min-h-[62px] items-center gap-3 px-3"><Icon name={row.resourceType === "FILE" ? "template" : "folder"} /><div className="min-w-0 flex-1"><strong className="block truncate text-[13px]">{row.name}</strong><span className="text-[11px] text-slate-500">{row.recipients.map((recipient) => recipient.name || recipient.email).join(", ")}</span></div><span className="text-[12px] text-slate-500">{row.permission}</span></div>)}</div>}
+            </section>
+          ) : null}
+
+          {tab === "templates" ? (
+            <section className="mx-auto w-full max-w-[930px]">
+              <div className="rounded-[16px] border border-[#e5e5e5] bg-white p-7"><div className="flex items-start justify-between gap-6"><div><h2 className="text-[17px] font-medium text-[#2d2d2d]">Mandate data template association to files and folders</h2><p className="mt-3 max-w-[760px] text-[13px] leading-6 text-[#666]">Enable this option to associate a data template automatically and require users to add custom properties whenever they add a file or folder to this Team Folder.</p></div><span className="relative h-6 w-11 shrink-0 rounded-full bg-[#d9dce0] opacity-55"><span className="absolute start-1 top-1 h-4 w-4 rounded-full bg-white" /></span></div><div className="mt-5 border-t border-slate-100 pt-5 text-[13px] text-[#444]">ⓘ {locale === "ar" ? "لا توجد قوالب بيانات نشطة في المؤسسة." : "Your organization does not have any active data templates."}</div><Link href="/files/templates" className="mt-6 inline-flex h-9 items-center rounded-full bg-[color:var(--wd-primary)] px-4 text-[13px] font-semibold text-white">{locale === "ar" ? "إنشاء قالب بيانات" : "Create Data Template"}</Link></div><div className="mt-7"><h3 className="text-[17px] font-medium text-[#333]">Data Templates</h3><p className="mt-2 text-[13px] leading-6 text-[#666]">Data Templates are used to add custom properties to files and folders.</p></div>
             </section>
           ) : null}
 

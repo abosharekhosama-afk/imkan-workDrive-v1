@@ -32,6 +32,30 @@ export class TeamFoldersController {
     return this.teamFolders.list(user);
   }
 
+  @Get(':id/activity')
+  listActivity(
+    @CurrentUser() user: AccessTokenPayload,
+    @Param('id', new ParseUUIDPipe({ version: '4' })) id: string,
+  ) {
+    return this.teamFolders.listActivity(user, id);
+  }
+
+  @Get(':id/trash')
+  listTrash(
+    @CurrentUser() user: AccessTokenPayload,
+    @Param('id', new ParseUUIDPipe({ version: '4' })) id: string,
+  ) {
+    return this.teamFolders.listTrash(user, id);
+  }
+
+  @Get(':id/shared')
+  listShared(
+    @CurrentUser() user: AccessTokenPayload,
+    @Param('id', new ParseUUIDPipe({ version: '4' })) id: string,
+  ) {
+    return this.teamFolders.listShared(user, id);
+  }
+
   @Get(':id/members')
   listMembers(
     @CurrentUser() user: AccessTokenPayload,
@@ -79,6 +103,15 @@ export class TeamFoldersController {
     @Param('id', new ParseUUIDPipe({ version: '4' })) id: string,
   ) {
     return this.teamFolders.getById(user, id);
+  }
+
+  @Patch(':id/settings')
+  updateSettings(
+    @CurrentUser() user: AccessTokenPayload,
+    @Param('id', new ParseUUIDPipe({ version: '4' })) id: string,
+    @Body() body: unknown,
+  ) {
+    return this.teamFolders.updateSettings(user, id, parseUpdateTeamFolderSettings(body));
   }
 
   @Patch(':id')

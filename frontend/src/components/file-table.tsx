@@ -215,9 +215,9 @@ export function FileTable({
   }
 
   return (
-    <div className="relative w-full max-w-full overflow-x-hidden">
-      <div className="imkan-table-scroll w-full max-w-full">
-        <table className="imkan-table min-w-[42rem] w-full table-auto">
+    <div className="relative h-full min-h-full w-full max-w-full overflow-x-hidden">
+      <div className="imkan-table-scroll h-full min-h-full w-full max-w-full">
+        <table className="imkan-table h-full min-h-full min-w-[42rem] w-full table-auto">
           <thead>
           <tr className="wd-list-head">
             <th scope="col" className="w-10 ps-[13px] text-start font-medium">

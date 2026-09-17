@@ -9,6 +9,10 @@ import {
   listTeamFolders,
   removeTeamFolderMember,
   renameTeamFolder,
+  updateTeamFolderSettings,
+  listTeamFolderActivity,
+  listTeamFolderShared,
+  listTeamFolderTrash,
   updateTeamFolderMember,
 } from "./team-folders.ts";
 
@@ -38,6 +42,10 @@ test("Team Folder client follows the contract and never sends client tenant cont
   await listTeamFolders();
   await getTeamFolder(TEAM_FOLDER_ID);
   await renameTeamFolder(TEAM_FOLDER_ID, "Legal 2026");
+  await updateTeamFolderSettings(TEAM_FOLDER_ID, { allowExternalSharing: false, allowViewerDownloads: true });
+  await listTeamFolderActivity(TEAM_FOLDER_ID);
+  await listTeamFolderTrash(TEAM_FOLDER_ID);
+  await listTeamFolderShared(TEAM_FOLDER_ID);
   await deleteTeamFolder(TEAM_FOLDER_ID);
   await listTeamFolderMembers(TEAM_FOLDER_ID);
   await addTeamFolderMember(TEAM_FOLDER_ID, USER_ID, "EDITOR");
@@ -51,6 +59,10 @@ test("Team Folder client follows the contract and never sends client tenant cont
       { path: "/team-folders", method: "GET", body: undefined },
       { path: `/team-folders/${TEAM_FOLDER_ID}`, method: "GET", body: undefined },
       { path: `/team-folders/${TEAM_FOLDER_ID}`, method: "PATCH", body: { name: "Legal 2026" } },
+      { path: `/team-folders/${TEAM_FOLDER_ID}/settings`, method: "PATCH", body: { allowExternalSharing: false, allowViewerDownloads: true } },
+      { path: `/team-folders/${TEAM_FOLDER_ID}/activity`, method: "GET", body: undefined },
+      { path: `/team-folders/${TEAM_FOLDER_ID}/trash`, method: "GET", body: undefined },
+      { path: `/team-folders/${TEAM_FOLDER_ID}/shared`, method: "GET", body: undefined },
       { path: `/team-folders/${TEAM_FOLDER_ID}`, method: "DELETE", body: undefined },
       { path: `/team-folders/${TEAM_FOLDER_ID}/members`, method: "GET", body: undefined },
       {
