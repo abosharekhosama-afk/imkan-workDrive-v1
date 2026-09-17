@@ -1710,8 +1710,8 @@ html[data-theme="dark"] .zoho-workflow-status-badge{border-color:#38414d;backgro
 .team-folders-list-loading{padding:18px}
 
 .wd-toolbar.team-folder-toolbar{
-  height:60px !important;
-  min-height:60px !important;
+  height:48px !important;
+  min-height:48px !important;
   padding:0 16px !important;
   gap:5px !important;
   border-bottom:1px solid #ededed;
