@@ -8,6 +8,7 @@ import { InspectorDock, InspectorPanel } from "./inspector";
 import { Icons } from "./icons";
 import { WipHost } from "../wip-modal";
 import { ExternalAppsHost } from "../external-apps-modal";
+import { CloudImportHost } from "../cloud-import-modal";
 import { NewItemHost } from "../new-item-host";
 import { RecordingHost } from "../recording-host";
 function Frame({ children }: { children: ReactNode }) {
@@ -17,7 +18,7 @@ function Frame({ children }: { children: ReactNode }) {
   const width = sidebarCollapsed ? "md:w-16" : "md:w-[264px]";
   return (
     <div className="workdrive-frame flex h-screen min-h-0 w-full overflow-hidden bg-white">
-      <WipHost /><ExternalAppsHost /><NewItemHost /><RecordingHost />
+      <WipHost /><ExternalAppsHost /><CloudImportHost /><NewItemHost /><RecordingHost />
       <aside className={`hidden shrink-0 md:block ${width}`} aria-label="primary">
         <PrimarySidebar />
       </aside>

@@ -21,6 +21,7 @@ import { NotificationsModule } from './notifications/notifications.module';
 import { OrganizationModule } from './organization/organization.module';
 import { FolderPermissionsModule } from './folder-permissions/folder-permissions.module';
 import { WorkflowsModule } from './workflows/workflows.module';
+import { CloudImportModule } from './cloud-import/cloud-import.module';
 
 @Module({
   imports: [
@@ -43,6 +44,7 @@ import { WorkflowsModule } from './workflows/workflows.module';
     OrganizationModule,
     FolderPermissionsModule,
     WorkflowsModule,
+    CloudImportModule,
   ],
   controllers: [AppController],
   providers: [AppService],

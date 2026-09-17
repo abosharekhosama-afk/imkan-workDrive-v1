@@ -1027,6 +1027,75 @@ model SecurityEvent {
   @@index([orgId, severity, createdAt])
   @@map("security_events")
 }
+
+enum CloudImportJobStatus {
+  PENDING
+  IN_PROGRESS
+  COMPLETED
+  FAILED
+}
+
+model CloudConnection {
+  id           String   @id @default(uuid()) @db.Char(36)
+  orgId        String   @map("org_id") @db.Char(36)
+  userId       String   @map("user_id") @db.Char(36)
+  provider     String
+  accessToken  String   @map("access_token") @db.Text
+  refreshToken String?  @map("refresh_token") @db.Text
+  expiresAt    DateTime? @map("expires_at")
+  scope        String?  @db.Text
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+  jobs         CloudImportJob[]
+
+  @@unique([orgId, userId, provider])
+  @@index([orgId, userId])
+  @@map("cloud_connections")
+}
+
+model CloudOAuthState {
+  id        String   @id @default(uuid()) @db.Char(36)
+  stateHash String   @unique @map("state_hash") @db.Char(64)
+  orgId     String   @map("org_id") @db.Char(36)
+  userId    String   @map("user_id") @db.Char(36)
+  provider  String
+  folderId  String?  @map("folder_id") @db.Char(36)
+  expiresAt DateTime @map("expires_at")
+  usedAt    DateTime? @map("used_at")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([orgId, userId, expiresAt])
+  @@map("cloud_oauth_states")
+}
+
+model CloudImportJob {
+  id             String               @id @default(uuid()) @db.Char(36)
+  orgId          String               @map("org_id") @db.Char(36)
+  userId         String               @map("user_id") @db.Char(36)
+  connectionId   String               @map("connection_id") @db.Char(36)
+  provider       String
+  connection     CloudConnection @relation(fields: [connectionId], references: [id], onDelete: Cascade)
+  folderId       String?              @map("folder_id") @db.Char(36)
+  remoteFileId   String               @map("remote_file_id") @db.VarChar(2048)
+  remoteName     String               @map("remote_name")
+  remoteMimeType String               @map("remote_mime_type")
+  status         CloudImportJobStatus @default(PENDING)
+  progress       Int                  @default(0)
+  bytesDone      BigInt               @default(0) @map("bytes_done")
+  totalBytes     BigInt?              @map("total_bytes")
+  fileId         String?              @map("file_id") @db.Char(36)
+  versionId      String?              @map("version_id") @db.Char(36)
+  error          String?              @db.Text
+  startedAt      DateTime?            @map("started_at")
+  completedAt    DateTime?            @map("completed_at")
+  createdAt      DateTime             @default(now()) @map("created_at")
+  updatedAt      DateTime             @updatedAt @map("updated_at")
+
+  @@index([orgId, userId, status])
+  @@index([connectionId, remoteFileId])
+  @@map("cloud_import_jobs")
+}
+
 model Workflow {
   id          String         @id @default(uuid()) @db.Char(36)
   orgId       String         @map("org_id") @db.Char(36)

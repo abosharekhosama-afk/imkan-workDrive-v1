@@ -242,7 +242,7 @@ export function ActionToolbar({
             else if (k === "externalApps") WorkdriveEvents.externalApps();
             else if (k === "record") dispatchRecord("video");
             else if (["doc", "sheet", "slide", "link", "code"].includes(k)) window.dispatchEvent(new CustomEvent("workdrive:new-file", { detail: { kind: k, folderId: currentFolderId ?? null } }));
-            else if (k === "cloud") window.dispatchEvent(new CustomEvent("workdrive:external-apps", { detail: { source: "cloud-import" } }));
+            else if (k === "cloud") window.dispatchEvent(new CustomEvent("workdrive:cloud-import", { detail: { folderId: currentFolderId ?? null } }));
             else openWip(label("menu.zia"));
           }}
           items={[
