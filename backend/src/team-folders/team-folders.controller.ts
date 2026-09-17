@@ -12,6 +12,7 @@ import { CurrentUser } from '../auth/current-user.decorator';
 import type { AccessTokenPayload } from '../auth/jwt.types';
 import { parseResourceName } from '../common/parse-resource-name';
 import { parseCreateTeamFolder } from './create-team-folder.schema';
+import { parseUpdateTeamFolderSettings } from './settings.schema';
 import {
   parseAddTeamFolderMember,
   parseUpdateTeamFolderMember,
