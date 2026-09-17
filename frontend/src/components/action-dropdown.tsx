@@ -89,8 +89,8 @@ function RenderItem({ item }: { item: ActionDropdownItem }) {
           role="menuitem"
           data-danger={item.destructive || undefined}
           className="wd-menu-item min-h-[34px] text-start"
-          onPointerDown={(event) => { event.preventDefault(); event.stopPropagation(); }}
-          onMouseDown={(event) => { event.preventDefault(); event.stopPropagation(); }}
+          onPointerDown={(event) => { event.stopPropagation(); }}
+          onMouseDown={(event) => { event.stopPropagation(); }}
           onClick={(event) => {
             // Prevent a row/card Link from interpreting an action click as
             // resource navigation (which can produce /files/<fileId> 404s).
@@ -164,9 +164,13 @@ export function ActionDropdown({ label, items, trigger }: ActionDropdownProps) {
         className="wd-icon-btn"
         aria-haspopup="menu"
         onClick={(event) => {
-          // Row actions can live inside clickable resource cards/links.
-          // Prevent the resource navigation from firing when opening actions.
-          event.preventDefault();
+          // Stop resource-row navigation, but do NOT preventDefault:
+          // Radix uses the trigger click's default behavior to toggle the popover.
+          event.stopPropagation();
+        }}
+        onPointerDown={(event) => {
+          // Keep the click inside the action control without cancelling the
+          // default pointer behavior Radix needs for opening the popover.
           event.stopPropagation();
         }}
       >

@@ -7,7 +7,7 @@ import { ApiError } from "../../../lib/api/client";
 import { deleteTeamFolder, listTeamFolders, renameTeamFolder, type TeamFolderListItem } from "../../../lib/api/team-folders";
 import { formatBytes } from "../../../lib/api/quota";
 import { MembersModal } from "../../../components/members-modal";
-import { FileTypeIcon } from "../../../components/file-icon";
+import { FileIcon } from "../../../components/file-icon";
 import { AlertBanner } from "../../../components/alert-banner";
 import { EmptyState } from "../../../components/empty-state";
 import { SkeletonLoader } from "../../../components/skeleton-loader";
@@ -91,10 +91,6 @@ export default function TeamFoldersPage() {
   return (
     <section className="min-w-0 w-full">
       <div className="flex min-w-0 flex-col border-b border-slate-100 bg-white">
-        <div className="flex min-w-0 items-center px-3 py-2">
-          <h1 className="truncate text-[length:var(--imkan-font-size-ui)] font-semibold">{label("teamFolders.heading")}</h1>
-          {selectedTeamFolder ? <span className="ms-2 text-xs text-slate-500">{selectedTeamFolder.name}</span> : null}
-        </div>
         <ActionToolbar
           context="teamFolders"
           view="list" onView={() => undefined}
@@ -115,76 +111,168 @@ export default function TeamFoldersPage() {
       ) : (
         <div className="relative w-full max-w-full overflow-x-hidden">
           <div className="overflow-x-auto w-full max-w-full">
-            <table className="imkan-table min-w-[42rem] w-full table-auto">
+            <table className="imkan-table min-w-[48rem] w-full table-auto">
               <thead>
                 <tr className="wd-list-head">
-                  <th scope="col" className="px-3 py-2 text-start font-medium w-10">
+                  <th scope="col" className="w-10 ps-[13px] text-start font-medium">
                     <input
                       type="checkbox"
-                      className="imkan-checkbox"
+                      className="wd-check"
                       checked={selectedIds.size === teamFolders.length && teamFolders.length > 0}
                       onChange={(e) => handleSelectAll(e.target.checked)}
                     />
                   </th>
-                  <th scope="col" className="px-3 text-start font-medium"><button type="button" className="imkan-focusable rounded-[16px] px-3 py-2.5" onClick={() => { setSortField("name"); setSortDir((d) => sortField === "name" ? (d === "asc" ? "desc" : "asc") : "asc"); }}>{label("files.column.name")} {sortField === "name" ? (sortDir === "asc" ? "↑" : "↓") : "↑"}</button></th>
-                  <th scope="col" className="px-3 py-2 text-start font-medium">{label("files.column.owner")}</th>
-                  <th scope="col" className="px-3 text-start font-medium"><button type="button" className="imkan-focusable rounded-[16px] px-3 py-2.5" onClick={() => { setSortField("lastModified"); setSortDir((d) => sortField === "lastModified" ? (d === "asc" ? "desc" : "asc") : "desc"); }}>{label("files.column.modified")} {sortField === "lastModified" ? (sortDir === "asc" ? "↑" : "↓") : "↓"}</button></th>
-                  <th scope="col" className="px-3 text-start font-medium"><button type="button" className="imkan-focusable rounded-[16px] px-3 py-2.5" onClick={() => { setSortField("size"); setSortDir((d) => sortField === "size" ? (d === "asc" ? "desc" : "asc") : "desc"); }}>{label("files.column.size")} {sortField === "size" ? (sortDir === "asc" ? "↑" : "↓") : ""}</button></th>
-                  <th scope="col" className="px-3 py-2 text-end font-medium"><span className="sr-only">{label("files.actions")}</span></th>
+                  <th scope="col" className="px-3 text-start font-medium">
+                    <button
+                      type="button"
+                      className="imkan-focusable rounded-[16px] px-3 py-2.5"
+                      onClick={() => {
+                        setSortField("name");
+                        setSortDir((d) => sortField === "name" ? (d === "asc" ? "desc" : "asc") : "asc");
+                      }}
+                    >
+                      {label("files.column.name")} {sortField === "name" ? (sortDir === "asc" ? "↑" : "↓") : "↑"}
+                    </button>
+                  </th>
+                  <th scope="col" className="px-3 text-start font-medium">{label("files.column.owner")}</th>
+                  <th scope="col" className="px-3 text-start font-medium">
+                    <button
+                      type="button"
+                      className="imkan-focusable rounded-[16px] px-3 py-2.5"
+                      onClick={() => {
+                        setSortField("lastModified");
+                        setSortDir((d) => sortField === "lastModified" ? (d === "asc" ? "desc" : "asc") : "desc");
+                      }}
+                    >
+                      {label("files.column.modified")} {sortField === "lastModified" ? (sortDir === "asc" ? "↑" : "↓") : "↓"}
+                    </button>
+                  </th>
+                  <th scope="col" className="px-3 text-start font-medium">
+                    <button
+                      type="button"
+                      className="imkan-focusable rounded-[16px] px-3 py-2.5"
+                      onClick={() => {
+                        setSortField("size");
+                        setSortDir((d) => sortField === "size" ? (d === "asc" ? "desc" : "asc") : "desc");
+                      }}
+                    >
+                      {label("files.column.size")} {sortField === "size" ? (sortDir === "asc" ? "↑" : "↓") : ""}
+                    </button>
+                  </th>
+                  <th scope="col" className="px-4 text-end font-medium">
+                    <span className="sr-only">{label("files.actions")}</span>
+                  </th>
                 </tr>
               </thead>
               <tbody>
                 {sortedTeamFolders.map((tf) => (
-                  <tr key={tf.id} className="wd-list-row group">
+                  <tr
+                    key={tf.id}
+                    className="wd-list-row group"
+                    data-selected={selectedIds.has(tf.id) || undefined}
+                    onDoubleClick={() => tf.rootFolderId && window.location.assign(`/files/${tf.rootFolderId}`)}
+                  >
                     <td className="ps-[13px]">
                       <input
                         type="checkbox"
-                        className="imkan-checkbox"
+                        className="wd-check"
                         checked={selectedIds.has(tf.id)}
                         onChange={(e) => handleSelectRow(tf.id, e.target.checked)}
+                        onClick={(e) => e.stopPropagation()}
                       />
                     </td>
-                    <td className="max-w-[18rem] truncate px-3 py-2">
-                      <div className="inline-flex max-w-full items-center truncate rounded-sm">
-                        <span className="flex-shrink-0 mr-2" aria-hidden="true">
-                          <FileTypeIcon kind="folder" size={20} />
+                    <td className="max-w-[18rem] truncate px-2">
+                      {tf.rootFolderId ? (
+                        <Link
+                          href={`/files/${tf.rootFolderId}`}
+                          className="imkan-focusable inline-flex max-w-full items-center gap-4 truncate rounded-sm"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          <FileIcon kind="folder" label={label("files.type.folder")} />
+                          <span className="min-w-0 truncate">
+                            <span className="wd-list-name block truncate">{tf.name}</span>
+                            <span className="wd-list-meta block truncate">
+                              {label(`teamFolders.role.${tf.role}` as Parameters<typeof label>[0]) ?? tf.role}
+                            </span>
+                          </span>
+                        </Link>
+                      ) : (
+                        <span className="inline-flex max-w-full items-center gap-4 truncate">
+                          <FileIcon kind="folder" label={label("files.type.folder")} />
+                          <span className="wd-list-name truncate">{tf.name}</span>
                         </span>
-                        {tf.rootFolderId ? (
-                          <Link href={`/files/${tf.rootFolderId}`} className="font-medium hover:underline truncate">
-                            {tf.name}
-                          </Link>
-                        ) : (
-                          <span className="font-medium truncate">{tf.name}</span>
-                        )}
-                      </div>
-                      <span className="ml-2 text-xs text-[color:var(--imkan-color-muted)]">
-                        ({label(`teamFolders.role.${tf.role}` as Parameters<typeof label>[0]) ?? tf.role})
-                      </span>
+                      )}
                     </td>
-                    <td className="imkan-muted px-3 py-2 text-[length:var(--imkan-font-size-secondary)]">
-                      <div className="flex items-center gap-2">
-                        <span className="w-6 h-6 rounded-full flex items-center justify-center" style={{ background: "color-mix(in srgb, var(--wd-primary) 14%, transparent)", color: "var(--wd-primary)" }} aria-hidden="true">
-                          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6.5A1.5 1.5 0 0 1 4.5 5h4l1.7 2H19a1.5 1.5 0 0 1 1.5 1.5v9A1.5 1.5 0 0 1 19 19H4.5A1.5 1.5 0 0 1 3 17.5Z" /></svg>
+                    <td className="wd-list-meta whitespace-nowrap px-3">
+                      <div className="flex min-w-0 items-center gap-2">
+                        <span
+                          className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full"
+                          style={{
+                            background: "color-mix(in srgb, var(--wd-primary) 14%, transparent)",
+                            color: "var(--wd-primary)",
+                          }}
+                          aria-hidden="true"
+                        >
+                          <span className="text-[10px] font-semibold">IM</span>
                         </span>
-                        <span>IMKAN Workspace</span>
+                        <span className="truncate">IMKAN Workspace</span>
                       </div>
                     </td>
-                    <td className="imkan-muted px-3 py-2 text-[length:var(--imkan-font-size-secondary)]">
-                      {formatDate(tf.updatedAt)}
-                    </td>
-                    <td className="imkan-muted px-3 py-2 text-[length:var(--imkan-font-size-secondary)]">
-                      {formatBytes(tf.totalSize)}
-                    </td>
+                    <td className="wd-list-meta whitespace-nowrap px-3">{formatDate(tf.updatedAt)}</td>
+                    <td className="wd-list-meta whitespace-nowrap px-3">{formatBytes(tf.totalSize)}</td>
                     <td className="px-3 py-2 text-end">
-                      <ActionDropdown
-                        label={label("files.actions")}
-                        items={[
-                          { label: label("nav.files"), onSelect: () => tf.rootFolderId && window.location.assign(`/files/${tf.rootFolderId}`), icon: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" /></svg> },
-                          { label: label("teamFolders.members"), onSelect: () => setActiveMembersTf(tf), icon: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" /><path d="M23 21v-2a4 4 0 0 0-3-3.87" /><path d="M16 3.13a4 4 0 0 1 0 7.75" /></svg> },
-                          { label: label("files.rename"), onSelect: () => { setRenameTarget(tf); setRenameName(tf.name); }, icon: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z" /><path d="m15 5 4 4" /></svg> },
-                          { label: label("files.delete"), onSelect: () => { void (async () => { if (!window.confirm(locale === "ar" ? `هل تريد حذف مجلد الفريق «${tf.name}»؟` : `Delete team folder “${tf.name}”?`)) return; setActionBusy(true); setError(null); try { await deleteTeamFolder(tf.id); setSelectedIds((prev) => { const next = new Set(prev); next.delete(tf.id); return next; }); await load(); } catch (cause) { setError(cause instanceof ApiError ? cause.message : label("error.generic")); } finally { setActionBusy(false); } })(); }, destructive: true, icon: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><polyline points="3 6 5 6 21 6" /><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" /></svg> },
-                        ]}
-                      />
+                      <div
+                        className="inline-flex"
+                        onClick={(e) => e.stopPropagation()}
+                        onPointerDown={(e) => e.stopPropagation()}
+                        onMouseDown={(e) => e.stopPropagation()}
+                      >
+                        <ActionDropdown
+                          label={label("files.actions")}
+                          items={[
+                            {
+                              label: label("nav.files"),
+                              onSelect: () => tf.rootFolderId && window.location.assign(`/files/${tf.rootFolderId}`),
+                              icon: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" /></svg>,
+                            },
+                            {
+                              label: label("teamFolders.members"),
+                              onSelect: () => setActiveMembersTf(tf),
+                              icon: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" /><path d="M23 21v-2a4 4 0 0 0-3-3.87" /><path d="M16 3.13a4 4 0 0 1 0 7.75" /></svg>,
+                            },
+                            {
+                              label: label("files.rename"),
+                              onSelect: () => { setRenameTarget(tf); setRenameName(tf.name); },
+                              icon: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z" /><path d="m15 5 4 4" /></svg>,
+                            },
+                            {
+                              label: label("files.delete"),
+                              onSelect: () => {
+                                void (async () => {
+                                  if (!window.confirm(locale === "ar" ? `هل تريد حذف مجلد الفريق «${tf.name}»؟` : `Delete team folder “${tf.name}”?`)) return;
+                                  setActionBusy(true);
+                                  setError(null);
+                                  try {
+                                    await deleteTeamFolder(tf.id);
+                                    setSelectedIds((prev) => {
+                                      const next = new Set(prev);
+                                      next.delete(tf.id);
+                                      return next;
+                                    });
+                                    await load();
+                                  } catch (cause) {
+                                    setError(cause instanceof ApiError ? cause.message : label("error.generic"));
+                                  } finally {
+                                    setActionBusy(false);
+                                  }
+                                })();
+                              },
+                              destructive: true,
+                              icon: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><polyline points="3 6 5 6 21 6" /><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" /></svg>,
+                            },
+                          ]}
+                        />
+                      </div>
                     </td>
                   </tr>
                 ))}
