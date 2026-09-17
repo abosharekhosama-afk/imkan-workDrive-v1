@@ -73,8 +73,12 @@ export function TopHeader() {
         if (!live) return;
         setTeamFolder(candidate);
         if (candidate) {
-          const memberRes = await listTeamFolderMembers(candidate.id);
-          if (live) setTeamMemberCount(memberRes.members.length);
+          if (typeof candidate.memberCount === "number") {
+            if (live) setTeamMemberCount(candidate.memberCount);
+          } else {
+            const memberRes = await listTeamFolderMembers(candidate.id);
+            if (live) setTeamMemberCount(memberRes.members.length);
+          }
         } else {
           setTeamMemberCount(0);
         }
@@ -179,74 +183,183 @@ export function TopHeader() {
 function HeaderSearchOverlay({ onClose, inputRef }: { onClose: () => void; inputRef: React.RefObject<HTMLInputElement | null> }) {
   const { label } = useLocale();
   const [q, setQ] = useState("");
-  const [filter, setFilter] = useState<"all" | "folders" | "files" | "recent">("all");
-  const [filterOpen, setFilterOpen] = useState(false);
-  const filterRef = useRef<HTMLDivElement | null>(null);
-  const [rows, setRows] = useState<{ folders: { id: string; name: string }[]; files: { id: string; name: string }[] }>({ folders: [], files: [] });
-  const filterOptions: Array<{ key: "all" | "folders" | "files" | "recent"; labelKey: MessageKey }> = [
-    { key: "all", labelKey: "search.filter.all" },
-    { key: "folders", labelKey: "search.filter.folders" },
-    { key: "files", labelKey: "search.filter.files" },
-    { key: "recent", labelKey: "search.filter.recent" },
-  ];
+  const [scope, setScope] = useState<"all" | "folders" | "files">("all");
+  const [fileType, setFileType] = useState<"all" | "documents" | "images" | "pdf">("all");
+  const [dateRange, setDateRange] = useState<"all" | "today" | "week" | "month">("all");
+  const [createdBy, setCreatedBy] = useState<"all" | "me">("all");
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+  const [openFilter, setOpenFilter] = useState<"scope" | "fileType" | "date" | "createdBy" | null>(null);
+  const [rows, setRows] = useState<{ folders: Array<{ id: string; name: string; ownerId?: string; teamFolderId?: string | null }>; files: Array<{ id: string; name: string; ownerId?: string; mimeType?: string | null; updatedAt?: string | null }> }>({ folders: [], files: [] });
   useEffect(() => {
-    if (!filterOpen) return;
-    const onDown = (e: MouseEvent) => { if (filterRef.current && !filterRef.current.contains(e.target as Node)) setFilterOpen(false); };
+    try {
+      const raw = localStorage.getItem("workdrive_user");
+      const user = raw ? JSON.parse(raw) as { id?: string; userId?: string } : null;
+      setCurrentUserId(user?.id ?? user?.userId ?? null);
+    } catch { /* noop */ }
+  }, []);
+
+  useEffect(() => {
+    if (!openFilter) return;
+    const onDown = (e: MouseEvent) => {
+      const target = e.target instanceof Element ? e.target : null;
+      if (!target?.closest("[data-search-filter]")) setOpenFilter(null);
+    };
     document.addEventListener("mousedown", onDown);
     return () => document.removeEventListener("mousedown", onDown);
-  }, [filterOpen]);
+  }, [openFilter]);
+
   useEffect(() => {
-    if (!q.trim()) { setRows({ folders: [], files: [] }); return; }
+    if (!q.trim()) {
+      setRows({ folders: [], files: [] });
+      return;
+    }
     let live = true;
     const t = window.setTimeout(() => {
-      import("../../lib/api/search").then(({ searchNames }) => searchNames(q.trim(), filter).then((r) => {
-        if (live) setRows({ folders: (r.folders ?? []).slice(0, 5), files: (r.files ?? []).slice(0, 7) });
-      }).catch(() => undefined));
-    }, 220);
+      import("../../lib/api/search").then(({ searchNames }) => searchNames(q.trim(), scope === "folders" ? "folders" : scope === "files" ? "files" : "all").then((r) => {
+        if (!live) return;
+        let files = (r.files ?? []);
+        const now = Date.now();
+        if (dateRange !== "all") {
+          const days = dateRange === "today" ? 1 : dateRange === "week" ? 7 : 30;
+          files = files.filter((f) => f.updatedAt ? now - new Date(f.updatedAt).getTime() <= days * 86400000 : false);
+        }
+        if (fileType !== "all") {
+          files = files.filter((f) => {
+            const m = (f.mimeType ?? "").toLowerCase();
+            if (fileType === "images") return m.startsWith("image/");
+            if (fileType === "pdf") return m === "application/pdf";
+            return m.includes("document") || m.includes("word") || m.includes("text") || m.includes("spreadsheet") || m.includes("presentation");
+          });
+        }
+        const folders = scope === "files" ? [] : (r.folders ?? []).filter((f) => createdBy !== "me" || !currentUserId || f.ownerId === currentUserId).slice(0, 8);
+        files = files.filter((f) => createdBy !== "me" || !currentUserId || f.ownerId === currentUserId);
+        setRows({
+          folders,
+          files: scope === "folders" ? [] : files.slice(0, 12),
+        });
+      }).catch(() => {
+        if (live) setRows({ folders: [], files: [] });
+      }));
+    }, 180);
     return () => { live = false; window.clearTimeout(t); };
-  }, [q, filter]);
-  return (
-    <div className="fixed inset-0 z-[80]" role="dialog" aria-modal="true" aria-label={label("search.placeholder")}>
-      <div className="absolute inset-0 bg-black/30" onClick={onClose} aria-hidden="true" />
-      <div className="absolute start-1/2 top-20 w-[min(36rem,92vw)] -translate-x-1/2 rtl:translate-x-1/2 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-2xl">
-        <div className="flex items-center gap-2 border-b border-slate-100 px-3 py-2.5">
-          <Icons.search size={16} />
-          <input ref={inputRef} value={q} onChange={(e) => setQ(e.target.value)} placeholder={label("search.placeholder")}
-            aria-label={label("search.placeholder")} className="min-w-0 flex-1 bg-transparent text-[14px] outline-none placeholder:text-slate-400" />
-          <div className="relative" ref={filterRef}>
-            <button id="hdr-search-filter-btn" type="button" onClick={() => setFilterOpen((v) => !v)} aria-expanded={filterOpen} aria-haspopup="menu"
-              className="inline-flex items-center gap-1 rounded-md border border-slate-200 px-2 py-1 text-[12px] text-slate-600 hover:bg-slate-50">
-              <Icons.funnel size={13} /> {label((filterOptions.find((o) => o.key === filter)?.labelKey ?? "search.filter.all") as MessageKey)}
+  }, [q, scope, fileType, dateRange, createdBy, currentUserId]);
+
+  const clearFilters = () => {
+    setScope("all");
+    setFileType("all");
+    setDateRange("all");
+    setCreatedBy("all");
+    setOpenFilter(null);
+  };
+
+  const FilterChip = ({
+    kind,
+    icon,
+    children,
+  }: {
+    kind: "scope" | "fileType" | "date" | "createdBy";
+    icon: React.ReactNode;
+    children: React.ReactNode;
+  }) => (
+    <div className="relative" data-search-filter>
+      <button
+        type="button"
+        className={`search-filter-chip ${openFilter === kind ? "is-open" : ""}`}
+        onClick={() => setOpenFilter((v) => v === kind ? null : kind)}
+        aria-expanded={openFilter === kind}
+      >
+        {icon}<span>{children}</span><Icons.chevD size={12} />
+      </button>
+      {openFilter === kind ? (
+        <div className="search-filter-popover" role="menu">
+          {kind === "scope" ? ([
+            ["all", "Search All"], ["folders", "Folders"], ["files", "Files"],
+          ] as const).map(([k, text]) => (
+            <button key={k} type="button" className={scope === k ? "is-selected" : ""} onClick={() => { setScope(k); setOpenFilter(null); }}>
+              <span>{text}</span>{scope === k ? <span>✓</span> : null}
             </button>
-            {filterOpen ? (
-              <div className="absolute top-full z-[90] mt-1 w-44 overflow-hidden rounded-lg border border-slate-200 bg-white py-1 shadow-lg" role="menu">
-                {filterOptions.map((o) => (
-                  <button key={o.key} type="button" role="menuitem" onClick={() => { setFilter(o.key); setFilterOpen(false); }}
-                    className={`flex w-full items-center gap-2.5 px-3 py-2 text-start text-[13px] ${filter === o.key ? "bg-[#EEF3FE] text-[#1B66EA]" : "text-slate-700 hover:bg-slate-50"}`}>
-                    <span className="w-4 text-center">{filter === o.key ? "✓" : ""}</span>
-                    <span className="flex-1">{label(o.labelKey)}</span>
-                  </button>
-                ))}
-              </div>
-            ) : null}
-          </div>
-          <kbd className="rounded border border-slate-200 bg-slate-50 px-1.5 py-0.5 text-[10.5px] text-slate-400">ESC</kbd>
+          )) : null}
+          {kind === "fileType" ? ([
+            ["all", "All File Types"], ["documents", "Documents"], ["images", "Images"], ["pdf", "PDF"],
+          ] as const).map(([k, text]) => (
+            <button key={k} type="button" className={fileType === k ? "is-selected" : ""} onClick={() => { setFileType(k); setOpenFilter(null); }}>
+              <span>{text}</span>{fileType === k ? <span>✓</span> : null}
+            </button>
+          )) : null}
+          {kind === "date" ? ([
+            ["all", "All Dates"], ["today", "Today"], ["week", "Last 7 days"], ["month", "Last 30 days"],
+          ] as const).map(([k, text]) => (
+            <button key={k} type="button" className={dateRange === k ? "is-selected" : ""} onClick={() => { setDateRange(k); setOpenFilter(null); }}>
+              <span>{text}</span>{dateRange === k ? <span>✓</span> : null}
+            </button>
+          )) : null}
+          {kind === "createdBy" ? (
+            <button type="button" className={createdBy === "me" ? "is-selected" : ""} onClick={() => { setCreatedBy(createdBy === "me" ? "all" : "me"); setOpenFilter(null); }}>
+              <span>Me</span>{createdBy === "me" ? <span>✓</span> : null}
+            </button>
+          ) : null}
         </div>
-        <div className="max-h-[50vh] overflow-y-auto p-1.5">
-          {rows.folders.map((f) => (
-            <a key={f.id} href={`/files/${f.id}`} onClick={onClose} className="flex items-center gap-2.5 rounded-md px-2.5 py-2 text-[13.5px] hover:bg-[#EEF3FE]">
-              <span className="text-[#1B66EA]"><Icons.folder size={16} /></span>
-              <span className="min-w-0 flex-1 truncate">{f.name}</span>
-            </a>
-          ))}
-          {rows.files.map((f) => (
-            <button key={f.id} type="button" onClick={() => { onClose(); window.dispatchEvent(new CustomEvent("workdrive:preview-by-id", { detail: { id: f.id } })); }}
-              className="flex w-full items-center gap-2.5 rounded-md px-2.5 py-2 text-start text-[13.5px] hover:bg-[#EEF3FE]">
-              <span className="text-slate-400"><Icons.doc size={16} /></span>
-              <span className="min-w-0 flex-1 truncate">{f.name}</span>
-            </button>
-          ))}
-          {!q.trim() ? <p className="px-3 py-4 text-center text-[13px] text-slate-400">{label("search.placeholder")}</p> : null}
+      ) : null}
+    </div>
+  );
+
+  const hasFilters = scope !== "all" || fileType !== "all" || dateRange !== "all" || createdBy !== "all";
+
+  return (
+    <div className="search-overlay" role="dialog" aria-modal="true" aria-label={label("search.placeholder")}>
+      <div className="search-overlay-backdrop" onClick={onClose} aria-hidden="true" />
+      <div className="search-overlay-panel">
+        <div className="search-mainbar">
+          <FilterChip kind="scope" icon={<Icons.search size={15} />}>{scope === "all" ? "Search All" : scope === "folders" ? "Folders" : "Files"}</FilterChip>
+          <input
+            ref={inputRef}
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+            placeholder="Search by name, keyword, object, and more"
+            aria-label={label("search.placeholder")}
+          />
+          <span className="search-mainbar-label">Search across Zoho</span>
+          <button type="button" className="search-overlay-close" onClick={onClose} aria-label="Close">×</button>
+        </div>
+
+        <div className="search-filters-row">
+          <FilterChip kind="fileType" icon={<Icons.doc size={14} />}>{fileType === "all" ? "All File Types" : fileType === "pdf" ? "PDF" : fileType[0].toUpperCase() + fileType.slice(1)}</FilterChip>
+          <FilterChip kind="date" icon={<Icons.clock size={14} />}>{dateRange === "all" ? "All Dates" : dateRange === "today" ? "Today" : dateRange === "week" ? "Last 7 days" : "Last 30 days"}</FilterChip>
+          <FilterChip kind="createdBy" icon={<Icons.users size={14} />}>{createdBy === "all" ? "Created by" : "Me"}</FilterChip>
+          {hasFilters ? <button type="button" className="search-clear-filters" onClick={clearFilters}>Clear Filters</button> : null}
+        </div>
+
+        <div className="search-results">
+          {!q.trim() ? (
+            <div className="search-empty-prompt">{label("search.placeholder")}</div>
+          ) : (
+            <>
+              {rows.folders.length > 0 ? (
+                <section>
+                  <div className="search-section-title">TEAM FOLDERS</div>
+                  {rows.folders.map((f) => (
+                    <Link key={f.id} href={`/files/${f.id}`} onClick={onClose} className="search-result-row">
+                      <span className="search-result-icon"><Icons.folder size={19} /></span>
+                      <span className="search-result-copy"><strong>{f.name}</strong><small>Team Folder</small></span>
+                    </Link>
+                  ))}
+                </section>
+              ) : null}
+              {rows.files.length > 0 ? (
+                <section>
+                  <div className="search-section-title">FILES</div>
+                  {rows.files.map((f) => (
+                    <button key={f.id} type="button" onClick={() => { onClose(); window.dispatchEvent(new CustomEvent("workdrive:preview-by-id", { detail: { id: f.id } })); }} className="search-result-row">
+                      <span className="search-result-icon file"><Icons.doc size={19} /></span>
+                      <span className="search-result-copy"><strong>{f.name}</strong><small>{f.updatedAt ? new Intl.DateTimeFormat(undefined, { dateStyle: "medium" }).format(new Date(f.updatedAt)) : "File"}</small></span>
+                    </button>
+                  ))}
+                </section>
+              ) : (
+                <div className="search-no-results">No results found</div>
+              )}
+            </>
+          )}
         </div>
       </div>
     </div>

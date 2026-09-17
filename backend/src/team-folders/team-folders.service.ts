@@ -30,6 +30,7 @@ export type TeamFolderListItem = {
   rootFolderId: string | null;
   role: TeamFolderRole | 'ORG_ADMIN';
   memberCount: number;
+  isMember: boolean;
   isPublicToOrg: boolean;
   /** Latest activity across the folder tree (folders + active files). */
   updatedAt: string | null;
@@ -123,6 +124,7 @@ export class TeamFoldersService {
         rootFolderId: await this.findRootFolderId(folder.id),
         role: (user.role === 'ADMIN' || user.role === 'SUPER_ADMIN') ? 'ORG_ADMIN' : (role as TeamFolderRole),
         memberCount: folder._count.members,
+        isMember: role !== null || user.role === 'ADMIN' || user.role === 'SUPER_ADMIN',
         isPublicToOrg: folder.isPublicToOrg,
         updatedAt: stats.updatedAt,
         totalSize: stats.totalSize,

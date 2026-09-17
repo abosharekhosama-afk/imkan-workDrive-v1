@@ -24,6 +24,7 @@ export type TeamFolderListItem = {
   rootFolderId: string | null;
   role: TeamFolderUserRole;
   memberCount: number;
+  isMember: boolean;
   isPublicToOrg: boolean;
   /** Latest activity across the folder tree (folders + active files). */
   updatedAt?: string | null;

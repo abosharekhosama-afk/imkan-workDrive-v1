@@ -20,27 +20,18 @@ function FolderGlyph() {
     </svg>
   );
 }
-
 function SearchIcon() {
   return <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true"><circle cx="11" cy="11" r="7" /><path d="m20 20-4-4" /></svg>;
 }
-
 function FilterIcon() {
   return <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true"><path d="M4 6h16M7 12h10M10 18h4" /></svg>;
 }
-
-function InfoIcon() {
-  return <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true"><circle cx="12" cy="12" r="9" /><path d="M12 10v6M12 7.5h.01" /></svg>;
-}
-
 function PinIcon({ filled = false }: { filled?: boolean }) {
   return <svg width="16" height="16" viewBox="0 0 24 24" fill={filled ? "currentColor" : "none"} stroke="currentColor" strokeWidth="1.7" aria-hidden="true"><path d="m9 4 6 0 1 5 3 3v1h-5v6l-2 2-2-2v-6H5v-1l3-3Z" /></svg>;
 }
-
 function MembersIcon() {
   return <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true"><circle cx="9" cy="8" r="3" /><path d="M3.5 20a5.5 5.5 0 0 1 11 0M17 11a3 3 0 0 0 0-6M16.5 15a4.8 4.8 0 0 1 4 5" /></svg>;
 }
-
 function MoreIcon() {
   return <svg width="17" height="17" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="5" cy="12" r="1.5" /><circle cx="12" cy="12" r="1.5" /><circle cx="19" cy="12" r="1.5" /></svg>;
 }
@@ -69,7 +60,9 @@ export default function TeamFoldersPage() {
       setTeamFolders(res.teamFolders);
     } catch (cause) {
       setError(errorMessageForStatus(cause instanceof ApiError ? cause.status : undefined, {
-        unauthenticated: label("error.unauthenticated"), forbidden: label("error.forbidden"), generic: label("error.generic"),
+        unauthenticated: label("error.unauthenticated"),
+        forbidden: label("error.forbidden"),
+        generic: label("error.generic"),
       }));
     } finally {
       setLoading(false);
@@ -77,6 +70,22 @@ export default function TeamFoldersPage() {
   }, [label]);
 
   useEffect(() => { void load(); }, [load]);
+
+  useEffect(() => {
+    let live = true;
+    import("../../../lib/api/favorites").then(({ listFavorites }) => listFavorites().then((rows) => {
+      if (!live) return;
+      const rootIds = new Set(teamFolders.map((tf) => tf.rootFolderId).filter(Boolean) as string[]);
+      const pinned = rows.filter((row) => row.resourceType === "FOLDER" && rootIds.has(row.resourceId));
+      setPinnedIds(new Set(
+        pinned
+          .map((row) => teamFolders.find((tf) => tf.rootFolderId === row.resourceId)?.id)
+          .filter(Boolean) as string[],
+      ));
+    }).catch(() => undefined));
+    return () => { live = false; };
+  }, [teamFolders]);
+
   useEffect(() => {
     const refresh = () => void load();
     window.addEventListener("workdrive:team-folders-changed", refresh);
@@ -87,6 +96,7 @@ export default function TeamFoldersPage() {
     const onDown = (event: MouseEvent) => {
       if (!(event.target instanceof Element)) return;
       if (!event.target.closest("[data-team-folder-menu], [data-team-folder-menu-trigger]")) setMenuId(null);
+      if (!event.target.closest("[data-team-folder-filter]")) setFilterOpen(false);
     };
     document.addEventListener("mousedown", onDown);
     return () => document.removeEventListener("mousedown", onDown);
@@ -96,94 +106,159 @@ export default function TeamFoldersPage() {
     const q = search.trim().toLocaleLowerCase();
     return [...teamFolders]
       .filter((tf) => !q || tf.name.toLocaleLowerCase().includes(q))
-      .filter((tf) => scopeFilter === "all" || scopeFilter === "joined" || (scopeFilter === "public" ? tf.isPublicToOrg : !tf.isPublicToOrg))
+      .filter((tf) => scopeFilter === "all" || (scopeFilter === "joined" ? tf.isMember : scopeFilter === "public" ? tf.isPublicToOrg : !tf.isPublicToOrg))
       .sort((a, b) => Number(pinnedIds.has(b.id)) - Number(pinnedIds.has(a.id)) || a.name.localeCompare(b.name));
   }, [teamFolders, search, pinnedIds, scopeFilter]);
 
   const createHref = "/files/team-folders/create";
-  const openRename = (tf: TeamFolderListItem) => { setMenuId(null); setRenameTarget(tf); setRenameName(tf.name); };
+
+  const openRename = (tf: TeamFolderListItem) => {
+    setMenuId(null);
+    setRenameTarget(tf);
+    setRenameName(tf.name);
+  };
+
   const remove = (tf: TeamFolderListItem) => {
     setMenuId(null);
     void (async () => {
       if (!window.confirm(locale === "ar" ? `هل تريد حذف مجلد الفريق «${tf.name}»؟` : `Delete team folder “${tf.name}”?`)) return;
-      setActionBusy(true); setError(null);
+      setActionBusy(true);
+      setError(null);
       try {
         await deleteTeamFolder(tf.id);
         setPinnedIds((prev) => { const next = new Set(prev); next.delete(tf.id); return next; });
         await load();
       } catch (cause) {
         setError(cause instanceof ApiError ? cause.message : label("error.generic"));
-      } finally { setActionBusy(false); }
+      } finally {
+        setActionBusy(false);
+      }
     })();
   };
 
+  const togglePin = async (tf: TeamFolderListItem) => {
+    const pinned = pinnedIds.has(tf.id);
+    if (!tf.rootFolderId) return;
+    setActionBusy(true);
+    setError(null);
+    try {
+      const { addFavorite, removeFavorite } = await import("../../../lib/api/favorites");
+      if (pinned) {
+        await removeFavorite("FOLDER", tf.rootFolderId);
+        setPinnedIds((prev) => {
+          const next = new Set(prev);
+          next.delete(tf.id);
+          return next;
+        });
+      } else {
+        await addFavorite("FOLDER", tf.rootFolderId);
+        setPinnedIds((prev) => new Set(prev).add(tf.id));
+      }
+    } catch (cause) {
+      setError(cause instanceof ApiError ? cause.message : label("error.generic"));
+    } finally {
+      setActionBusy(false);
+    }
+  };
+
   return (
-    <section className="flex min-h-full min-w-0 flex-col bg-white">
-      <div className="flex shrink-0 items-center gap-3 border-b border-slate-100 px-5 py-3">
-        <div className="relative">
-          <button type="button" onClick={() => setFilterOpen((v) => !v)} className="flex h-[35px] items-center gap-2 rounded-[18px] border border-slate-200 bg-white px-3.5 text-[13px] font-medium text-slate-700 shadow-sm hover:bg-slate-50" aria-expanded={filterOpen}>
+    <section className="team-folders-page flex min-h-full min-w-0 flex-col bg-white">
+      <div className="team-folders-toolbar flex shrink-0 items-center border-b border-slate-100 px-5" data-team-folders-toolbar>
+        <div className="relative shrink-0" data-team-folder-filter>
+          <button type="button" onClick={() => setFilterOpen((v) => !v)} className={`team-filter-trigger ${scopeFilter !== "joined" ? "is-active" : ""}`} aria-expanded={filterOpen} aria-haspopup="menu">
             <FilterIcon />
             <span>{scopeFilter === "joined" ? (locale === "ar" ? "مشترك" : "Joined") : scopeFilter === "public" ? "Public" : scopeFilter === "private" ? "Private" : "All"}</span>
-            <span className="text-[11px] text-slate-500">⌄</span>
+            <span className="team-filter-chevron">⌄</span>
           </button>
-          {filterOpen ? <div className="absolute start-0 top-10 z-30 w-40 rounded-xl border border-slate-200 bg-white p-1.5 shadow-lg">{([['joined','Joined'],['all','All'],['public','Public'],['private','Private']] as const).map(([key,text]) => <button key={key} type="button" className={`flex w-full rounded-lg px-3 py-2 text-start text-[13px] ${scopeFilter === key ? "bg-[#EEF4FF] text-[#2457B8]" : "text-slate-700 hover:bg-slate-50"}`} onClick={() => { setScopeFilter(key); setFilterOpen(false); }}>{locale === "ar" && key === "joined" ? "مشترك" : text}</button>)}</div> : null}
+          {filterOpen ? (
+            <div className="team-filter-menu" role="menu">
+              {([["joined", locale === "ar" ? "مشترك" : "Joined"], ["all", locale === "ar" ? "الكل" : "All"], ["public", "Public"], ["private", "Private"]] as const).map(([key, text]) => (
+                <button key={key} type="button" role="menuitem" className={scopeFilter === key ? "is-selected" : ""} onClick={() => { setScopeFilter(key); setFilterOpen(false); }}>
+                  <span>{text}</span>{scopeFilter === key ? <span aria-hidden="true">✓</span> : null}
+                </button>
+              ))}
+            </div>
+          ) : null}
         </div>
-        <label className="relative flex h-[35px] w-[285px] max-w-[42vw] items-center">
-          <span className="absolute start-3 text-slate-400"><SearchIcon /></span>
-          <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder={label("files.searchPlaceholder")} className="h-full w-full rounded-[18px] border border-slate-200 bg-white ps-9 pe-3 text-[13px] text-slate-700 outline-none placeholder:text-slate-400 focus:border-[color:var(--wd-primary)] focus:ring-2 focus:ring-[color:var(--wd-primary)]/10" />
+
+        <label className="team-folders-search">
+          <SearchIcon />
+          <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder={locale === "ar" ? "بحث" : "Search"} aria-label={locale === "ar" ? "بحث في مجلدات الفريق" : "Search Team Folders"} />
+          {search ? <button type="button" className="team-search-clear" onClick={() => setSearch("")} aria-label={locale === "ar" ? "مسح البحث" : "Clear search"}>×</button> : null}
         </label>
+
         <div className="ms-auto flex items-center gap-2">
-          <Link href={createHref} className="inline-flex h-[35px] items-center gap-1.5 rounded-[18px] bg-[color:var(--wd-primary)] px-4 text-[13px] font-semibold text-white shadow-sm transition hover:bg-[color:var(--wd-primary-dark)]">
-            <span className="text-[17px] leading-none">+</span>
-            {locale === "ar" ? "إنشاء مجلد فريق" : "Create Team Folder"}
-          </Link>
-          <button type="button" className="wd-icon-btn" aria-label={locale === "ar" ? "عرض القائمة" : "List view"}><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M4 6h16M4 12h16M4 18h16" /></svg></button>
+          <Link href={createHref} className="team-create-button"><span aria-hidden="true">+</span>{locale === "ar" ? "إنشاء مجلد فريق" : "Create Team Folder"}</Link>
+          <button type="button" className="team-view-button" aria-label={locale === "ar" ? "عرض القائمة" : "List view"} title={locale === "ar" ? "عرض القائمة" : "List view"}>
+            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" aria-hidden="true"><path d="M5 6h14M5 12h14M5 18h14" /></svg>
+          </button>
         </div>
       </div>
 
       {error ? <AlertBanner message={error} action={<button type="button" className="imkan-button-secondary" onClick={() => void load()}>{label("feedback.retry")}</button>} /> : null}
 
-      {loading ? <SkeletonLoader rows={5} columns={4} /> : visibleFolders.length === 0 ? (
-        <EmptyState title={search ? (locale === "ar" ? "لا توجد نتائج" : "No matching Team Folders") : label("teamFolders.empty")} description={search ? undefined : label("teamFolders.emptyDescription")} action={!search ? <Link href={createHref} className="imkan-button">{locale === "ar" ? "إنشاء مجلد فريق" : "Create Team Folder"}</Link> : undefined} />
+      {loading ? (
+        <div className="team-folders-list-loading"><SkeletonLoader rows={4} columns={1} /></div>
+      ) : visibleFolders.length === 0 ? (
+        <div className="flex min-h-0 flex-1 items-center justify-center">
+          <EmptyState
+            title={search ? (locale === "ar" ? "لا توجد نتائج" : "No matching Team Folders") : label("teamFolders.empty")}
+            description={search ? undefined : label("teamFolders.emptyDescription")}
+            action={!search ? <Link href={createHref} className="imkan-button">{locale === "ar" ? "إنشاء مجلد فريق" : "Create Team Folder"}</Link> : undefined}
+          />
+        </div>
       ) : (
-        <div className="min-h-0 min-w-0 flex-1 overflow-x-auto">
-          <div className="min-h-full min-w-[860px] px-5">
-            <div className="grid grid-cols-[minmax(360px,1fr)_180px_120px_150px_44px] items-center border-b border-slate-100 py-3 text-[12px] font-medium text-slate-500" aria-hidden="true">
-              <span>{locale === "ar" ? "الاسم" : "Name"}</span><span>{locale === "ar" ? "آخر تعديل" : "Last Modified"}</span><span>{locale === "ar" ? "الحجم" : "Size"}</span><span>{locale === "ar" ? "الأعضاء" : "Members"}</span><span />
-            </div>
-            <div>
-              {visibleFolders.map((tf) => (
-                <div key={tf.id} className="group relative grid min-h-[58px] grid-cols-[minmax(360px,1fr)_180px_120px_150px_44px] items-center border-b border-slate-100 text-[13px] text-slate-700 transition hover:bg-slate-50" data-selected={detailsTf?.id === tf.id || undefined}>
-                  <Link href={tf.rootFolderId ? `/files/${tf.rootFolderId}` : createHref} className="flex min-w-0 items-center gap-3 rounded-md py-2 outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--wd-primary)]">
-                    <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md border border-[#e3e6ea] bg-white text-[#30353a]"><FolderGlyph /></span>
-                    <span className="min-w-0">
-                      <span className="flex min-w-0 items-center gap-1.5 font-medium text-slate-800"><span className="truncate">{tf.name}</span>{tf.role !== "ORG_ADMIN" ? <span className="shrink-0 text-slate-400" title={tf.role}>{tf.role === "VIEWER" ? "🔒" : ""}</span> : null}</span>
-                      <span className="mt-0.5 block truncate text-[11px] text-slate-400">{label(`teamFolders.role.${tf.role}` as Parameters<typeof label>[0]) ?? tf.role} · {tf.memberCount} {locale === "ar" ? "عضو" : "members"}</span>
+        <div className="team-folders-table-wrap min-h-0 min-w-0 flex-1 overflow-auto">
+          <div className="team-folders-table min-w-[720px]">
+            {visibleFolders.map((tf, index) => {
+              const pinned = pinnedIds.has(tf.id);
+              return (
+                <div key={tf.id} className={`team-folder-row group ${index === 0 && pinned ? "is-pinned" : ""}`} data-selected={detailsTf?.id === tf.id || undefined}>
+                  <Link href={tf.rootFolderId ? `/files/${tf.rootFolderId}` : createHref} className="team-folder-main">
+                    <span className="team-folder-glyph"><FolderGlyph /></span>
+                    <span className="team-folder-copy">
+                      <span className="team-folder-name">
+                        <span className="truncate">{tf.name}</span>
+                        {!tf.isPublicToOrg ? <span className="team-folder-lock" title={locale === "ar" ? "مجلد خاص" : "Private Team Folder"} aria-label={locale === "ar" ? "خاص" : "Private"}>●</span> : null}
+                      </span>
                     </span>
                   </Link>
-                  <span className="px-3 text-[12px] text-slate-500">{tf.updatedAt ? new Intl.DateTimeFormat(undefined, { dateStyle: "medium" }).format(new Date(tf.updatedAt)) : "—"}</span>
-                  <span className="px-3 text-[12px] text-slate-500">{formatBytes(tf.totalSize ?? 0)}</span>
-                  <button type="button" className="flex items-center gap-2 rounded-md px-2 py-1 text-start text-slate-600 hover:bg-slate-100" onClick={() => setActiveMembersTf(tf)} title={locale === "ar" ? "إدارة الأعضاء" : "Manage members"}><MembersIcon /><span className="truncate">{tf.memberCount} {locale === "ar" ? "عضو" : "Member"}{tf.memberCount === 1 ? "" : "s"}</span></button>
-                  <div className="relative flex justify-end" data-team-folder-menu>
-                    <button type="button" data-team-folder-menu-trigger aria-expanded={menuId === tf.id} className="flex h-8 w-8 items-center justify-center rounded-full text-slate-400 opacity-0 transition hover:bg-slate-100 hover:text-slate-700 group-hover:opacity-100 focus:opacity-100" onClick={(e) => { e.preventDefault(); e.stopPropagation(); setMenuId((id) => id === tf.id ? null : tf.id); }} aria-label={locale === "ar" ? "المزيد" : "More"}><MoreIcon /></button>
-                    {menuId === tf.id ? (
-                      <div className="absolute end-0 top-9 z-[100] w-48 rounded-xl border border-slate-200 bg-white p-1.5 shadow-[0_8px_28px_rgba(0,0,0,.12)]" data-team-folder-menu>
-                        <button type="button" className="wd-menu-item min-h-[34px] text-start" onClick={() => { setDetailsTf(tf); setMenuId(null); }}>{locale === "ar" ? "التفاصيل" : "Details"}</button>
-                        <button type="button" className="wd-menu-item min-h-[34px] text-start" onClick={() => { setActiveMembersTf(tf); setMenuId(null); }}>{locale === "ar" ? "الأعضاء" : "Members"}</button>
-                        <button type="button" className="wd-menu-item min-h-[34px] text-start" onClick={() => openRename(tf)}>{label("files.rename")}</button>
-                        <button type="button" className="wd-menu-item min-h-[34px] text-start text-red-600 hover:bg-red-50" onClick={() => remove(tf)}>{label("files.delete")}</button>
-                      </div>
-                    ) : null}
+
+                  <button type="button" className="team-folder-members" onClick={() => setActiveMembersTf(tf)} title={locale === "ar" ? "إدارة أعضاء مجلد الفريق" : "Manage Team Folder members"}>
+                    <MembersIcon /><span>{tf.memberCount} {locale === "ar" ? "عضو" : tf.memberCount === 1 ? "Member" : "Members"}</span>
+                  </button>
+
+                  <div className="team-folder-row-actions" data-team-folder-menu>
+                    <button type="button" className={`team-folder-pin ${pinned ? "is-pinned" : ""}`} aria-pressed={pinned} disabled={actionBusy || !tf.rootFolderId} onClick={(e) => { e.preventDefault(); e.stopPropagation(); void togglePin(tf); }} title={pinned ? (locale === "ar" ? "إلغاء التثبيت" : "Unpin") : (locale === "ar" ? "تثبيت" : "Pin")}>
+                      <PinIcon filled={pinned} /><span className="team-folder-pin-label">{pinned ? (locale === "ar" ? "إلغاء التثبيت" : "Unpin") : (locale === "ar" ? "تثبيت" : "Pin")}</span>
+                    </button>
+                    <div className="relative">
+                      <button type="button" data-team-folder-menu-trigger aria-expanded={menuId === tf.id} className="team-folder-more" onClick={(e) => { e.preventDefault(); e.stopPropagation(); setMenuId((id) => id === tf.id ? null : tf.id); }} aria-label={locale === "ar" ? "المزيد" : "More"}><MoreIcon /></button>
+                      {menuId === tf.id ? (
+                        <div className="team-folder-menu" data-team-folder-menu role="menu">
+                          <button type="button" onClick={() => { setDetailsTf(tf); setMenuId(null); }}>{locale === "ar" ? "التفاصيل" : "Details"}</button>
+                          <button type="button" onClick={() => { setActiveMembersTf(tf); setMenuId(null); }}>{locale === "ar" ? "الأعضاء" : "Members"}</button>
+                          <button type="button" onClick={() => openRename(tf)}>{label("files.rename")}</button>
+                          <button type="button" className="danger" onClick={() => remove(tf)}>{label("files.delete")}</button>
+                        </div>
+                      ) : null}
+                    </div>
                   </div>
+
                   {detailsTf?.id === tf.id ? (
-                    <div className="absolute end-12 top-12 z-[90] w-[280px] rounded-xl border border-slate-200 bg-white p-3 shadow-[0_8px_28px_rgba(0,0,0,.12)]">
+                    <div className="team-folder-details-card">
                       <div className="flex items-center gap-2 border-b border-slate-100 pb-2"><span className="text-slate-700"><FolderGlyph /></span><strong className="truncate text-[13px]">{tf.name}</strong></div>
-                      <div className="grid grid-cols-2 gap-2 pt-3 text-[11px] text-slate-500"><span>{locale === "ar" ? "الدور" : "Role"}</span><span className="text-end text-slate-700">{tf.role}</span><span>{locale === "ar" ? "آخر تعديل" : "Modified"}</span><span className="text-end text-slate-700">{tf.updatedAt ? new Intl.DateTimeFormat(undefined, { dateStyle: "medium" }).format(new Date(tf.updatedAt)) : "—"}</span><span>{locale === "ar" ? "الحجم" : "Size"}</span><span className="text-end text-slate-700">{formatBytes(tf.totalSize ?? 0)}</span></div>
+                      <div className="grid grid-cols-2 gap-y-2 pt-3 text-[11px] text-slate-500">
+                        <span>{locale === "ar" ? "الدور" : "Role"}</span><span className="text-end text-slate-700">{tf.role}</span>
+                        <span>{locale === "ar" ? "الأعضاء" : "Members"}</span><span className="text-end text-slate-700">{tf.memberCount}</span>
+                        <span>{locale === "ar" ? "آخر تعديل" : "Modified"}</span><span className="text-end text-slate-700">{tf.updatedAt ? new Intl.DateTimeFormat(undefined, { dateStyle: "medium" }).format(new Date(tf.updatedAt)) : "—"}</span>
+                        <span>{locale === "ar" ? "الحجم" : "Size"}</span><span className="text-end text-slate-700">{formatBytes(tf.totalSize ?? 0)}</span>
+                      </div>
                     </div>
                   ) : null}
                 </div>
-              ))}
-            </div>
+              );
+            })}
           </div>
         </div>
       )}
@@ -192,8 +267,22 @@ export default function TeamFoldersPage() {
         <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/30 px-4" role="dialog" aria-modal="true">
           <div className="w-[min(420px,100%)] rounded-xl border border-slate-200 bg-white p-4 shadow-2xl">
             <h2 className="text-sm font-semibold text-slate-800">{locale === "ar" ? "إعادة تسمية مجلد الفريق" : "Rename Team Folder"}</h2>
-            <input autoFocus value={renameName} onChange={(e) => setRenameName(e.target.value)} className="imkan-input mt-3 w-full" disabled={actionBusy} onKeyDown={(e) => { if (e.key !== "Enter") return; const name = renameName.trim(); if (!name) return; setActionBusy(true); void renameTeamFolder(renameTarget.id, name).then(() => { setRenameTarget(null); return load(); }).catch((cause) => setError(cause instanceof ApiError ? cause.message : label("error.generic"))).finally(() => setActionBusy(false)); }} />
-            <div className="mt-4 flex justify-end gap-2"><button type="button" className="imkan-button-secondary" onClick={() => setRenameTarget(null)} disabled={actionBusy}>{locale === "ar" ? "إلغاء" : "Cancel"}</button><button type="button" className="imkan-button" disabled={actionBusy || !renameName.trim()} onClick={() => { const name = renameName.trim(); if (!name) return; setActionBusy(true); void renameTeamFolder(renameTarget.id, name).then(() => { setRenameTarget(null); return load(); }).catch((cause) => setError(cause instanceof ApiError ? cause.message : label("error.generic"))).finally(() => setActionBusy(false)); }}>{actionBusy ? "…" : locale === "ar" ? "حفظ" : "Save"}</button></div>
+            <input autoFocus value={renameName} onChange={(e) => setRenameName(e.target.value)} className="imkan-input mt-3 w-full" disabled={actionBusy} onKeyDown={(e) => {
+              if (e.key !== "Enter") return;
+              const name = renameName.trim();
+              if (!name) return;
+              setActionBusy(true);
+              void renameTeamFolder(renameTarget.id, name).then(() => { setRenameTarget(null); return load(); }).catch((cause) => setError(cause instanceof ApiError ? cause.message : label("error.generic"))).finally(() => setActionBusy(false));
+            }} />
+            <div className="mt-4 flex justify-end gap-2">
+              <button type="button" className="imkan-button-secondary" onClick={() => setRenameTarget(null)} disabled={actionBusy}>{locale === "ar" ? "إلغاء" : "Cancel"}</button>
+              <button type="button" className="imkan-button" disabled={actionBusy || !renameName.trim()} onClick={() => {
+                const name = renameName.trim();
+                if (!name) return;
+                setActionBusy(true);
+                void renameTeamFolder(renameTarget.id, name).then(() => { setRenameTarget(null); return load(); }).catch((cause) => setError(cause instanceof ApiError ? cause.message : label("error.generic"))).finally(() => setActionBusy(false));
+              }}>{actionBusy ? "…" : locale === "ar" ? "حفظ" : "Save"}</button>
+            </div>
           </div>
         </div>
       ) : null}

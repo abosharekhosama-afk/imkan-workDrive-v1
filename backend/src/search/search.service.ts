@@ -14,7 +14,7 @@ export class SearchService {
     private readonly permissions: PermissionService,
   ) {}
 
-  async search(user: AccessTokenPayload, query: string) {
+  async search(user: AccessTokenPayload, query: string, filter: 'all' | 'folders' | 'files' | 'recent' = 'all') {
     // My-Folder isolation (privacy P0): personal folders/files are visible only
     // to their own owner; org shares and team folders stay searchable. The
     // narrow Prisma predicates below are defense-in-depth on top of canRead.
@@ -62,7 +62,18 @@ export class SearchService {
         visibleFiles.push(rest);
       }
     }
-    return { query, folders: visibleFolders, files: visibleFiles };
+    const recentSince = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+    const foldersByFilter = filter === 'files'
+      ? []
+      : filter === 'recent'
+        ? visibleFolders.filter((folder) => folder.updatedAt >= recentSince)
+        : visibleFolders;
+    const filesByFilter = filter === 'folders'
+      ? []
+      : filter === 'recent'
+        ? visibleFiles.filter((file) => file.updatedAt >= recentSince)
+        : visibleFiles;
+    return { query, folders: foldersByFilter, files: filesByFilter };
   }
 
   private async canReadFolder(
