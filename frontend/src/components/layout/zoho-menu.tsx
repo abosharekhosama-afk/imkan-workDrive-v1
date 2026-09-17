@@ -60,6 +60,11 @@ export function ZohoMenu({ open, onClose, onSelect, items, labelledBy, align = "
   const style: React.CSSProperties = {
     top: pos.top,
     width: menuW,
+    // Cap the card to the space left below the trigger and scroll inside it, so
+    // the tail of a long card (e.g. the New card) never ends up outside the
+    // viewport where its action buttons cannot be clicked.
+    maxHeight: Math.max(160, window.innerHeight - pos.top - 8),
+    overflowY: "auto",
     ...(rtl ? { right: Math.max(8, window.innerWidth - pos.start - menuW) } : { left: pos.start }),
   };
   return createPortal(

@@ -116,7 +116,14 @@ export function ActionToolbar({
   useEffect(() => {
     if (!openMenu) return;
     const onDown = (e: MouseEvent) => {
-      if (rootRef.current?.contains(e.target as Node)) return;
+      const target = e.target instanceof Element ? e.target : null;
+      if (target && rootRef.current?.contains(target)) return;
+      // The New / Record cards are rendered by ZohoMenu through a portal on
+      // document.body, so their items are NOT descendants of the toolbar
+      // container. Without this guard a mousedown inside an open card counts
+      // as an "outside click", the card unmounts before the item receives its
+      // click event, and the action silently never runs.
+      if (target?.closest('[role="menu"], .wd-menu')) return;
       setOpenMenu(null);
     };
     const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setOpenMenu(null); };

@@ -32,7 +32,7 @@ function Frame({ children }: { children: ReactNode }) {
       <div className="flex min-w-0 flex-1 flex-col">
         <TopHeader />
         <div className="flex min-h-0 flex-1">
-          <div className="flex min-w-0 flex-1 flex-col">{children}</div>
+          <div className="flex min-w-0 flex-1 flex-col overflow-y-auto">{children}</div>
           <InspectorPanel />
           <InspectorDock />
         </div>

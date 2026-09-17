@@ -7,6 +7,7 @@ import { formatDateLocalized } from "@/lib/localized";
 import { Icons } from "@/components/layout/icons";
 import { FileIcon } from "@/components/file-icon";
 import { Toast } from "@/components/toast";
+import { normalizePublicAppUrl } from "@/lib/public-url";
 
 export default function SharedLinksPage() {
   const { label, locale } = useLocale();
@@ -37,7 +38,7 @@ export default function SharedLinksPage() {
   const handleCopy = async (url?: string) => {
     if (!url) return;
     try {
-      await navigator.clipboard.writeText(url);
+      await navigator.clipboard.writeText(normalizePublicAppUrl(url));
       setToast(label("share.copied"));
     } catch {
       setToast(label("error.generic"));

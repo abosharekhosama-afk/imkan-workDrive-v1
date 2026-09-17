@@ -615,6 +615,8 @@ export function FileBrowser({
             } else {
               await copyFile(copyTarget.id, destinationFolderId);
             }
+            // Copy is a successful content mutation; refresh the current view
+            // before closing the modal so the new item is visible immediately.
             await load();
           }}
         />

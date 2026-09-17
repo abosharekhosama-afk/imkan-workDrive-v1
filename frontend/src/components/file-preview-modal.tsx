@@ -17,6 +17,7 @@ import { formatBytes } from "../lib/api/quota";
 import { requestDownload } from "../lib/api/files";
 import { triggerDownload } from "../lib/api/download";
 import { buildCreateShareBody, createShare } from "../lib/api/shares";
+import { normalizePublicAppUrl } from "../lib/public-url";
 
 export interface FilePreviewModalTarget {
   id: string;
@@ -114,7 +115,7 @@ export function FilePreviewModal({ target, onClose, onPrevFile, onNextFile }: Fi
       const result = await createShare(
         buildCreateShareBody({ resourceType: "FILE", resourceId: activeTarget.id, canDownload: true }),
       );
-      await navigator.clipboard.writeText(result.link_url);
+      await navigator.clipboard.writeText(normalizePublicAppUrl(result.link_url));
       showToast(label("preview.shareCopied"));
     } catch {
       showToast(label("preview.error"));

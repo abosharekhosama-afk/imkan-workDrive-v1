@@ -1070,7 +1070,10 @@ export class FilesService {
       return newFile;
     });
     this.dispatchWorkflowFileEvent(user, 'copy', copied);
-    return copied;
+    // Do not return the Prisma model directly: File.size is a BigInt and
+    // Express JSON serialization would throw after the transaction has already
+    // committed, making a successful copy look like a failed request.
+    return { id: copied.id, name: copied.name, action: 'copy' };
   }
 
   async permanentDelete(user: AccessTokenPayload, id: string) {

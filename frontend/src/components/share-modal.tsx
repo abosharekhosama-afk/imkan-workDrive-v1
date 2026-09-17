@@ -7,6 +7,7 @@ import { Toast } from "./toast";
 import { buildCreateShareBody, createShare } from "../lib/api/shares";
 import { listOrganizationMembers, type OrgMember } from "../lib/api/organization";
 import { friendlyErrorMessageKey } from "../lib/friendly-error";
+import { normalizePublicAppUrl } from "../lib/public-url";
 
 type SharePermission = "VIEW" | "COMMENT" | "EDIT";
 type ExpiryKind = "never" | "1d" | "7d" | "30d" | "custom";
@@ -107,7 +108,7 @@ export function ShareModal({
           permission,
         }),
       );
-      setLinkUrl(result.link_url);
+      setLinkUrl(normalizePublicAppUrl(result.link_url));
       return true;
     } catch (cause) {
       setError(label(friendlyErrorMessageKey(cause)));

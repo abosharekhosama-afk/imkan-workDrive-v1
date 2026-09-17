@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useLocale } from "./locale-provider";
 import { Modal } from "./modal";
 import { uploadFileToFolder } from "../lib/api/upload-file";
+import { createTeamFolder } from "../lib/api/team-folders";
 
 export type NewItemKind = "doc" | "sheet" | "slide" | "link" | "code";
 
@@ -56,6 +57,19 @@ export function NewItemHost() {
   const [name, setName] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const [teamFolderOpen, setTeamFolderOpen] = useState(false);
+  const [teamFolderName, setTeamFolderName] = useState("");
+  const [teamFolderBusy, setTeamFolderBusy] = useState(false);
+
+  useEffect(() => {
+    const onTeamFolder = () => {
+      setTeamFolderOpen(true);
+      setTeamFolderName("");
+      setError("");
+    };
+    window.addEventListener("workdrive:new-team-folder", onTeamFolder);
+    return () => window.removeEventListener("workdrive:new-team-folder", onTeamFolder);
+  }, []);
 
   useEffect(() => {
     const handler = (event: Event) => {
@@ -69,7 +83,42 @@ export function NewItemHost() {
     return () => window.removeEventListener("workdrive:new-file", handler);
   }, []);
 
-  if (!detail) return null;
+
+  const createTeamFolderFromToolbar = async () => {
+    const cleanName = teamFolderName.trim();
+    if (!cleanName) return;
+    setTeamFolderBusy(true);
+    setError("");
+    try {
+      await createTeamFolder(cleanName);
+      window.dispatchEvent(new Event("workdrive:team-folders-changed"));
+      setTeamFolderOpen(false);
+      setTeamFolderName("");
+    } catch (e) {
+      setError(e instanceof Error ? e.message : (locale === "ar" ? "تعذر إنشاء مجلد الفريق." : "Unable to create the team folder."));
+    } finally {
+      setTeamFolderBusy(false);
+    }
+  };
+
+  if (!detail && !teamFolderOpen) return null;
+  if (!detail && teamFolderOpen) {
+    return (
+      <Modal title={locale === "ar" ? "إنشاء مجلد فريق" : "New team folder"} onClose={() => !teamFolderBusy && setTeamFolderOpen(false)}>
+        <div className="space-y-3">
+          <label className="flex flex-col gap-1 text-[11px] text-slate-500">
+            {locale === "ar" ? "اسم مجلد الفريق" : "Team folder name"}
+            <input autoFocus value={teamFolderName} onChange={(e) => setTeamFolderName(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") void createTeamFolderFromToolbar(); }} className="imkan-input" disabled={teamFolderBusy} />
+          </label>
+          {error ? <div className="rounded-lg bg-red-50 px-3 py-2 text-[11px] text-red-700">{error}</div> : null}
+          <div className="flex justify-end gap-2 border-t border-slate-100 pt-3">
+            <button type="button" className="imkan-button-secondary" disabled={teamFolderBusy} onClick={() => setTeamFolderOpen(false)}>{locale === "ar" ? "إلغاء" : "Cancel"}</button>
+            <button type="button" className="imkan-button" disabled={teamFolderBusy || !teamFolderName.trim()} onClick={() => void createTeamFolderFromToolbar()}>{teamFolderBusy ? (locale === "ar" ? "جارٍ الإنشاء…" : "Creating…") : (locale === "ar" ? "إنشاء" : "Create")}</button>
+          </div>
+        </div>
+      </Modal>
+    );
+  }
   const definition = DEFINITIONS[detail.kind];
   const title = LABELS[detail.kind][locale === "ar" ? "ar" : "en"];
 

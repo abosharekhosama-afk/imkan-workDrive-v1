@@ -19,6 +19,7 @@ import {
   type Organization,
 } from "../../lib/api/organization";
 import { ApiError } from "../../lib/api/client";
+import { normalizePublicAppUrl } from "../../lib/public-url";
 
 function initialsOf(value: string): string {
   return value.slice(0, 2).toUpperCase();
@@ -103,7 +104,7 @@ export default function OrganizationPage() {
     setInviteUrl("");
     try {
       const r = await inviteOrganizationMember(email, role);
-      setInviteUrl(r.inviteUrl);
+      setInviteUrl(normalizePublicAppUrl(r.inviteUrl));
       setEmail("");
       await load();
     } catch (e) {
