@@ -16,7 +16,7 @@ function Frame({ children }: { children: ReactNode }) {
   if (pathname.startsWith("/auth/")) return <>{children}</>;
   const width = sidebarCollapsed ? "md:w-16" : "md:w-[264px]";
   return (
-    <div className="flex h-screen w-full overflow-hidden bg-white">
+    <div className="workdrive-frame flex h-screen min-h-0 w-full overflow-hidden bg-white">
       <WipHost /><ExternalAppsHost /><NewItemHost /><RecordingHost />
       <aside className={`hidden shrink-0 md:block ${width}`} aria-label="primary">
         <PrimarySidebar />
@@ -32,7 +32,7 @@ function Frame({ children }: { children: ReactNode }) {
       <div className="flex min-w-0 flex-1 flex-col">
         <TopHeader />
         <div className="flex min-h-0 flex-1">
-          <div className="flex min-w-0 flex-1 flex-col overflow-y-auto">{children}</div>
+          <div className="workdrive-main-scroll flex min-h-0 min-w-0 flex-1 flex-col overflow-y-auto">{children}</div>
           <InspectorPanel />
           <InspectorDock />
         </div>

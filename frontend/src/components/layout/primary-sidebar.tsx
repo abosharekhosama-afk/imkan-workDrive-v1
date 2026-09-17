@@ -32,7 +32,7 @@ export function PrimarySidebar() {
   const close = () => setMobileNavOpen(false);
   const teamActive = pathname.startsWith("/files/team-folders");
   return (
-    <div className="flex h-full w-full flex-col bg-[#282828] text-[#EEEEEE]">
+    <div className="primary-sidebar flex h-full min-h-0 w-full flex-col overflow-hidden bg-[#282828] text-[#EEEEEE]">
       <div className="flex h-12 shrink-0 items-center gap-2 px-4 shadow-[0_1px_2px_rgba(0,0,0,0.3)]">
         <button type="button" className="rounded-[8px] p-1.5 text-[#EEEEEE] hover:bg-white/10" title={label("nav.appSwitcher")} aria-label={label("nav.appSwitcher")}>
           <Icons.grid size={18} />
@@ -46,7 +46,7 @@ export function PrimarySidebar() {
       </div>
       <SidebarNav />
       {c ? null : (
-        <div className="px-2 pb-1">
+        <div className="primary-sidebar-team min-h-0 max-h-[220px] overflow-y-auto px-2 pb-1">
           <div className="flex items-center">
             <Link href="/files/team-folders" onClick={close} aria-current={teamActive ? "page" : undefined}
               className={`flex h-10 min-w-0 flex-1 items-center gap-4 rounded-[16px] px-[15px] text-[14px] font-medium ${teamActive ? "bg-[var(--wd-active)] font-bold text-[#DBE3FA]" : "text-[#EEEEEE] hover:bg-white/[0.08]"}`}>

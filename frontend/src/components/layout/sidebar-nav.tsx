@@ -42,7 +42,7 @@ export function SidebarNav() {
     { href: "/files", key: "files.breadcrumb.root", icon: "folder", active: myActive, spaced: true },
   ];
   return (
-    <nav className="min-h-0 flex-1 overflow-y-auto px-2 pt-4" aria-label="workspace">
+    <nav className="workspace-sidebar-scroll min-h-0 flex-1 overflow-y-auto px-2 pt-4" aria-label="workspace">
       <div className="flex flex-col">{items.map((i) => <Row key={`${i.key}-${i.href}`} item={i} collapsed={c} onNav={close} />)}</div>
     </nav>
   );

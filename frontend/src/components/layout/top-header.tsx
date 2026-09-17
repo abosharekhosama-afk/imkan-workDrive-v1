@@ -3,28 +3,26 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { useLocale } from "../locale-provider";
-import type { MessageKey } from "../../i18n";
 import { ThemeToggle } from "../theme-toggle";
 import { listNotifications, type NotificationRecord } from "../../lib/api/notifications";
 import { getTeamFolder, listTeamFolderMembers, type TeamFolderRecord } from "../../lib/api/team-folders";
-import { useShell, readScope, type ScopeDetail } from "./shell-context";
+import { readScope, type ScopeDetail } from "./shell-context";
 import { Icons } from "./icons";
 import { AccountMenu } from "./account-menu";
-import { ZohoMenu } from "./zoho-menu";
 import { NotificationPanel } from "./notification-panel";
+import { OrgSwitcher } from "../org-switcher";
 export function TopHeader() {
   const { label, locale, setLocale } = useLocale();
   const router = useRouter();
   const pathname = usePathname();
-  const { setMobileNavOpen } = useShell();
   const [name, setName] = useState("");
   const [org, setOrg] = useState("");
+  const [role, setRole] = useState("");
   const [notes, setNotes] = useState<NotificationRecord[]>([]);
   const [scope, setScope] = useState<ScopeDetail>({ folderId: null, folderName: null });
   const [teamFolder, setTeamFolder] = useState<TeamFolderRecord | null>(null);
   const [teamMemberCount, setTeamMemberCount] = useState(0);
   const [manageOpen, setManageOpen] = useState(false);
-  const [treeOpen, setTreeOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
   const [notifOpen, setNotifOpen] = useState(false);
   const searchInputRef = useRef<HTMLInputElement | null>(null);
@@ -32,9 +30,10 @@ export function TopHeader() {
     try {
       const raw = localStorage.getItem("workdrive_user");
       if (raw) {
-        const u = JSON.parse(raw) as { name?: string; email?: string; organizationName?: string };
+        const u = JSON.parse(raw) as { name?: string; email?: string; organizationName?: string; role?: string };
         setName(u.name || u.email || "");
         setOrg(u.organizationName ?? "");
+        setRole(u.role ?? "");
       }
     } catch { /* noop */ }
     const token = typeof window !== "undefined" ? localStorage.getItem("workdrive_access_token") : null;
@@ -101,7 +100,7 @@ export function TopHeader() {
       <header className="team-context-header">
         <div className="team-context-title"><span className="team-context-folder"><Icons.folder size={23} /></span><span className="team-context-name">Team Folders</span></div>
         <div className="team-context-actions">
-          <div className="team-org-switch"><span className="team-org-avatar">{(org || "I").slice(0, 1).toUpperCase()}</span><span>{org || "IMKAN"}</span><Icons.chevD size={13} /></div>
+          <OrgSwitcher organizationName={org || "IMKAN"} userRole={role} />
           <button type="button" className="wd-icon-btn" aria-label={label("search.placeholder")} onClick={() => setSearchOpen(true)}><Icons.search size={17} /></button>
           <button type="button" className="wd-icon-btn" aria-label="Announcements"><Icons.horn size={17} /></button>
           <button type="button" className="wd-icon-btn" aria-label={label("nav.notifications")} onClick={() => setNotifOpen((v) => !v)}><Icons.bell size={17} /></button>
@@ -145,7 +144,7 @@ export function TopHeader() {
         </div>
         {!isTeamManageRoute ? (
           <div className="team-context-actions">
-            <div className="team-org-switch"><span className="team-org-avatar">{(org || 'I').slice(0,1).toUpperCase()}</span><span>{org || 'IMKAN'}</span><Icons.chevD size={13} /></div>
+            <OrgSwitcher organizationName={org || "IMKAN"} userRole={role} />
             <button type="button" className="wd-icon-btn" aria-label={label('search.placeholder')} onClick={() => setSearchOpen(true)}><Icons.search size={17} /></button>
             <button type="button" className="wd-icon-btn" aria-label="Announcements"><Icons.horn size={17} /></button>
             <button type="button" className="wd-icon-btn relative" aria-label={label('nav.notifications')} onClick={() => setNotifOpen((v) => !v)}><Icons.bell size={17} />{unread > 0 ? <span className="absolute end-1 top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-[#DC2626] px-1 text-[10px] font-bold text-white">{unread > 9 ? '9+' : unread}</span> : null}</button>
@@ -161,13 +160,13 @@ export function TopHeader() {
   }
 
   return (
-    <header className="flex h-12 shrink-0 items-center gap-2 border-b border-[#EDEDED] bg-white px-3">
-      <button type="button" className="wd-icon-btn md:hidden" onClick={() => setMobileNavOpen(true)} aria-label={label("nav.workspace")}><Icons.menu size={18} /></button>
-      <button id="hdr-tree-btn" type="button" onClick={() => setTreeOpen((v) => !v)} aria-expanded={treeOpen} aria-haspopup="menu" title={label("nav.manage")} aria-label={label("nav.manage")} className="wd-icon-btn hidden md:inline-flex"><Icons.tree size={17} /></button>
-      <ZohoMenu open={treeOpen} onClose={() => setTreeOpen(false)} labelledBy="hdr-tree-btn" onSelect={(k) => { if (k === "root") router.push("/files"); else if (k === "recent") router.push("/files/recent"); else if (k === "favorites") router.push("/files/favorites"); else if (k === "trash") router.push("/files/trash"); }} items={[{ key: "root", labelKey: "files.breadcrumb.root" }, { key: "recent", labelKey: "nav.recent" }, { key: "favorites", labelKey: "nav.favorites" }, "sep", { key: "trash", labelKey: "files.trash" }]} />
-      <div className="flex min-w-0 items-center gap-1.5"><span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[8px] bg-[#F0F4FF] text-[var(--wd-primary)]"><Icons.folder size={18} /></span><span className="max-w-[30vw] truncate text-[15px] font-semibold text-[#212121]">{scope.folderName ?? label("files.breadcrumb.root")}</span></div>
-      <div className="ms-auto flex shrink-0 items-center gap-1.5">
-        <div className="hidden w-56 md:block xl:w-72"><button type="button" onClick={() => setSearchOpen(true)} className="wd-search flex w-full items-center gap-2 text-[#4F4F4F]" aria-label={label("search.placeholder")}><Icons.search size={16} /><span className="min-w-0 flex-1 truncate text-start">{label("search.placeholder")}</span><kbd className="hidden rounded border border-[#EDEDED] bg-[#F7F8FA] px-1.5 py-0.5 text-[10.5px] font-medium text-[#4F4F4F] xl:block">Ctrl K</kbd></button></div>
+    <header className="wd-default-topbar flex h-12 shrink-0 items-center gap-2 border-b border-[#EDEDED] bg-white px-4">
+      <div className="flex min-w-0 items-center gap-2">
+        <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[8px] bg-[#F0F4FF] text-[var(--wd-primary)]"><Icons.folder size={18} /></span>
+        <span className="max-w-[32vw] truncate text-[15px] font-semibold text-[#212121]">{scope.folderName ?? label("files.breadcrumb.root")}</span>
+      </div>
+      <div className="ms-auto flex min-w-0 shrink-0 items-center gap-1.5">
+        <OrgSwitcher organizationName={org || "IMKAN"} userRole={role} />
         <button type="button" className="wd-icon-btn" aria-label={label("search.placeholder")} onClick={() => setSearchOpen(true)}><Icons.search size={17} /></button>
         <button type="button" className="wd-icon-btn" aria-label="Announcements"><Icons.horn size={17} /></button>
         <button type="button" className="wd-icon-btn relative" aria-label={label("nav.notifications")} onClick={() => setNotifOpen((v) => !v)}><Icons.bell size={17} />{unread > 0 ? <span className="absolute end-1 top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-[#DC2626] px-1 text-[10px] font-bold text-white">{unread > 9 ? "9+" : unread}</span> : null}</button>

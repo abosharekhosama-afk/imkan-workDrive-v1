@@ -191,19 +191,19 @@ export default function OrganizationPage() {
   );
 
   if (loading) {
-    return <div className="wd-page"><div className="wd-alert" role="status">Loading organization…</div></div>;
+    return <div className="wd-page organization-page"><div className="wd-alert" role="status">Loading organization…</div></div>;
   }
 
   if (org?.role !== "ADMIN" && org?.role !== "SUPER_ADMIN") {
     return (
-      <div className="wd-page">
+      <div className="wd-page organization-page">
         <div className="wd-alert">{label("org.adminRequired")}</div>
       </div>
     );
   }
 
   return (
-    <div className="wd-page">
+    <div className="wd-page organization-page">
       <header className="wd-page-head">
         <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
           <span className="wd-avatar wd-avatar-lg" aria-hidden="true">

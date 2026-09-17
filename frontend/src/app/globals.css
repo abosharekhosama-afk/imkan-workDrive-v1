@@ -1920,3 +1920,30 @@ html[data-theme="dark"] .zoho-workflow-status-badge{border-color:#38414d;backgro
   width: 0;
   height: 0;
 }
+
+/* ── WorkDrive shell sizing / scrollbar cleanup ─────────────────────────── */
+.workdrive-frame { min-height: 0; }
+.workdrive-frame > aside { min-height: 0; height: 100%; overflow: hidden; }
+.primary-sidebar { min-height: 0; overflow: hidden; }
+.workspace-sidebar-scroll,
+.primary-sidebar-team { scrollbar-width: none; -ms-overflow-style: none; }
+.workspace-sidebar-scroll::-webkit-scrollbar,
+.primary-sidebar-team::-webkit-scrollbar { width: 0; height: 0; display: none; }
+.workdrive-main-scroll { min-height: 0; min-width: 0; }
+
+/* Organization is a bounded admin surface; the page itself scrolls, not the shell. */
+.organization-page {
+  width: min(100%, 1180px);
+  max-width: 1180px;
+  margin-inline: auto;
+  padding: 20px 24px 28px;
+  gap: 16px;
+  overflow-x: hidden;
+}
+.organization-page .wd-page-head { padding-block-end: 12px; }
+.organization-page .wd-card { width: 100%; }
+.organization-page .wd-card-body { padding: 16px 18px; }
+.organization-page .wd-grid-2 { gap: 14px; }
+@media (max-width: 900px) {
+  .organization-page { width: 100%; padding-inline: 16px; }
+}
