@@ -22,7 +22,6 @@ export function TopHeader() {
   const [scope, setScope] = useState<ScopeDetail>({ folderId: null, folderName: null });
   const [teamFolder, setTeamFolder] = useState<TeamFolderRecord | null>(null);
   const [teamMemberCount, setTeamMemberCount] = useState(0);
-  const [rememberedTeam, setRememberedTeam] = useState<TeamFolderRecord | null>(null);
   const [manageOpen, setManageOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
   const [notifOpen, setNotifOpen] = useState(false);
@@ -41,10 +40,6 @@ export function TopHeader() {
     if (!token) return;
     listNotifications().then(setNotes).catch(() => undefined);
     setScope(readScope());
-    try {
-      const rawTeam = sessionStorage.getItem("zoho.team.context");
-      if (rawTeam) setRememberedTeam(JSON.parse(rawTeam) as TeamFolderRecord);
-    } catch { /* noop */ }
     const onScope = (e: Event) => setScope((e as CustomEvent<ScopeDetail>).detail ?? { folderId: null, folderName: null });
     window.addEventListener("workdrive:scope", onScope);
     return () => window.removeEventListener("workdrive:scope", onScope);
@@ -60,20 +55,6 @@ export function TopHeader() {
   const isTeamFoldersDirectory = pathname === "/files/team-folders";
   const isFolderRoute = /^\/files\/[^/]+$/.test(pathname);
   const teamContext = isTeamManageRoute || (isFolderRoute && Boolean(scope.folderId));
-  const pageTitle = (() => {
-    if (teamContext && teamFolder) return teamFolder.name;
-    if (isTeamFoldersDirectory) return label("nav.teamFolders");
-    if (pathname === "/organization") return label("nav.organization");
-    if (pathname.startsWith("/files/workflows")) return label("nav.workflows");
-    if (pathname === "/files/favorites") return label("nav.favorites");
-    if (pathname === "/files/recent") return label("nav.recent");
-    if (pathname === "/files/shared-with-me") return label("nav.sharedWithMe");
-    if (pathname === "/files/shared-by-me") return label("nav.sharedByMe");
-    if (pathname === "/files/trash") return label("nav.trash");
-    if (pathname === "/files/templates") return label("nav.templates");
-    if (pathname === "/files") return label("files.breadcrumb.root");
-    return label("app.title");
-  })();
 
   useEffect(() => {
     let live = true;
@@ -91,10 +72,8 @@ export function TopHeader() {
         if (!live) return;
         setTeamFolder(candidate);
         if (candidate) {
-          try { sessionStorage.setItem("zoho.team.context", JSON.stringify(candidate)); } catch { /* noop */ }
-          setRememberedTeam(candidate);
           if (typeof candidate.memberCount === "number") {
-            setTeamMemberCount(candidate.memberCount);
+            if (live) setTeamMemberCount(candidate.memberCount);
           } else {
             const memberRes = await listTeamFolderMembers(candidate.id);
             if (live) setTeamMemberCount(memberRes.members.length);
@@ -119,12 +98,14 @@ export function TopHeader() {
   if (isTeamFoldersDirectory) {
     return (
       <header className="team-context-header">
-        <div className="team-context-title"><span className="team-context-folder"><Icons.folder size={23} /></span><span className="team-context-name">{pageTitle}</span></div>
+        <div className="team-context-title"><span className="team-context-folder"><Icons.folder size={23} /></span><span className="team-context-name">Team Folders</span></div>
         <div className="team-context-actions">
           <OrgSwitcher organizationName={org || "IMKAN"} userRole={role} />
           <button type="button" className="wd-icon-btn" aria-label={label("search.placeholder")} onClick={() => setSearchOpen(true)}><Icons.search size={17} /></button>
           <button type="button" className="wd-icon-btn" aria-label="Announcements"><Icons.horn size={17} /></button>
           <button type="button" className="wd-icon-btn" aria-label={label("nav.notifications")} onClick={() => setNotifOpen((v) => !v)}><Icons.bell size={17} /></button>
+          <ThemeToggle />
+          <button type="button" className="rounded-md px-2 py-1.5 text-[12px] font-semibold text-slate-500 hover:bg-slate-100" aria-label={locale === "en" ? "العربية" : "English"} onClick={() => setLocale(locale === "en" ? "ar" : "en")}>{locale === "en" ? "ع" : "En"}</button>
           <AccountMenu name={name} />
           <button type="button" className="wd-icon-btn" aria-label={label("nav.appSwitcher")}><Icons.grid size={17} /></button>
         </div>
@@ -170,6 +151,8 @@ export function TopHeader() {
             <button type="button" className="wd-icon-btn" aria-label="Announcements"><Icons.horn size={17} /></button>
             <button type="button" className="wd-icon-btn relative" aria-label={label('nav.notifications')} onClick={() => setNotifOpen((v) => !v)}><Icons.bell size={17} />{unread > 0 ? <span className="absolute end-1 top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-[#DC2626] px-1 text-[10px] font-bold text-white">{unread > 9 ? '9+' : unread}</span> : null}</button>
             {notifOpen ? <NotificationPanel open={notifOpen} onClose={() => setNotifOpen(false)} /> : null}
+            <ThemeToggle />
+            <button type="button" className="rounded-md px-2 py-1.5 text-[12px] font-semibold text-slate-500 hover:bg-slate-100" aria-label={locale === "en" ? "العربية" : "English"} onClick={() => setLocale(locale === "en" ? "ar" : "en")}>{locale === "en" ? "ع" : "En"}</button>
             <AccountMenu name={name} />
             <button type="button" className="wd-icon-btn" aria-label={label('nav.appSwitcher')}><Icons.grid size={17} /></button>
           </div>
@@ -184,12 +167,15 @@ export function TopHeader() {
     <header className="wd-default-topbar flex h-12 shrink-0 items-center gap-2 border-b border-[#EDEDED] bg-white px-4">
       <div className="flex min-w-0 items-center gap-2">
         <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[8px] bg-[#F0F4FF] text-[var(--wd-primary)]"><Icons.folder size={18} /></span>
-        <div className="min-w-0">
-          <div className="max-w-[34vw] truncate text-[15px] font-semibold text-[#212121]" title={pageTitle}>{pageTitle}</div>
-          {rememberedTeam && !teamContext && !isTeamFoldersDirectory ? (
-            <div className="max-w-[34vw] truncate text-[10px] text-slate-400" title={rememberedTeam.name}>Team Folder · {rememberedTeam.name} · {rememberedTeam.memberCount ?? teamMemberCount} members</div>
-          ) : null}
-        </div>
+        <span className="max-w-[42vw] truncate text-[15px] font-semibold text-[#212121]">{
+          pathname.startsWith("/organization") ? (locale === "ar" ? "المنظمة" : "Organization") :
+          pathname.startsWith("/files/workflows") ? (locale === "ar" ? "سير العمل" : "Workflows") :
+          pathname === "/files/team-folders" ? (locale === "ar" ? "مجلدات الفريق" : "Team Folders") :
+          pathname.startsWith("/files/favorites") ? (locale === "ar" ? "المفضلة" : "Favorites") :
+          pathname.startsWith("/files/recent") ? (locale === "ar" ? "الأخيرة" : "Recent") :
+          pathname.startsWith("/files/trash") ? (locale === "ar" ? "المهملات" : "Trash") :
+          scope.folderName ?? label("files.breadcrumb.root")
+        }</span>
       </div>
       <div className="ms-auto flex min-w-0 shrink-0 items-center gap-1.5">
         <OrgSwitcher organizationName={org || "IMKAN"} userRole={role} />

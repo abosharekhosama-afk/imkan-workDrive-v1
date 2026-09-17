@@ -1933,51 +1933,59 @@ html[data-theme="dark"] .zoho-workflow-status-badge{border-color:#38414d;backgro
 
 /* Organization is a bounded admin surface; the page itself scrolls, not the shell. */
 .organization-page {
-  width: min(100%, 1180px);
-  max-width: 1180px;
+  display: flex;
+  flex: 0 0 auto;
+  width: 100%;
+  max-width: 1440px;
   margin-inline: auto;
-  padding: 20px 24px 28px;
-  gap: 16px;
-  overflow-x: hidden;
+  padding: 24px clamp(18px, 3vw, 40px) 40px;
+  gap: 18px;
+  box-sizing: border-box;
+  overflow: visible;
 }
-.organization-page .wd-page-head { padding-block-end: 12px; }
-.organization-page .wd-card { width: 100%; }
-.organization-page .wd-card-body { padding: 16px 18px; }
-.organization-page .wd-grid-2 { gap: 14px; }
+.organization-page .wd-page-head {
+  width: 100%;
+  padding-block-end: 14px;
+}
+.organization-page .wd-card {
+  width: 100%;
+  min-width: 0;
+  max-width: none;
+  box-sizing: border-box;
+}
+.organization-page .wd-card-body { padding: 18px; }
+.organization-page > .wd-grid-2 {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  align-items: stretch;
+  width: 100%;
+  min-width: 0;
+  gap: 18px;
+}
+.organization-page > .wd-grid-2 > .wd-card { min-width: 0; }
+.organization-page .wd-table { width: 100%; }
 @media (max-width: 900px) {
-  .organization-page { width: 100%; padding-inline: 16px; }
+  .organization-page { padding-inline: 16px; }
+  .organization-page > .wd-grid-2 { grid-template-columns: minmax(0, 1fr); }
 }
 
-/* Organization surface: use the shell's full content width. The primary
-   sidebar belongs to the shell, not to the page, so admin cards must never
-   inherit a second grid/sidebar constraint. */
-.organization-page {
-  align-self: stretch;
-  width: 100%;
-  max-width: none;
+/* The navigation owns its own viewport. Page scrolling must never move the sidebar. */
+.workdrive-frame > aside {
+  position: relative;
+  flex: 0 0 auto;
+  height: 100vh;
+  align-self: flex-start;
+  overflow: hidden;
+}
+.workdrive-frame > aside > .primary-sidebar {
+  height: 100vh;
+  max-height: 100vh;
+}
+.workdrive-main-scroll {
+  height: 100%;
+  min-height: 0;
   min-width: 0;
-  box-sizing: border-box;
   overflow-x: hidden;
-  padding: 22px 26px 32px;
-}
-.organization-page .wd-grid-2 {
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-  width: 100%;
-  min-width: 0;
-}
-.organization-page .wd-grid-2 > .wd-card,
-.organization-page > .wd-card {
-  min-width: 0;
-  width: 100%;
-  max-width: none;
-}
-.organization-page .wd-card-body,
-.organization-page .wd-card-head {
-  min-width: 0;
-}
-.organization-page table {
-  width: 100%;
-}
-@media (max-width: 980px) {
-  .organization-page .wd-grid-2 { grid-template-columns: minmax(0, 1fr); }
+  overflow-y: auto;
+  overscroll-behavior: contain;
 }
