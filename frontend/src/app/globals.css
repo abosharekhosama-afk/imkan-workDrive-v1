@@ -1527,7 +1527,7 @@ html[data-theme="dark"] .zoho-workflow-status-badge{border-color:#38414d;backgro
 }
 .team-create-button{
   display:inline-flex;
-  height:36px;
+  height:32px;
   align-items:center;
   gap:6px;
   border-radius:19px;
@@ -1721,8 +1721,8 @@ html[data-theme="dark"] .zoho-workflow-status-badge{border-color:#38414d;backgro
   height:34px;
 }
 .wd-toolbar.team-folder-toolbar .wd-pill{
-  height:36px;
-  min-height:36px;
+  height:32px;
+  min-height:32px;
 }
 .wd-toolbar.team-folder-toolbar>div.ms-auto{gap:5px}
 
