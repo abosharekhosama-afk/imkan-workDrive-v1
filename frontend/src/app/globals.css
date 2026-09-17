@@ -1904,3 +1904,19 @@ html[data-theme="dark"] .zoho-workflow-status-badge{border-color:#38414d;backgro
   .team-context-name{max-width:30vw;font-size:14px}
   .team-context-members{font-size:11px}
 }
+
+
+/* WorkDrive sidebar: keep the navigation scrollable without exposing a browser scrollbar. */
+.imkan-workspace-layout nav[aria-label="workspace"],
+.imkan-workspace-layout .workspace-sidebar-scroll,
+.sidebar-scroll-hidden {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.imkan-workspace-layout nav[aria-label="workspace"]::-webkit-scrollbar,
+.imkan-workspace-layout .workspace-sidebar-scroll::-webkit-scrollbar,
+.sidebar-scroll-hidden::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}

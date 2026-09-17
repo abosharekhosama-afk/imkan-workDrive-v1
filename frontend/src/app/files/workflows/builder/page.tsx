@@ -5,6 +5,7 @@ import { useEffect, useMemo, useRef, useState, type DragEvent } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useLocale } from "@/components/locale-provider";
 import { WorkflowHelp } from "@/components/workflow-help";
+import { useWorkflowAccess } from "@/components/workflow-access";
 import { createWorkflow, getWorkflow, updateWorkflow, listWorkflowParticipants, listWorkflowParticipantOptions, listWorkflowTemplates, listWorkflowFunctions, type Workflow, type WorkflowParticipant, type WorkflowDataTemplate, type WorkflowFunction } from "@/lib/api/workflows";
 
 type Action = { type: string; config: Record<string, unknown> };
@@ -178,8 +179,10 @@ function WorkflowCanvas({ states, transitions, positions, setPositions, selected
 }
 
 export default function WorkflowBuilderPage() {
-  const { locale } = useLocale(); const ar = locale === "ar"; const router = useRouter(); const params = useSearchParams(); const urlId = params.get("id");
-  const [workflowId, setWorkflowId] = useState<string | null>(urlId); const [step, setStep] = useState<1 | 2 | 3>(1); const [name, setName] = useState(params.get("name") || ""); const [description, setDescription] = useState(params.get("description") || ""); const [mode, setMode] = useState<"AUTOMATIC" | "MANUAL">(params.get("mode") === "MANUAL" ? "MANUAL" : "AUTOMATIC"); const [resourceType, setResourceType] = useState<"FILE" | "FOLDER">(params.get("resourceType") === "FOLDER" ? "FOLDER" : "FILE");
+  const { locale } = useLocale();
+  const access = useWorkflowAccess(); const ar = locale === "ar"; const router = useRouter(); const params = useSearchParams(); const urlId = params.get("id");
+  const [workflowId, setWorkflowId] = useState<string | null>(urlId);
+  useEffect(() => { if (urlId || access?.canCreate) return; router.replace("/files/workflows"); }, [access, router, urlId]); const [step, setStep] = useState<1 | 2 | 3>(1); const [name, setName] = useState(params.get("name") || ""); const [description, setDescription] = useState(params.get("description") || ""); const [mode, setMode] = useState<"AUTOMATIC" | "MANUAL">(params.get("mode") === "MANUAL" ? "MANUAL" : "AUTOMATIC"); const [resourceType, setResourceType] = useState<"FILE" | "FOLDER">(params.get("resourceType") === "FOLDER" ? "FOLDER" : "FILE");
   const [triggers, setTriggers] = useState<string[]>(["upload"]); const [fields, setFields] = useState<WorkflowField[]>([]); const [states, setStates] = useState<StateDraft[]>([{ name: "Start", description: "Workflow entry point", terminal: false }, { name: "Completed", description: "", terminal: true }]); const [transitions, setTransitions] = useState<TransitionDraft[]>([transitionDefaults(0, 1, 1)]); const [positions, setPositionsState] = useState<Position[]>(DEFAULT_POSITIONS.slice(0, 2));
   const [selected, setSelected] = useState("state-0"); const [phase, setPhase] = useState<Phase>("during"); const [zoom, setZoom] = useState(1); const [busy, setBusy] = useState(false); const [loading, setLoading] = useState(Boolean(urlId)); const [error, setError] = useState(""); const [message, setMessage] = useState(""); const [fieldDraft, setFieldDraft] = useState<WorkflowField | null>(null); const [dragFieldType, setDragFieldType] = useState<string | null>(null); const [activationOpen, setActivationOpen] = useState(false); const [fieldsDragOver, setFieldsDragOver] = useState(false);
   const setPositions = (next: Position[]) => { setPositionsState(next); if (workflowId && typeof window !== "undefined") localStorage.setItem(`workflow-layout:${workflowId}`, JSON.stringify(next)); };

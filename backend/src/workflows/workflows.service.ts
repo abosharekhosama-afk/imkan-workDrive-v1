@@ -29,6 +29,50 @@ export class WorkflowsService {
     if (!isWorkflowAdmin(user) && ownerId !== user.sub) throw new ForbiddenException('You do not have permission to manage this workflow');
   }
 
+  /**
+   * Capabilities are exposed to the UI so navigation can be permission-aware.
+   * The endpoint is only a UX hint; every data/mutation method remains
+   * protected server-side by the same authorization helpers below.
+   */
+  async capabilities(user: AccessTokenPayload) {
+    const admin = isWorkflowAdmin(user);
+    return {
+      role: user.role,
+      canViewWorkspace: true,
+      canViewMy: true,
+      canViewDrafts: true,
+      canCreate: admin,
+      canEditOwnedDrafts: true,
+      canViewWaiting: true,
+      canViewRuns: true,
+      canViewDynamicValues: true,
+      canViewTemplates: admin,
+      canViewFunctions: admin,
+      canViewDiagnostics: admin,
+      canViewQueue: admin,
+      canViewAudit: admin,
+      canManageWorkflows: admin,
+    } as const;
+  }
+
+  private async visibleRun(user: AccessTokenPayload, runId: string) {
+    const run = await this.prisma.workflowRun.findFirst({
+      where: { id: runId, orgId: user.org_id },
+      select: {
+        id: true,
+        createdById: true,
+        workflow: { select: { ownerId: true } },
+        tasks: { select: { assigneeId: true, participants: { select: { userId: true } } } },
+      },
+    });
+    if (!run) return null;
+    if (isWorkflowAdmin(user)) return run;
+    const visible = run.createdById === user.sub || run.workflow.ownerId === user.sub || run.tasks.some((task) =>
+      task.assigneeId === user.sub || task.participants.some((participant) => participant.userId === user.sub),
+    );
+    return visible ? run : null;
+  }
+
   private normalizeActions(raw: unknown): Array<{ type: string; config: Record<string, unknown> }> {
     if (!Array.isArray(raw)) return [];
     return raw.map((item) => {
@@ -635,8 +679,27 @@ export class WorkflowsService {
     return this.create(user, { name: `${source.name} (Copy)`, description: source.description ?? '', mode: source.mode, resourceType: source.resourceType, trigger: (source.steps.find((s) => s.kind === 'TRIGGER')?.config as { value?: unknown })?.value, condition: (source.steps.find((s) => s.kind === 'CONDITION')?.config as { value?: unknown })?.value, actions: [], fields, status: 'DRAFT', states: source.states.map((s) => ({ name: s.name, description: s.description ?? '', terminal: s.terminal })), transitions: source.transitions.map((t) => ({ from: source.states.findIndex((s) => s.id === t.fromStateId), to: source.states.findIndex((s) => s.id === t.toStateId), name: t.name, description: t.description ?? '', trigger: t.trigger, condition: t.condition, actions: t.actions })) });
   }
 
-  async logs(user: AccessTokenPayload, runId: string) { const run = await this.prisma.workflowRun.findFirst({ where: { id: runId, orgId: user.org_id }, include: { workflow: { select: { id: true, name: true } }, stepRuns: { orderBy: { stepPosition: 'asc' } }, jobs: { orderBy: { createdAt: 'desc' }, take: 10 } } }); if (!run) throw new NotFoundException('Workflow run not found'); return run; }
-  async retry(user: AccessTokenPayload, runId: string) { const run = await this.prisma.workflowRun.findFirst({ where: { id: runId, orgId: user.org_id }, include: { workflow: true } }); if (!run) throw new NotFoundException('Workflow run not found'); if (!['FAILED','DEAD','DEAD_LETTER'].includes(run.status)) throw new BadRequestException('Only failed workflow runs can be retried'); await this.prisma.$transaction(async (tx) => { await tx.workflowRun.update({ where: { id: runId }, data: { status: 'QUEUED', error: null, finishedAt: null } }); await tx.workflowJob.create({ data: { id: randomUUID(), orgId: user.org_id, workflowId: run.workflowId, runId, status: 'QUEUED', runAt: new Date(), attempts: 0, priority: 0, idempotencyKey: `retry:${runId}:${randomUUID()}` } }); }); return { runId, queued: true }; }
+  async logs(user: AccessTokenPayload, runId: string) {
+    const visible = await this.visibleRun(user, runId);
+    if (!visible) throw new NotFoundException('Workflow run not found');
+    return this.prisma.workflowRun.findFirst({
+      where: { id: runId, orgId: user.org_id },
+      include: { workflow: { select: { id: true, name: true, ownerId: true } }, stepRuns: { orderBy: { stepPosition: 'asc' } }, jobs: { orderBy: { createdAt: 'desc' }, take: 10 } },
+    });
+  }
+
+  async retry(user: AccessTokenPayload, runId: string) {
+    this.requireWorkflowAdmin(user);
+    const run = await this.prisma.workflowRun.findFirst({ where: { id: runId, orgId: user.org_id }, include: { workflow: true } });
+    if (!run) throw new NotFoundException('Workflow run not found');
+    if (!['FAILED','DEAD','DEAD_LETTER'].includes(run.status)) throw new BadRequestException('Only failed workflow runs can be retried');
+    await this.prisma.$transaction(async (tx) => {
+      await tx.workflowRun.update({ where: { id: runId }, data: { status: 'QUEUED', error: null, finishedAt: null } });
+      await tx.workflowJob.create({ data: { id: randomUUID(), orgId: user.org_id, workflowId: run.workflowId, runId, status: 'QUEUED', runAt: new Date(), attempts: 0, priority: 0, idempotencyKey: `retry:${runId}:${randomUUID()}` } });
+      await tx.auditLog.create({ data: { orgId: user.org_id, actorId: user.sub, action: 'WORKFLOW_RUN_RETRIED', resourceType: 'WORKFLOW_RUN', resourceId: runId } });
+    });
+    return { runId, queued: true };
+  }
 
   async completeTask(user: AccessTokenPayload, id: string, transitionId: string, fieldValues: Record<string, unknown> = {}, comment?: string) {
     const task = await this.prisma.workflowTask.findFirst({ where: { id, orgId: user.org_id, status: 'PENDING' }, include: { participants: true, run: true, workflow: { include: { transitions: true, states: true, steps: true } } } });

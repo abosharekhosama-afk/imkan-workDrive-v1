@@ -48,12 +48,13 @@ export function PrimarySidebar() {
       {c ? null : (
         <div className="px-2 pb-1">
           <div className="flex items-center">
-            <button type="button" onClick={() => setOpen((v) => !v)} aria-expanded={open}
-              className="flex h-10 min-w-0 flex-1 items-center gap-4 rounded-[16px] px-[15px] text-[14px] font-medium text-[#EEEEEE] hover:bg-white/[0.08]">
-              <span aria-hidden="true" className="text-[#9CA3AF]"><Icons.users size={17} /></span>
+            <Link href="/files/team-folders" onClick={close} aria-current={teamActive ? "page" : undefined}
+              className={`flex h-10 min-w-0 flex-1 items-center gap-4 rounded-[16px] px-[15px] text-[14px] font-medium ${teamActive ? "bg-[var(--wd-active)] font-bold text-[#DBE3FA]" : "text-[#EEEEEE] hover:bg-white/[0.08]"}`}>
+              <span aria-hidden="true" className={teamActive ? "text-[#DBE3FA]" : "text-[#9CA3AF]"}><Icons.users size={17} /></span>
               <span className="min-w-0 flex-1 truncate text-start">{label("nav.teamFolders")}</span>
-              <span aria-hidden="true" className={open ? "rotate-90 text-slate-500" : "text-slate-500"}><Icons.chevR size={14} /></span>
-            </button>
+            </Link>
+            <button type="button" onClick={() => setOpen((v) => !v)} aria-expanded={open} aria-label={open ? "Collapse Team Folders" : "Expand Team Folders"}
+              className="rounded-md p-1.5 text-[#9CA3AF] hover:bg-white/[0.06] hover:text-white"><span aria-hidden="true" className={open ? "rotate-90 inline-block" : "inline-block"}><Icons.chevR size={14} /></span></button>
             <button type="button" onClick={() => router.push("/files/team-folders")} title={label("files.createFolder")} aria-label={label("files.createFolder")}
               className="rounded-md p-1.5 text-[#9CA3AF] hover:bg-white/[0.06] hover:text-white"><Icons.plus size={15} /></button>
           </div>

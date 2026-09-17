@@ -71,6 +71,15 @@ export function ActionToolbar({
   const { label } = useLocale();
   const router = useRouter();
   const [openMenu, setOpenMenu] = useState<"new" | "record" | "filter" | "columns" | "sort" | "view" | "tree" | null>(null);
+  const [canCreateWorkflow, setCanCreateWorkflow] = useState(false);
+
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem("workdrive_user");
+      const role = raw ? (JSON.parse(raw) as { role?: string }).role : undefined;
+      setCanCreateWorkflow(role === "ADMIN" || role === "SUPER_ADMIN");
+    } catch { setCanCreateWorkflow(false); }
+  }, []);
 
   // Folder-tree navigation state (collapsible tree with guarded lazy children).
   const [expandedNodes, setExpandedNodes] = useState<Set<string>>(new Set());
@@ -240,7 +249,7 @@ export function ActionToolbar({
             { key: "folder", labelKey: "menu.newFolder", icon: <Icons.folder size={16} />, descKey: "menu.newFolderDesc" },
             { key: "upload", labelKey: "menu.uploadFiles", icon: <Icons.upload size={16} />, descKey: "menu.uploadFilesDesc" },
             { key: "uploadFolder", labelKey: "menu.uploadFolder", icon: <Icons.folder size={16} /> },
-            { key: "workflow", labelKey: "workflows.create", icon: <Icons.flow size={16} /> },
+            ...(canCreateWorkflow ? [{ key: "workflow", labelKey: "workflows.create", icon: <Icons.flow size={16} /> } as const] : []),
             { key: "templates", labelKey: "menu.templates", icon: <Icons.doc size={16} /> },
             { key: "externalApps", labelKey: "menu.externalApps", icon: <Icons.globe size={16} /> },
             { key: "cloud", labelKey: "menu.importCloud", icon: <Icons.globe size={16} /> },

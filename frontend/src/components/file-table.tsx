@@ -278,7 +278,7 @@ export function FileTable({
               <td className="wd-list-meta whitespace-nowrap px-3">{folderSizes?.get(folder.id) ? formatSize(folderSizes.get(folder.id)) : "–"}</td>
               {colOn("type") ? <td className="wd-list-meta whitespace-nowrap px-3">{label("files.type.folder")}</td> : null}
               {colOn("extension") ? <td className="wd-list-meta whitespace-nowrap px-3">{"–"}</td> : null}
-              <td className="px-3 py-2 text-end">
+              <td className="px-3 py-2 text-end" onClick={(event) => event.stopPropagation()} onMouseDown={(event) => event.stopPropagation()}>
                 <FileActionsMenu
                   context={{
                     resourceType: "FOLDER",
@@ -332,7 +332,7 @@ export function FileTable({
               <td className="wd-list-meta whitespace-nowrap px-3">{file.size != null ? formatSize(file.size) : "–"}</td>
               {colOn("type") ? <td className="wd-list-meta whitespace-nowrap px-3">{label("files.type.file")}</td> : null}
               {colOn("extension") ? <td className="wd-list-meta whitespace-nowrap px-3">{extOf(file.name) ? extOf(file.name) : "–"}</td> : null}
-              <td className="px-3 py-2 text-end">
+              <td className="px-3 py-2 text-end" onClick={(event) => event.stopPropagation()} onMouseDown={(event) => event.stopPropagation()}>
                 <FileActionsMenu
                   context={{
                     resourceType: "FILE",

@@ -4,6 +4,25 @@ export type WorkflowAction = { type: string; config?: Record<string, unknown> };
 export type WorkflowState = { id: string; position: number; name: string; description?: string | null; terminal: boolean };
 export type WorkflowTransition = { id: string; fromStateId: string; toStateId: string; name: string; description?: string | null; trigger?: string | null; condition?: Record<string, unknown> | null; actions: WorkflowAction[] };
 export type WorkflowStep = { id: string; position: number; kind: string; config: { value: unknown } };
+export type WorkflowCapabilities = {
+  role: string;
+  canViewWorkspace: boolean;
+  canViewMy: boolean;
+  canViewDrafts: boolean;
+  canCreate: boolean;
+  canEditOwnedDrafts: boolean;
+  canViewWaiting: boolean;
+  canViewRuns: boolean;
+  canViewDynamicValues: boolean;
+  canViewTemplates: boolean;
+  canViewFunctions: boolean;
+  canViewDiagnostics: boolean;
+  canViewQueue: boolean;
+  canViewAudit: boolean;
+  canManageWorkflows: boolean;
+};
+export function listWorkflowCapabilities() { return apiRequest<WorkflowCapabilities>('/workflows/capabilities'); }
+
 export type Workflow = { id: string; name: string; description?: string | null; mode: 'AUTOMATIC' | 'MANUAL'; resourceType: 'FILE' | 'FOLDER'; status: 'DRAFT' | 'ACTIVE'; ownerId: string; createdAt: string; updatedAt: string; activeVersionId?: string | null; calendarConfig?: Record<string, unknown> | null; isSystemDefault?: boolean; steps: WorkflowStep[]; states: WorkflowState[]; transitions: WorkflowTransition[] };
 
 export type WorkflowParticipant = { id: string; name?: string | null; email: string; avatarUrl?: string | null };

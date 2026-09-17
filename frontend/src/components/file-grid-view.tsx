@@ -25,6 +25,7 @@ export interface FileGridViewProps {
   onFavorite?: (resourceType:"FILE"|"FOLDER", resourceId: string) => void;
   onVersionHistory?: (resourceType:"FILE"|"FOLDER", resourceId: string, name: string) => void;
   onViewDetails?: (resourceType:"FILE"|"FOLDER", resourceId: string, name: string) => void;
+  onAssignWorkflow?: (resourceType:"FILE"|"FOLDER", resourceId: string, name: string) => void;
   favoriteIds?: Set<string>;
   canFavorite?: boolean;
   folderSizes?: ReadonlyMap<string, number>;
@@ -65,6 +66,7 @@ export function FileGridView({
   onFavorite,
   onVersionHistory,
   onViewDetails,
+  onAssignWorkflow,
   favoriteIds,
   canFavorite = false,
   folderSizes,
@@ -92,6 +94,7 @@ export function FileGridView({
           onMove: canMutate && onMove ? () => onMove("FOLDER", folder.id, folder.name) : undefined,
           onViewDetails: onViewDetails ? () => onViewDetails("FOLDER", folder.id, folder.name) : undefined,
           onDelete: canMutate && onDelete ? () => onDelete("FOLDER", folder.id) : undefined,
+          onAssignWorkflow: canMutate && onAssignWorkflow ? () => onAssignWorkflow("FOLDER", folder.id, folder.name) : undefined,
         };
         return (
           <div key={folder.id} role="listitem"className="zoho-grid-card">
@@ -123,6 +126,7 @@ export function FileGridView({
           onFavoriteToggle: canFavorite && onFavorite ? () => onFavorite("FILE", file.id) : undefined,
           onVersionHistory: onVersionHistory ? () => onVersionHistory("FILE", file.id, file.name) : undefined,
           onDelete: canMutate && onDelete ? () => onDelete("FILE", file.id) : undefined,
+          onAssignWorkflow: canMutate && onAssignWorkflow ? () => onAssignWorkflow("FILE", file.id, file.name) : undefined,
         };
         return (
           <div key={file.id} role="listitem" className="zoho-grid-card">

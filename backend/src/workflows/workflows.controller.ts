@@ -7,6 +7,7 @@ import { WorkflowsService } from './workflows.service';
 @Controller('workflows')
 export class WorkflowsController {
   constructor(private readonly service: WorkflowsService, private readonly engine: WorkflowEngineService) {}
+  @Get('capabilities') capabilities(@CurrentUser() user: AccessTokenPayload) { return this.service.capabilities(user); }
   @Get('templates') templates(@CurrentUser() user: AccessTokenPayload) { return this.service.templates(user); }
   @Post('templates') createTemplate(@CurrentUser() user: AccessTokenPayload, @Body() body: any) { return this.service.createTemplate(user, body); }
   @Get('templates/:id') template(@CurrentUser() user: AccessTokenPayload, @Param('id', new ParseUUIDPipe({ version: '4' })) id: string) { return this.service.template(user, id); }
