@@ -2005,3 +2005,135 @@ html[data-theme="dark"] .workflow-ui .wd-card {
   background: var(--wd-bg);
   border-color: var(--wd-line);
 }
+
+
+/* Workflow controls: use the same light capsule language as the secondary
+   WorkDrive toolbar (New / Record), while preserving help icons and menus. */
+.workflow-ui button:not(.workflow-help-button):not(.wd-icon-btn):not(.wd-menu-item):not([role="switch"]):not([aria-haspopup="menu"]) {
+  min-height: 28px;
+  border-radius: var(--wd-pill-radius, 8px);
+  padding: 6px 10px;
+  border: 1px solid var(--wd-capsule, #dce2e6);
+  background: transparent;
+  color: var(--wd-primary-ink, #1B66EA);
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 16px;
+  box-shadow: none;
+  transition: background-color var(--wd-dur,.14s) var(--wd-ease,ease),
+              border-color var(--wd-dur,.14s) var(--wd-ease,ease),
+              color var(--wd-dur,.14s) var(--wd-ease,ease);
+}
+.workflow-ui button:not(.workflow-help-button):not(.wd-icon-btn):not(.wd-menu-item):not([role="switch"]):not([aria-haspopup="menu"]):hover {
+  background: var(--wd-menu-hover, #f3f7fb);
+  border-color: var(--wd-active, #c9d8ef);
+  color: var(--wd-primary-ink, #1558ca);
+  transform: none;
+  box-shadow: none;
+}
+.workflow-ui button.wd-pill-new,
+.workflow-ui .wf-primary-button {
+  background: var(--wd-primary, #1B66EA) !important;
+  border-color: var(--wd-primary, #1B66EA) !important;
+  color: #fff !important;
+  font-weight: 600;
+}
+.workflow-ui button.wd-pill-new:hover,
+.workflow-ui .wf-primary-button:hover {
+  background: var(--wd-primary-dark, #1558ca) !important;
+  border-color: var(--wd-primary-dark, #1558ca) !important;
+  color: #fff !important;
+}
+.workflow-ui .workflow-shell-header .wd-pill-new {
+  min-height: 28px !important;
+}
+
+/* Compact transition editor: clear sections, consistent controls, and no
+   horizontal leakage from the inspector card. */
+.workflow-transition-inspector {
+  min-width: 0;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+.workflow-transition-inspector > div,
+.workflow-transition-editor,
+.workflow-transition-section {
+  min-width: 0;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+.workflow-transition-editor {
+  overflow-x: hidden;
+}
+.workflow-transition-section {
+  border: 1px solid var(--wd-line, #e6eaee);
+  border-radius: 12px;
+  background: #fff;
+  padding: 12px;
+}
+.workflow-transition-section-title {
+  color: #5f6873;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+.workflow-transition-inspector input,
+.workflow-transition-inspector select,
+.workflow-transition-inspector textarea {
+  box-sizing: border-box;
+  max-width: 100%;
+  min-width: 0;
+}
+.workflow-transition-inspector textarea {
+  overflow-wrap: anywhere;
+}
+.workflow-transition-inspector .workflow-transition-section.bg-slate-50 {
+  background: #f8fafc;
+}
+.workflow-transition-inspector .workflow-transition-section > .grid {
+  min-width: 0;
+}
+.workflow-transition-inspector .workflow-transition-section button {
+  min-width: 0;
+}
+.workflow-transition-inspector .workflow-transition-section .flex.rounded-xl {
+  gap: 2px;
+  padding: 3px;
+  background: #f6f8fa;
+}
+.workflow-transition-inspector .workflow-transition-section .flex.rounded-xl > button {
+  min-height: 27px;
+  padding: 5px 8px;
+  border-color: transparent;
+  color: #68717c;
+}
+.workflow-transition-inspector .workflow-transition-section .flex.rounded-xl > button.bg-white,
+.workflow-transition-inspector .workflow-transition-section .flex.rounded-xl > button[class*="text-[#1B66EA]"] {
+  background: #fff !important;
+  border-color: var(--wd-active, #d8e2ef) !important;
+  color: var(--wd-primary-ink, #1B66EA) !important;
+  box-shadow: 0 1px 3px rgba(15,23,42,.06);
+}
+.workflow-transition-inspector .workflow-transition-section > .grid.grid-cols-2 {
+  min-width: 0;
+}
+.workflow-transition-inspector .workflow-transition-section > .grid.grid-cols-2 > button {
+  min-width: 0;
+}
+.workflow-start-scope {
+  min-width: 0;
+  box-sizing: border-box;
+}
+@media (max-width: 980px) {
+  .workflow-transition-inspector {
+    width: min(350px, 42vw) !important;
+  }
+}
+@media (max-width: 760px) {
+  .workflow-transition-inspector {
+    width: 100% !important;
+    border-inline-start: 0;
+    border-top: 1px solid var(--wd-line, #e6eaee);
+  }
+}
