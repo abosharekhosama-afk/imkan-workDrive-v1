@@ -158,7 +158,7 @@ export default function AuditPage() {
                   {[v1, v2].map((id, i) => {
                     const v = versions.find((item) => item.id === id);
                     return (
-                      <div key={i} className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+                      <div key={i} className="wd-card bg-slate-50 p-3">
                         <div className="text-[10px] font-semibold">{i === 0 ? "A" : "B"} · {v ? `v${v.version}` : "—"}</div>
                         <div className="mt-2 text-[9px] text-slate-500">
                           {v && new Date(v.createdAt).toLocaleString()} · {v?.status} · {v?.publishedAt ? new Date(v.publishedAt).toLocaleString() : ar ? "غير منشور" : "unpublished"}
@@ -173,7 +173,7 @@ export default function AuditPage() {
                 </button>
 
                 {diff.length > 0 && (
-                  <div className="mt-4 overflow-auto rounded-xl border border-slate-200">
+                  <div className="wd-card mt-4 overflow-auto">
                     <div className="grid min-w-[760px] grid-cols-[1.4fr_1fr_1fr] border-b border-slate-100 bg-slate-50 px-3 py-2 text-[9px] font-semibold text-slate-500">
                       <span>Path</span><span>A</span><span>B</span>
                     </div>

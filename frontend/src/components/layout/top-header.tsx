@@ -103,7 +103,11 @@ export function TopHeader() {
           <OrgSwitcher organizationName={org || "IMKAN"} userRole={role} />
           <button type="button" className="wd-icon-btn" aria-label={label("search.placeholder")} onClick={() => setSearchOpen(true)}><Icons.search size={17} /></button>
           <button type="button" className="wd-icon-btn" aria-label="Announcements"><Icons.horn size={17} /></button>
-          <button type="button" className="wd-icon-btn" aria-label={label("nav.notifications")} onClick={() => setNotifOpen((v) => !v)}><Icons.bell size={17} /></button>
+          <button type="button" className="wd-icon-btn relative" aria-label={label("nav.notifications")} onClick={() => setNotifOpen((v) => !v)}>
+            <Icons.bell size={17} />
+            {unread > 0 ? <span className="absolute end-1 top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-[#DC2626] px-1 text-[10px] font-bold text-white">{unread > 9 ? "9+" : unread}</span> : null}
+          </button>
+          {notifOpen ? <NotificationPanel open={notifOpen} onClose={() => setNotifOpen(false)} /> : null}
           <ThemeToggle />
           <button type="button" className="rounded-md px-2 py-1.5 text-[12px] font-semibold text-slate-500 hover:bg-slate-100" aria-label={locale === "en" ? "العربية" : "English"} onClick={() => setLocale(locale === "en" ? "ar" : "en")}>{locale === "en" ? "ع" : "En"}</button>
           <AccountMenu name={name} />
@@ -155,6 +159,18 @@ export function TopHeader() {
             <button type="button" className="rounded-md px-2 py-1.5 text-[12px] font-semibold text-slate-500 hover:bg-slate-100" aria-label={locale === "en" ? "العربية" : "English"} onClick={() => setLocale(locale === "en" ? "ar" : "en")}>{locale === "en" ? "ع" : "En"}</button>
             <AccountMenu name={name} />
             <button type="button" className="wd-icon-btn" aria-label={label('nav.appSwitcher')}><Icons.grid size={17} /></button>
+          </div>
+        ) : null}
+        {isTeamManageRoute ? (
+          <div className="team-context-actions">
+            <button type="button" className="wd-icon-btn relative" aria-label={label("nav.notifications")} onClick={() => setNotifOpen((v) => !v)}>
+              <Icons.bell size={17} />
+              {unread > 0 ? <span className="absolute end-1 top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-[#DC2626] px-1 text-[10px] font-bold text-white">{unread > 9 ? "9+" : unread}</span> : null}
+            </button>
+            {notifOpen ? <NotificationPanel open={notifOpen} onClose={() => setNotifOpen(false)} /> : null}
+            <ThemeToggle />
+            <button type="button" className="rounded-md px-2 py-1.5 text-[12px] font-semibold text-slate-500 hover:bg-slate-100" aria-label={locale === "en" ? "العربية" : "English"} onClick={() => setLocale(locale === "en" ? "ar" : "en")}>{locale === "en" ? "ع" : "En"}</button>
+            <AccountMenu name={name} />
           </div>
         ) : null}
         <Link href={isTeamManageRoute ? '/files/team-folders' : '/files'} className="team-context-close" aria-label="Close">×</Link>

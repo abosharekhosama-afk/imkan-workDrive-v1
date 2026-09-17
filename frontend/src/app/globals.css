@@ -1989,3 +1989,20 @@ html[data-theme="dark"] .zoho-workflow-status-badge{border-color:#38414d;backgro
   overflow-y: auto;
   overscroll-behavior: contain;
 }
+/* Workflow workspace cards — keep all workflow surfaces on the same WorkDrive card language. */
+.workflow-ui .wd-card {
+  background: #fff;
+  border: 1px solid var(--wd-line);
+  border-radius: 8px;
+  overflow: hidden;
+  min-width: 0;
+  max-width: 100%;
+}
+.workflow-ui .wd-card > .wd-card-head {
+  border-bottom-color: var(--wd-line);
+}
+html[data-theme="dark"] .workflow-ui .wd-card {
+  background: var(--wd-bg);
+  border-color: var(--wd-line);
+}
+\n
