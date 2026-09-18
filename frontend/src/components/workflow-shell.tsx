@@ -46,10 +46,10 @@ export function WorkflowShell({ children, title, subtitle, active }: { children:
             {access?.canCreate ? <Link href="/files/workflows/builder" className="wd-pill wd-pill-new">＋ {ar ? "سير عمل جديد" : "New workflow"}</Link> : null}
           </div>
         </div>
-        <nav className="workflow-shell-nav mt-3 flex items-center gap-1 overflow-x-auto" aria-label={ar ? "تنقل سير العمل" : "Workflow navigation"}>
+        <nav className="workflow-shell-nav mt-2 flex items-end gap-5 overflow-x-auto border-b border-slate-100" aria-label={ar ? "تنقل سير العمل" : "Workflow navigation"}>
           {visibleItems.map(([key, href, text]) => {
             const selected = active === key || (!active && pathname === href.split("?")[0]);
-            return <Link key={key} href={href} className={`whitespace-nowrap rounded-lg px-3 py-2 text-[11px] font-medium transition ${selected ? "bg-[#EEF4FF] text-[#1B66EA] shadow-sm" : "text-slate-500 hover:bg-slate-50 hover:text-slate-800"}`}>{text}</Link>;
+            return <Link key={key} href={href} aria-current={selected ? "page" : undefined} className={`workflow-shell-tab whitespace-nowrap border-b-2 px-0.5 pb-2.5 pt-1 text-[11px] font-medium transition ${selected ? "is-active" : ""}`}>{text}</Link>;
           })}
         </nav>
       </div>

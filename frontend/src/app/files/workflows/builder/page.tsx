@@ -71,6 +71,7 @@ function ActionEditor({ actions, onChange, resourceType, ar }: { actions: Action
   const [participantOptions, setParticipantOptions] = useState<{ users: WorkflowParticipant[]; groups: Array<{ id:string; name:string; memberCount?:number }>; roles:string[] }>({ users:[], groups:[], roles:[] });
   const [templates, setTemplates] = useState<WorkflowDataTemplate[]>([]);
   const [functions, setFunctions] = useState<WorkflowFunction[]>([]);
+
   useEffect(() => {
     let alive = true;
     void Promise.all([listWorkflowParticipants(), listWorkflowParticipantOptions(), listWorkflowTemplates(), listWorkflowFunctions()]).then(([p, po, t, f]) => {
@@ -79,51 +80,142 @@ function ActionEditor({ actions, onChange, resourceType, ar }: { actions: Action
       setParticipantOptions(po);
       setTemplates(t);
       setFunctions(f.custom);
-    }).catch(() => { if (alive) { setParticipants([]); setParticipantOptions({users:[],groups:[],roles:[]}); setTemplates([]); setFunctions([]); } });
+    }).catch(() => {
+      if (alive) {
+        setParticipants([]);
+        setParticipantOptions({users:[],groups:[],roles:[]});
+        setTemplates([]);
+        setFunctions([]);
+      }
+    });
     return () => { alive = false; };
   }, []);
-  const update = (i: number, key: string, value: unknown) => onChange(actions.map((a, idx) => idx === i ? { ...a, config: { ...a.config, [key]: value } } : a));
-  const add = (type: string) => { if (actions.length < 5) { onChange([...actions, action(type, type === "request_approval" ? { approvalPolicy: "ANY", title: ar ? "طلب موافقة" : "Approval required" } : {})]); setMenuOpen(false); } };
-  const move = (from: number, to: number) => { if (from === to || from === null || to < 0 || to >= actions.length) return; const next = [...actions]; const [item] = next.splice(from, 1); next.splice(to, 0, item); onChange(next); };
+
+  const update = (i: number, key: string, value: unknown) =>
+    onChange(actions.map((a, idx) => idx === i ? { ...a, config: { ...a.config, [key]: value } } : a));
+
+  const add = (type: string) => {
+    if (actions.length < 5) {
+      const config = type === "request_approval"
+        ? { approvalPolicy: "ANY", title: ar ? "طلب موافقة" : "Approval required" }
+        : {};
+      onChange([...actions, action(type, config)]);
+      setMenuOpen(false);
+    }
+  };
+
+  const move = (from: number, to: number) => {
+    if (from === to || from === null || to < 0 || to >= actions.length) return;
+    const next = [...actions];
+    const [item] = next.splice(from, 1);
+    next.splice(to, 0, item);
+    onChange(next);
+  };
+
   const allowed = ACTIONS.filter(([v]) => resourceType === "FILE" || !["favorite", "tag", "mark_final", "share", "generate_link"].includes(v));
-  const field = (label: string, value: unknown, onValue: (v: string) => void, placeholder?: string) => <label className="block min-w-0 text-[9.5px] font-medium text-slate-600">{label}<input value={String(value ?? "")} onChange={e => onValue(e.target.value)} placeholder={placeholder} className="mt-1 w-full min-w-0 rounded-lg border border-slate-200 bg-white px-2.5 py-2 text-[10px] outline-none focus:border-[#1B66EA]" /></label>;
+  const actionLabel = (type: string) => {
+    const item = ACTIONS.find(x => x[0] === type);
+    return txt(ar, item?.[1] ?? type, item?.[2] ?? type);
+  };
+  const actionIcon = (type: string) => {
+    const icons: Record<string, string> = {
+      notify: "◔", move: "↗", copy: "▣", generate_link: "↗", share: "↗",
+      request_approval: "✓", favorite: "☆", tag: "#", mark_final: "✓", create_folder: "＋",
+      data_template: "Aa", custom_function: "ƒ",
+    };
+    return icons[type] ?? "•";
+  };
+  const field = (label: string, value: unknown, onValue: (v: string) => void, placeholder?: string) =>
+    <label className="workflow-action-field">
+      <span>{label}</span>
+      <input value={String(value ?? "")} onChange={e => onValue(e.target.value)} placeholder={placeholder} />
+    </label>;
+
   return <div className="space-y-2.5">
-    {actions.map((a, i) => <div key={`${a.type}-${i}`} draggable onDragStart={() => setDragged(i)} onDragOver={e => e.preventDefault()} onDrop={() => { if (dragged !== null) move(dragged, i); setDragged(null); }} className="group min-w-0 rounded-xl border border-slate-300 bg-white p-3 text-slate-800 shadow-sm transition hover:border-[#1B66EA] hover:bg-[#F8FBFF] hover:shadow-md">
-      <div className="flex min-w-0 items-center gap-2"><span className="cursor-grab text-slate-400">⋮⋮</span><span className="min-w-0 flex-1 truncate text-[11px] font-semibold">{txt(ar, ACTIONS.find(x => x[0] === a.type)?.[1] ?? a.type, ACTIONS.find(x => x[0] === a.type)?.[2] ?? a.type)}</span><span className="text-[9px] text-slate-400">{i + 1}/5</span><button type="button" onClick={() => onChange(actions.filter((_, idx) => idx !== i))} className="rounded-md px-1.5 text-slate-400 hover:bg-red-50 hover:text-red-600" aria-label={txt(ar,"Remove action","حذف الإجراء")}>×</button></div>
-      <div className="mt-2 grid min-w-0 gap-2 sm:grid-cols-2">
-        {a.type === "notify" && <>{field(txt(ar,"Notification title","عنوان الإشعار"), a.config.title, v => update(i,"title",v))}{field(txt(ar,"Recipients (optional)","المستلمون (اختياري)"), Array.isArray(a.config.userIds) ? a.config.userIds.join(", ") : a.config.userIds, v => update(i,"userIds",v.split(",").map(x=>x.trim()).filter(Boolean)))}<label className="block min-w-0 text-[9.5px] font-medium text-slate-600 sm:col-span-2">{txt(ar,"Message","الرسالة")}<textarea value={String(a.config.message ?? "")} onChange={e=>update(i,"message",e.target.value)} rows={2} className="mt-1 w-full resize-none rounded-lg border border-slate-200 px-2.5 py-2 text-[10px]" /></label></>}
-        {(a.type === "move" || a.type === "copy") && <div className="sm:col-span-2">{field(txt(ar,"Destination folder ID","معرّف مجلد الوجهة"),a.config.destinationFolderId,v=>update(i,"destinationFolderId",v))}</div>}
-        {a.type === "tag" && <div className="sm:col-span-2">{field(txt(ar,"Tag name","اسم الوسم"),a.config.name,v=>update(i,"name",v))}</div>}
-        {a.type === "create_folder" && <>{field(txt(ar,"Folder name","اسم المجلد"),a.config.name,v=>update(i,"name",v))}{field(txt(ar,"Parent folder ID (optional)","معرّف المجلد الأب (اختياري)"),a.config.parentFolderId,v=>update(i,"parentFolderId",v))}</>}
-        {a.type === "share" && <>{field(txt(ar,"Recipients","المستلمون"),Array.isArray(a.config.userIds)?a.config.userIds.join(", "):a.config.userIds,v=>update(i,"userIds",v.split(",").map(x=>x.trim()).filter(Boolean)))}<label className="block min-w-0 text-[9.5px] font-medium text-slate-600">{txt(ar,"Permission","الصلاحية")}<select value={String(a.config.permission ?? "VIEW")} onChange={e=>update(i,"permission",e.target.value)} className="mt-1 w-full rounded-lg border border-slate-200 px-2.5 py-2 text-[10px]"><option>VIEW</option><option>COMMENT</option><option>EDIT</option></select></label></>}
-        {a.type === "generate_link" && <label className="flex items-center gap-2 self-end text-[9.5px] text-slate-600"><input type="checkbox" checked={a.config.canDownload !== false} onChange={e=>update(i,"canDownload",e.target.checked)} className="accent-[#1B66EA]" />{txt(ar,"Allow download","السماح بالتنزيل")}</label>}
-        {a.type === "request_approval" && <div className="contents">
-          <label className="block min-w-0 text-[9.5px] font-medium text-slate-600 sm:col-span-2">{txt(ar,"Approvers / members","الموافقون / الأعضاء")}
-            <select multiple value={Array.isArray(a.config.userIds) ? a.config.userIds.map(String) : (a.config.userId ? [String(a.config.userId)] : [])} onChange={e => { const ids = Array.from(e.target.selectedOptions).map(o => o.value); update(i,"userIds",ids); update(i,"userId",ids[0] ?? ""); }} className="mt-1 h-24 w-full min-w-0 rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-[10px]">
-              {participantOptions.users.map(u => <option key={u.id} value={u.id}>{u.name || u.email} · {u.email}</option>)}
-            </select>
-          </label>
-          {participantOptions.groups.length > 0 && <label className="block min-w-0 text-[9.5px] font-medium text-slate-600">{txt(ar,"Groups","المجموعات")}
-            <select multiple value={Array.isArray(a.config.groupIds) ? a.config.groupIds.map(String) : []} onChange={e => update(i,"groupIds",Array.from(e.target.selectedOptions).map(o => o.value))} className="mt-1 h-20 w-full min-w-0 rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-[10px]">{participantOptions.groups.map(g => <option key={g.id} value={g.id}>{g.name} · {g.memberCount ?? 0}</option>)}</select>
-          </label>}
-          {participantOptions.roles.length > 0 && <label className="block min-w-0 text-[9.5px] font-medium text-slate-600">{txt(ar,"Roles","الأدوار")}
-            <select multiple value={Array.isArray(a.config.roles) ? a.config.roles.map(String) : []} onChange={e => update(i,"roles",Array.from(e.target.selectedOptions).map(o => o.value))} className="mt-1 h-20 w-full min-w-0 rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-[10px]">{participantOptions.roles.map(role => <option key={role} value={role}>{role}</option>)}</select>
-          </label>}
-          {field(txt(ar,"Approval title","عنوان طلب الموافقة"), a.config.title, v => update(i,"title",v))}
-          <label className="block min-w-0 text-[9.5px] font-medium text-slate-600">{txt(ar,"Approval title template","قالب عنوان الطلب")}
-            <select value={String(a.config.templateId ?? "")} onChange={e => update(i,"templateId",e.target.value)} className="mt-1 w-full min-w-0 rounded-lg border border-slate-200 bg-white px-2.5 py-2 text-[10px]"><option value="">{txt(ar,"No template","بدون قالب")}</option>{templates.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}</select>
-          </label>
-          <label className="block min-w-0 text-[9.5px] font-medium text-slate-600">{txt(ar,"Approval policy","سياسة الموافقة")}
-            <select value={String(a.config.approvalPolicy ?? "ANY")} onChange={e => update(i,"approvalPolicy",e.target.value)} className="mt-1 w-full rounded-lg border border-slate-200 px-2.5 py-2 text-[10px]"><option value="ANY">{txt(ar,"Any approver","أي موافق")}</option><option value="ALL">{txt(ar,"All approvers","جميع الموافقين")}</option></select>
-          </label>
-          {field(txt(ar,"Due minutes","دقائق الاستحقاق"), a.config.dueInMinutes, v => update(i,"dueInMinutes",v ? Number(v) : undefined))}
-          {field(txt(ar,"Reminder minutes","دقائق التذكير"), a.config.reminderInMinutes, v => update(i,"reminderInMinutes",v ? Number(v) : undefined))}
-          <label className="flex items-center gap-2 text-[9.5px] text-slate-600 sm:col-span-2"><input type="checkbox" checked={a.config.allowStarterParticipants === true} onChange={e => update(i,"allowStarterParticipants",e.target.checked)} className="accent-[#1B66EA]" />{txt(ar,"Allow starter to choose participants","السماح لمن يبدأ سير العمل باختيار المشاركين")}</label>
-        </div>}
-        {a.type === "data_template" && <><label className="block min-w-0 text-[9.5px] font-medium text-slate-600 sm:col-span-2">{txt(ar,"Data template","قالب البيانات")}<select value={String(a.config.templateId ?? "")} onChange={e=>update(i,"templateId",e.target.value)} className="mt-1 w-full min-w-0 rounded-lg border border-slate-200 bg-white px-2.5 py-2 text-[10px]"><option value="">{txt(ar,"Select template","اختر قالباً")}</option>{templates.map(t=><option key={t.id} value={t.id}>{t.name} · v{t.activeVersion?.version ?? 1}</option>)}</select></label>{field(txt(ar,"Output field ID (optional)","معرّف حقل الإخراج (اختياري)"),a.config.outputFieldId,v=>update(i,"outputFieldId",v))}</>}
-        {a.type === "custom_function" && <><label className="block min-w-0 text-[9.5px] font-medium text-slate-600 sm:col-span-2">{txt(ar,"Secure function","الدالة الآمنة")}<select value={String(a.config.functionId ?? "")} onChange={e=>update(i,"functionId",e.target.value)} className="mt-1 w-full min-w-0 rounded-lg border border-slate-200 bg-white px-2.5 py-2 text-[10px]"><option value="">{txt(ar,"Select a function","اختر دالة")}</option>{functions.map(f=><option key={f.id} value={f.id}>{f.name}</option>)}</select></label></>}
-      </div>
-    </div>)}
+    {actions.map((a, i) => {
+      const linkedFunction = a.type === "custom_function" ? functions.find(f => f.id === String(a.config.functionId ?? "")) : null;
+      return <div
+        key={`${a.type}-${i}`}
+        draggable
+        onDragStart={() => setDragged(i)}
+        onDragOver={e => e.preventDefault()}
+        onDrop={() => { if (dragged !== null) move(dragged, i); setDragged(null); }}
+        className="workflow-action-card group"
+        data-action-type={a.type}
+      >
+        <div className="workflow-action-card-head">
+          <div className="flex min-w-0 items-center gap-2.5">
+            <span className="workflow-action-drag" aria-hidden="true">⋮⋮</span>
+            <span className="workflow-action-icon" aria-hidden="true">{actionIcon(a.type)}</span>
+            <div className="min-w-0">
+              <div className="truncate text-[11px] font-semibold text-slate-900">{actionLabel(a.type)}</div>
+              <div className="text-[9px] text-slate-400">{ar ? `إجراء ${i + 1} من 5` : `Action ${i + 1} of 5`}</div>
+            </div>
+          </div>
+          <button type="button" onClick={() => onChange(actions.filter((_, idx) => idx !== i))} className="workflow-action-remove" aria-label={txt(ar,"Remove action","حذف الإجراء")}>×</button>
+        </div>
+
+        <div className="workflow-action-card-body">
+          {a.type === "notify" && <>
+            {field(txt(ar,"Notification title","عنوان الإشعار"), a.config.title, v => update(i,"title",v))}
+            {field(txt(ar,"Recipients (optional)","المستلمون (اختياري)"), Array.isArray(a.config.userIds) ? a.config.userIds.join(", ") : a.config.userIds, v => update(i,"userIds",v.split(",").map(x=>x.trim()).filter(Boolean)))}
+            <label className="workflow-action-field sm:col-span-2"><span>{txt(ar,"Message","الرسالة")}</span><textarea value={String(a.config.message ?? "")} onChange={e=>update(i,"message",e.target.value)} rows={2} /></label>
+          </>}
+
+          {(a.type === "move" || a.type === "copy") && <div className="sm:col-span-2">{field(txt(ar,"Destination folder ID","معرّف مجلد الوجهة"),a.config.destinationFolderId,v=>update(i,"destinationFolderId",v))}</div>}
+          {a.type === "tag" && <div className="sm:col-span-2">{field(txt(ar,"Tag name","اسم الوسم"),a.config.name,v=>update(i,"name",v))}</div>}
+          {a.type === "create_folder" && <>{field(txt(ar,"Folder name","اسم المجلد"),a.config.name,v=>update(i,"name",v))}{field(txt(ar,"Parent folder ID (optional)","معرّف المجلد الأب (اختياري)"),a.config.parentFolderId,v=>update(i,"parentFolderId",v))}</>}
+          {a.type === "share" && <>
+            {field(txt(ar,"Recipients","المستلمون"),Array.isArray(a.config.userIds)?a.config.userIds.join(", "):a.config.userIds,v=>update(i,"userIds",v.split(",").map(x=>x.trim()).filter(Boolean)))}
+            <label className="workflow-action-field"><span>{txt(ar,"Permission","الصلاحية")}</span><select value={String(a.config.permission ?? "VIEW")} onChange={e=>update(i,"permission",e.target.value)}><option>VIEW</option><option>COMMENT</option><option>EDIT</option></select></label>
+          </>}
+          {a.type === "generate_link" && <label className="workflow-action-check"><input type="checkbox" checked={a.config.canDownload !== false} onChange={e=>update(i,"canDownload",e.target.checked)} />{txt(ar,"Allow download","السماح بالتنزيل")}</label>}
+
+          {a.type === "request_approval" && <div className="contents">
+            <label className="workflow-action-field sm:col-span-2"><span>{txt(ar,"Approvers / members","الموافقون / الأعضاء")}</span>
+              <select multiple value={Array.isArray(a.config.userIds) ? a.config.userIds.map(String) : (a.config.userId ? [String(a.config.userId)] : [])} onChange={e => { const ids = Array.from(e.target.selectedOptions).map(o => o.value); update(i,"userIds",ids); update(i,"userId",ids[0] ?? ""); }}>
+                {participantOptions.users.map(u => <option key={u.id} value={u.id}>{u.name || u.email} · {u.email}</option>)}
+              </select>
+            </label>
+            {participantOptions.groups.length > 0 && <label className="workflow-action-field"><span>{txt(ar,"Groups","المجموعات")}</span>
+              <select multiple value={Array.isArray(a.config.groupIds) ? a.config.groupIds.map(String) : []} onChange={e => update(i,"groupIds",Array.from(e.target.selectedOptions).map(o => o.value))}>{participantOptions.groups.map(g => <option key={g.id} value={g.id}>{g.name} · {g.memberCount ?? 0}</option>)}</select>
+            </label>}
+            {participantOptions.roles.length > 0 && <label className="workflow-action-field"><span>{txt(ar,"Roles","الأدوار")}</span>
+              <select multiple value={Array.isArray(a.config.roles) ? a.config.roles.map(String) : []} onChange={e => update(i,"roles",Array.from(e.target.selectedOptions).map(o => o.value))}>{participantOptions.roles.map(role => <option key={role} value={role}>{role}</option>)}</select>
+            </label>}
+            {field(txt(ar,"Approval title","عنوان طلب الموافقة"), a.config.title, v => update(i,"title",v))}
+            <label className="workflow-action-field"><span>{txt(ar,"Approval title template","قالب عنوان الطلب")}</span>
+              <select value={String(a.config.templateId ?? "")} onChange={e => update(i,"templateId",e.target.value)}><option value="">{txt(ar,"No template","بدون قالب")}</option>{templates.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}</select>
+            </label>
+            <label className="workflow-action-field"><span>{txt(ar,"Approval policy","سياسة الموافقة")}</span>
+              <select value={String(a.config.approvalPolicy ?? "ANY")} onChange={e => update(i,"approvalPolicy",e.target.value)}><option value="ANY">{txt(ar,"Any approver","أي موافق")}</option><option value="ALL">{txt(ar,"All approvers","جميع الموافقين")}</option></select>
+            </label>
+            {field(txt(ar,"Due minutes","دقائق الاستحقاق"), a.config.dueInMinutes, v => update(i,"dueInMinutes",v ? Number(v) : undefined))}
+            {field(txt(ar,"Reminder minutes","دقائق التذكير"), a.config.reminderInMinutes, v => update(i,"reminderInMinutes",v ? Number(v) : undefined))}
+            <label className="workflow-action-check sm:col-span-2"><input type="checkbox" checked={a.config.allowStarterParticipants === true} onChange={e => update(i,"allowStarterParticipants",e.target.checked)} />{txt(ar,"Allow starter to choose participants","السماح لمن يبدأ سير العمل باختيار المشاركين")}</label>
+          </div>}
+
+          {a.type === "data_template" && <>
+            <label className="workflow-action-field sm:col-span-2"><span>{txt(ar,"Data template","قالب البيانات")}</span><select value={String(a.config.templateId ?? "")} onChange={e=>update(i,"templateId",e.target.value)}><option value="">{txt(ar,"Select template","اختر قالباً")}</option>{templates.map(t=><option key={t.id} value={t.id}>{t.name} · v{t.activeVersion?.version ?? 1}</option>)}</select></label>
+            {field(txt(ar,"Output field ID (optional)","معرّف حقل الإخراج (اختياري)"),a.config.outputFieldId,v=>update(i,"outputFieldId",v))}
+          </>}
+
+          {a.type === "custom_function" && <>
+            <label className="workflow-action-field sm:col-span-2">
+              <span>{txt(ar,"Secure function","الدالة الآمنة")}</span>
+              <select value={String(a.config.functionId ?? "")} onChange={e=>update(i,"functionId",e.target.value)}>
+                <option value="">{txt(ar,"Select a function","اختر دالة")}</option>
+                {functions.map(f=><option key={f.id} value={f.id}>{f.name} · v{f.activeVersion?.version ?? 1}</option>)}
+              </select>
+            </label>
+            {linkedFunction
+              ? <div className="workflow-function-link sm:col-span-2"><span className="workflow-function-link-icon">ƒ</span><div className="min-w-0 flex-1"><div className="truncate font-semibold">{linkedFunction.name}</div><div className="text-[9px] text-slate-500">{ar ? "الإصدار النشط سيُنفذ مع هذا الإجراء." : "The active version will execute with this action."}</div></div><span className="workflow-function-version">v{linkedFunction.activeVersion?.version ?? 1}</span><Link href="/files/workflows/functions" className="text-[9px] font-semibold text-[#1B66EA] hover:underline">{ar ? "إدارة الدوال" : "Manage functions"}</Link></div>
+              : <div className="workflow-function-empty sm:col-span-2"><span>{functions.length ? (ar ? "اختر دالة آمنة لربط هذا الإجراء بها." : "Select a safe function to link this action.") : (ar ? "لا توجد دوال آمنة مخصصة بعد." : "No custom safe functions yet.")}</span><Link href="/files/workflows/functions" className="font-semibold text-[#1B66EA] hover:underline">{ar ? "إنشاء دالة" : "Create function"}</Link></div>}
+          </>}
+        </div>
+      </div>;
+    })}
+
     <div className="relative">
       <button type="button" onClick={() => setMenuOpen(v => !v)} disabled={actions.length >= 5} className="wd-pill wd-pill-new inline-flex items-center gap-1.5 disabled:opacity-40">＋ {txt(ar,"Add instant action","إضافة إجراء فوري")} <span className="text-slate-400">⌄</span></button>
       {menuOpen && <div className="absolute start-0 top-full z-[80] mt-1.5 max-h-72 w-[min(360px,90vw)] overflow-y-auto rounded-[var(--wd-menu-radius)] border border-slate-200 bg-white p-1.5 shadow-[var(--wd-menu-shadow)]">{allowed.map(([v,en,arLabel])=><button key={v} type="button" onClick={() => add(v)} className="wd-menu-item flex w-full items-center gap-2 text-start"><span className="flex-1 truncate">{txt(ar,en,arLabel)}</span><span className="text-slate-400">＋</span></button>)}</div>}
