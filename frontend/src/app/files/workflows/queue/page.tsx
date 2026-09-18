@@ -70,7 +70,7 @@ export default function QueuePage() {
               ) : rows.map((job) => (
                 <div key={job.id} className="grid grid-cols-[1.5fr_1fr_110px_90px_110px_170px_1.3fr] items-center border-b border-slate-100/80 px-4 py-3 text-[10px]">
                   <span className="font-semibold">{job.workflow?.name ?? job.workflowId}</span>
-                  <Link href={`/files/workflows/runs?id=${job.runId}`} className="text-[#1B66EA]">{job.runId.slice(0, 8)}…</Link>
+                  <Link href={`/files/workflows/runs?id=${job.runId}`} className="text-[var(--wd-primary)]">{job.runId.slice(0, 8)}…</Link>
                   <button type="button" onClick={() => setSelected(job)} className="text-start underline decoration-slate-300 underline-offset-2">{job.status}</button>
                   <span>{job.attempts}/{job.maxAttempts}</span><span>{job.priority}</span>
                   <span className="text-slate-500">{job.leaseUntil ? new Date(job.leaseUntil).toLocaleString() : new Date(job.runAt).toLocaleString()}</span>

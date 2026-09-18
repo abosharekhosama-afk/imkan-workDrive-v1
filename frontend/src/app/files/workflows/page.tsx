@@ -184,7 +184,7 @@ export default function WorkflowsPage() {
                 <div className="flex min-w-0 items-center gap-2">
                   <span className="workflow-row-icon"><Icons.flow size={17} /></span>
                   {(access?.canManageWorkflows || (r.status === "DRAFT" && access?.canEditOwnedDrafts))
-                    ? <Link href={`/files/workflows/builder?id=${r.id}`} className="min-w-0 truncate text-[12px] font-semibold text-slate-900 hover:text-[#1B66EA]">{r.name}</Link>
+                    ? <Link href={`/files/workflows/builder?id=${r.id}`} className="min-w-0 truncate text-[12px] font-semibold text-slate-900 hover:text-[var(--wd-primary)]">{r.name}</Link>
                     : <span className="min-w-0 truncate text-[12px] font-semibold text-slate-900">{r.name}</span>}
                   {r.status === "ACTIVE" && <span className="workflow-status-badge">{ar ? "فعال" : "Active"}</span>}
                   {r.status === "DRAFT" && <span className="workflow-draft-badge">{ar ? "مسودة" : "Draft"}</span>}
@@ -241,7 +241,7 @@ export default function WorkflowsPage() {
               ? (ar ? "يجب بدء سير العمل يدوياً من ملف أو مجلد." : "This workflow must be started manually from a file/folder.")
               : (ar ? "يبدأ سير العمل تلقائياً عند حدوث حدث مطابق." : "This workflow starts automatically when a matching event occurs.")}
             {" "}
-            <Link href="/files/workflows/builder" className="text-[#1B66EA] hover:underline">{ar ? "تعرف على إنشاء سير عمل مخصص" : "Learn more about creating a custom workflow"}</Link>
+            <Link href="/files/workflows/builder" className="text-[var(--wd-primary)] hover:underline">{ar ? "تعرف على إنشاء سير عمل مخصص" : "Learn more about creating a custom workflow"}</Link>
           </p>
 
           <label className="workflow-form-field">
@@ -277,7 +277,7 @@ export default function WorkflowsPage() {
     {editing && <div className="workflow-modal-backdrop" dir={ar ? "rtl" : "ltr"}>
       <div className="workflow-edit-modal" role="dialog" aria-modal="true">
         <div className="workflow-create-header">
-          <div><div className="text-[9px] font-semibold uppercase tracking-[.14em] text-[#1B66EA]">{ar ? "سير العمل" : "Workflow"}</div><h2>{ar ? "تعديل الاسم والوصف" : "Edit name & description"}</h2></div>
+          <div><div className="text-[9px] font-semibold uppercase tracking-[.14em] text-[var(--wd-primary)]">{ar ? "سير العمل" : "Workflow"}</div><h2>{ar ? "تعديل الاسم والوصف" : "Edit name & description"}</h2></div>
           <button type="button" className="workflow-modal-close" onClick={() => setEditing(null)} aria-label={ar ? "إغلاق" : "Close"}><Icons.x size={18} /></button>
         </div>
         <div className="workflow-create-body">

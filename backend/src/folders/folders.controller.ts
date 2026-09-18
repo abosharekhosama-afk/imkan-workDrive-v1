@@ -45,6 +45,11 @@ export class FoldersController {
     return this.folders.listContents(user, undefined, { type, status, ownerId, date, dateField, dateFrom, dateTo, query });
   }
 
+  @Get('tree')
+  tree(@CurrentUser() user: AccessTokenPayload) {
+    return this.folders.listAccessibleTree(user);
+  }
+
   @Get(':id')
   async getById(
     @CurrentUser() user: AccessTokenPayload,

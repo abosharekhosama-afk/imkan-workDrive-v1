@@ -16,6 +16,21 @@ export function getFolder(id: string, filters?: ContentFilters): Promise<FolderD
   return apiRequest<FolderDetail>(withFilters(`/folders/${id}`, filters));
 }
 
+
+export type FolderTreeItem = {
+  id: string;
+  name: string;
+  parentId: string | null;
+  teamFolderId?: string | null;
+  folderType?: string;
+  fileCount?: number;
+  childCount?: number;
+};
+
+export function listFolderTree(): Promise<FolderTreeItem[]> {
+  return apiRequest<FolderTreeItem[]>('/folders/tree');
+}
+
 export function createFolder(name: string, parentId?: string): Promise<FolderRecord> {
   return apiRequest<FolderRecord>("/folders", {
     method: "POST",

@@ -152,6 +152,28 @@ export class FoldersService {
     return this.getById(user, membership.personalFolderId);
   }
 
+  async listAccessibleTree(user: AccessTokenPayload) {
+    const folders = await this.prisma.folder.findMany({
+      where: { orgId: user.org_id },
+      select: { id: true, name: true, parentId: true, teamFolderId: true, folderType: true, _count: { select: { files: true, children: true } } },
+      orderBy: [{ name: 'asc' }],
+    });
+    const visible: Array<{ id: string; name: string; parentId: string | null; teamFolderId: string | null; folderType: string; fileCount: number; childCount: number }> = [];
+    for (const folder of folders) {
+      if (!(await this.canReadFolder(user, folder))) continue;
+      visible.push({
+        id: folder.id,
+        name: folder.name,
+        parentId: folder.parentId,
+        teamFolderId: folder.teamFolderId,
+        folderType: folder.folderType,
+        fileCount: folder._count.files,
+        childCount: folder._count.children,
+      });
+    }
+    return visible;
+  }
+
   async listContents(user: AccessTokenPayload, parentId?: string, filters: {
     type?: string;
     status?: string;

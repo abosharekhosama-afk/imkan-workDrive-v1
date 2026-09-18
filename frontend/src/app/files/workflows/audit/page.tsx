@@ -105,7 +105,7 @@ export default function AuditPage() {
                 <article key={a.id} className="wd-card p-4">
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <div>
-                      <span className="rounded-full bg-[#EEF4FF] px-2 py-1 text-[9px] font-semibold text-[#1B66EA]">
+                      <span className="rounded-full bg-[var(--wd-primary-light)] px-2 py-1 text-[9px] font-semibold text-[var(--wd-primary)]">
                         {a.action}
                       </span>
                       <span className="ms-2 text-[10px] text-slate-500">

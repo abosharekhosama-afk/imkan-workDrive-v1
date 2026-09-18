@@ -2759,3 +2759,89 @@ html[data-sidebar-light="true"] .primary-sidebar{background:#f6f7f9!important;co
 /* Long-table surfaces should occupy the viewport even when only a few rows exist. */
 .wd-table-wrap,.imkan-table-wrap{min-height:calc(100vh - 190px)}
 .member-detail-card{min-height:calc(100vh - 180px)}
+
+/* Workflow UX vNext — compact action menus, visual pickers, viewport-filling tables, and account-level appearance. */
+.workflow-ui .workflow-add-action-trigger{
+  display:flex;align-items:center;justify-content:space-between;gap:8px;width:100%;min-height:34px;
+  padding:7px 10px;border:1px dashed #cbd5e1;border-radius:5px;background:#fbfcfe;color:#475569;
+  font-size:10.5px;font-weight:600;text-align:start;transition:border-color .15s ease,background-color .15s ease,color .15s ease;
+}
+.workflow-ui .workflow-add-action-trigger:hover:not(:disabled){border-color:var(--wd-primary);background:var(--wd-primary-light);color:var(--wd-primary)}
+.workflow-ui .workflow-add-action-trigger:disabled{opacity:.45;cursor:not-allowed}
+.workflow-ui .workflow-action-menu{border-color:var(--wd-line)!important;background:var(--wd-bg)!important;box-shadow:var(--wd-menu-shadow,0 12px 32px rgba(15,23,42,.12))}
+.workflow-ui .workflow-action-menu .wd-menu-item{min-height:34px;border-radius:5px;padding:7px 9px;font-size:10px}
+.workflow-ui .workflow-action-menu .wd-menu-item:hover{background:var(--wd-primary-light);color:var(--wd-primary)}
+.workflow-ui .workflow-picker-control{
+  display:flex;align-items:center;justify-content:space-between;gap:8px;width:100%;min-height:34px;
+  border:1px solid #dfe4ea;border-radius:7px;background:var(--wd-bg);color:var(--wd-text);padding:7px 9px;
+  font-size:10px;font-weight:400;text-align:start;outline:none;
+}
+.workflow-ui .workflow-picker-control:hover{border-color:#b9c8da;background:var(--wd-hover)}
+.workflow-ui .workflow-picker-control:focus-visible{border-color:var(--wd-primary);box-shadow:0 0 0 3px color-mix(in srgb,var(--wd-primary) 10%,transparent)}
+.workflow-picker-modal{
+  width:min(620px,96vw);max-height:min(760px,92vh);display:flex;flex-direction:column;overflow:hidden;
+  border:1px solid var(--wd-line);border-radius:10px;background:var(--wd-bg);color:var(--wd-text);box-shadow:0 22px 60px rgba(15,23,42,.22);
+}
+.workflow-picker-header{display:flex;align-items:flex-start;justify-content:space-between;gap:14px;padding:18px 20px;border-bottom:1px solid var(--wd-line)}
+.workflow-picker-header h2{margin:3px 0 0;font-size:16px;font-weight:700;color:var(--wd-text)}
+.workflow-picker-header p{margin:4px 0 0;font-size:10px;line-height:1.6;color:#7a8491}
+.workflow-picker-search{display:flex;align-items:center;gap:8px;height:36px;border:1px solid #dfe4ea;border-radius:7px;background:var(--wd-bg);padding:0 10px;color:#8b95a1}
+.workflow-picker-search:focus-within{border-color:var(--wd-primary);box-shadow:0 0 0 3px color-mix(in srgb,var(--wd-primary) 10%,transparent)}
+.workflow-picker-search input{min-width:0;flex:1;border:0;outline:0;background:transparent;color:var(--wd-text);font-size:10.5px}
+.workflow-picker-body{min-height:220px;max-height:56vh;overflow-y:auto;padding:4px 8px}
+.workflow-picker-footer{display:flex;align-items:center;justify-content:space-between;gap:10px;border-top:1px solid var(--wd-line);padding:10px 14px;font-size:8.5px;color:#8b95a1}
+.workflow-user-menu{position:absolute;z-index:90;inset-inline-start:0;top:calc(100% + 5px);width:min(340px,90vw);overflow:hidden;border:1px solid var(--wd-line);border-radius:8px;background:var(--wd-bg);box-shadow:0 14px 34px rgba(15,23,42,.14)}
+.workflow-user-menu .workflow-picker-search{margin:8px;height:34px}
+.workflow-user-menu .wd-pill{min-height:28px;height:28px}
+
+/* Every workflow data table reserves the viewport even when it contains one row. */
+.workflow-ui .workflow-table-scroll,
+.workflow-ui .workflow-table-shell{
+  min-height:calc(100vh - 220px);
+}
+.workflow-ui .workflow-table-scroll{overflow-x:auto;overflow-y:auto;flex:1;min-width:0}
+.workflow-ui .workflow-table-shell{overflow-x:auto;overflow-y:auto}
+.workflow-ui .workflow-table-scroll > .min-w-\[980px\]{min-height:100%}
+
+/* Account appearance also governs Workflow surfaces. */
+.workflow-ui{font-family:var(--user-font-family),Arial,system-ui,sans-serif;color:var(--wd-text);background:var(--wd-canvas)!important}
+.workflow-ui .wd-pill-new{background:var(--wd-primary)!important;color:#fff!important}
+.workflow-ui .wd-pill-record{background:transparent!important;color:var(--wd-primary-ink)!important;box-shadow:inset 0 0 0 1px var(--wd-primary)!important}
+.workflow-ui .workflow-segment.is-active{border-color:var(--wd-primary)!important;background:var(--wd-primary-light)!important;color:var(--wd-primary)!important}
+.workflow-ui .workflow-step-tab.is-active{color:var(--wd-primary)!important}
+.workflow-ui .workflow-action-icon{border-color:color-mix(in srgb,var(--wd-primary) 20%,var(--wd-line));background:var(--wd-primary-light);color:var(--wd-primary)}
+.workflow-ui .workflow-connection-handle:hover{background:var(--wd-primary)}
+
+/* Dark mode for workflow surfaces. */
+html[data-theme="dark"] .workflow-ui .bg-white{background:var(--wd-bg)!important}
+html[data-theme="dark"] .workflow-ui [class*="bg-slate-50"]{background:var(--wd-hover)!important}
+html[data-theme="dark"] .workflow-ui [class*="text-slate-900"],
+html[data-theme="dark"] .workflow-ui [class*="text-slate-800"],
+html[data-theme="dark"] .workflow-ui [class*="text-slate-700"]{color:var(--wd-text)!important}
+html[data-theme="dark"] .workflow-ui [class*="text-slate-600"],
+html[data-theme="dark"] .workflow-ui [class*="text-slate-500"],
+html[data-theme="dark"] .workflow-ui [class*="text-slate-400"]{color:#a7b0bd!important}
+html[data-theme="dark"] .workflow-ui [class*="border-slate-"]{border-color:var(--wd-line)!important}
+html[data-theme="dark"] .workflow-ui input,
+html[data-theme="dark"] .workflow-ui textarea,
+html[data-theme="dark"] .workflow-ui select{background:var(--wd-bg);color:var(--wd-text);border-color:var(--wd-line)}
+html[data-theme="dark"] .workflow-ui .workflow-action-card,
+html[data-theme="dark"] .workflow-ui .workflow-action-card-head,
+html[data-theme="dark"] .workflow-ui .workflow-picker-modal,
+html[data-theme="dark"] .workflow-ui .workflow-user-menu{background:var(--wd-bg);color:var(--wd-text);border-color:var(--wd-line)}
+html[data-theme="dark"] .workflow-ui .workflow-action-card-head{background:var(--wd-hover)}
+html[data-theme="dark"] .workflow-ui .workflow-add-action-trigger{background:var(--wd-hover);border-color:#4b5a70;color:#cbd5e1}
+html[data-theme="dark"] .workflow-ui .workflow-picker-control,
+html[data-theme="dark"] .workflow-ui .workflow-picker-search{background:var(--wd-bg);border-color:var(--wd-line);color:var(--wd-text)}
+
+/* Preserve the combined Members search/filter shape and eliminate the stray child border/edge. */
+.member-search-combo{overflow:visible!important;clip-path:none}
+.member-search-combo > .relative{height:34px;display:flex;align-items:stretch}
+.member-search-combo .member-filter-button{outline:none!important;box-shadow:none!important}
+.member-search-combo:focus-within{box-shadow:0 0 0 2px var(--wd-primary-light)!important}
+
+@media(max-width:700px){
+  .workflow-picker-modal{max-height:94vh;border-radius:8px}
+  .workflow-picker-body{max-height:60vh}
+  .workflow-user-menu{width:min(310px,calc(100vw - 28px))}
+}

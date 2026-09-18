@@ -381,10 +381,41 @@ export class WorkflowEngineService implements OnModuleInit, OnModuleDestroy {
     await this.recordAudit(run.orgId, run.createdById, terminal ? 'WORKFLOW_RUN_DEAD_LETTER' : 'WORKFLOW_RUN_RETRY_SCHEDULED', 'WORKFLOW_RUN', runId, { jobId, attempts, maxAttempts, error: message, nextRunAt: new Date(Date.now() + delay).toISOString() });
   }
 
+  private async renderWorkflowText(template: string, user: AccessTokenPayload, event: WorkflowFileEvent, workflowId: string, runId: string) {
+    const [actor, workflow, run] = await Promise.all([
+      this.prisma.user.findUnique({ where: { id: event.userId || user.sub }, select: { id: true, name: true, email: true } }),
+      this.prisma.workflow.findFirst({ where: { id: workflowId, orgId: user.org_id }, select: { id: true, name: true } }),
+      this.prisma.workflowRun.findUnique({ where: { id: runId }, select: { result: true } }),
+    ]);
+    const result = run?.result && typeof run.result === 'object' ? run.result as Record<string, unknown> : {};
+    const fieldValues = result.fieldValues && typeof result.fieldValues === 'object' ? result.fieldValues as Record<string, unknown> : {};
+    const values: Record<string, unknown> = {
+      'file.id': event.resourceType === 'FOLDER' ? undefined : event.fileId,
+      'file.name': event.name,
+      'file.type': event.fileType,
+      'file.mimeType': event.mimeType,
+      'file.extension': event.extension,
+      'file.size': event.size,
+      'folder.id': event.folderId,
+      'user.id': actor?.id ?? event.userId ?? user.sub,
+      'user.name': actor?.name ?? '',
+      'user.email': actor?.email ?? '',
+      'event.type': event.eventType ?? '',
+      'event.name': event.name,
+      'workflow.id': workflow?.id ?? workflowId,
+      'workflow.name': workflow?.name ?? '',
+    };
+    for (const [key, value] of Object.entries(fieldValues)) values[`fields.${key}`] = value;
+    return template.replace(/{{\s*([^}]+?)\s*}}/g, (full, key: string) => {
+      const value = values[key.trim()];
+      return value === undefined || value === null ? full : String(value);
+    });
+  }
+
   private async executeAction(user: AccessTokenPayload, event: WorkflowFileEvent, action: WorkflowAction, workflowId: string, runId: string) {
     const config = action.config ?? {};
     switch (action.type) {
-      case 'notify': { const ids = Array.isArray(config.userIds) ? config.userIds.filter((id): id is string => typeof id === 'string') : [user.sub]; const recipients = await this.prisma.organizationMembership.findMany({ where: { organizationId: user.org_id, userId: { in: ids }, status: 'ACTIVE' }, select: { userId: true } }); const resourceType = (event.resourceType ?? 'FILE') as 'FILE' | 'FOLDER'; for (const r of recipients) await this.prisma.notification.create({ data: { orgId: user.org_id, userId: r.userId, type: 'SYSTEM', title: String(config.title ?? 'Workflow notification'), body: String(config.message ?? `Workflow action completed for ${event.name}`), resourceType, resourceId: event.fileId } }); return { action: 'notify', deliveredTo: recipients.map((r) => r.userId) }; }
+      case 'notify': { const configuredIds = Array.isArray(config.userIds) ? config.userIds.filter((id): id is string => typeof id === 'string' && id.trim().length > 0) : []; const ids = configuredIds.length ? configuredIds : [user.sub]; const recipients = await this.prisma.organizationMembership.findMany({ where: { organizationId: user.org_id, userId: { in: ids }, status: 'ACTIVE' }, select: { userId: true } }); const resourceType = (event.resourceType ?? 'FILE') as 'FILE' | 'FOLDER'; const titleTemplate = String(config.title ?? 'Workflow notification'); const bodyTemplate = typeof config.message === 'string' ? config.message : typeof config.body === 'string' ? config.body : `Workflow action completed for ${event.name}`; const title = await this.renderWorkflowText(titleTemplate, user, event, workflowId, runId); const body = await this.renderWorkflowText(bodyTemplate, user, event, workflowId, runId); for (const r of recipients) await this.prisma.notification.create({ data: { orgId: user.org_id, userId: r.userId, type: 'SYSTEM', title, body, resourceType, resourceId: event.fileId } }); return { action: 'notify', deliveredTo: recipients.map((r) => r.userId), title, body }; }
       case 'favorite': { if ((event.resourceType ?? 'FILE') === 'FOLDER') throw new Error('Favorite action is only supported for files'); await this.prisma.favorite.upsert({ where: { userId_resourceType_resourceId: { userId: user.sub, resourceType: 'FILE', resourceId: event.fileId } }, create: { orgId: user.org_id, userId: user.sub, resourceType: 'FILE', resourceId: event.fileId }, update: {} }); return { action: 'favorite', resourceId: event.fileId }; }
       case 'tag': { if ((event.resourceType ?? 'FILE') === 'FOLDER') throw new Error('Tag action is only supported for files'); const name = String(config.name ?? '').trim(); if (!name) throw new Error('Tag action requires a tag name'); const tag = await this.prisma.tag.upsert({ where: { orgId_name: { orgId: user.org_id, name } }, create: { orgId: user.org_id, name }, update: {} }); await this.prisma.fileTag.upsert({ where: { fileId_tagId: { fileId: event.fileId, tagId: tag.id } }, create: { fileId: event.fileId, tagId: tag.id }, update: {} }); return { action: 'tag', tag: name }; }
       case 'mark_final': case 'archive': { if ((event.resourceType ?? 'FILE') === 'FOLDER') throw new Error('Mark as final is only supported for files'); await this.prisma.file.updateMany({ where: { id: event.fileId, orgId: user.org_id, deletedAt: null }, data: { status: 'ARCHIVED' } }); return { action: 'mark_final', resourceId: event.fileId }; }
