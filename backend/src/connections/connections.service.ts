@@ -224,7 +224,7 @@ export class ConnectionsService {
         await this.providerProbe(row.provider, token, row.baseUrl);
       } else if (row.provider === 'rest') {
         const secret = await this.prisma.connectionSecret.findUnique({ where: { connectionId: id } });
-        const missing = this.requiredSecretFields(row.authType).filter((key) => !secret?.[key]);
+        const missing = this.requiredSecretFields(row.authType).filter((key) => !secret?.[key as keyof typeof secret]);
         if (missing.length) throw new Error(`Missing credential: ${missing.join(', ')}`);
         const metadata = row.metadata && typeof row.metadata === 'object' ? row.metadata as Record<string, unknown> : {};
         const testPath = typeof metadata.testPath === 'string' && metadata.testPath.startsWith('/') ? metadata.testPath : '/';
@@ -233,7 +233,7 @@ export class ConnectionsService {
         if ([401, 403].includes(Number(probe.status))) throw new Error(`REST endpoint rejected credentials (HTTP ${probe.status})`);
       } else {
         const secret = await this.prisma.connectionSecret.findUnique({ where: { connectionId: id } });
-        const missing = this.requiredSecretFields(row.authType).filter((key) => !secret?.[key]);
+        const missing = this.requiredSecretFields(row.authType).filter((key) => !secret?.[key as keyof typeof secret]);
         if (missing.length) throw new Error(`Missing credential: ${missing.join(', ')}`);
       }
       await this.prisma.connection.update({ where: { id }, data: { lastTestedAt: new Date(), status: ConnectionStatus.ACTIVE, errorCode: null, errorMessage: null } });
@@ -268,7 +268,7 @@ export class ConnectionsService {
     const [count, recent, byStatus, byAction] = await this.prisma.$transaction([
       this.prisma.connectionUsage.count({ where }),
       this.prisma.connectionUsage.findMany({ where, orderBy: { createdAt: 'desc' }, take: 50, select: { id: true, userId: true, workflowId: true, runId: true, actionType: true, status: true, durationMs: true, createdAt: true } }),
-      this.prisma.connectionUsage.groupBy({ by: ['status'], where, _count: { _all: true }, _avg: { durationMs: true } }),
+      this.prisma.connectionUsage.groupBy({ by: ['status'], where, _count: { _all: true }, _avg: { durationMs: true }, orderBy: { status: 'asc' } }),
       this.prisma.connectionUsage.groupBy({ by: ['actionType'], where, _count: { _all: true }, _avg: { durationMs: true }, orderBy: { _count: { actionType: 'desc' } }, take: 10 }),
     ]);
     return { count, recent, summary: { byStatus, byAction } };
@@ -308,7 +308,7 @@ export class ConnectionsService {
     const refreshToken = typeof payload.refresh_token === 'string' ? this.crypto.encrypt(payload.refresh_token) : undefined;
     const connection = await this.prisma.$transaction(async (tx) => {
       const connection = existing
-        ? await tx.connection.update({ where: { id: existing.id }, data: { status: ConnectionStatus.ACTIVE, metadata: metadata as Prisma.InputJsonValue, expiresAt, scope: typeof payload.scope === 'string' ? payload.scope.slice(0, 4000) : existing.scope, errorCode: null, errorMessage: null, secret: { upsert: { create: { id: randomUUID(), ownerId: row.userId, accessToken, ...(newRefreshToken ? { refreshToken: newRefreshToken } : {}) }, update: { accessToken, ...(refreshToken ? { refreshToken } : {}) } } } } })
+        ? await tx.connection.update({ where: { id: existing.id }, data: { status: ConnectionStatus.ACTIVE, metadata: metadata as Prisma.InputJsonValue, expiresAt, scope: typeof payload.scope === 'string' ? payload.scope.slice(0, 4000) : existing.scope, errorCode: null, errorMessage: null, secret: { upsert: { create: { id: randomUUID(), connectionId: existing.id, ownerId: row.userId, accessToken, ...(refreshToken ? { refreshToken } : {}) }, update: { accessToken, ...(refreshToken ? { refreshToken } : {}) } } } } })
         : await tx.connection.create({ data: { id: randomUUID(), orgId: row.orgId, ownerId: row.userId, name, provider, authType: ConnectionAuthType.OAUTH2, visibility: ConnectionVisibility.PRIVATE, status: ConnectionStatus.ACTIVE, metadata: metadata as Prisma.InputJsonValue, expiresAt, scope: typeof payload.scope === 'string' ? payload.scope.slice(0, 4000) : null, secret: { create: { id: randomUUID(), ownerId: row.userId, accessToken, ...(refreshToken ? { refreshToken } : {}) } } } });
       const secret = await tx.connectionSecret.findUnique({ where: { connectionId: connection.id } });
       if (!secret) throw new BadRequestException('OAuth connection secret could not be stored');
@@ -431,7 +431,7 @@ export class ConnectionsService {
     const newRefreshToken = typeof payload.refresh_token === 'string' ? this.crypto.encrypt(payload.refresh_token) : undefined;
     const existingSecret = await this.prisma.connectionSecret.findUnique({ where: { connectionId: id } });
     const connectionOwner = existingSecret?.ownerId ?? (await this.prisma.connection.findUniqueOrThrow({ where: { id }, select: { ownerId: true } })).ownerId;
-    const snapshot = this.mergeSecretSnapshot(existingSecret, { accessToken, ...(newRefreshToken ? { refreshToken: newRefreshToken } : {}) });
+    const snapshot = this.mergeSecretSnapshot(existingSecret, { accessToken, ...(refreshToken ? { refreshToken } : {}) });
     await this.prisma.$transaction(async (tx) => {
       await tx.connection.update({ where: { id }, data: { expiresAt: typeof payload.expires_in === 'number' ? new Date(Date.now() + payload.expires_in * 1000) : null, status: ConnectionStatus.ACTIVE, errorCode: null, errorMessage: null } });
       const latest = await tx.connectionSecretVersion.findFirst({ where: { connectionId: id }, orderBy: { version: 'desc' }, select: { version: true } });
