@@ -2017,3 +2017,25 @@ html[data-theme="dark"] .workflow-ui .wd-card {
   .workflow-ui .workflow-canvas-pane>.relative{min-width:1050px!important}
   .workflow-ui .workflow-connection-handle{width:14px;height:14px;top:55px}
 }
+
+/* Workflow control language: match the secondary WorkDrive New/Record buttons while keeping controls compact. */
+.workflow-ui .wd-pill{border-radius:5px}
+.workflow-ui .workflow-step-tab{border-radius:4px;color:#64748b;background:transparent}
+.workflow-ui .workflow-step-tab:hover{background:#f8fafc;color:#1f2937}
+.workflow-ui .workflow-step-tab.is-active{background:#fff;color:#1B66EA;box-shadow:0 1px 3px rgba(15,23,42,.08)}
+.workflow-ui .workflow-segment{min-height:34px;border:1px solid #e2e8f0;border-radius:4px;background:#fff;color:#475569;padding:7px 10px;font-size:10.5px;font-weight:500;transition:background-color .15s ease,border-color .15s ease,color .15s ease,box-shadow .15s ease}
+.workflow-ui .workflow-segment:hover{border-color:#cbd5e1;background:#f8fafc}
+.workflow-ui .workflow-segment.is-active{border-color:#1B66EA;background:#EEF4FF;color:#1B66EA;box-shadow:inset 0 0 0 1px rgba(27,102,234,.08)}
+.workflow-ui .workflow-phase-tabs{gap:2px;border-radius:5px}
+.workflow-ui .workflow-phase-tabs .workflow-segment{border-color:transparent;background:transparent}
+.workflow-ui .workflow-phase-tabs .workflow-segment.is-active{border-color:#e2e8f0;background:#fff}
+.workflow-builder-header{border:0!important;box-shadow:none!important;border-radius:0!important}
+.workflow-builder-mobile-menu{display:none}
+@media (max-width:1279px){
+  .workflow-builder-mobile-menu{display:inline-flex}
+}
+@media (max-width:900px){
+  .workflow-shell-nav{display:none!important}
+  .workflow-shell-header{border-bottom:1px solid var(--wd-line)}
+  .workflow-builder-header{padding-inline:12px!important}
+}
