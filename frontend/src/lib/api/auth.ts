@@ -1,6 +1,6 @@
 import { getApiBaseUrl } from './client';
 
-export type AuthUser = { id: string; name: string | null; email: string; org_id: string; role: string; membershipId?: string; membershipStatus?: string };
+export type AuthUser = { id: string; name: string | null; email: string; avatarUrl?: string | null; org_id: string; role: string; membershipId?: string; membershipStatus?: string };
 export type OrganizationMembershipSummary = { id: string; organizationId: string; role: string; status: string; isPrimary: boolean; organization: { id: string; name: string } };
 
 export type AuthResult = { access_token: string; user: AuthUser };
@@ -53,6 +53,19 @@ export function clearSession() {
     // مسح الكوكي عند تسجيل الخروج
     document.cookie = 'workdrive_access_token=; path=/; max-age=0; SameSite=Lax;';
   }
+}
+
+
+export type AppearancePreferences = {
+  id: string; name: string | null; email: string; avatarUrl?: string | null; role: string; organizationId: string;
+  themeMode: 'light' | 'dark' | 'system'; themeColor: 'blue' | 'green' | 'red' | 'yellow';
+  fontFamily: 'Zoho Puvi' | 'Lato' | 'Roboto' | 'PT Sans' | 'Arial'; lighterSidebar: boolean;
+};
+export function getAppearancePreferences() {
+  return fetch(`${getApiBaseUrl()}/auth/preferences`, { headers: { Authorization: `Bearer ${localStorage.getItem('workdrive_access_token') ?? ''}` } }).then(async r => { if (!r.ok) throw new Error('Unable to load preferences'); return r.json() as Promise<AppearancePreferences>; });
+}
+export function updateAppearancePreferences(input: Partial<Pick<AppearancePreferences, 'themeMode' | 'themeColor' | 'fontFamily' | 'lighterSidebar'>>) {
+  return fetch(`${getApiBaseUrl()}/auth/preferences`, { method: 'PATCH', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${localStorage.getItem('workdrive_access_token') ?? ''}` }, body: JSON.stringify(input) }).then(async r => { if (!r.ok) throw new Error((await r.text()) || 'Unable to update preferences'); return r.json() as Promise<AppearancePreferences>; });
 }
 
 export function forgotPassword(email: string) { return request<{ok:boolean;reset_token?:string}>('/auth/forgot-password',{email}); }

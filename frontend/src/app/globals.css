@@ -430,14 +430,15 @@ html, body {
    Reference: Zoho WorkDrive information architecture and interaction patterns.
    -------------------------------------------------------------------------- */
 :root{
+  --user-font-family:Arial;
   /*--wd-green:var(--wd-primary);*/
   /*--wd-green-dark:#008f70;*/
   --wd-sidebar:#282828;
   --wd-active:var(--wd-active);
-  --wd-primary:#2C66DD;
-  --wd-primary-dark:#184091;
-  --wd-primary-ink:#254993;
-  --wd-primary-light:#EFF6FF;
+  --wd-primary:var(--user-accent-primary,#2C66DD);
+  --wd-primary-dark:var(--user-accent-dark,#184091);
+  --wd-primary-ink:var(--user-accent-ink,#254993);
+  --wd-primary-light:var(--user-accent-light,#EFF6FF);
   --wd-danger:#DC2626;
   --wd-sel-bar:#EFF6FF;
   --wd-sel-border:#BFDBFE;
@@ -473,7 +474,7 @@ html, body {
   --wd-inspector-rail:80px;
   --wd-inspector-w:300px;
 }
-body{background:var(--wd-canvas)!important;color:var(--wd-text)!important;font-family:Arial,system-ui,sans-serif!important}
+body{background:var(--wd-canvas)!important;color:var(--wd-text)!important;font-family:var(--user-font-family),Arial,system-ui,sans-serif!important}
 .zoho-app-shell{min-height:100vh;background:var(--wd-canvas)}
 .zoho-topbar{height:48px;background:#fff;border-bottom:1px solid var(--wd-line);display:flex;align-items:center;padding:0 16px;gap:10px;position:sticky;top:0;z-index:30;margin:0}
 /* Safe edge padding: a slim 16px inset on each side keeps the search/buttons
@@ -709,7 +710,7 @@ html[data-theme="dark"] .zoho-top-actions .wd-btn-primary{background:var(--wd-pr
 
 /* ── Dark theme tokens (Zoho-style charcoal/slate, indigo accent) ────── */
 html[data-theme="dark"]{
-  --wd-primary:#3b82f6;--wd-primary-dark:#2563eb;
+  --wd-primary:var(--user-accent-primary,#3b82f6);--wd-primary-dark:var(--user-accent-dark,#2563eb);--wd-primary-ink:var(--user-accent-ink,#93c5fd);--wd-primary-light:var(--user-accent-light,rgba(59,130,246,.16));
   --wd-sidebar:#1e293b;--wd-sidebar-text:#cbd5e1;--wd-sidebar-muted:#94a3b8;
   --wd-bg:#1a2232;--wd-canvas:#121824;--wd-line:#2e3b52;--wd-hover:#2d3a4e;--wd-text:#f1f5f9;
   --imkan-color-bg:#1a2232;--imkan-color-fg:#f1f5f9;--imkan-color-muted:#94a3b8;
@@ -765,6 +766,9 @@ html[data-theme="dark"] .zoho-profile-menu a,
 html[data-theme="dark"] .zoho-profile-menu button{color:var(--wd-text)}
 html[data-theme="dark"] .zoho-profile-menu a:hover,
 html[data-theme="dark"] .zoho-profile-menu button:hover{background:var(--wd-hover)}
+html[data-theme="dark"] .account-drawer{box-shadow:-10px 0 34px rgba(0,0,0,.45)}
+html[data-theme="dark"] .appearance-preview{border-color:var(--wd-line)}
+html[data-theme="dark"] .appearance-subcard,html[data-theme="dark"] .appearance-card{background:var(--wd-bg)}
 html[data-theme="dark"] .zoho-member-dropdown,
 html[data-theme="dark"] .zoho-member-row:hover{background:var(--wd-hover)}
 
@@ -2700,3 +2704,58 @@ html[data-theme="dark"] .workflow-ui .wd-card {
   .member-profile-card .member-outline-button{flex:1}
   .team-role-menu{width:290px}
 }
+
+
+/* Account drawer + site-wide appearance preferences. */
+.account-drawer{position:fixed;inset-block:0;inset-inline-end:0;width:min(480px,100vw);z-index:90;background:var(--wd-bg);color:var(--wd-text);border-inline-start:1px solid var(--wd-line);box-shadow:-10px 0 34px rgba(15,23,42,.12);display:flex;flex-direction:column}
+.account-drawer-head{height:48px;display:flex;align-items:center;justify-content:flex-end;padding:0 14px;border-bottom:1px solid var(--wd-line);flex:none}
+.account-drawer-close{width:32px;height:32px;border:0;background:transparent;border-radius:6px;color:var(--wd-text-muted);font-size:24px;line-height:1;display:grid;place-items:center}
+.account-drawer-close:hover{background:var(--wd-hover);color:var(--wd-text)}
+.account-drawer-scroll{min-height:0;overflow-y:auto;flex:1}
+.account-profile{padding:26px 22px 22px;text-align:center;border-bottom:1px solid var(--wd-line)}
+.account-profile-avatar{width:88px;height:88px;border-radius:50%;overflow:hidden;margin:0 auto 13px;display:grid;place-items:center;background:var(--wd-primary-light);color:var(--wd-primary-ink);font-size:24px;font-weight:700}
+.account-profile-avatar img{width:100%;height:100%;object-fit:cover}
+.account-profile-name{font-size:17px;font-weight:600}
+.account-profile-badge{display:inline-flex;margin-top:7px;padding:3px 8px;border-radius:10px;background:var(--wd-hover);font-size:11px;font-weight:600}
+.account-profile-line{margin-top:13px;font-size:13px;color:var(--wd-text-muted);display:flex;justify-content:center;align-items:center;gap:6px}
+.account-profile-line button{border:0;background:transparent;color:var(--wd-text-muted);padding:2px}
+.account-my-account{display:block;margin-top:13px;color:var(--wd-primary-ink);font-size:13px;font-weight:600;text-decoration:none}
+.account-referral{display:flex;gap:12px;align-items:flex-start;padding:14px 22px;background:var(--wd-primary-light);color:var(--wd-primary-ink);font-size:13px;line-height:19px}
+.account-referral-icon{font-size:22px;line-height:1}
+.account-section{padding:22px 22px 18px;border-bottom:1px solid var(--wd-line)}
+.account-section-title{font-size:13px;font-weight:700;margin-bottom:13px}
+.account-action-grid{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+.account-action{min-height:42px;border:0;background:transparent;border-radius:7px;padding:8px 10px;display:flex;align-items:center;gap:10px;text-align:start;color:var(--wd-text);font-size:13px}
+.account-action:hover{background:var(--wd-hover)}
+.account-action-icon{width:18px;display:grid;place-items:center;color:var(--wd-text-muted)}
+.account-download{padding:22px;border-bottom:1px solid var(--wd-line)}
+.account-download-grid{display:grid;grid-template-columns:1fr 1fr 96px;gap:16px;align-items:center;text-align:center}
+.account-download-item{font-size:12px;line-height:18px}.account-download-item svg{display:block;margin:0 auto 8px}
+.account-qr{width:92px;height:92px;border:6px solid #fff;background:repeating-conic-gradient(#111 0 25%,#fff 0 50%) 50%/12px 12px;box-shadow:0 0 0 1px var(--wd-line);display:grid;place-items:center;font-size:0}
+.account-signout{height:54px;flex:none;border:0;background:transparent;color:#C62828;font-size:13px;font-weight:500;display:flex;align-items:center;justify-content:center;gap:7px}
+.account-signout:hover{background:var(--wd-hover)}
+.account-appearance-head{height:60px;padding:0 16px;display:flex;align-items:center;gap:10px;border-bottom:1px solid var(--wd-line);font-size:16px;font-weight:600}
+.account-back{width:32px;height:32px;border:1px solid var(--wd-line);border-radius:50%;background:transparent;display:grid;place-items:center}
+.appearance-card{margin:12px;background:var(--wd-bg);border:1px solid var(--wd-line);border-radius:14px;padding:14px}
+.appearance-title{font-size:15px;font-weight:600}.appearance-desc{margin-top:10px;color:var(--wd-text-muted);font-size:12px;line-height:18px}
+.appearance-modes{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:14px}
+.appearance-mode{border:1px solid var(--wd-line);border-radius:12px;background:var(--wd-bg);padding:8px;cursor:pointer;text-align:center;color:var(--wd-text);font-size:11px;font-weight:600}
+.appearance-mode.is-active{border:1.5px solid var(--wd-primary);background:var(--wd-primary-light);color:var(--wd-primary-ink)}
+.appearance-preview{height:74px;border:1px solid #d8dce2;border-radius:7px;overflow:hidden;display:flex;background:#fff;margin-bottom:8px}.appearance-preview-left{width:35%;background:#1e1f20}.appearance-preview-main{flex:1;background:#fff}.appearance-mode.dark .appearance-preview-left{background:#111}.appearance-mode.dark .appearance-preview-main{background:#1f2430}.appearance-mode.system .appearance-preview-left{background:linear-gradient(90deg,#fff 50%,#191b20 50%)}
+.appearance-check{margin-top:14px;display:flex;align-items:center;gap:8px;font-size:12px}.appearance-check input{accent-color:var(--wd-primary)}
+.appearance-subcard{margin:12px;background:var(--wd-bg);border:1px solid var(--wd-line);border-radius:14px;padding:14px}.appearance-subtitle{font-size:14px;font-weight:600}.appearance-colors{display:flex;gap:18px;margin-top:14px}.appearance-color{width:30px;height:30px;border-radius:50%;border:0;display:grid;place-items:center;cursor:pointer;box-shadow:0 0 0 1px rgba(0,0,0,.04)}.appearance-color.is-active{outline:2px solid var(--wd-primary);outline-offset:3px}.appearance-color.blue{background:#4f8df7}.appearance-color.green{background:#2ab39b}.appearance-color.red{background:#ff2d32}.appearance-color.yellow{background:#f9b812}
+.appearance-fonts{display:flex;flex-wrap:wrap;gap:8px;margin-top:14px}.appearance-font{height:34px;padding:0 12px;border:1px solid var(--wd-line);border-radius:17px;background:transparent;color:var(--wd-text);font-size:12px;cursor:pointer}.appearance-font.is-active{border-color:var(--wd-primary);background:var(--wd-primary-light);color:var(--wd-primary-ink);font-weight:600}
+html[data-sidebar-light="true"] .primary-sidebar{background:#f6f7f9!important;color:#25282d!important}html[data-sidebar-light="true"] .primary-sidebar a{color:#25282d!important}html[data-sidebar-light="true"] .primary-sidebar a:hover{background:#e9edf3!important}html[data-sidebar-light="true"] .primary-sidebar [class*="text-[#9CA3AF"]{color:#697180!important}
+
+/* Members / Team Folder tables: fill the available viewport and distinguish idle/hover rows. */
+.members-page{min-height:100%;height:100%}.members-page main{min-height:0}.members-table{min-height:calc(100vh - 205px);background:var(--wd-bg)}
+.members-table-row{background:var(--wd-bg);transition:background-color .12s ease}.members-table-row:hover{background:#f5f6f8!important}.members-table-row.is-selected{background:var(--wd-primary-light)!important}.members-table-row:hover.is-selected{background:color-mix(in srgb,var(--wd-primary-light) 78%,#fff)!important}
+.member-data-table{min-height:430px;background:var(--wd-bg)}.member-data-row{background:var(--wd-bg);transition:background-color .12s ease}.member-data-row:hover{background:#f5f6f8!important}
+.member-search-combo{display:flex;align-items:center;height:36px;border:1px solid #d9dce1;border-radius:18px;background:#fff;overflow:visible;width:min(505px,100%)}.member-search-combo .member-filter-button{height:34px;border:0;border-inline-end:1px solid #e4e6e9;border-radius:0;padding-inline:12px;flex:none}.member-search-combo .member-search{height:34px;width:auto;flex:1;border:0;border-radius:0}.member-search-combo:focus-within{border-color:var(--wd-primary);box-shadow:0 0 0 2px var(--wd-primary-light)}
+.member-team-toolbar{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:14px 26px;border-bottom:1px solid var(--wd-line)}.member-team-toolbar-actions{display:flex;align-items:center;gap:8px}.member-export-button{height:34px;padding:0 16px;border:0;border-radius:18px;background:var(--wd-hover);color:var(--wd-text);font-size:12px;font-weight:600}.member-export-button:hover{background:#e9ebee}
+.member-section-toolbar{padding:16px 26px 8px}.member-section-toolbar p{margin-top:4px}
+@media(max-width:700px){.account-drawer{width:100vw}.account-download-grid{grid-template-columns:1fr 1fr}.account-qr{display:none}.appearance-modes{gap:6px}.member-search-combo{width:100%}.member-team-toolbar{align-items:stretch;flex-direction:column}.member-team-toolbar-actions{justify-content:space-between}.members-table{min-height:calc(100vh - 230px)}}
+
+/* Long-table surfaces should occupy the viewport even when only a few rows exist. */
+.wd-table-wrap,.imkan-table-wrap{min-height:calc(100vh - 190px)}
+.member-detail-card{min-height:calc(100vh - 180px)}

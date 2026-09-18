@@ -31,7 +31,7 @@
   --imkan-color-fg:      #222222;   /* FALLBACK */
   --imkan-color-muted:   #667085;   /* FALLBACK */
   --imkan-color-surface: #f7f8fa;   /* FALLBACK */
-  --imkan-color-primary: #2C66DD;   /* ✅ AUTHORITY — IMKAN One primary */
+  --imkan-color-primary: var(--user-accent-primary, #2C66DD);   /* ✅ AUTHORITY — IMKAN One primary */
 
   /* ── Color: Semantic Aliases ─────────────────────────────────────────────
      These reference existing core tokens.  No new values are invented.
@@ -41,7 +41,7 @@
   --imkan-color-focus:  var(--imkan-color-primary);  /* FALLBACK alias — primary used for focus rings */
 
   /* ── Typography ────────────────────────────────────────────────────────── */
-  --imkan-font-latin:  system-ui, sans-serif;   /* FALLBACK — replace with "Zoho Puvi" when available */
+  --imkan-font-latin:  var(--user-font-family, Arial), system-ui, sans-serif;   /* FALLBACK — replace with "Zoho Puvi" when available */
   --imkan-font-arabic: system-ui, sans-serif;   /* FALLBACK — replace with "IBM Plex Sans Arabic" when available */
   --imkan-font-size-ui:         14px;            /* ✅ AUTHORITY — IMKAN One UI scale */
   --imkan-font-size-secondary:  12px;            /* ✅ AUTHORITY — IMKAN One secondary scale */

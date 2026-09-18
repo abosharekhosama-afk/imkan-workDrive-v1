@@ -310,6 +310,41 @@ export class AuthService {
     return { ...updated };
   }
 
+  async preferences(user: AccessTokenPayload) {
+    const found = await this.prisma.user.findUnique({
+      where: { id: user.sub },
+      select: { id: true, name: true, email: true, avatarUrl: true, themeMode: true, themeColor: true, fontFamily: true, lighterSidebar: true },
+    });
+    if (!found) throw new UnauthorizedException('Session is no longer valid');
+    const membership = await this.prisma.organizationMembership.findFirst({
+      where: { userId: user.sub, organizationId: user.org_id, status: MembershipStatus.ACTIVE },
+      select: { role: true },
+    });
+    if (!membership) throw new UnauthorizedException('Session is no longer valid');
+    return { ...found, role: membership.role, organizationId: user.org_id };
+  }
+
+  async updatePreferences(user: AccessTokenPayload, input: { themeMode?: string; themeColor?: string; fontFamily?: string; lighterSidebar?: boolean }) {
+    const allowedModes = new Set(['light', 'dark', 'system']);
+    const allowedColors = new Set(['blue', 'green', 'red', 'yellow']);
+    const allowedFonts = new Set(['Zoho Puvi', 'Lato', 'Roboto', 'PT Sans', 'Arial']);
+    if (input.themeMode !== undefined && !allowedModes.has(input.themeMode)) throw new BadRequestException('Invalid theme mode');
+    if (input.themeColor !== undefined && !allowedColors.has(input.themeColor)) throw new BadRequestException('Invalid theme color');
+    if (input.fontFamily !== undefined && !allowedFonts.has(input.fontFamily)) throw new BadRequestException('Invalid font family');
+    if (input.lighterSidebar !== undefined && typeof input.lighterSidebar !== 'boolean') throw new BadRequestException('Invalid sidebar preference');
+    const updated = await this.prisma.user.update({
+      where: { id: user.sub },
+      data: {
+        ...(input.themeMode !== undefined ? { themeMode: input.themeMode } : {}),
+        ...(input.themeColor !== undefined ? { themeColor: input.themeColor } : {}),
+        ...(input.fontFamily !== undefined ? { fontFamily: input.fontFamily } : {}),
+        ...(input.lighterSidebar !== undefined ? { lighterSidebar: input.lighterSidebar } : {}),
+      },
+      select: { id: true, name: true, email: true, avatarUrl: true, themeMode: true, themeColor: true, fontFamily: true, lighterSidebar: true },
+    });
+    return updated;
+  }
+
   async changePassword(user: AccessTokenPayload, currentPassword: string, newPassword: string) {
     if (newPassword.length < 10) throw new BadRequestException('New password must be at least 10 characters');
     const found = await this.prisma.user.findFirst({ where: { id: user.sub } });

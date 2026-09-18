@@ -103,11 +103,24 @@ function RolePicker({value,onChange,ar}:{value:OrgRole;onChange:(v:OrgRole)=>voi
 
 function TeamFoldersPanel({data,ar,onRefresh,setToast}:{data:MemberDetails;ar:boolean;onRefresh:()=>Promise<void>;setToast:(x:{message:string;tone?:"success"|"error"}|null)=>void}) {
   const [openId,setOpenId]=useState<string|null>(null);
+  const [query,setQuery]=useState("");
   async function change(id:string,role:TeamFolderRole){try{await updateTeamFolderMember(id,data.member.userId,role);await onRefresh()}catch{setToast({message:ar?"تعذر تغيير الصلاحية.":"Unable to change permission.",tone:"error"})}}
   async function remove(id:string){try{await removeTeamFolderMember(id,data.member.userId);await onRefresh()}catch{setToast({message:ar?"تعذر إزالة المجلد.":"Unable to remove the team folder.",tone:"error"})}}
+  const rows=data.teamFolders.filter(tf=>tf.name.toLocaleLowerCase().includes(query.trim().toLocaleLowerCase()));
+  const exportFolders = () => {
+    const header = ["Team Folder", "Role"];
+    const lines = rows.map((tf) => [`"${tf.name.replaceAll('"', '""')}"`, `"${roleLabel(tf.role, false)}"`].join(","));
+    const blob = new Blob([[header.join(","), ...lines].join("\n")], { type: "text/csv;charset=utf-8" });
+    const url = URL.createObjectURL(blob); const a = document.createElement("a"); a.href = url; a.download = "imkan-team-folders.csv"; a.click(); URL.revokeObjectURL(url);
+  };
   return <div className="member-content-panel">
-    <div className="member-section-toolbar"><div><h3>{ar?"مجلدات الفريق":"Team Folders"}</h3><p>{ar?"المجلدات المتاحة لهذا العضو وصلاحياته.":"Team folders assigned to this member and their roles."}</p></div></div>
-    {data.teamFolders.length===0?<EmptyPanel icon="folder" title={ar?"هذا العضو ليس ضمن أي مجلد فريق بعد.":"This member isn't part of any team folders yet."} text={ar?"أضفهم إلى مجلد فريق لإدارة الوصول إلى الملفات.":"Add them to a Team Folder to manage file access."}/>:<div className="member-data-table"><div className="member-data-head"><span>{ar?"الاسم":"Name"}</span><span>{ar?"الدور":"Role"}</span><span/></div>{data.teamFolders.map(tf=><div className="member-data-row" key={tf.id}><span className="flex items-center gap-3"><Icons.folder size={17}/>{tf.name}</span><span className="relative"><button className="member-role-pill" onClick={()=>setOpenId(openId===tf.id?null:tf.id)}>{roleLabel(tf.role,ar)}<Icons.chevD size={12}/></button>{openId===tf.id?<TeamRoleMenu value={tf.role as TeamFolderRole} ar={ar} onChange={(r)=>{setOpenId(null);void change(tf.id,r)}}/>:null}</span><button className="member-remove-x" onClick={()=>void remove(tf.id)}><Icons.x size={15}/></button></div>)}</div>}
+    <div className="member-team-toolbar">
+      <div className="member-search-combo">
+        <label className="member-search"><Icons.search size={15}/><input value={query} onChange={e=>setQuery(e.target.value)} placeholder={ar?"البحث باسم مجلد الفريق":"Search by team folder name"}/></label>
+      </div>
+      <div className="member-team-toolbar-actions"><button type="button" className="member-export-button" onClick={exportFolders}>{ar?"تصدير":"Export"}</button></div>
+    </div>
+    {rows.length===0?<EmptyPanel icon="folder" title={data.teamFolders.length===0?(ar?"هذا العضو ليس ضمن أي مجلد فريق بعد.":"This member isn't part of any team folders yet."):(ar?"لا توجد نتائج مطابقة.":"No matching team folders.")} text={data.teamFolders.length===0?(ar?"أضفهم إلى مجلد فريق لإدارة الوصول إلى الملفات.":"Add them to a Team Folder to manage file access."):(ar?"جرّب تغيير عبارة البحث.":"Try changing your search.")}/>:<div className="member-data-table"><div className="member-data-head"><span>{ar?"الاسم":"Name"}</span><span>{ar?"دور العضو":"Role"}</span><span/></div>{rows.map(tf=><div className="member-data-row" key={tf.id}><span className="flex items-center gap-3"><Icons.folder size={17}/>{tf.name}</span><span className="relative"><button className="member-role-pill" onClick={()=>setOpenId(openId===tf.id?null:tf.id)}>{roleLabel(tf.role,ar)}<Icons.chevD size={12}/></button>{openId===tf.id?<TeamRoleMenu value={tf.role as TeamFolderRole} ar={ar} onChange={(r)=>{setOpenId(null);void change(tf.id,r)}}/>:null}</span><button className="member-remove-x" onClick={()=>void remove(tf.id)} aria-label={ar?"إزالة":"Remove"}><Icons.x size={15}/></button></div>)}</div>}
   </div>;
 }
 function TeamRoleMenu({value,ar,onChange}:{value:TeamFolderRole;ar:boolean;onChange:(v:TeamFolderRole)=>void}){return <div className="member-role-menu team-role-menu">{TEAM_ROLES.map(r=><button key={r} onClick={()=>onChange(r)} className={value===r?"is-active":""}><b>{roleLabel(r,ar)}</b><small>{r==="ADMIN"?(ar?"تحكم كامل":"Full control"):r==="ORGANIZER"?(ar?"يمكنه التنظيم والمشاركة":"Can organize, share, create, edit, and manage members"):r==="EDITOR"?(ar?"يمكنه الإنشاء والتحرير والتعليق":"Can create, edit, and comment"):r==="COMMENTER"?(ar?"يمكنه العرض والتعليق":"Can view and comment"):(ar?"يمكنه العرض":"Can view")}</small></button>)}</div>}

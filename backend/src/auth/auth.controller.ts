@@ -1,4 +1,4 @@
-import { Body, Controller, Delete, Get, Param, Post, Query, Res } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Patch, Post, Query, Res } from '@nestjs/common';
 import type { Response } from 'express';
 import { Public } from './public.decorator';
 import { CurrentUser } from './current-user.decorator';
@@ -18,6 +18,8 @@ export class AuthController {
   @Public() @Post('reset-password') resetPassword(@Body() body: { token: string; password: string }) { return this.auth.resetPassword(body.token, body.password); }
   @Get('me') me(@CurrentUser() user: AccessTokenPayload) { return this.auth.me(user); }
   @Post('profile') updateProfile(@CurrentUser() user: AccessTokenPayload, @Body() body: { name: string }) { return this.auth.updateProfile(user, body.name); }
+  @Get('preferences') preferences(@CurrentUser() user: AccessTokenPayload) { return this.auth.preferences(user); }
+  @Patch('preferences') updatePreferences(@CurrentUser() user: AccessTokenPayload, @Body() body: { themeMode?: string; themeColor?: string; fontFamily?: string; lighterSidebar?: boolean }) { return this.auth.updatePreferences(user, body); }
   @Post('change-password') changePassword(@CurrentUser() user: AccessTokenPayload, @Body() body: { currentPassword: string; newPassword: string }) { return this.auth.changePassword(user, body.currentPassword, body.newPassword); }
   @Get('memberships') memberships(@CurrentUser() user: AccessTokenPayload) { return this.auth.getUserMemberships(user.sub); }
   @Post('organizations/switch') switchOrganization(@CurrentUser() user: AccessTokenPayload, @Body() body: { organizationId: string }) { return this.auth.switchOrganization(user, body.organizationId); }

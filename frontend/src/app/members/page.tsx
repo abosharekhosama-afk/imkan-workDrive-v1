@@ -92,6 +92,12 @@ export default function MembersPage() {
   }
 
   const roleLabel = (role: OrgRole) => role === "SUPER_ADMIN" ? (ar ? "مسؤول عام" : "Super Admin") : role === "ADMIN" ? (ar ? "مسؤول" : "Admin") : (ar ? "عضو" : "Member");
+  const exportMembers = () => {
+    const header = ["Name", "Email", "Role", "Status", "Storage used"];
+    const lines = members.map((m) => [m.name || "", m.email, roleLabel(m.role), m.status, bytes(m.storageUsed)].map((v) => `"${String(v).replaceAll('"', '""')}"`).join(","));
+    const blob = new Blob([[header.join(","), ...lines].join("\n")], { type: "text/csv;charset=utf-8" });
+    const url = URL.createObjectURL(blob); const a = document.createElement("a"); a.href = url; a.download = "imkan-members.csv"; a.click(); URL.revokeObjectURL(url);
+  };
 
   return (
     <div className="members-page min-h-full bg-white text-[#202124]">
@@ -99,7 +105,7 @@ export default function MembersPage() {
         <div className="flex shrink-0 items-center justify-between border-b border-[#ececec] px-7 py-4">
           <h1 className="text-[20px] font-semibold">{ar ? "الأعضاء" : "Members"}</h1>
           <div className="flex items-center gap-2">
-            <button type="button" className="member-soft-button" onClick={() => setToast({ message: ar ? "تم تجهيز تصدير الأعضاء." : "Members export is ready.", tone: "success" })}>
+            <button type="button" className="member-soft-button" onClick={exportMembers}>
               <Icons.download size={16} /> {ar ? "تصدير" : "Export"}
             </button>
             <button type="button" className="member-primary-button" onClick={() => setInviteOpen(true)}>
@@ -111,24 +117,26 @@ export default function MembersPage() {
         <div className="flex min-h-0 flex-1">
           <main className="min-w-0 flex-1 overflow-auto px-5 py-6 lg:px-7">
             <div className="members-toolbar">
-              <div className="relative">
-                <button type="button" className="member-filter-button" onClick={() => setFilterOpen((v) => !v)} aria-expanded={filterOpen}>
-                  <Icons.funnel size={15} /> {filter === "ACTIVE" ? (ar ? "نشط" : "Active") : filter === "SUSPENDED" ? (ar ? "موقوف" : "Suspended") : filter === "REMOVED" ? (ar ? "محذوف" : "Deleted") : (ar ? "مدعو" : "Invited")}
-                  <Icons.chevD size={13} />
-                </button>
-                {filterOpen ? (
-                  <div className="member-popover start-0">
-                    {(["ACTIVE", "SUSPENDED", "REMOVED", "INVITED"] as Filter[]).map((key) => (
-                      <button key={key} type="button" className={filter === key ? "is-active" : ""} onClick={() => { setFilter(key); setFilterOpen(false); }}>
-                        {key === "ACTIVE" ? (ar ? "نشط" : "Active") : key === "SUSPENDED" ? (ar ? "موقوف" : "Suspended") : key === "REMOVED" ? (ar ? "محذوف" : "Deleted") : (ar ? "مدعو" : "Invited")}
-                      </button>
-                    ))}
-                  </div>
-                ) : null}
-              </div>
-              <div className="member-search">
-                <Icons.search size={16} />
-                <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder={ar ? "أدخل الاسم أو البريد الإلكتروني للبحث" : "Enter name or email address to search"} />
+              <div className="member-search-combo">
+                <div className="relative">
+                  <button type="button" className="member-filter-button" onClick={() => setFilterOpen((v) => !v)} aria-expanded={filterOpen}>
+                    <Icons.funnel size={15} /> {filter === "ACTIVE" ? (ar ? "نشط" : "Active") : filter === "SUSPENDED" ? (ar ? "موقوف" : "Suspended") : filter === "REMOVED" ? (ar ? "محذوف" : "Deleted") : (ar ? "مدعو" : "Invited")}
+                    <Icons.chevD size={13} />
+                  </button>
+                  {filterOpen ? (
+                    <div className="member-popover start-0 top-10">
+                      {(["ACTIVE", "SUSPENDED", "REMOVED", "INVITED"] as Filter[]).map((key) => (
+                        <button key={key} type="button" className={filter === key ? "is-active" : ""} onClick={() => { setFilter(key); setFilterOpen(false); }}>
+                          {key === "ACTIVE" ? (ar ? "نشط" : "Active") : key === "SUSPENDED" ? (ar ? "موقوف" : "Suspended") : key === "REMOVED" ? (ar ? "محذوف" : "Deleted") : (ar ? "مدعو" : "Invited")}
+                        </button>
+                      ))}
+                    </div>
+                  ) : null}
+                </div>
+                <label className="member-search">
+                  <Icons.search size={16} />
+                  <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder={ar ? "أدخل الاسم أو البريد الإلكتروني للبحث" : "Enter name or email address to search"} />
+                </label>
               </div>
             </div>
 

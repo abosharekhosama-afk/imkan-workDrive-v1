@@ -306,6 +306,10 @@ model User {
   lastLoginAt          DateTime?  @map("last_login_at")
   createdAt            DateTime   @default(now()) @map("created_at")
   currentOrganizationId String?   @map("current_organization_id") @db.Char(36)
+  themeMode            String     @default("light") @map("theme_mode")
+  themeColor           String     @default("blue") @map("theme_color")
+  fontFamily           String     @default("Zoho Puvi") @map("font_family")
+  lighterSidebar       Boolean    @default(false) @map("lighter_sidebar")
 
   currentOrganization Organization? @relation("UserCurrentOrganization", fields: [currentOrganizationId], references: [id], onDelete: SetNull)
 
