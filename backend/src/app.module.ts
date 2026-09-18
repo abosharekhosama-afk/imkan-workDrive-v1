@@ -23,6 +23,7 @@ import { FolderPermissionsModule } from './folder-permissions/folder-permissions
 import { WorkflowsModule } from './workflows/workflows.module';
 import { CloudImportModule } from './cloud-import/cloud-import.module';
 import { GroupsModule } from './groups/groups.module';
+import { ConnectionsModule } from './connections/connections.module';
 
 @Module({
   imports: [
@@ -47,6 +48,7 @@ import { GroupsModule } from './groups/groups.module';
     WorkflowsModule,
     CloudImportModule,
     GroupsModule,
+    ConnectionsModule,
   ],
   controllers: [AppController],
   providers: [AppService],

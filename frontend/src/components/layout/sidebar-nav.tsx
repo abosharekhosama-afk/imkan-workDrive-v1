@@ -38,6 +38,7 @@ export function SidebarNav() {
     { href: "/files/shared-links", key: "nav.collectFiles", icon: "inbox", active: pathname.startsWith("/files/shared-links") },
     { href: "/files/templates", key: "nav.templates", icon: "layout", active: pathname.startsWith("/files/templates") },
     { href: "/files/workflows", key: "nav.workflows", icon: "flow", active: pathname.startsWith("/files/workflows") },
+    { href: "/files/workflows/connections", key: "nav.connections", icon: "link", active: pathname.startsWith("/files/workflows/connections") },
     { href: "/members", key: "nav.members", icon: "users", active: pathname === "/members" || pathname.startsWith("/members/") },
     { href: "/organization", key: "nav.organization", icon: "users", active: pathname.startsWith("/organization") },
     { href: "/files", key: "files.breadcrumb.root", icon: "folder", active: myActive, spaced: true },

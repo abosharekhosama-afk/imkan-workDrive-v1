@@ -1,0 +1,1 @@
+-- Phase 5 stores function connection references inside existing JSON definitions; no schema change.

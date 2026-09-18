@@ -7,7 +7,7 @@ import { useLocale } from "@/components/locale-provider";
 import { WorkflowHelp } from "@/components/workflow-help";
 import { listFolderTree, type FolderTreeItem } from "@/lib/api/folders";
 import { useWorkflowAccess } from "@/components/workflow-access";
-import { createWorkflow, getWorkflow, updateWorkflow, listWorkflowParticipantOptions, listWorkflowTemplates, listWorkflowFunctions, type Workflow, type WorkflowParticipant, type WorkflowDataTemplate, type WorkflowFunction } from "@/lib/api/workflows";
+import { listConnections, createWorkflow, getWorkflow, updateWorkflow, listWorkflowParticipantOptions, listWorkflowTemplates, listWorkflowFunctions, type Workflow, type WorkflowParticipant, type WorkflowDataTemplate, type WorkflowFunction } from "@/lib/api/workflows";
 
 type Action = { type: string; config: Record<string, unknown> };
 type WorkflowField = { id: string; name: string; description: string; type: string; required: boolean; defaultValue?: string; max?: number; options?: string[] };
@@ -29,7 +29,7 @@ const TRIGGERS = [
   ["properties_updated", "Properties updated", "تم تحديث الخصائص"], ["ready", "File marked as ready", "تم تعليم الملف كجاهز"],
 ] as const;
 const ACTIONS = [
-  ["notify", "System notification", "إشعار للنظام"], ["move", "Move", "نقل"], ["copy", "Copy", "نسخ"], ["generate_link", "Generate link", "إنشاء رابط"],
+  ["http_request", "HTTP request", "طلب HTTP"], ["notify", "System notification", "إشعار للنظام"], ["move", "Move", "نقل"], ["copy", "Copy", "نسخ"], ["generate_link", "Generate link", "إنشاء رابط"],
   ["share", "Share", "مشاركة"], ["request_approval", "Request approval", "طلب موافقة"], ["favorite", "Add to favorites", "إضافة للمفضلة"],
   ["tag", "Add tag", "إضافة وسم"], ["mark_final", "Mark as final", "تعليم كنهائي"], ["create_folder", "Create folder", "إنشاء مجلد"],
   ["data_template", "Apply data template", "تطبيق قالب بيانات"], ["custom_function", "Run custom function", "تشغيل دالة آمنة"],
@@ -134,6 +134,8 @@ function UserPicker({ selected, users, ar, onChange }: { selected: string[]; use
 function ActionEditor({ actions, onChange, resourceType, ar, workflowFields }: { actions: Action[]; onChange: (next: Action[]) => void; resourceType: string; ar: boolean; workflowFields: WorkflowField[] }) {
   const [dragged, setDragged] = useState<number | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [connections, setConnections] = useState<Array<{id:string;name:string;provider:string;status:string}>>([]);
+  useEffect(() => { void listConnections({ provider: "rest", status: "ACTIVE" }).then(setConnections).catch(() => undefined); }, []);
   const [participantOptions, setParticipantOptions] = useState<{ users: WorkflowParticipant[]; groups: Array<{ id:string; name:string; memberCount?:number }>; roles:string[] }>({ users:[], groups:[], roles:[] });
   const [templates, setTemplates] = useState<WorkflowDataTemplate[]>([]);
   const [functions, setFunctions] = useState<WorkflowFunction[]>([]);
@@ -183,7 +185,7 @@ function ActionEditor({ actions, onChange, resourceType, ar, workflowFields }: {
   };
   const actionIcon = (type: string) => {
     const icons: Record<string, string> = {
-      notify: "◔", move: "↗", copy: "▣", generate_link: "↗", share: "↗",
+      http_request: "↗", notify: "◔", move: "↗", copy: "▣", generate_link: "↗", share: "↗",
       request_approval: "✓", favorite: "☆", tag: "#", mark_final: "✓", create_folder: "＋",
       data_template: "Aa", custom_function: "ƒ",
     };
@@ -220,6 +222,16 @@ function ActionEditor({ actions, onChange, resourceType, ar, workflowFields }: {
         </div>
 
         <div className="workflow-action-card-body">
+          {a.type === "http_request" && <>
+            <label className="workflow-action-field sm:col-span-2"><span>{txt(ar,"Connection","الاتصال")}</span><select value={String(a.config.connectionId ?? "")} onChange={e=>update(i,"connectionId",e.target.value)}><option value="">{txt(ar,"Select REST connection","اختر اتصال REST")}</option>{connections.map(c=><option key={c.id} value={c.id}>{c.name}</option>)}</select></label>
+            {field(txt(ar,"Path / URL path","المسار"), a.config.path, v => update(i,"path",v), "/v1/resource or ?id={{file.id}}")}
+            <label className="workflow-action-field"><span>{txt(ar,"Method","الطريقة")}</span><select value={String(a.config.method ?? "GET")} onChange={e=>update(i,"method",e.target.value)}>{["GET","POST","PUT","PATCH","DELETE","HEAD"].map(m=><option key={m}>{m}</option>)}</select></label>
+            <label className="workflow-action-field sm:col-span-2"><span>{txt(ar,"Body (optional)","الجسم (اختياري)")}</span><textarea value={String(a.config.body ?? "")} onChange={e=>update(i,"body",e.target.value)} rows={4} placeholder='{"fileId":"{{file.id}}"}' /></label>
+            <label className="workflow-action-field"><span>{txt(ar,"Response mode","طريقة الاستجابة")}</span><select value={String(a.config.responseMode ?? "TEXT")} onChange={e=>update(i,"responseMode",e.target.value)}>{["TEXT","JSON","HEADERS","NONE"].map(m=><option key={m}>{m}</option>)}</select></label>
+            <label className="workflow-action-field"><span>{txt(ar,"Max response bytes","الحد الأقصى للاستجابة")}</span><input type="number" min={256} max={20000} value={Number(a.config.maxResponseBytes ?? 20000)} onChange={e=>update(i,"maxResponseBytes",Number(e.target.value)||20000)} /></label>
+            <label className="workflow-action-field sm:col-span-2"><span>{txt(ar,"Output workflow field (optional)","حقل إخراج سير العمل (اختياري)")}</span><select value={String(a.config.outputFieldId ?? "")} onChange={e=>update(i,"outputFieldId",e.target.value)}><option value="">{txt(ar,"Do not store response","لا تحفظ الاستجابة")}</option>{workflowFields.map(f=><option key={f.id} value={f.id}>{f.name}</option>)}</select></label>
+            <div className="sm:col-span-2 rounded-xl bg-amber-50 p-3 text-[9px] leading-5 text-amber-700">{txt(ar,"Requests use the selected REST connection credentials. Targets are restricted to the connection origin and private/local network targets are blocked.","تستخدم الطلبات بيانات اعتماد اتصال REST المحدد، ويتم تقييد الهدف إلى نفس أصل الاتصال وحظر الشبكات المحلية والخاصة.")}</div>
+          </>}
           {a.type === "notify" && <>
             {field(txt(ar,"Notification title","عنوان الإشعار"), a.config.title, v => update(i,"title",v))}
             <label className="workflow-action-field"><span>{txt(ar,"Recipients (optional)","المستلمون (اختياري)")}</span><UserPicker selected={Array.isArray(a.config.userIds) ? a.config.userIds.map(String) : []} users={participantOptions.users} ar={ar} onChange={ids => update(i,"userIds",ids)} /></label>
@@ -396,7 +408,7 @@ export default function WorkflowBuilderPage() {
   const onDropField = (e: DragEvent<HTMLDivElement>) => { e.preventDefault(); const type = e.dataTransfer.getData("application/x-workflow-field") || dragFieldType; if (!type) return; const base = { id: `${type}_${Date.now().toString(36)}`, name: "", description: "", type, required: false }; setFieldDraft(base); setDragFieldType(null); setFieldsDragOver(false); };
   const removeField = (id: string) => setFields((v) => v.filter((f) => f.id !== id));
 
-  const validation = useMemo(() => { const issues: string[] = []; if (!name.trim()) issues.push(txt(ar,"Workflow name is required.","اسم سير العمل مطلوب.")); if (!states.length) issues.push(txt(ar,"Add at least one state.","أضف حالة واحدة على الأقل.")); if (!states.some((s) => s.terminal)) issues.push(txt(ar,"Add at least one final state.","أضف حالة نهائية واحدة على الأقل.")); if (mode === "AUTOMATIC" && !triggers.length) issues.push(txt(ar,"Select at least one starting trigger.","اختر محفز بداية واحداً على الأقل.")); transitions.forEach((t, i) => { if (t.from === t.to) issues.push(txt(ar,`Transition ${i + 1} cannot point to itself.`,`الانتقال ${i + 1} لا يمكن أن يشير إلى الحالة نفسها.`)); if (!t.name.trim()) issues.push(txt(ar,`Transition ${i + 1} needs a name.`,`الانتقال ${i + 1} يحتاج اسماً.`)); }); return issues; }, [name, states, transitions, mode, triggers, ar]);
+  const validation = useMemo(() => { const issues: string[] = []; if (!name.trim()) issues.push(txt(ar,"Workflow name is required.","اسم سير العمل مطلوب.")); if (!states.length) issues.push(txt(ar,"Add at least one state.","أضف حالة واحدة على الأقل.")); if (!states.some((s) => s.terminal)) issues.push(txt(ar,"Add at least one final state.","أضف حالة نهائية واحدة على الأقل.")); if (mode === "AUTOMATIC" && !triggers.length) issues.push(txt(ar,"Select at least one starting trigger.","اختر محفز بداية واحداً على الأقل.")); transitions.forEach((t, i) => { if (t.from === t.to) issues.push(txt(ar,`Transition ${i + 1} cannot point to itself.`,`الانتقال ${i + 1} لا يمكن أن يشير إلى الحالة نفسها.`)); if (!t.name.trim()) issues.push(txt(ar,`Transition ${i + 1} needs a name.`,`الانتقال ${i + 1} يحتاج اسماً.`)); [...t.before, ...t.during, ...t.after].forEach((a) => { if (a.type === "http_request" && !String(a.config.connectionId ?? "").trim()) issues.push(txt(ar,`Transition ${i + 1} has an HTTP action without a connection.`,`الانتقال ${i + 1} يحتوي إجراء HTTP بلا اتصال.`)); }); }); return issues; }, [name, states, transitions, mode, triggers, ar]);
   const buildPayload = (status: "DRAFT" | "ACTIVE") => ({ name: name.trim(), description: description.trim(), mode, resourceType, trigger: mode === "MANUAL" ? "manual" : triggers, condition: "any", actions: [], status, fields, states, transitions: transitions.map((t) => ({ from: t.from, to: t.to, name: t.name.trim(), description: t.description, trigger: t.execution === "MANUAL" ? "manual" : t.trigger || undefined, condition: t.condition, actions: { before: t.before, during: t.during, after: t.after } })) });
   const save = async (status: "DRAFT" | "ACTIVE") => { if (busy) return; setError(""); setMessage(""); if (validation.length && status === "ACTIVE") { setError(validation[0]); setStep(3); return; } if (!name.trim()) { setError(txt(ar,"Workflow name is required.","اسم سير العمل مطلوب.")); setStep(1); return; } setBusy(true); try { const saved = workflowId ? await updateWorkflow(workflowId, buildPayload(status)) : await createWorkflow(buildPayload(status)); setWorkflowId(saved.id); setMessage(status === "ACTIVE" ? txt(ar,"Workflow activated successfully.","تم تفعيل سير العمل بنجاح.") : txt(ar,"Draft saved successfully.","تم حفظ المسودة بنجاح.")); if (status === "ACTIVE") window.setTimeout(() => router.push("/files/workflows"), 700); } catch (e) { setError(e instanceof Error ? e.message : txt(ar,"Something went wrong.","حدث خطأ غير متوقع.")); } finally { setBusy(false); } };
   const exportSpec = () => { const blob = new Blob([JSON.stringify(buildPayload("DRAFT"), null, 2)], { type: "application/json" }); const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = `${name || "workflow"}.json`; a.click(); URL.revokeObjectURL(a.href); };

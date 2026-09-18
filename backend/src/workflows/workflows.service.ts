@@ -363,9 +363,25 @@ export class WorkflowsService {
     return this.get(user, id);
   }
 
+  private async validateWorkflowConnectionReferences(user: AccessTokenPayload, workflow: { transitions: Array<{ actions: unknown }>; steps: Array<{ config: unknown }> }) {
+    const ids = new Set<string>();
+    const walk = (v: unknown) => {
+      if (!v || typeof v !== 'object') return;
+      if (Array.isArray(v)) { v.forEach(walk); return; }
+      const r = v as Record<string, unknown>;
+      if (typeof r.connectionId === 'string' && r.connectionId.trim()) ids.add(r.connectionId.trim());
+      Object.values(r).forEach(walk);
+    };
+    walk(workflow.transitions); walk(workflow.steps);
+    if (!ids.size) return;
+    const rows = await this.prisma.connection.findMany({ where: { orgId: user.org_id, id: { in: [...ids] }, provider: 'rest', status: 'ACTIVE', OR: [{ ownerId: user.sub }, { visibility: 'ORGANIZATION' }, { shares: { some: { userId: user.sub } } }] }, select: { id: true } });
+    if (rows.length !== ids.size) throw new BadRequestException('Workflow references a REST connection that is unavailable to the publisher');
+  }
+
   private async publishVersion(user: AccessTokenPayload, id: string) {
     const workflow = await this.prisma.workflow.findFirst({ where: { id, orgId: user.org_id }, include: { steps: { orderBy: { position: 'asc' } }, states: { orderBy: { position: 'asc' } }, transitions: true } });
     if (!workflow) throw new NotFoundException('Workflow not found');
+    await this.validateWorkflowConnectionReferences(user, workflow);
     const latest = await this.prisma.workflowVersion.findFirst({ where: { workflowId: id }, orderBy: { version: 'desc' }, select: { version: true } });
     const version = (latest?.version ?? 0) + 1;
     const snapshot = { name: workflow.name, description: workflow.description, mode: workflow.mode, resourceType: workflow.resourceType, calendarConfig: workflow.calendarConfig, steps: workflow.steps, states: workflow.states, transitions: workflow.transitions };
@@ -555,12 +571,27 @@ export class WorkflowsService {
     if (!definition || typeof definition !== 'object') throw new BadRequestException('Function definition is required');
     const operations = (definition as Record<string, unknown>).operations;
     if (!Array.isArray(operations) || operations.length < 1 || operations.length > 30) throw new BadRequestException('A function must contain between 1 and 30 operations');
-    const allowed = new Set(['SET_FIELD','COPY_VALUE','CONCAT','LOWERCASE','UPPERCASE','NUMBER','ADD','SUBTRACT','MULTIPLY','DIVIDE','NOTIFY_OWNER','ADD_TAG','IF']);
+    const allowed = new Set(['SET_FIELD','COPY_VALUE','CONCAT','LOWERCASE','UPPERCASE','NUMBER','ADD','SUBTRACT','MULTIPLY','DIVIDE','NOTIFY_OWNER','ADD_TAG','IF','HTTP_REQUEST']);
     for (const item of operations) {
       const op = String((item as Record<string, unknown>)?.op ?? '').toUpperCase();
       if (!allowed.has(op)) throw new BadRequestException(`Unsupported or unsafe operation: ${op}`);
+      if (op === 'HTTP_REQUEST') {
+        const x = item as Record<string, unknown>;
+        if (!String(x.connectionId ?? '').trim()) throw new BadRequestException('HTTP_REQUEST requires connectionId');
+        if (!String(x.path ?? '').startsWith('/')) throw new BadRequestException('HTTP_REQUEST path must start with /');
+        if (!['GET','POST','PUT','PATCH','DELETE','HEAD'].includes(String(x.method ?? 'GET').toUpperCase())) throw new BadRequestException('HTTP_REQUEST method is invalid');
+        const retries = Number(x.retries ?? 0); if (!Number.isInteger(retries) || retries < 0 || retries > 3) throw new BadRequestException('HTTP_REQUEST retries must be between 0 and 3');
+      }
     }
     return { operations };
+  }
+
+  private async validateFunctionConnectionReferences(user: AccessTokenPayload, definition: unknown) {
+    const ids = new Set<string>();
+    const walk = (v: unknown) => { if (!v || typeof v !== 'object') return; if (Array.isArray(v)) { v.forEach(walk); return; } const r=v as Record<string,unknown>; if (typeof r.connectionId==='string') ids.add(r.connectionId); Object.values(r).forEach(walk); };
+    walk(definition); if (!ids.size) return;
+    const rows=await this.prisma.connection.findMany({where:{orgId:user.org_id,id:{in:[...ids]},provider:'rest',status:'ACTIVE',OR:[{ownerId:user.sub},{visibility:'ORGANIZATION'},{shares:{some:{userId:user.sub}}}]},select:{id:true,status:true}});
+    if (rows.length!==ids.size) throw new BadRequestException('Function references a REST connection that is unavailable to the publisher');
   }
 
   async createFunction(user: AccessTokenPayload, body: { name?: string; key?: string; description?: string; definition?: unknown; runtime?: string; permissions?: unknown; timeoutMs?: number; memoryLimitMb?: number }) {
@@ -570,6 +601,7 @@ export class WorkflowsService {
     if (!name || !key) throw new BadRequestException('Function name and key are required');
     if (!body.definition) throw new BadRequestException('A safe function definition is required');
     const definition = this.normalizeFunctionDefinition(body.definition);
+    await this.validateFunctionConnectionReferences(user, definition);
     const runtime = String(body.runtime ?? 'SAFE').toUpperCase();
     if (runtime !== 'SAFE') throw new BadRequestException('Only SAFE runtime is enabled in V17-A');
     const timeoutMs = Math.min(5000, Math.max(100, Math.floor(Number(body.timeoutMs ?? 1000))));
@@ -598,6 +630,7 @@ export class WorkflowsService {
     this.requireWorkflowAdmin(user);
     const version = await this.prisma.workflowFunctionVersion.findFirst({ where: { id: versionId, functionId, orgId: user.org_id } });
     if (!version) throw new NotFoundException('Workflow function version not found');
+    await this.validateFunctionConnectionReferences(user, version.definition);
     return this.prisma.$transaction(async (tx) => {
       await tx.workflowFunctionVersion.updateMany({ where: { functionId, orgId: user.org_id, status: 'ACTIVE' }, data: { status: 'ARCHIVED' } });
       await tx.workflowFunctionVersion.update({ where: { id: versionId }, data: { status: 'ACTIVE', publishedAt: new Date() } });

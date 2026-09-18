@@ -1,17 +1,18 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { randomUUID } from 'node:crypto';
+import { ConnectionsService } from '../connections/connections.service';
 import { interpolateDynamicValues } from './workflow-runtime';
 import type { AccessTokenPayload } from '../auth/jwt.types';
 
 export type SafeFunctionInput = { file: Record<string, unknown>; workflow: Record<string, unknown>; user: Record<string, unknown>; now: string; fields: Record<string, unknown> };
-export type SafeOperation = { op: string; field?: string; value?: unknown; left?: unknown; right?: unknown; separator?: string; tag?: unknown; title?: unknown; body?: unknown; condition?: unknown; then?: unknown; else?: unknown };
+export type SafeOperation = { op: string; field?: string; value?: unknown; left?: unknown; right?: unknown; separator?: string; tag?: unknown; title?: unknown; body?: unknown; condition?: unknown; then?: unknown; else?: unknown; connectionId?: string; path?: string; method?: string; headers?: unknown; outputField?: string; responseMode?: string; jsonPath?: string; retries?: number };
 
-const ALLOWED = new Set(['SET_FIELD','COPY_VALUE','CONCAT','LOWERCASE','UPPERCASE','NUMBER','ADD','SUBTRACT','MULTIPLY','DIVIDE','NOTIFY_OWNER','ADD_TAG','IF']);
+const ALLOWED = new Set(['SET_FIELD','COPY_VALUE','CONCAT','LOWERCASE','UPPERCASE','NUMBER','ADD','SUBTRACT','MULTIPLY','DIVIDE','NOTIFY_OWNER','ADD_TAG','IF','HTTP_REQUEST']);
 
 @Injectable()
 export class CustomFunctionExecutor {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(private readonly prisma: PrismaService, private readonly connections: ConnectionsService) {}
 
   validateDefinition(definition: unknown) {
     if (!definition || typeof definition !== 'object') throw new BadRequestException('Function definition must be an object');
@@ -24,6 +25,7 @@ export class CustomFunctionExecutor {
       if (op === 'SET_FIELD' && !String((raw as SafeOperation).field ?? '').trim()) throw new BadRequestException('SET_FIELD requires field');
       if (op === 'COPY_VALUE' && !String((raw as SafeOperation).field ?? '').trim()) throw new BadRequestException('COPY_VALUE requires field');
       if (op === 'DIVIDE' && Number((raw as SafeOperation).right) === 0) throw new BadRequestException('DIVIDE by zero is not allowed');
+      if (op === 'HTTP_REQUEST') { const x = raw as SafeOperation; if (!String(x.connectionId ?? '').trim()) throw new BadRequestException('HTTP_REQUEST requires connectionId'); if (!String(x.path ?? '').startsWith('/')) throw new BadRequestException('HTTP_REQUEST path must start with /'); if (!['GET','POST','PUT','PATCH','DELETE','HEAD'].includes(String(x.method ?? 'GET').toUpperCase())) throw new BadRequestException('HTTP_REQUEST method is invalid'); }
     }
     return d;
   }
@@ -47,7 +49,8 @@ export class CustomFunctionExecutor {
       const fields: Record<string, unknown> = { ...input.fields };
       const notifications: Array<Record<string, unknown>> = [];
       const tags: string[] = [];
-      for (const raw of d.operations as SafeOperation[]) {
+      for (let operationIndex = 0; operationIndex < (d.operations as SafeOperation[]).length; operationIndex++) {
+        const raw = (d.operations as SafeOperation[])[operationIndex];
         const op = String(raw.op).toUpperCase();
         const left = this.value(raw.left, { ...input, fields });
         const right = this.value(raw.right, { ...input, fields });
@@ -64,6 +67,7 @@ export class CustomFunctionExecutor {
           case 'DIVIDE': if (Number(right) === 0) throw new Error('DIVIDE by zero'); fields[String(raw.field ?? '_result')] = Number(left) / Number(right); break;
           case 'NOTIFY_OWNER': notifications.push({ title: this.value(raw.title ?? 'Workflow update', { ...input, fields }), body: this.value(raw.body ?? 'A workflow function completed.', { ...input, fields }) }); break;
           case 'ADD_TAG': { const tag = String(this.value(raw.tag ?? '', { ...input, fields }) ?? '').trim(); if (tag) tags.push(tag); break; }
+          case 'HTTP_REQUEST': { const result = await this.connections.executeRestFunction(user, String(raw.connectionId ?? ''), String(raw.method ?? 'GET').toUpperCase(), String(this.value(raw.path ?? '/', { ...input, fields })), raw.body, raw.headers, { responseMode: String(raw.responseMode ?? 'TEXT'), jsonPath: raw.jsonPath ? String(raw.jsonPath) : undefined, retries: Number(raw.retries ?? 0), idempotencyKey: opts.idempotencyKey ? `${opts.idempotencyKey}:http:${operationIndex}` : undefined }); fields[String(raw.outputField ?? '_http')] = result; break; }
           case 'IF': { const condition = Boolean(this.value(raw.condition, { ...input, fields })); const branch = condition ? raw.then : raw.else; if (branch && typeof branch === 'object') { const nested = this.validateDefinition({ operations: [branch] }); for (const nestedOp of nested.operations as SafeOperation[]) { if (String(nestedOp.op).toUpperCase() !== 'SET_FIELD') throw new Error('IF branches currently support SET_FIELD only'); fields[String(nestedOp.field)] = this.value(nestedOp.value, { ...input, fields }); } } break; }
         }
       }

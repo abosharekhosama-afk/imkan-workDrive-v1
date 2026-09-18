@@ -1,0 +1,63 @@
+CREATE TABLE `connections` (
+  `id` CHAR(36) NOT NULL,
+  `org_id` CHAR(36) NOT NULL,
+  `owner_id` CHAR(36) NOT NULL,
+  `name` VARCHAR(191) NOT NULL,
+  `provider` VARCHAR(191) NOT NULL,
+  `auth_type` ENUM('OAUTH2','API_KEY','BEARER','BASIC','CUSTOM_HEADER','NONE') NOT NULL,
+  `visibility` ENUM('PRIVATE','ORGANIZATION') NOT NULL DEFAULT 'PRIVATE',
+  `status` ENUM('ACTIVE','REAUTH_REQUIRED','DISABLED','ERROR') NOT NULL DEFAULT 'ACTIVE',
+  `base_url` VARCHAR(1000) NULL,
+  `metadata` JSON NULL,
+  `last_tested_at` DATETIME(3) NULL,
+  `last_used_at` DATETIME(3) NULL,
+  `error_code` VARCHAR(100) NULL,
+  `error_message` TEXT NULL,
+  `created_at` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+  `updated_at` DATETIME(3) NOT NULL,
+  PRIMARY KEY (`id`),
+  INDEX `connections_org_id_status_updated_at_idx` (`org_id`,`status`,`updated_at`),
+  INDEX `connections_org_id_owner_id_provider_idx` (`org_id`,`owner_id`,`provider`),
+  CONSTRAINT `connections_org_id_fkey` FOREIGN KEY (`org_id`) REFERENCES `organizations` (`id`) ON DELETE CASCADE ON UPDATE CASCADE,
+  CONSTRAINT `connections_owner_id_fkey` FOREIGN KEY (`owner_id`) REFERENCES `users` (`id`) ON DELETE CASCADE ON UPDATE CASCADE
+) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+
+CREATE TABLE `connection_secrets` (
+  `id` CHAR(36) NOT NULL,
+  `connection_id` CHAR(36) NOT NULL,
+  `owner_id` CHAR(36) NOT NULL,
+  `access_token` TEXT NULL,
+  `refresh_token` TEXT NULL,
+  `api_key` TEXT NULL,
+  `bearer_token` TEXT NULL,
+  `username` TEXT NULL,
+  `password` TEXT NULL,
+  `custom_headers` TEXT NULL,
+  `key_version` INTEGER NOT NULL DEFAULT 1,
+  `created_at` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+  `updated_at` DATETIME(3) NOT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE INDEX `connection_secrets_connection_id_key` (`connection_id`),
+  INDEX `connection_secrets_owner_id_idx` (`owner_id`),
+  CONSTRAINT `connection_secrets_connection_id_fkey` FOREIGN KEY (`connection_id`) REFERENCES `connections` (`id`) ON DELETE CASCADE ON UPDATE CASCADE,
+  CONSTRAINT `connection_secrets_owner_id_fkey` FOREIGN KEY (`owner_id`) REFERENCES `users` (`id`) ON DELETE CASCADE ON UPDATE CASCADE
+) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+
+CREATE TABLE `connection_usages` (
+  `id` CHAR(36) NOT NULL,
+  `org_id` CHAR(36) NOT NULL,
+  `connection_id` CHAR(36) NOT NULL,
+  `user_id` CHAR(36) NULL,
+  `workflow_id` CHAR(36) NULL,
+  `run_id` CHAR(36) NULL,
+  `action_type` VARCHAR(100) NULL,
+  `status` VARCHAR(40) NOT NULL,
+  `duration_ms` INTEGER NULL,
+  `created_at` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+  PRIMARY KEY (`id`),
+  INDEX `connection_usages_org_id_connection_id_created_at_idx` (`org_id`,`connection_id`,`created_at`),
+  INDEX `connection_usages_org_id_workflow_id_created_at_idx` (`org_id`,`workflow_id`,`created_at`),
+  CONSTRAINT `connection_usages_org_id_fkey` FOREIGN KEY (`org_id`) REFERENCES `organizations` (`id`) ON DELETE CASCADE ON UPDATE CASCADE,
+  CONSTRAINT `connection_usages_connection_id_fkey` FOREIGN KEY (`connection_id`) REFERENCES `connections` (`id`) ON DELETE CASCADE ON UPDATE CASCADE,
+  CONSTRAINT `connection_usages_user_id_fkey` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE SET NULL ON UPDATE CASCADE
+) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;

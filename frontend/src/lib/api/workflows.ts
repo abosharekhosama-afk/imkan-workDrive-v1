@@ -104,3 +104,29 @@ export function workflowQueueAction(id:string, action:'retry'|'requeue'|'dead-le
 export function getWorkflowQueueJob(id:string) { return apiRequest<WorkflowQueueJob>(`/workflows/queue/${id}`); }
 export type WorkflowAuditEntry = { id:string; action:string; resourceType:string; resourceId:string; actorId?:string|null; metadata?:unknown; createdAt:string; actor?:{id:string;name?:string|null;email:string}|null };
 export function listWorkflowAudit(params?: { action?:string; resourceType?:string }) { const q=new URLSearchParams(); if(params?.action) q.set('action',params.action); if(params?.resourceType) q.set('resourceType',params.resourceType); return apiRequest<WorkflowAuditEntry[]>(`/workflows/audit${q.toString()?`?${q}`:''}`); }
+
+
+export type ConnectionProvider = { key: string; name: string; authTypes: string[]; oauth?: boolean; capabilities?: string[] };
+export type Connection = { canManage: boolean; id: string; orgId: string; ownerId: string; name: string; provider: string; authType: string; visibility: 'PRIVATE' | 'ORGANIZATION'; status: 'ACTIVE' | 'REAUTH_REQUIRED' | 'DISABLED' | 'ERROR'; baseUrl?: string | null; metadata?: Record<string, unknown> | null; expiresAt?: string | null; scope?: string | null; lastTestedAt?: string | null; lastUsedAt?: string | null; errorCode?: string | null; errorMessage?: string | null; createdAt: string; updatedAt: string };
+export type ConnectionUsage = { id: string; userId?: string | null; workflowId?: string | null; runId?: string | null; actionType?: string | null; status: string; durationMs?: number | null; createdAt: string };
+export function listConnectionProviders() { return apiRequest<ConnectionProvider[]>('/connections/providers'); }
+export function listConnections(params?: { provider?: string; status?: string; search?: string }) { const q = new URLSearchParams(); if (params?.provider) q.set('provider', params.provider); if (params?.status) q.set('status', params.status); if (params?.search) q.set('search', params.search); return apiRequest<Connection[]>(`/connections${q.toString() ? `?${q}` : ''}`); }
+export function getConnection(id: string) { return apiRequest<Connection>(`/connections/${id}`); }
+export function createConnection(input: Record<string, unknown>) { return apiRequest<Connection>('/connections', { method: 'POST', body: JSON.stringify(input) }); }
+export function updateConnection(id: string, input: Record<string, unknown>) { return apiRequest<Connection>(`/connections/${id}`, { method: 'PATCH', body: JSON.stringify(input) }); }
+export function testConnection(id: string) { return apiRequest<{ id: string; ok: boolean; status: string; missing: string[] }>(`/connections/${id}/test`, { method: 'POST' }); }
+export function disableConnection(id: string) { return apiRequest<Connection>(`/connections/${id}/disable`, { method: 'POST' }); }
+export function enableConnection(id: string) { return apiRequest<Connection>(`/connections/${id}/enable`, { method: 'POST' }); }
+export function revokeConnection(id: string) { return apiRequest<{ id:string; revoked:boolean; status:string }>(`/connections/${id}/revoke`, { method: 'POST' }); }
+export function getConnectionShares(id: string) { return apiRequest<{ ownerId:string; shares:Array<{id:string;userId:string;role:'USE'|'MANAGE';user:{id:string;name?:string|null;email:string}}> }>(`/connections/${id}/shares`); }
+export function shareConnection(id: string, userId: string, role: 'USE'|'MANAGE') { return apiRequest(`/connections/${id}/shares`, { method: 'POST', body: JSON.stringify({ userId, role }) }); }
+export function unshareConnection(id: string, userId: string) { return apiRequest(`/connections/${id}/shares/${encodeURIComponent(userId)}`, { method: 'DELETE' }); }
+export function deleteConnection(id: string) { return apiRequest<{ id: string; deleted: boolean }>(`/connections/${id}`, { method: 'DELETE' }); }
+export function getConnectionSecretVersions(id: string) { return apiRequest<{ connectionId:string; currentVersion:number|null; versions:Array<{id:string;version:number;createdById:string;createdAt:string}> }>(`/connections/${id}/secrets/versions`); }
+export function rotateConnectionSecret(id:string, secrets:Record<string,string>) { return apiRequest(`/connections/${id}/secrets/rotate`,{method:"POST",body:JSON.stringify({secrets})}); }
+export function rollbackConnectionSecret(id:string, version:number) { return apiRequest(`/connections/${id}/secrets/rollback`,{method:"POST",body:JSON.stringify({version})}); }
+export function getConnectionDiagnostics(id: string) { return apiRequest<{ id:string; provider:string; authType:string; status:string; checks:Record<string,boolean>; lastTestedAt?:string|null; lastUsedAt?:string|null; errorCode?:string|null; errorMessage?:string|null; usageCount:number; averageDurationMs?:number|null }>(`/connections/${id}/diagnostics`); }
+export function getConnectionUsage(id: string) { return apiRequest<{ count: number; recent: ConnectionUsage[]; summary: { byStatus: Array<{status:string;_count:{_all:number};_avg:{durationMs:number|null}}>; byAction: Array<{actionType:string|null;_count:{_all:number};_avg:{durationMs:number|null}}> } }>(`/connections/${id}/usage`); }
+
+export function startConnectionOAuth(provider: string, folderId?: string) { return apiRequest<{url:string}>(`/connections/oauth/${encodeURIComponent(provider)}/start${folderId ? `?folderId=${encodeURIComponent(folderId)}` : ""}`); }
+export function reconnectConnection(id: string) { return apiRequest<{url:string}>(`/connections/${id}/reconnect`, { method: "POST" }); }

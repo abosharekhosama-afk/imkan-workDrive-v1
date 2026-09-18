@@ -7,13 +7,13 @@ import { useLocale } from "./locale-provider";
 import { WorkflowHelp } from "./workflow-help";
 import { useWorkflowAccess } from "./workflow-access";
 
-export function WorkflowShell({ children, title, subtitle, active }: { children: ReactNode; title?: string; subtitle?: string; active?: "all" | "mine" | "drafts" | "templates" | "functions" | "waiting" | "runs" | "diagnostics" | "queue" | "audit" | "dynamic-values" }) {
+export function WorkflowShell({ children, title, subtitle, active }: { children: ReactNode; title?: string; subtitle?: string; active?: "all" | "mine" | "drafts" | "templates" | "functions" | "connections" | "waiting" | "runs" | "diagnostics" | "queue" | "audit" | "dynamic-values" }) {
   const { locale } = useLocale();
   const pathname = usePathname();
   const ar = locale === "ar";
   const access = useWorkflowAccess();
   const helpKeyByActive = {
-    all: "workflow.workspace", mine: "workflow.workspace", drafts: "workflow.workspace", templates: "workflow.templates", functions: "workflow.functions", waiting: "workflow.tasks", runs: "workflow.runs", diagnostics: "workflow.diagnostics", queue: "workflow.queue", audit: "workflow.audit", "dynamic-values": "workflow.dynamic-values",
+    all: "workflow.workspace", mine: "workflow.workspace", drafts: "workflow.workspace", templates: "workflow.templates", functions: "workflow.functions", waiting: "workflow.tasks", runs: "workflow.runs", diagnostics: "workflow.diagnostics", queue: "workflow.queue", audit: "workflow.audit", "dynamic-values": "workflow.dynamic-values", connections: "workflow.connections",
   } as const;
   const contextualHelpKey = helpKeyByActive[active ?? "all"];
   const items = [
@@ -22,6 +22,7 @@ export function WorkflowShell({ children, title, subtitle, active }: { children:
     ["drafts", "/files/workflows?scope=drafts", ar ? "المسودات" : "Drafts", "canViewDrafts"],
     ["templates", "/files/workflows/templates", ar ? "قوالب البيانات" : "Data templates", "canViewTemplates"],
     ["functions", "/files/workflows/functions", ar ? "الدوال الآمنة" : "Safe functions", "canViewFunctions"],
+    ["connections", "/files/workflows/connections", ar ? "الاتصالات" : "Connections", "canViewFunctions"],
     ["waiting", "/files/workflows/tasks", ar ? "بانتظار إجراءاتي" : "Waiting for my action", "canViewWaiting"],
     ["runs", "/files/workflows/runs", ar ? "سجل التشغيل" : "Run history", "canViewRuns"],
     ["diagnostics", "/files/workflows/diagnostics", ar ? "التشخيص" : "Diagnostics", "canViewDiagnostics"],

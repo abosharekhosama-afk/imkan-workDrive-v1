@@ -268,6 +268,7 @@
   "nav.trash": "سلة المحذوفات",
   "nav.unread": "غير المقروء",
   "nav.workflows": "سير العمل",
+  "nav.connections": "الاتصالات",
   "nav.workspace": "مساحة العمل",
   "nav.zia": "مساعد زيا الذكي",
   "notif.empty": "لا توجد إشعارات جديدة.",
@@ -751,4 +752,6 @@
   "help.sendFeedback": "إرسال ملاحظة",
   "share.folderContents": "محتويات المجلد المشترك",
   "nav.members": "الأعضاء"
+,
+  "workflow.connections": "الاتصالات"
 }

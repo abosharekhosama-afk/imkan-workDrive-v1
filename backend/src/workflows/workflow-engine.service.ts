@@ -7,6 +7,7 @@ import { SharesService } from '../shares/shares.service';
 import type { AccessTokenPayload } from '../auth/jwt.types';
 import { dynamicValueCatalog, evaluateCondition, walkDynamicValues, resolveDynamicValue } from './workflow-runtime';
 import { CustomFunctionExecutor } from './custom-function.executor';
+import { ConnectionsService } from '../connections/connections.service';
 
 export type WorkflowFileEvent = {
   eventType?: string; fileId: string; resourceId?: string; name: string; mimeType?: string | null; fileType?: string | null; size?: string;
@@ -25,7 +26,7 @@ type RunResult = { actions?: unknown[]; fieldValues?: Record<string, unknown>; c
 @Injectable()
 export class WorkflowEngineService implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(WorkflowEngineService.name); private timer?: NodeJS.Timeout; private processing = false; private readonly workerId = `workdrive-workflow-${randomUUID()}`;
-  constructor(private readonly prisma: PrismaService, private readonly shares: SharesService, private readonly functionExecutor: CustomFunctionExecutor, private readonly permissions: PermissionService) {}
+  constructor(private readonly prisma: PrismaService, private readonly shares: SharesService, private readonly functionExecutor: CustomFunctionExecutor, private readonly permissions: PermissionService, private readonly connections: ConnectionsService) {}
   onModuleInit() { this.timer = setInterval(() => void this.drain(), 1500); void this.drain(); }
   onModuleDestroy() { if (this.timer) clearInterval(this.timer); }
   private async recordAudit(orgId: string, actorId: string | null, action: string, resourceType: string, resourceId: string, metadata?: Record<string, unknown>) {
@@ -297,7 +298,7 @@ export class WorkflowEngineService implements OnModuleInit, OnModuleDestroy {
     for (const [phaseName, actions] of ([['before', phases.before], ['during', phases.during], ['after', phases.after]] as const)) {
       for (let i = 0; i < actions.length; i++) {
         const action = this.resolveAction(actions[i], event, fields, { workflowId, runId, user: { id: user.sub, email: (user as AccessTokenPayload & { email?: string }).email, name: (user as AccessTokenPayload & { name?: string }).name } }); if (continuation && action.type === 'request_approval') { results.push({ phase: phaseName, output: { action: 'request_approval', skipped: true, reason: 'approval already satisfied by the selected task transition' } }); continue; } if (calendarConfig && action.config) action.config.calendarConfig = calendarConfig; const step = await this.prisma.workflowStepRun.create({ data: { orgId: user.org_id, runId, stepKind: `TRANSITION:${transition.name}:${phaseName}:${action.type}`, stepPosition: existingResults.length + results.length, status: 'RUNNING', input: action as unknown as Prisma.InputJsonValue } });
-        try { const output = await this.executeAction(user, event, action, workflowId, runId); results.push({ phase: phaseName, output }); await this.prisma.workflowStepRun.update({ where: { id: step.id }, data: { status: 'SUCCEEDED', output: output as unknown as Prisma.InputJsonValue, finishedAt: new Date() } }); await this.recordAudit(user.org_id, user.sub, 'WORKFLOW_ACTION_EXECUTED', 'WORKFLOW_RUN', runId, { workflowId, transitionId: transition.id, phase: phaseName, action: action.type }); if ((output as { waiting?: boolean } | null)?.waiting) return { results, waiting: true, pendingTransitionIds: [] as string[], continuation }; }
+        try { const output = await this.executeAction(user, event, action, workflowId, runId, step.id); results.push({ phase: phaseName, output }); await this.prisma.workflowStepRun.update({ where: { id: step.id }, data: { status: 'SUCCEEDED', output: output as unknown as Prisma.InputJsonValue, finishedAt: new Date() } }); await this.recordAudit(user.org_id, user.sub, 'WORKFLOW_ACTION_EXECUTED', 'WORKFLOW_RUN', runId, { workflowId, transitionId: transition.id, phase: phaseName, action: action.type }); if ((output as { waiting?: boolean } | null)?.waiting) return { results, waiting: true, pendingTransitionIds: [] as string[], continuation }; }
         catch (error) { const message = error instanceof Error ? error.message : String(error); await this.prisma.workflowStepRun.update({ where: { id: step.id }, data: { status: 'FAILED', error: message, finishedAt: new Date() } }); throw error; }
       }
     }
@@ -412,9 +413,41 @@ export class WorkflowEngineService implements OnModuleInit, OnModuleDestroy {
     });
   }
 
-  private async executeAction(user: AccessTokenPayload, event: WorkflowFileEvent, action: WorkflowAction, workflowId: string, runId: string) {
+  private async executeAction(user: AccessTokenPayload, event: WorkflowFileEvent, action: WorkflowAction, workflowId: string, runId: string, stepId?: string) {
     const config = action.config ?? {};
     switch (action.type) {
+      case 'http_request': {
+        const connectionId = typeof config.connectionId === 'string' ? config.connectionId.trim() : '';
+        if (!connectionId) throw new Error('HTTP request action requires a connection');
+        const method = String(config.method ?? 'GET').toUpperCase();
+        if (!['GET','POST','PUT','PATCH','DELETE','HEAD'].includes(method)) throw new Error('Unsupported HTTP method');
+        const path = typeof config.path === 'string' ? config.path : '';
+        const resolvedPath = await this.renderWorkflowText(path, user, event, workflowId, runId);
+        const configuredHeaders = config.headers && typeof config.headers === 'object' && !Array.isArray(config.headers) ? config.headers as Record<string,unknown> : {};
+        const headers: Record<string,string> = { accept: 'application/json, text/plain;q=0.9, */*' };
+        for (const [k,v] of Object.entries(configuredHeaders)) {
+          if (!/^[A-Za-z0-9-]+$/.test(k) || typeof v !== 'string') throw new Error('Invalid request header');
+          if (/^(authorization|cookie|proxy-authorization|host|content-length|transfer-encoding)$/i.test(k)) throw new Error('Sensitive authentication headers are managed by the connection');
+          headers[k] = await this.renderWorkflowText(v, user, event, workflowId, runId);
+        }
+        const body = config.body === undefined || ['GET','HEAD'].includes(method) ? undefined : typeof config.body === 'string' ? await this.renderWorkflowText(config.body, user, event, workflowId, runId) : config.body;
+        const responseMode = String(config.responseMode ?? 'TEXT').toUpperCase();
+        if (!['TEXT','JSON','HEADERS','NONE'].includes(responseMode)) throw new Error('Unsupported HTTP response mode');
+        const outputFieldId = typeof config.outputFieldId === 'string' ? config.outputFieldId.trim() : '';
+        const configuredMax = Number(config.maxResponseBytes ?? 20000);
+        const maxResponseBytes = Number.isFinite(configuredMax) ? Math.min(20000, Math.max(256, Math.floor(configuredMax))) : 20000;
+        const retries = Number.isFinite(Number(config.retries)) ? Math.min(3, Math.max(0, Math.floor(Number(config.retries)))) : 0;
+        const idempotencyKey = typeof config.idempotencyKey === 'string' && config.idempotencyKey.trim() ? await this.renderWorkflowText(config.idempotencyKey, user, event, workflowId, runId) : `workflow:${runId}:${workflowId}:${stepId ?? connectionId}`;
+        const result = await this.connections.executeWorkflowRest(user, connectionId, method, resolvedPath, body, headers, { responseMode, jsonPath: typeof config.jsonPath === 'string' ? config.jsonPath : undefined, maxResponseBytes, retries, idempotencyKey, workflowId, runId });
+        if (!result.ok) throw new Error(`HTTP ${result.status}: ${typeof result.body === 'string' ? result.body.slice(0,500) : 'request failed'}`);
+        if (outputFieldId) {
+          const run = await this.prisma.workflowRun.findUnique({ where: { id: runId }, select: { result: true } });
+          const previous = run?.result && typeof run.result === 'object' ? run.result as Record<string, unknown> : {};
+          const fv = previous.fieldValues && typeof previous.fieldValues === 'object' ? previous.fieldValues as Record<string, unknown> : {};
+          await this.prisma.workflowRun.update({ where: { id: runId }, data: { result: { ...previous, fieldValues: { ...fv, [outputFieldId]: result.body } } as unknown as Prisma.InputJsonValue } });
+        }
+        return { action: 'http_request', connectionId, method, statusCode: result.status, responseMode, outputFieldId: outputFieldId || null, body: result.body };
+      }
       case 'notify': { const configuredIds = Array.isArray(config.userIds) ? config.userIds.filter((id): id is string => typeof id === 'string' && id.trim().length > 0) : []; const ids = configuredIds.length ? configuredIds : [user.sub]; const recipients = await this.prisma.organizationMembership.findMany({ where: { organizationId: user.org_id, userId: { in: ids }, status: 'ACTIVE' }, select: { userId: true } }); const resourceType = (event.resourceType ?? 'FILE') as 'FILE' | 'FOLDER'; const titleTemplate = String(config.title ?? 'Workflow notification'); const bodyTemplate = typeof config.message === 'string' ? config.message : typeof config.body === 'string' ? config.body : `Workflow action completed for ${event.name}`; const title = await this.renderWorkflowText(titleTemplate, user, event, workflowId, runId); const body = await this.renderWorkflowText(bodyTemplate, user, event, workflowId, runId); for (const r of recipients) await this.prisma.notification.create({ data: { orgId: user.org_id, userId: r.userId, type: 'SYSTEM', title, body, resourceType, resourceId: event.fileId } }); return { action: 'notify', deliveredTo: recipients.map((r) => r.userId), title, body }; }
       case 'favorite': { if ((event.resourceType ?? 'FILE') === 'FOLDER') throw new Error('Favorite action is only supported for files'); await this.prisma.favorite.upsert({ where: { userId_resourceType_resourceId: { userId: user.sub, resourceType: 'FILE', resourceId: event.fileId } }, create: { orgId: user.org_id, userId: user.sub, resourceType: 'FILE', resourceId: event.fileId }, update: {} }); return { action: 'favorite', resourceId: event.fileId }; }
       case 'tag': { if ((event.resourceType ?? 'FILE') === 'FOLDER') throw new Error('Tag action is only supported for files'); const name = String(config.name ?? '').trim(); if (!name) throw new Error('Tag action requires a tag name'); const tag = await this.prisma.tag.upsert({ where: { orgId_name: { orgId: user.org_id, name } }, create: { orgId: user.org_id, name }, update: {} }); await this.prisma.fileTag.upsert({ where: { fileId_tagId: { fileId: event.fileId, tagId: tag.id } }, create: { fileId: event.fileId, tagId: tag.id }, update: {} }); return { action: 'tag', tag: name }; }

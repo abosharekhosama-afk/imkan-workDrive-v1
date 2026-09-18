@@ -13,6 +13,7 @@ import { STORAGE_SERVICE, type StorageService } from '../storage/storage.types';
 import { Inject } from '@nestjs/common';
 import { CloudProvider } from './cloud-import.schemas';
 import { parseCreateJobs } from './cloud-import.schemas';
+import { ConnectionsService } from '../connections/connections.service';
 
 const MAX_IMPORT_BYTES = 250 * 1024 * 1024;
 const MAX_LIST_ITEMS = 100;
@@ -32,6 +33,7 @@ export class CloudImportService implements OnModuleInit, OnModuleDestroy {
     private readonly config: ConfigService,
     @Inject(STORAGE_SERVICE) private readonly storage: StorageService,
     private readonly workflowEngine: WorkflowEngineService,
+    private readonly connections: ConnectionsService,
   ) {}
 
   onModuleInit() {
@@ -81,41 +83,38 @@ export class CloudImportService implements OnModuleInit, OnModuleDestroy {
   }
 
   async beginOAuth(user: AccessTokenPayload, provider: CloudProvider, folderId: string | null) {
-    const cfg = this.providerConfig(provider);
-    if (!cfg.clientId || !cfg.clientSecret) throw new BadRequestException(`${provider} cloud integration is not configured`);
-    const state = randomBytes(32).toString('base64url');
-    await this.prisma.cloudOAuthState.create({ data: { id: randomUUID(), stateHash: this.hash(state), orgId: user.org_id, userId: user.sub, provider, folderId, expiresAt: new Date(Date.now() + TOKEN_TTL_MS) } });
-    const params = new URLSearchParams({ client_id: cfg.clientId, redirect_uri: cfg.callbackUrl, response_type: 'code', state });
-    if (provider === 'google') params.set('scope', 'https://www.googleapis.com/auth/drive.readonly');
-    if (provider === 'dropbox') params.set('token_access_type', 'offline');
-    if (provider === 'onedrive') { params.set('scope', 'offline_access Files.Read'); params.set('response_mode', 'query'); }
-    const authBase = provider === 'google' ? 'https://accounts.google.com/o/oauth2/v2/auth' : provider === 'dropbox' ? 'https://www.dropbox.com/oauth2/authorize' : 'https://login.microsoftonline.com/common/oauth2/v2.0/authorize';
-    return { url: `${authBase}?${params.toString()}` };
+    const genericProvider = provider === 'onedrive' ? 'microsoft' : provider;
+    return this.connections.beginOAuth(user, genericProvider as 'google' | 'microsoft' | 'dropbox', folderId);
   }
 
   async oauthCallback(provider: CloudProvider, code: string, state: string) {
-    if (!code || !state) throw new BadRequestException('Missing OAuth callback parameters');
-    const row = await this.prisma.cloudOAuthState.findFirst({ where: { stateHash: this.hash(state), provider, usedAt: null, expiresAt: { gt: new Date() } } });
-    if (!row) throw new BadRequestException('OAuth state is invalid or expired');
-    await this.prisma.cloudOAuthState.update({ where: { id: row.id }, data: { usedAt: new Date() } });
-    const cfg = this.providerConfig(provider);
-    const body = new URLSearchParams({ client_id: cfg.clientId!, client_secret: cfg.clientSecret!, code, redirect_uri: cfg.callbackUrl, grant_type: 'authorization_code' });
-    const tokenUrl = provider === 'google' ? 'https://oauth2.googleapis.com/token' : provider === 'dropbox' ? 'https://api.dropboxapi.com/oauth2/token' : 'https://login.microsoftonline.com/common/oauth2/v2.0/token';
-    const response = await fetch(tokenUrl, { method: 'POST', headers: { 'content-type': 'application/x-www-form-urlencoded' }, body });
-    const payload = await this.readJson(response);
-    if (!response.ok || typeof payload.access_token !== 'string') throw new BadRequestException('Cloud authorization failed');
-    const expiresAt = typeof payload.expires_in === 'number' ? new Date(Date.now() + payload.expires_in * 1000) : null;
-    await this.prisma.cloudConnection.upsert({
-      where: { orgId_userId_provider: { orgId: row.orgId, userId: row.userId, provider } },
-      create: { id: randomUUID(), orgId: row.orgId, userId: row.userId, provider, accessToken: this.encrypt(payload.access_token), refreshToken: typeof payload.refresh_token === 'string' ? this.encrypt(payload.refresh_token) : null, expiresAt, scope: typeof payload.scope === 'string' ? payload.scope.slice(0, 1000) : null },
-      update: { accessToken: this.encrypt(payload.access_token), ...(typeof payload.refresh_token === 'string' ? { refreshToken: this.encrypt(payload.refresh_token) } : {}), expiresAt, scope: typeof payload.scope === 'string' ? payload.scope.slice(0, 1000) : null },
-    });
-    return { frontend: cfg.frontend, folderId: row.folderId };
+    const genericProvider = provider === 'onedrive' ? 'microsoft' : provider;
+    const result = await this.connections.completeOAuth(genericProvider as 'google' | 'microsoft' | 'dropbox', code, state);
+    // Keep CloudConnection as a compatibility mirror for existing import jobs and older deployments.
+    const generic = await this.prisma.connection.findUnique({ where: { id: result.connectionId }, include: { secret: true } });
+    if (generic?.secret?.accessToken) {
+      await this.prisma.cloudConnection.upsert({
+        where: { orgId_userId_provider: { orgId: result.orgId ?? '', userId: result.userId ?? '', provider } },
+        create: { id: randomUUID(), orgId: result.orgId ?? '', userId: result.userId ?? '', provider, accessToken: `connection-ref:${generic.id}`, refreshToken: null, expiresAt: generic.expiresAt, scope: generic.scope },
+        update: { accessToken: `connection-ref:${generic.id}`, refreshToken: null, expiresAt: generic.expiresAt, scope: generic.scope },
+      });
+    }
+    return { frontend: result.frontend, folderId: result.folderId };
   }
 
   async listProviders(user: AccessTokenPayload) {
-    const rows = await this.prisma.cloudConnection.findMany({ where: { orgId: user.org_id, userId: user.sub }, select: { id: true, provider: true, expiresAt: true, updatedAt: true } });
-    return ['google', 'dropbox', 'onedrive'].map((provider) => ({ provider, connected: rows.some((r) => r.provider === provider), updatedAt: rows.find((r) => r.provider === provider)?.updatedAt ?? null }));
+    const generic = await this.prisma.connection.findMany({
+      where: { orgId: user.org_id, authType: 'OAUTH2', OR: [{ ownerId: user.sub }, { visibility: 'ORGANIZATION' }, { shares: { some: { userId: user.sub } } }] },
+      select: { provider: true, status: true, updatedAt: true },
+      orderBy: { updatedAt: 'desc' },
+    });
+    const legacy = await this.prisma.cloudConnection.findMany({ where: { orgId: user.org_id, userId: user.sub }, select: { provider: true, updatedAt: true } });
+    return ['google', 'dropbox', 'onedrive'].map((provider) => {
+      const genericProvider = provider === 'onedrive' ? 'microsoft' : provider;
+      const row = generic.find((r) => r.provider === genericProvider && r.status === 'ACTIVE');
+      const old = legacy.find((r) => r.provider === provider);
+      return { provider, connected: Boolean(row || (!generic.some((g) => g.provider === genericProvider) && old)), updatedAt: row?.updatedAt ?? ((!generic.some((g) => g.provider === genericProvider)) ? old?.updatedAt : null) };
+    });
   }
 
   async listFiles(user: AccessTokenPayload, provider: CloudProvider): Promise<RemoteFile[]> {
@@ -194,7 +193,8 @@ export class CloudImportService implements OnModuleInit, OnModuleDestroy {
     const job = await this.prisma.cloudImportJob.findUnique({ where: { id }, include: { connection: true } });
     if (!job) return;
     try {
-      const connection: Connection = { id: job.connection.id, provider: job.connection.provider as CloudProvider, accessToken: this.decrypt(job.connection.accessToken), refreshToken: job.connection.refreshToken ? this.decrypt(job.connection.refreshToken) : null, expiresAt: job.connection.expiresAt };
+      const isReference = job.connection.accessToken.startsWith('connection-ref:');
+      const connection: Connection = { id: job.connection.id, provider: job.connection.provider as CloudProvider, accessToken: isReference ? '' : this.decrypt(job.connection.accessToken), refreshToken: isReference ? null : (job.connection.refreshToken ? this.decrypt(job.connection.refreshToken) : null), expiresAt: job.connection.expiresAt };
       const token = await this.ensureAccessToken(connection);
       const downloaded = await this.downloadRemote(connection.provider, token, job.remoteFileId, job.remoteName, job.remoteMimeType, async (done, total) => {
         const progress = total > 0 ? Math.min(75, Math.max(1, Math.floor((done / total) * 75))) : Math.min(75, Math.max(1, job.progress + 1));
@@ -278,17 +278,43 @@ export class CloudImportService implements OnModuleInit, OnModuleDestroy {
 
   private async graphMetadata(token: string, id: string) { const response = await fetch(`https://graph.microsoft.com/v1.0/me/drive/items/${encodeURIComponent(id)}?$select=name,size,file,@microsoft.graph.downloadUrl`, { headers: { authorization: `Bearer ${token}` } }); const payload = await this.readJson(response); if (!response.ok) throw new BadRequestException('OneDrive metadata request failed'); return { downloadUrl: payload['@microsoft.graph.downloadUrl'], name: payload.name, size: payload.size, mimeType: payload.file?.mimeType }; }
 
-  private async getConnection(user: AccessTokenPayload, provider: CloudProvider) { const row = await this.prisma.cloudConnection.findFirst({ where: { orgId: user.org_id, userId: user.sub, provider } }); if (!row) throw new ConflictException('Connect this cloud provider first'); return { id: row.id, provider, accessToken: this.decrypt(row.accessToken), refreshToken: row.refreshToken ? this.decrypt(row.refreshToken) : null, expiresAt: row.expiresAt }; }
+  private async getConnection(user: AccessTokenPayload, provider: CloudProvider) {
+    const genericProvider = provider === 'onedrive' ? 'microsoft' : provider;
+    const generic = await this.prisma.connection.findFirst({ where: { orgId: user.org_id, provider: genericProvider, authType: 'OAUTH2', status: 'ACTIVE', OR: [{ ownerId: user.sub }, { visibility: 'ORGANIZATION' }, { shares: { some: { userId: user.sub } } }] }, include: { secret: true } });
+    if (generic?.secret?.accessToken) {
+      const legacy = await this.prisma.cloudConnection.upsert({
+        where: { orgId_userId_provider: { orgId: user.org_id, userId: user.sub, provider } },
+        create: { id: randomUUID(), orgId: user.org_id, userId: user.sub, provider, accessToken: `connection-ref:${generic.id}`, refreshToken: null, expiresAt: generic.expiresAt, scope: generic.scope },
+        update: { accessToken: `connection-ref:${generic.id}`, refreshToken: null, expiresAt: generic.expiresAt, scope: generic.scope },
+      });
+      return { id: legacy.id, provider, accessToken: '', refreshToken: null, expiresAt: generic.expiresAt };
+    }
+    const row = await this.prisma.cloudConnection.findFirst({ where: { orgId: user.org_id, userId: user.sub, provider } });
+    if (!row) throw new ConflictException('Connect this cloud provider first');
+    return { id: row.id, provider, accessToken: this.decrypt(row.accessToken), refreshToken: row.refreshToken ? this.decrypt(row.refreshToken) : null, expiresAt: row.expiresAt };
+  }
 
   private async ensureAccessToken(connection: Connection): Promise<string> {
+    if (connection.id && connection.accessToken === '') {
+      const legacy = await this.prisma.cloudConnection.findUnique({ where: { id: connection.id } });
+      const reference = legacy?.accessToken?.startsWith('connection-ref:') ? legacy.accessToken.slice('connection-ref:'.length) : null;
+      if (reference) {
+        const token = await this.connections.getAccessTokenById({ sub: legacy.userId, org_id: legacy.orgId } as AccessTokenPayload, reference);
+        if (!token) throw new BadRequestException('Cloud authorization expired; reconnect the provider');
+        return token;
+      }
+    }
     if (!connection.expiresAt || connection.expiresAt.getTime() > Date.now() + 60_000) return connection.accessToken;
+    const generic = await this.prisma.connection.findUnique({ where: { id: connection.id } });
+    if (generic) return (await this.connections.getAccessTokenById(user, generic.id)) ?? connection.accessToken;
     if (!connection.refreshToken) return connection.accessToken;
     const cfg = this.providerConfig(connection.provider);
     const body = new URLSearchParams({ client_id: cfg.clientId!, client_secret: cfg.clientSecret!, refresh_token: connection.refreshToken, grant_type: 'refresh_token' });
-    const tokenUrl = connection.provider === 'google' ? 'https://oauth2.googleapis.com/token' : connection.provider === 'onedrive' ? 'https://login.microsoftonline.com/common/oauth2/v2.0/token' : 'https://api.dropboxapi.com/oauth2/token';
+    const tokenUrl = connection.provider === 'google' ? 'https://oauth2.googleapis.com/token' : connection.provider === 'dropbox' ? 'https://api.dropboxapi.com/oauth2/token' : 'https://login.microsoftonline.com/common/oauth2/v2.0/token';
     const response = await fetch(tokenUrl, { method: 'POST', headers: { 'content-type': 'application/x-www-form-urlencoded' }, body });
-    const payload = await this.readJson(response); if (!response.ok || typeof payload.access_token !== 'string') throw new BadRequestException('Cloud session expired; reconnect the provider');
-    await this.prisma.cloudConnection.update({ where: { id: connection.id }, data: { accessToken: this.encrypt(payload.access_token), expiresAt: typeof payload.expires_in === 'number' ? new Date(Date.now() + payload.expires_in * 1000) : null } });
+    const payload = await this.readJson(response);
+    if (!response.ok || typeof payload.access_token !== 'string') throw new BadRequestException('Cloud authorization expired; reconnect the provider');
+    await this.prisma.cloudConnection.update({ where: { id: connection.id }, data: { accessToken: this.encrypt(payload.access_token), ...(typeof payload.refresh_token === 'string' ? { refreshToken: this.encrypt(payload.refresh_token) } : {}), expiresAt: typeof payload.expires_in === 'number' ? new Date(Date.now() + payload.expires_in * 1000) : null } });
     return payload.access_token;
   }
 
