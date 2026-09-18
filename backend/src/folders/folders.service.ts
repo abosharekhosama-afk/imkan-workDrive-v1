@@ -152,28 +152,6 @@ export class FoldersService {
     return this.getById(user, membership.personalFolderId);
   }
 
-  async listAccessibleTree(user: AccessTokenPayload) {
-    const folders = await this.prisma.folder.findMany({
-      where: { orgId: user.org_id },
-      select: { id: true, name: true, parentId: true, teamFolderId: true, folderType: true, _count: { select: { files: true, children: true } } },
-      orderBy: [{ name: 'asc' }],
-    });
-    const visible: Array<{ id: string; name: string; parentId: string | null; teamFolderId: string | null; folderType: string; fileCount: number; childCount: number }> = [];
-    for (const folder of folders) {
-      if (!(await this.canReadFolder(user, folder))) continue;
-      visible.push({
-        id: folder.id,
-        name: folder.name,
-        parentId: folder.parentId,
-        teamFolderId: folder.teamFolderId,
-        folderType: folder.folderType,
-        fileCount: folder._count.files,
-        childCount: folder._count.children,
-      });
-    }
-    return visible;
-  }
-
   async listContents(user: AccessTokenPayload, parentId?: string, filters: {
     type?: string;
     status?: string;
@@ -448,23 +426,33 @@ export class FoldersService {
 
   private async canReadFolder(
     user: AccessTokenPayload,
-    folder: { id: string; orgId: string; ownerId: string; teamFolderId?: string | null },
+    folder: { id: string; orgId?: string; ownerId?: string; teamFolderId?: string | null },
   ): Promise<boolean> {
-    if (folder.orgId !== user.org_id) return false;
-    if (!folder.teamFolderId) {
-      if (this.permissions.canRead(user, this.toAccessibleResource(folder))) return true;
-      return this.hasFolderShareAccess(user, folder.id);
+    // Some folder-tree/list queries intentionally select only the fields needed
+    // by the UI. Resolve the complete access-control shape here instead of
+    // forcing every caller to duplicate orgId/ownerId in its projection.
+    const resolved = folder.orgId && folder.ownerId
+      ? folder
+      : await this.prisma.folder.findFirst({
+          where: { id: folder.id },
+          select: { id: true, orgId: true, ownerId: true, teamFolderId: true },
+        });
+    if (!resolved || resolved.orgId !== user.org_id) return false;
+
+    if (!resolved.teamFolderId) {
+      if (this.permissions.canRead(user, this.toAccessibleResource(resolved))) return true;
+      return this.hasFolderShareAccess(user, resolved.id);
     }
     const teamFolder = await this.prisma.teamFolder.findFirst({
-      where: { id: folder.teamFolderId, orgId: folder.orgId },
+      where: { id: resolved.teamFolderId, orgId: resolved.orgId },
       select: { isPublicToOrg: true },
     });
-    const teamFolderRole = await this.resolveCallerRole(user, folder.teamFolderId);
+    const teamFolderRole = await this.resolveCallerRole(user, resolved.teamFolderId);
     if (this.permissions.canRead(user, {
-      orgId: folder.orgId, ownerId: folder.teamFolderId, teamFolderId: folder.teamFolderId,
+      orgId: resolved.orgId, ownerId: resolved.teamFolderId, teamFolderId: resolved.teamFolderId,
       teamFolderRole, isPublicToOrg: teamFolder?.isPublicToOrg ?? false,
     })) return true;
-    return this.hasFolderShareAccess(user, folder.id);
+    return this.hasFolderShareAccess(user, resolved.id);
   }
 
   private async hasFolderShareAccess(user: AccessTokenPayload, folderId: string): Promise<boolean> {
