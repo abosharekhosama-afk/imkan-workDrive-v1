@@ -749,5 +749,6 @@
   "help.supportDescription": "Our support team is ready to assist. Reach out from your account settings or send us your feedback directly.",
   "help.contactSupport": "Contact support",
   "help.sendFeedback": "Send feedback",
-  "share.folderContents": "Shared folder contents"
+  "share.folderContents": "Shared folder contents",
+  "nav.members": "Members"
 }

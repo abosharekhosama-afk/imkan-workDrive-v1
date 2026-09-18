@@ -27,6 +27,8 @@ export class OrganizationController {
   @Get('members') members(@CurrentUser() u: AccessTokenPayload, @Query('status') status?: string) { return this.service.members(u, status); }
   @Post('accounts') @UseGuards(SuperAdminGuard) createAccount(@CurrentUser() u: AccessTokenPayload, @Body() b: unknown) { return this.auth.createUserAccount(u, parseCreateAccount(b)); }
   @Get('members/all') allMembers(@CurrentUser() u: AccessTokenPayload) { return this.service.allMembersWithPending(u); }
+  @Get('members/management') management(@CurrentUser() u: AccessTokenPayload, @Query('status') status?: string) { return this.service.management(u, status); }
+  @Get('members/:id/details') memberDetails(@CurrentUser() u: AccessTokenPayload, @Param('id') id: string) { return this.service.memberDetails(u, id); }
   @Patch('members/:id') updateMember(@CurrentUser() u: AccessTokenPayload, @Param('id') id: string, @Body() b: unknown) { return this.service.updateMemberRole(u, id, parseUpdateMemberRole(b).role); }
   @Post('members/:id/suspend') suspendMember(@CurrentUser() u: AccessTokenPayload, @Param('id') id: string) { return this.service.suspendMember(u, id); }
   @Post('members/:id/activate') activateMember(@CurrentUser() u: AccessTokenPayload, @Param('id') id: string) { return this.service.activateMember(u, id); }

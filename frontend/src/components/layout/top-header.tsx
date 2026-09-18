@@ -184,6 +184,7 @@ export function TopHeader() {
       <div className="flex min-w-0 items-center gap-2">
         <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[8px] bg-[#F0F4FF] text-[var(--wd-primary)]"><Icons.folder size={18} /></span>
         <span className="max-w-[42vw] truncate text-[15px] font-semibold text-[#212121]">{
+          pathname.startsWith("/members") ? (locale === "ar" ? "الأعضاء" : "Members") :
           pathname.startsWith("/organization") ? (locale === "ar" ? "المنظمة" : "Organization") :
           pathname.startsWith("/files/workflows") ? (locale === "ar" ? "سير العمل" : "Workflows") :
           pathname === "/files/team-folders" ? (locale === "ar" ? "مجلدات الفريق" : "Team Folders") :

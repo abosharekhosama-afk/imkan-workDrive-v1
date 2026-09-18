@@ -80,6 +80,191 @@ export class OrganizationService {
     return { members: activeMembers, pendingInvitations };
   }
 
+
+  async management(user: AccessTokenPayload, statusFilter?: string) {
+    this.assertSuperAdmin(user);
+    const normalized = statusFilter?.trim().toUpperCase();
+    const allowed = new Set(Object.values(MembershipStatus));
+    if (normalized && !allowed.has(normalized as MembershipStatus)) {
+      throw new BadRequestException('Invalid member status filter');
+    }
+
+    const statusWhere = normalized
+      ? normalized as MembershipStatus
+      : { in: [MembershipStatus.ACTIVE, MembershipStatus.SUSPENDED] as MembershipStatus[] };
+
+    const memberships = await this.prisma.organizationMembership.findMany({
+      where: { organizationId: user.org_id, status: statusWhere },
+      include: {
+        user: { select: { id: true, name: true, email: true, avatarUrl: true, status: true, createdAt: true } },
+      },
+      orderBy: { joinedAt: 'asc' },
+    });
+
+    const userIds = memberships.map((m) => m.userId);
+    const [fileTotals, teamCounts, groupCounts, pendingInvitations, counts] = await Promise.all([
+      userIds.length
+        ? this.prisma.file.groupBy({
+            by: ['ownerId'],
+            where: { orgId: user.org_id, ownerId: { in: userIds }, deletedAt: null },
+            _sum: { size: true },
+          })
+        : [],
+      userIds.length
+        ? this.prisma.teamFolderMember.groupBy({
+            by: ['userId'],
+            where: { orgId: user.org_id, userId: { in: userIds } },
+            _count: { _all: true },
+          })
+        : [],
+      userIds.length
+        ? this.prisma.groupMember.groupBy({
+            by: ['userId'],
+            where: { orgId: user.org_id, userId: { in: userIds } },
+            _count: { _all: true },
+          })
+        : [],
+      this.prisma.organizationInvitation.findMany({
+        where: { orgId: user.org_id, acceptedAt: null, revokedAt: null, expiresAt: { gt: new Date() } },
+        select: { id: true, email: true, role: true, expiresAt: true, createdAt: true, invitedBy: { select: { id: true, name: true, email: true } } },
+        orderBy: { createdAt: 'desc' },
+      }),
+      Promise.all([
+        this.prisma.organizationMembership.count({ where: { organizationId: user.org_id, status: MembershipStatus.ACTIVE } }),
+        this.prisma.organizationMembership.count({ where: { organizationId: user.org_id, status: MembershipStatus.SUSPENDED } }),
+        this.prisma.organizationMembership.count({ where: { organizationId: user.org_id, status: MembershipStatus.REMOVED } }),
+      ]),
+    ]);
+
+    const fileMap = new Map(fileTotals.map((r) => [r.ownerId, String(r._sum.size ?? 0n)]));
+    const teamMap = new Map(teamCounts.map((r) => [r.userId, r._count._all]));
+    const groupMap = new Map(groupCounts.map((r) => [r.userId, r._count._all]));
+
+    return {
+      members: memberships.map((m) => ({
+        id: m.id,
+        userId: m.userId,
+        name: m.user.name,
+        email: m.user.email,
+        avatarUrl: m.user.avatarUrl,
+        role: m.role,
+        status: m.status,
+        joinedAt: m.joinedAt,
+        createdAt: m.user.createdAt,
+        storageUsed: fileMap.get(m.userId) ?? '0',
+        teamFolderCount: teamMap.get(m.userId) ?? 0,
+        groupCount: groupMap.get(m.userId) ?? 0,
+      })),
+      invitations: pendingInvitations,
+      counts: {
+        licensed: counts[0] + counts[1],
+        active: counts[0],
+        suspended: counts[1],
+        removed: counts[2],
+        invited: pendingInvitations.length,
+        templateAdmins: 0,
+        teamAdmins: await this.prisma.organizationMembership.count({
+          where: { organizationId: user.org_id, status: MembershipStatus.ACTIVE, role: { in: [OrgRole.ADMIN, OrgRole.SUPER_ADMIN] } },
+        }),
+      },
+      licenseLimit: Number(process.env.WORKDRIVE_MEMBER_LICENSE_LIMIT ?? 10),
+    };
+  }
+
+  async memberDetails(user: AccessTokenPayload, membershipId: string) {
+    this.assertSuperAdmin(user);
+    const membership = await this.prisma.organizationMembership.findFirst({
+      where: { id: membershipId, organizationId: user.org_id },
+      include: {
+        user: { select: { id: true, name: true, email: true, avatarUrl: true, status: true, createdAt: true, lastLoginAt: true } },
+      },
+    });
+    if (!membership) throw new NotFoundException('Member not found');
+
+    const [folderMemberships, groupMemberships, fileTotal] = await Promise.all([
+      this.prisma.teamFolderMember.findMany({
+        where: { orgId: user.org_id, userId: membership.userId },
+        include: { teamFolder: { select: { id: true, name: true, isPublicToOrg: true } } },
+        orderBy: { teamFolder: { name: 'asc' } },
+      }),
+      this.prisma.groupMember.findMany({
+        where: { orgId: user.org_id, userId: membership.userId },
+        include: { group: { select: { id: true, name: true, description: true } } },
+        orderBy: { group: { name: 'asc' } },
+      }),
+      this.prisma.file.aggregate({
+        where: { orgId: user.org_id, ownerId: membership.userId, deletedAt: null },
+        _sum: { size: true },
+      }),
+    ]);
+
+    const allTeamFolders = await this.prisma.teamFolder.findMany({
+      where: { orgId: user.org_id, archivedAt: null },
+      select: { id: true, name: true, isPublicToOrg: true },
+      orderBy: { name: 'asc' },
+    });
+
+    const assignedIds = new Set(folderMemberships.map((m) => m.teamFolderId));
+    const available = allTeamFolders.filter((folder) => !assignedIds.has(folder.id));
+    const fileRows = available.length
+      ? await this.prisma.file.findMany({
+          where: {
+            orgId: user.org_id,
+            deletedAt: null,
+            folder: { teamFolderId: { in: available.map((f) => f.id) } },
+          },
+          select: {
+            id: true, name: true, size: true, mimeType: true, fileType: true, updatedAt: true,
+            folder: { select: { teamFolderId: true } },
+          },
+          orderBy: { updatedAt: 'desc' },
+          take: 100,
+        })
+      : [];
+
+    const preview = new Map<string, Array<{ id: string; name: string; size: string; mimeType: string | null; fileType: string; updatedAt: Date }>>();
+    for (const file of fileRows) {
+      const teamFolderId = file.folder?.teamFolderId;
+      if (!teamFolderId) continue;
+      const list = preview.get(teamFolderId) ?? [];
+      if (list.length < 6) {
+        list.push({ id: file.id, name: file.name, size: String(file.size), mimeType: file.mimeType, fileType: file.fileType, updatedAt: file.updatedAt });
+        preview.set(teamFolderId, list);
+      }
+    }
+
+    return {
+      member: {
+        id: membership.id,
+        userId: membership.userId,
+        name: membership.user.name,
+        email: membership.user.email,
+        avatarUrl: membership.user.avatarUrl,
+        role: membership.role,
+        status: membership.status,
+        createdAt: membership.user.createdAt,
+        lastLoginAt: membership.user.lastLoginAt,
+        storageUsed: String(fileTotal._sum.size ?? 0n),
+      },
+      teamFolders: folderMemberships.map((m) => ({
+        id: m.teamFolderId,
+        name: m.teamFolder.name,
+        role: m.role,
+        isPublicToOrg: m.teamFolder.isPublicToOrg,
+      })),
+      groups: groupMemberships.map((m) => ({
+        id: m.groupId,
+        name: m.group.name,
+        description: m.group.description,
+        role: m.role,
+      })),
+      availableTeamFolders: available.map((folder) => ({
+        ...folder,
+        files: preview.get(folder.id) ?? [],
+      })),
+    };
+  }
+
   async updateMemberRole(user: AccessTokenPayload, membershipId: string, role: OrgRole) {
     this.assertSuperAdmin(user);
     if (user.role === OrgRole.ADMIN && role === OrgRole.SUPER_ADMIN) {
