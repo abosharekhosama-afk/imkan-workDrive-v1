@@ -308,7 +308,7 @@ export class ConnectionsService {
     const refreshToken = typeof payload.refresh_token === 'string' ? this.crypto.encrypt(payload.refresh_token) : undefined;
     const connection = await this.prisma.$transaction(async (tx) => {
       const connection = existing
-        ? await tx.connection.update({ where: { id: existing.id }, data: { status: ConnectionStatus.ACTIVE, metadata: metadata as Prisma.InputJsonValue, expiresAt, scope: typeof payload.scope === 'string' ? payload.scope.slice(0, 4000) : existing.scope, errorCode: null, errorMessage: null, secret: { upsert: { create: { id: randomUUID(), ownerId: row.userId, accessToken, ...(refreshToken ? { refreshToken } : {}) }, update: { accessToken, ...(refreshToken ? { refreshToken } : {}) } } } } })
+        ? await tx.connection.update({ where: { id: existing.id }, data: { status: ConnectionStatus.ACTIVE, metadata: metadata as Prisma.InputJsonValue, expiresAt, scope: typeof payload.scope === 'string' ? payload.scope.slice(0, 4000) : existing.scope, errorCode: null, errorMessage: null, secret: { upsert: { create: { id: randomUUID(), ownerId: row.userId, accessToken, ...(newRefreshToken ? { refreshToken: newRefreshToken } : {}) }, update: { accessToken, ...(refreshToken ? { refreshToken } : {}) } } } } })
         : await tx.connection.create({ data: { id: randomUUID(), orgId: row.orgId, ownerId: row.userId, name, provider, authType: ConnectionAuthType.OAUTH2, visibility: ConnectionVisibility.PRIVATE, status: ConnectionStatus.ACTIVE, metadata: metadata as Prisma.InputJsonValue, expiresAt, scope: typeof payload.scope === 'string' ? payload.scope.slice(0, 4000) : null, secret: { create: { id: randomUUID(), ownerId: row.userId, accessToken, ...(refreshToken ? { refreshToken } : {}) } } } });
       const secret = await tx.connectionSecret.findUnique({ where: { connectionId: connection.id } });
       if (!secret) throw new BadRequestException('OAuth connection secret could not be stored');
@@ -347,18 +347,18 @@ export class ConnectionsService {
   }
 
   async executeRestFunction(user: AccessTokenPayload, id: string, method: string, path: string, rawBody?: unknown, rawHeaders?: unknown, options: { responseMode?: string; jsonPath?: string; retries?: number; idempotencyKey?: string; workflowId?: string; runId?: string; maxResponseBytes?: number; actionType?: string } = {}) {
-    const row = await this.findVisible(user, id);
-    if (row.provider !== 'rest') throw new BadRequestException('HTTP_REQUEST requires a REST connection');
-    if (row.status !== ConnectionStatus.ACTIVE) throw new ForbiddenException('Connection is not active');
-    if (!row.baseUrl) throw new BadRequestException('REST connection base URL is missing');
-    const base = new URL(row.baseUrl); if (base.protocol !== 'https:') throw new BadRequestException('REST connection must use HTTPS');
+    const { row: connection, secrets } = await this.getSecretsForExecution(user, id);
+    if (connection.provider !== 'rest') throw new BadRequestException('HTTP_REQUEST requires a REST connection');
+    if (connection.status !== ConnectionStatus.ACTIVE) throw new ForbiddenException('Connection is not active');
+    if (!connection.baseUrl) throw new BadRequestException('REST connection base URL is missing');
+    const base = new URL(connection.baseUrl); if (base.protocol !== 'https:') throw new BadRequestException('REST connection must use HTTPS');
     const target = new URL(path, base); if (target.origin !== base.origin) throw new BadRequestException('HTTP_REQUEST target must remain on the connection origin');
     await this.assertSafeFunctionHost(target.hostname);
-    const secrets = await this.getSecretsForExecution(user, id); const headers = new Headers();
-    if (row.authType === ConnectionAuthType.API_KEY && secrets.apiKey) headers.set('X-API-Key', secrets.apiKey);
-    if (row.authType === ConnectionAuthType.BEARER && secrets.bearerToken) headers.set('Authorization', `Bearer ${secrets.bearerToken}`);
-    if (row.authType === ConnectionAuthType.BASIC && secrets.username) headers.set('Authorization', `Basic ${Buffer.from(`${secrets.username}:${secrets.password ?? ''}`).toString('base64')}`);
-    if (row.authType === ConnectionAuthType.CUSTOM_HEADER && secrets.customHeaders) { const h=JSON.parse(secrets.customHeaders); if (h && typeof h==='object') for (const [k,v] of Object.entries(h)) if (!/^(authorization|cookie|proxy-authorization|host|content-length|transfer-encoding)$/i.test(k) && typeof v==='string') headers.set(k,v); }
+    const headers = new Headers();
+    if (connection.authType === ConnectionAuthType.API_KEY && secrets.apiKey) headers.set('X-API-Key', secrets.apiKey);
+    if (connection.authType === ConnectionAuthType.BEARER && secrets.bearerToken) headers.set('Authorization', `Bearer ${secrets.bearerToken}`);
+    if (connection.authType === ConnectionAuthType.BASIC && secrets.username) headers.set('Authorization', `Basic ${Buffer.from(`${secrets.username}:${secrets.password ?? ''}`).toString('base64')}`);
+    if (connection.authType === ConnectionAuthType.CUSTOM_HEADER && secrets.customHeaders) { const h=JSON.parse(secrets.customHeaders); if (h && typeof h==='object') for (const [k,v] of Object.entries(h)) if (!/^(authorization|cookie|proxy-authorization|host|content-length|transfer-encoding)$/i.test(k) && typeof v==='string') headers.set(k,v); }
     if (rawHeaders && typeof rawHeaders==='object') for (const [k,v] of Object.entries(rawHeaders as Record<string,unknown>)) if (!/^(authorization|cookie|proxy-authorization|host|content-length|transfer-encoding)$/i.test(k) && typeof v==='string') headers.set(k,v);
     let body: string|undefined; if (rawBody !== undefined && rawBody !== null) { body=typeof rawBody==='string'?rawBody:JSON.stringify(rawBody); if (!headers.has('content-type')) headers.set('content-type','application/json'); }
     const started=Date.now(); let status='FAILED'; const maxRetries=Math.min(Math.max(Number(options.retries ?? 0),0),3);
@@ -428,15 +428,15 @@ export class ConnectionsService {
       throw new ForbiddenException('Connection requires re-authentication');
     }
     const accessToken = this.crypto.encrypt(payload.access_token);
-    const refreshToken = typeof payload.refresh_token === 'string' ? this.crypto.encrypt(payload.refresh_token) : undefined;
+    const newRefreshToken = typeof payload.refresh_token === 'string' ? this.crypto.encrypt(payload.refresh_token) : undefined;
     const existingSecret = await this.prisma.connectionSecret.findUnique({ where: { connectionId: id } });
     const connectionOwner = existingSecret?.ownerId ?? (await this.prisma.connection.findUniqueOrThrow({ where: { id }, select: { ownerId: true } })).ownerId;
-    const snapshot = this.mergeSecretSnapshot(existingSecret, { accessToken, ...(refreshToken ? { refreshToken } : {}) });
+    const snapshot = this.mergeSecretSnapshot(existingSecret, { accessToken, ...(newRefreshToken ? { refreshToken: newRefreshToken } : {}) });
     await this.prisma.$transaction(async (tx) => {
       await tx.connection.update({ where: { id }, data: { expiresAt: typeof payload.expires_in === 'number' ? new Date(Date.now() + payload.expires_in * 1000) : null, status: ConnectionStatus.ACTIVE, errorCode: null, errorMessage: null } });
       const latest = await tx.connectionSecretVersion.findFirst({ where: { connectionId: id }, orderBy: { version: 'desc' }, select: { version: true } });
       const version = (latest?.version ?? 0) + 1;
-      await tx.connectionSecret.upsert({ where: { connectionId: id }, create: { id: randomUUID(), ownerId: connectionOwner, ...snapshot }, update: snapshot });
+      await tx.connectionSecret.upsert({ where: { connectionId: id }, create: { id: randomUUID(), connectionId: id, ownerId: connectionOwner, ...snapshot }, update: snapshot });
       const secret = await tx.connectionSecret.findUnique({ where: { connectionId: id }, select: { id: true } });
       await tx.connectionSecretVersion.create({ data: { id: randomUUID(), connectionId: id, createdById: connectionOwner, version, ...snapshot, ...(secret ? { secretId: secret.id } : {}) } });
       await tx.connectionSecret.update({ where: { connectionId: id }, data: { keyVersion: version } });
@@ -495,7 +495,7 @@ export class ConnectionsService {
     if (!addresses.length || addresses.some((entry) => this.isPrivateFunctionIp(entry.address))) throw new BadRequestException('HTTP_REQUEST hostname resolves to a private or local network target');
   }
 
-  private isPrivateFunctionIp(host: string) {
+  private isPrivateFunctionIp(host: string): boolean {
     const normalized = host.toLowerCase().replace(/^\[|\]$/g, '');
     if (isIP(normalized) === 4) {
       const p = normalized.split('.').map(Number);
