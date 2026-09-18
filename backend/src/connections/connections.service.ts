@@ -265,10 +265,10 @@ export class ConnectionsService {
     const name = existing?.name ?? `${this.registry.get(provider).name} connection`;
     const metadata = { ...(existing?.metadata && typeof existing.metadata === 'object' ? existing.metadata as Record<string, unknown> : {}), oauthProvider: provider, oauthConnectedAt: new Date().toISOString() };
     const accessToken = this.crypto.encrypt(payload.access_token);
-    const refreshToken = typeof payload.refresh_token === 'string' ? this.crypto.encrypt(payload.refresh_token) : undefined;
+    const newRefreshToken = typeof payload.refresh_token === 'string' ? this.crypto.encrypt(payload.refresh_token) : undefined;
     const connection = existing
       ? await this.prisma.connection.update({ where: { id: existing.id }, data: { status: ConnectionStatus.ACTIVE, metadata: metadata as Prisma.InputJsonValue, expiresAt, scope: typeof payload.scope === 'string' ? payload.scope.slice(0, 4000) : existing.scope, errorCode: null, errorMessage: null, secret: { upsert: { create: { id: randomUUID(), ownerId: row.userId, accessToken, ...(refreshToken ? { refreshToken } : {}) }, update: { accessToken, ...(refreshToken ? { refreshToken } : {}) } } } } })
-      : await this.prisma.connection.create({ data: { id: randomUUID(), orgId: row.orgId, ownerId: row.userId, name, provider, authType: ConnectionAuthType.OAUTH2, visibility: ConnectionVisibility.PRIVATE, status: ConnectionStatus.ACTIVE, metadata: metadata as Prisma.InputJsonValue, expiresAt, scope: typeof payload.scope === 'string' ? payload.scope.slice(0, 4000) : null, secret: { create: { id: randomUUID(), ownerId: row.userId, accessToken, ...(refreshToken ? { refreshToken } : {}) } } } });
+      : await this.prisma.connection.create({ data: { id: randomUUID(), orgId: row.orgId, ownerId: row.userId, name, provider, authType: ConnectionAuthType.OAUTH2, visibility: ConnectionVisibility.PRIVATE, status: ConnectionStatus.ACTIVE, metadata: metadata as Prisma.InputJsonValue, expiresAt, scope: typeof payload.scope === 'string' ? payload.scope.slice(0, 4000) : null, secret: { create: { id: randomUUID(), ownerId: row.userId, accessToken, ...(newRefreshToken ? { refreshToken: newRefreshToken } : {}) } } } });
     const oauthSecret = await this.prisma.connectionSecret.findUnique({ where: { connectionId: connection.id } });
     if (oauthSecret) {
       const version = await this.nextSecretVersion(connection.id);
@@ -311,7 +311,7 @@ export class ConnectionsService {
     const base = new URL(row.baseUrl); if (base.protocol !== 'https:') throw new BadRequestException('REST connection must use HTTPS');
     const target = new URL(path, base); if (target.origin !== base.origin) throw new BadRequestException('HTTP_REQUEST target must remain on the connection origin');
     await this.assertSafeFunctionHost(target.hostname);
-    const secrets = await this.getSecretsForExecution(user, id); const headers = new Headers();
+    const { secrets } = await this.getSecretsForExecution(user, id); const headers = new Headers();
     if (row.authType === ConnectionAuthType.API_KEY && secrets.apiKey) headers.set('X-API-Key', secrets.apiKey);
     if (row.authType === ConnectionAuthType.BEARER && secrets.bearerToken) headers.set('Authorization', `Bearer ${secrets.bearerToken}`);
     if (row.authType === ConnectionAuthType.BASIC && secrets.username) headers.set('Authorization', `Basic ${Buffer.from(`${secrets.username}:${secrets.password ?? ''}`).toString('base64')}`);
@@ -368,10 +368,10 @@ export class ConnectionsService {
     return { row, secrets: out };
   }
 
-  private async refreshOAuthToken(provider: OAuthProvider, id: string, refreshToken: string) {
+  private async refreshOAuthToken(provider: OAuthProvider, id: string, currentRefreshToken: string) {
     const cfg = this.oauthConfig(provider);
     if (!cfg.clientId || !cfg.clientSecret) throw new BadRequestException('OAuth provider is not configured');
-    const body = new URLSearchParams({ client_id: cfg.clientId, client_secret: cfg.clientSecret, refresh_token: refreshToken, grant_type: 'refresh_token' });
+    const body = new URLSearchParams({ client_id: cfg.clientId, client_secret: cfg.clientSecret, refresh_token: currentRefreshToken, grant_type: 'refresh_token' });
     const response = await fetch(cfg.tokenUrl, { method: 'POST', headers: { 'content-type': 'application/x-www-form-urlencoded' }, body });
     const payload = await this.readJson(response);
     if (!response.ok || typeof payload.access_token !== 'string') {
@@ -379,8 +379,8 @@ export class ConnectionsService {
       throw new ForbiddenException('Connection requires re-authentication');
     }
     const accessToken = this.crypto.encrypt(payload.access_token);
-    const refreshToken = typeof payload.refresh_token === 'string' ? this.crypto.encrypt(payload.refresh_token) : undefined;
-    await this.prisma.connection.update({ where: { id }, data: { expiresAt: typeof payload.expires_in === 'number' ? new Date(Date.now() + payload.expires_in * 1000) : null, status: ConnectionStatus.ACTIVE, errorCode: null, errorMessage: null, secret: { update: { accessToken, ...(refreshToken ? { refreshToken } : {}) } } } });
+    const newRefreshToken = typeof payload.refresh_token === 'string' ? this.crypto.encrypt(payload.refresh_token) : undefined;
+    await this.prisma.connection.update({ where: { id }, data: { expiresAt: typeof payload.expires_in === 'number' ? new Date(Date.now() + payload.expires_in * 1000) : null, status: ConnectionStatus.ACTIVE, errorCode: null, errorMessage: null, secret: { update: { accessToken, ...(newRefreshToken ? { refreshToken: newRefreshToken } : {}) } } } });
     return payload.access_token as string;
   }
 
