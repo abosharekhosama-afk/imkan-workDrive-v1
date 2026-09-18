@@ -93,28 +93,20 @@ export class CloudImportService implements OnModuleInit, OnModuleDestroy {
     // Keep CloudConnection as a compatibility mirror for existing import jobs and older deployments.
     const generic = await this.prisma.connection.findUnique({ where: { id: result.connectionId }, include: { secret: true } });
     if (generic?.secret?.accessToken) {
+      const accessToken = this.connections.decryptSecret(generic.secret.accessToken);
+      const refreshToken = generic.secret.refreshToken ? this.connections.decryptSecret(generic.secret.refreshToken) : null;
       await this.prisma.cloudConnection.upsert({
         where: { orgId_userId_provider: { orgId: result.orgId ?? '', userId: result.userId ?? '', provider } },
-        create: { id: randomUUID(), orgId: result.orgId ?? '', userId: result.userId ?? '', provider, accessToken: `connection-ref:${generic.id}`, refreshToken: null, expiresAt: generic.expiresAt, scope: generic.scope },
-        update: { accessToken: `connection-ref:${generic.id}`, refreshToken: null, expiresAt: generic.expiresAt, scope: generic.scope },
+        create: { id: randomUUID(), orgId: result.orgId ?? '', userId: result.userId ?? '', provider, accessToken: this.encrypt(accessToken), refreshToken: refreshToken ? this.encrypt(refreshToken) : null, expiresAt: generic.expiresAt, scope: generic.scope },
+        update: { accessToken: this.encrypt(accessToken), ...(refreshToken ? { refreshToken: this.encrypt(refreshToken) } : {}), expiresAt: generic.expiresAt, scope: generic.scope },
       });
     }
     return { frontend: result.frontend, folderId: result.folderId };
   }
 
   async listProviders(user: AccessTokenPayload) {
-    const generic = await this.prisma.connection.findMany({
-      where: { orgId: user.org_id, authType: 'OAUTH2', OR: [{ ownerId: user.sub }, { visibility: 'ORGANIZATION' }, { shares: { some: { userId: user.sub } } }] },
-      select: { provider: true, status: true, updatedAt: true },
-      orderBy: { updatedAt: 'desc' },
-    });
-    const legacy = await this.prisma.cloudConnection.findMany({ where: { orgId: user.org_id, userId: user.sub }, select: { provider: true, updatedAt: true } });
-    return ['google', 'dropbox', 'onedrive'].map((provider) => {
-      const genericProvider = provider === 'onedrive' ? 'microsoft' : provider;
-      const row = generic.find((r) => r.provider === genericProvider && r.status === 'ACTIVE');
-      const old = legacy.find((r) => r.provider === provider);
-      return { provider, connected: Boolean(row || (!generic.some((g) => g.provider === genericProvider) && old)), updatedAt: row?.updatedAt ?? ((!generic.some((g) => g.provider === genericProvider)) ? old?.updatedAt : null) };
-    });
+    const rows = await this.prisma.cloudConnection.findMany({ where: { orgId: user.org_id, userId: user.sub }, select: { id: true, provider: true, expiresAt: true, updatedAt: true } });
+    return ['google', 'dropbox', 'onedrive'].map((provider) => ({ provider, connected: rows.some((r) => r.provider === provider), updatedAt: rows.find((r) => r.provider === provider)?.updatedAt ?? null }));
   }
 
   async listFiles(user: AccessTokenPayload, provider: CloudProvider): Promise<RemoteFile[]> {
@@ -193,8 +185,7 @@ export class CloudImportService implements OnModuleInit, OnModuleDestroy {
     const job = await this.prisma.cloudImportJob.findUnique({ where: { id }, include: { connection: true } });
     if (!job) return;
     try {
-      const isReference = job.connection.accessToken.startsWith('connection-ref:');
-      const connection: Connection = { id: job.connection.id, provider: job.connection.provider as CloudProvider, accessToken: isReference ? '' : this.decrypt(job.connection.accessToken), refreshToken: isReference ? null : (job.connection.refreshToken ? this.decrypt(job.connection.refreshToken) : null), expiresAt: job.connection.expiresAt };
+      const connection: Connection = { id: job.connection.id, provider: job.connection.provider as CloudProvider, accessToken: this.decrypt(job.connection.accessToken), refreshToken: job.connection.refreshToken ? this.decrypt(job.connection.refreshToken) : null, expiresAt: job.connection.expiresAt };
       const token = await this.ensureAccessToken(connection);
       const downloaded = await this.downloadRemote(connection.provider, token, job.remoteFileId, job.remoteName, job.remoteMimeType, async (done, total) => {
         const progress = total > 0 ? Math.min(75, Math.max(1, Math.floor((done / total) * 75))) : Math.min(75, Math.max(1, job.progress + 1));
@@ -280,33 +271,17 @@ export class CloudImportService implements OnModuleInit, OnModuleDestroy {
 
   private async getConnection(user: AccessTokenPayload, provider: CloudProvider) {
     const genericProvider = provider === 'onedrive' ? 'microsoft' : provider;
-    const generic = await this.prisma.connection.findFirst({ where: { orgId: user.org_id, provider: genericProvider, authType: 'OAUTH2', status: 'ACTIVE', OR: [{ ownerId: user.sub }, { visibility: 'ORGANIZATION' }, { shares: { some: { userId: user.sub } } }] }, include: { secret: true } });
-    if (generic?.secret?.accessToken) {
-      const legacy = await this.prisma.cloudConnection.upsert({
-        where: { orgId_userId_provider: { orgId: user.org_id, userId: user.sub, provider } },
-        create: { id: randomUUID(), orgId: user.org_id, userId: user.sub, provider, accessToken: `connection-ref:${generic.id}`, refreshToken: null, expiresAt: generic.expiresAt, scope: generic.scope },
-        update: { accessToken: `connection-ref:${generic.id}`, refreshToken: null, expiresAt: generic.expiresAt, scope: generic.scope },
-      });
-      return { id: legacy.id, provider, accessToken: '', refreshToken: null, expiresAt: generic.expiresAt };
-    }
+    const generic = await this.prisma.connection.findFirst({ where: { orgId: user.org_id, ownerId: user.sub, provider: genericProvider, authType: 'OAUTH2' }, include: { secret: true } });
+    if (generic?.secret?.accessToken) return { id: generic.id, provider, accessToken: this.connections.decryptSecret(generic.secret.accessToken), refreshToken: generic.secret.refreshToken ? this.connections.decryptSecret(generic.secret.refreshToken) : null, expiresAt: generic.expiresAt };
     const row = await this.prisma.cloudConnection.findFirst({ where: { orgId: user.org_id, userId: user.sub, provider } });
     if (!row) throw new ConflictException('Connect this cloud provider first');
     return { id: row.id, provider, accessToken: this.decrypt(row.accessToken), refreshToken: row.refreshToken ? this.decrypt(row.refreshToken) : null, expiresAt: row.expiresAt };
   }
 
   private async ensureAccessToken(connection: Connection): Promise<string> {
-    if (connection.id && connection.accessToken === '') {
-      const legacy = await this.prisma.cloudConnection.findUnique({ where: { id: connection.id } });
-      const reference = legacy?.accessToken?.startsWith('connection-ref:') ? legacy.accessToken.slice('connection-ref:'.length) : null;
-      if (reference) {
-        const token = await this.connections.getAccessTokenById({ sub: legacy.userId, org_id: legacy.orgId } as AccessTokenPayload, reference);
-        if (!token) throw new BadRequestException('Cloud authorization expired; reconnect the provider');
-        return token;
-      }
-    }
     if (!connection.expiresAt || connection.expiresAt.getTime() > Date.now() + 60_000) return connection.accessToken;
     const generic = await this.prisma.connection.findUnique({ where: { id: connection.id } });
-    if (generic) return (await this.connections.getAccessTokenById(user, generic.id)) ?? connection.accessToken;
+    if (generic) return (await this.connections.getAccessTokenById(generic.id)) ?? connection.accessToken;
     if (!connection.refreshToken) return connection.accessToken;
     const cfg = this.providerConfig(connection.provider);
     const body = new URLSearchParams({ client_id: cfg.clientId!, client_secret: cfg.clientSecret!, refresh_token: connection.refreshToken, grant_type: 'refresh_token' });
