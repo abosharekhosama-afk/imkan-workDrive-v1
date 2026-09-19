@@ -9,7 +9,8 @@ import { ConnectionsService } from './connections.service';
 export class ConnectionsController {
   constructor(private readonly service: ConnectionsService) {}
   @Get('providers') providers() { return this.service.providers(); }
-  @Get('oauth/:provider/start') startOAuth(@CurrentUser() user: AccessTokenPayload, @Param('provider') provider: string, @Query('folderId') folderId?: string) { return this.service.beginOAuth(user, provider as any, folderId || null); }
+  @Get('templates') templates() { return this.service.templates(); }
+  @Get('oauth/:provider/start') startOAuth(@CurrentUser() user: AccessTokenPayload, @Param('provider') provider: string, @Query('folderId') folderId?: string, @Query('connectionId') connectionId?: string) { return this.service.beginOAuth(user, provider as any, folderId || null, connectionId || null); }
   @Public() @Get('oauth/:provider/callback') async oauthCallback(@Param('provider') provider: string, @Query('code') code: string, @Query('state') state: string, @Res() response: Response) { const result = await this.service.completeOAuth(provider as any, code, state); const target = result.folderId ? `/files?cloudImport=${encodeURIComponent(provider === "microsoft" ? "onedrive" : provider)}&folderId=${encodeURIComponent(result.folderId)}` : `/files/connections?oauth=success&provider=${encodeURIComponent(provider)}&connectionId=${encodeURIComponent(result.connectionId)}`; response.redirect(`${result.frontend}${target}`); }
   @Get() list(@CurrentUser() user: AccessTokenPayload, @Query('provider') provider?: string, @Query('status') status?: string, @Query('search') search?: string) { return this.service.list(user, { provider, status, search }); }
   @Get(':id/diagnostics') diagnostics(@CurrentUser() user: AccessTokenPayload, @Param('id') id: string) { return this.service.diagnostics(user, id); }

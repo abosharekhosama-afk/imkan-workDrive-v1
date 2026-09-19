@@ -106,7 +106,8 @@ export type WorkflowAuditEntry = { id:string; action:string; resourceType:string
 export function listWorkflowAudit(params?: { action?:string; resourceType?:string }) { const q=new URLSearchParams(); if(params?.action) q.set('action',params.action); if(params?.resourceType) q.set('resourceType',params.resourceType); return apiRequest<WorkflowAuditEntry[]>(`/workflows/audit${q.toString()?`?${q}`:''}`); }
 
 
-export type ConnectionProvider = { key: string; name: string; authTypes: string[]; oauth?: boolean; capabilities?: string[] };
+export type ConnectionScope = { value: string; label: string; description: string };
+export type ConnectionProvider = { key: string; name: string; category?: string; authTypes: string[]; oauth?: boolean; capabilities?: string[]; configured?: boolean; baseUrl?: string; scopes?: ConnectionScope[]; defaultScopes?: string[] };
 export type Connection = { canManage: boolean; id: string; orgId: string; ownerId: string; name: string; provider: string; authType: string; visibility: 'PRIVATE' | 'ORGANIZATION'; status: 'ACTIVE' | 'REAUTH_REQUIRED' | 'DISABLED' | 'ERROR'; baseUrl?: string | null; metadata?: Record<string, unknown> | null; expiresAt?: string | null; scope?: string | null; lastTestedAt?: string | null; lastUsedAt?: string | null; errorCode?: string | null; errorMessage?: string | null; createdAt: string; updatedAt: string };
 export type ConnectionUsage = { id: string; userId?: string | null; workflowId?: string | null; runId?: string | null; actionType?: string | null; status: string; durationMs?: number | null; createdAt: string };
 export function listConnectionProviders() { return apiRequest<ConnectionProvider[]>('/connections/providers'); }
@@ -128,5 +129,5 @@ export function rollbackConnectionSecret(id:string, version:number) { return api
 export function getConnectionDiagnostics(id: string) { return apiRequest<{ id:string; provider:string; authType:string; status:string; checks:Record<string,boolean>; lastTestedAt?:string|null; lastUsedAt?:string|null; errorCode?:string|null; errorMessage?:string|null; usageCount:number; averageDurationMs?:number|null }>(`/connections/${id}/diagnostics`); }
 export function getConnectionUsage(id: string) { return apiRequest<{ count: number; recent: ConnectionUsage[]; summary: { byStatus: Array<{status:string;_count:{_all:number};_avg:{durationMs:number|null}}>; byAction: Array<{actionType:string|null;_count:{_all:number};_avg:{durationMs:number|null}}> } }>(`/connections/${id}/usage`); }
 
-export function startConnectionOAuth(provider: string, folderId?: string) { return apiRequest<{url:string}>(`/connections/oauth/${encodeURIComponent(provider)}/start${folderId ? `?folderId=${encodeURIComponent(folderId)}` : ""}`); }
+export function startConnectionOAuth(provider: string, folderId?: string, connectionId?: string) { const q = new URLSearchParams(); if (folderId) q.set('folderId', folderId); if (connectionId) q.set('connectionId', connectionId); return apiRequest<{url:string;provider:string;connectionId?:string|null;scopes?:string[]}>(`/connections/oauth/${encodeURIComponent(provider)}/start${q.toString() ? `?${q}` : ''}`); }
 export function reconnectConnection(id: string) { return apiRequest<{url:string}>(`/connections/${id}/reconnect`, { method: "POST" }); }
