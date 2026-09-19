@@ -17,7 +17,17 @@ export class ConnectionsController {
   @Post('custom-services') createCustomService(@CurrentUser() user: AccessTokenPayload, @Body() body: any) { return this.service.createCustomService(user, body); }
   @Delete('custom-services/:id') deleteCustomService(@CurrentUser() user: AccessTokenPayload, @Param('id') id: string) { return this.service.deleteCustomService(user, id); }
   @Get('oauth/:provider/start') startOAuth(@CurrentUser() user: AccessTokenPayload, @Param('provider') provider: string, @Query('folderId') folderId?: string, @Query('connectionId') connectionId?: string) { return this.service.beginOAuth(user, provider as any, folderId || null, connectionId || null); }
-  @Public() @Get('oauth/:provider/callback') async oauthCallback(@Param('provider') provider: string, @Query('code') code: string, @Query('state') state: string, @Res() response: Response) { const result = await this.service.completeOAuth(provider as any, code, state); const target = result.folderId ? `/files?cloudImport=${encodeURIComponent(provider === "microsoft" ? "onedrive" : provider)}&folderId=${encodeURIComponent(result.folderId)}` : `/files/connections?oauth=success&provider=${encodeURIComponent(provider)}&connectionId=${encodeURIComponent(result.connectionId)}`; response.redirect(`${result.frontend}${target}`); }
+  @Public() @Get('oauth/:provider/callback') async oauthCallback(@Param('provider') provider: string, @Res() response: Response, @Query('code') code?: string, @Query('state') state?: string, @Query('error') error?: string, @Query('error_description') errorDescription?: string) {
+    if (error || !code || !state) {
+      const result = await this.service.handleOAuthCallbackError(provider as any, state, error, errorDescription);
+      const target = `/files/connections?oauth=${encodeURIComponent(error || 'cancelled')}&provider=${encodeURIComponent(provider)}${errorDescription ? `&message=${encodeURIComponent(errorDescription)}` : ''}`;
+      response.redirect(`${result.frontend}${target}`);
+      return;
+    }
+    const result = await this.service.completeOAuth(provider as any, code, state);
+    const target = result.folderId ? `/files?cloudImport=${encodeURIComponent(provider === "microsoft" ? "onedrive" : provider)}&folderId=${encodeURIComponent(result.folderId)}` : `/files/connections?oauth=success&provider=${encodeURIComponent(provider)}&connectionId=${encodeURIComponent(result.connectionId)}`;
+    response.redirect(`${result.frontend}${target}`);
+  }
   @Get() list(@CurrentUser() user: AccessTokenPayload, @Query('provider') provider?: string, @Query('status') status?: string, @Query('search') search?: string) { return this.service.list(user, { provider, status, search }); }
   @Get(':id/diagnostics') diagnostics(@CurrentUser() user: AccessTokenPayload, @Param('id') id: string) { return this.service.diagnostics(user, id); }
   @Get(':id/secrets/versions') secretVersions(@CurrentUser() user: AccessTokenPayload, @Param('id') id: string) { return this.service.secretVersions(user, id); }

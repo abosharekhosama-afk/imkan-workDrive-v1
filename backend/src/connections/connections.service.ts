@@ -474,6 +474,17 @@ export class ConnectionsService {
     return { connectionId: connection.id, frontend: this.frontendUrl(), folderId: row.folderId, orgId: row.orgId, userId: row.userId };
   }
 
+  async handleOAuthCallbackError(provider: OAuthProvider, state?: string, error?: string, description?: string) {
+    let frontend = this.frontendUrl();
+    if (state) {
+      const row = await this.prisma.connectionOAuthState.findFirst({ where: { stateHash: this.hash(state), provider }, select: { id: true, usedAt: true } });
+      if (row && !row.usedAt) {
+        await this.prisma.connectionOAuthState.update({ where: { id: row.id }, data: { usedAt: new Date() } });
+      }
+    }
+    return { frontend, error: error || 'oauth_cancelled', description: description || 'OAuth authorization was cancelled.' };
+  }
+
   async reconnect(user: AccessTokenPayload, id: string) {
     const row = await this.findVisible(user, id);
     if (row.ownerId !== user.sub) throw new ForbiddenException('Only the connection owner can reconnect it');
