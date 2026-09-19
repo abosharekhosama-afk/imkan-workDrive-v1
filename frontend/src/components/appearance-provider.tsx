@@ -13,6 +13,17 @@ type AppearanceContextValue = Appearance & {
 const AppearanceContext = createContext<AppearanceContextValue | null>(null);
 const STORAGE_KEY = "workdrive_appearance";
 
+// Font stacks are applied at the document root so every route and component
+// inherits the selected account font.  The Arabic companion font fills glyphs
+// that Latin-oriented UI fonts do not contain.
+const fontStacks: Record<Appearance["fontFamily"], string> = {
+  "Zoho Puvi": '"Zoho Puvi", Arial, "IBM Plex Sans Arabic", system-ui, sans-serif',
+  Lato: 'Lato, "IBM Plex Sans Arabic", Arial, system-ui, sans-serif',
+  Roboto: 'Roboto, "IBM Plex Sans Arabic", Arial, system-ui, sans-serif',
+  "PT Sans": '"PT Sans", "IBM Plex Sans Arabic", Arial, system-ui, sans-serif',
+  Arial: 'Arial, "IBM Plex Sans Arabic", system-ui, sans-serif',
+};
+
 const accent = {
   blue: ["#2C66DD", "#184091", "#254993", "#EFF6FF"],
   green: ["#16A085", "#087F69", "#08735F", "#EAF9F5"],
@@ -50,7 +61,7 @@ function applyToDocument(value: Appearance) {
   root.style.setProperty("--user-accent-dark", dark);
   root.style.setProperty("--user-accent-ink", ink);
   root.style.setProperty("--user-accent-light", light);
-  root.style.setProperty("--user-font-family", JSON.stringify(value.fontFamily));
+  root.style.setProperty("--user-font-family", fontStacks[value.fontFamily]);
 }
 
 export function AppearanceProvider({ children }: { children: ReactNode }) {

@@ -17,6 +17,14 @@ function roleLabel(role: string, ar: boolean) {
   if (role === "ADMIN") return ar ? "مسؤول" : "Admin";
   return ar ? "عضو" : "Member";
 }
+const fontPreviewStacks: Record<Appearance["fontFamily"], string> = {
+  "Zoho Puvi": '"Zoho Puvi", Arial, "IBM Plex Sans Arabic", sans-serif',
+  Lato: 'Lato, "IBM Plex Sans Arabic", Arial, sans-serif',
+  Roboto: 'Roboto, "IBM Plex Sans Arabic", Arial, sans-serif',
+  "PT Sans": '"PT Sans", "IBM Plex Sans Arabic", Arial, sans-serif',
+  Arial: 'Arial, "IBM Plex Sans Arabic", sans-serif',
+};
+
 function initials(name: string, email: string) {
   const source = (name || email.split("@")[0] || "U").trim();
   return source.split(/\s+/).map((p) => p[0]).join("").slice(0, 2).toUpperCase();
@@ -124,7 +132,7 @@ export function AccountMenu({ name, avatarUrl }: Props) {
 
                   <div className="appearance-subcard"><div className="appearance-subtitle">{ar ? "لون الثيم" : "Theme Color"}</div><div className="appearance-desc">{ar ? "اختر لوناً لحساب WorkDrive الخاص بك" : "Choose a color for your WorkDrive account"}</div><div className="appearance-colors">{(["blue","green","red","yellow"] as const).map((c)=><button key={c} type="button" className={`appearance-color ${c} ${themeColor===c?"is-active":""}`} onClick={()=>void update({themeColor:c})} aria-label={c}>{themeColor===c?<span className="text-white">✓</span>:null}</button>)}</div></div>
 
-                  <div className="appearance-subcard"><div className="appearance-subtitle">{ar ? "الخط" : "Font"}</div><div className="appearance-desc">{ar ? "اختر خطاً لحساب WorkDrive الخاص بك" : "Choose a font for your WorkDrive account"}</div><div className="appearance-fonts">{(["Zoho Puvi","Lato","Roboto","PT Sans","Arial"] as const).map((font)=><button key={font} type="button" className={`appearance-font ${fontFamily===font?"is-active":""}`} style={{fontFamily:`"${font}", Arial, sans-serif`}} onClick={()=>void update({fontFamily:font})}>{font}</button>)}</div><div className="mt-4 rounded-lg bg-slate-50 p-4 text-[22px] font-semibold text-slate-800" style={{fontFamily:`"${fontFamily}", Arial, sans-serif`}}>Hello.</div></div>
+                  <div className="appearance-subcard"><div className="appearance-subtitle">{ar ? "الخط" : "Font"}</div><div className="appearance-desc">{ar ? "اختر خطاً لحساب WorkDrive الخاص بك" : "Choose a font for your WorkDrive account"}</div><div className="appearance-fonts">{(["Zoho Puvi","Lato","Roboto","PT Sans","Arial"] as const).map((font)=><button key={font} type="button" className={`appearance-font ${fontFamily===font?"is-active":""}`} style={{fontFamily:fontPreviewStacks[font]}} onClick={()=>void update({fontFamily:font})}>{font}</button>)}</div><div className="mt-4 rounded-lg bg-slate-50 p-4 text-[22px] font-semibold text-slate-800" style={{fontFamily:fontPreviewStacks[fontFamily]}}>Hello.</div></div>
                   {error ? <div className="px-4 pb-5 text-[12px] text-red-600">{error}</div> : null}
                 </div>
               </>

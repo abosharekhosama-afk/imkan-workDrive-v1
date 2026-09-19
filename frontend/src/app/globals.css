@@ -1,3 +1,4 @@
+@import url("https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@400;500;600;700&family=Lato:wght@400;700&family=PT+Sans:wght@400;700&family=Roboto:wght@400;500;700&display=swap");
 /* ── Global Overflow Prevention ──────────────────────────────────────────────
    Ensure no horizontal scroll at root level on all viewports
    ──────────────────────────────────────────────────────────────────────── */
@@ -2885,3 +2886,433 @@ html[data-theme="dark"] .imkan-connections-page .border-\[\#E3E7EB\],
 html[data-theme="dark"] .imkan-connections-page .border-\[\#DDE4EC\],
 html[data-theme="dark"] .imkan-connections-page .border-\[\#D8E0E8\]{border-color:var(--wd-line)!important}
 html[data-theme="dark"] .imkan-connections-page .connections-empty .border-\[\#D7E1EA\]{border-color:var(--wd-line)!important;background:var(--wd-hover)!important}
+
+/* ═══════════════════════════════════════════════════════════════════════
+   IMKAN WorkDrive — Dark Theme Completion Layer
+   -----------------------------------------------------------------------
+   Purpose: complete the dark appearance across legacy WorkDrive, members,
+   admin, workflow, preview, authentication, settings and modal surfaces.
+   IMPORTANT: every rule in this block is scoped to data-theme="dark" so
+   the existing daytime design above remains unchanged.
+   ═══════════════════════════════════════════════════════════════════════ */
+html[data-theme="dark"] {
+  color-scheme: dark;
+  --imkan-color-bg: var(--wd-bg);
+  --imkan-color-fg: var(--wd-text);
+  --imkan-color-muted: #9aa6b6;
+  --imkan-color-surface: #202a3a;
+  --imkan-color-border: var(--wd-line);
+  --imkan-color-focus: var(--wd-primary);
+  --imkan-color-primary: var(--wd-primary);
+  --wd-panel: #1a2232;
+  --wd-panel-2: #202a3a;
+  --wd-text-strong: #f5f7fa;
+  --wd-text-soft: #aeb8c6;
+  --wd-border-strong: #3a485e;
+  --wd-shadow-dark: 0 18px 48px rgba(0,0,0,.42);
+}
+
+/* Dark document foundation — affects every route without changing light mode. */
+html[data-theme="dark"],
+html[data-theme="dark"] body,
+html[data-theme="dark"] #__next {
+  background: var(--wd-canvas) !important;
+  color: var(--wd-text) !important;
+}
+
+/* Dark typography — the selected account font is inherited by all ordinary UI. */
+html[data-theme="dark"] body,
+html[data-theme="dark"] button,
+html[data-theme="dark"] input,
+html[data-theme="dark"] textarea,
+html[data-theme="dark"] select,
+html[data-theme="dark"] option,
+html[data-theme="dark"] table {
+  font-family: var(--user-font-family), "IBM Plex Sans Arabic", Arial, system-ui, sans-serif !important;
+}
+
+/* Generic dark surface mapping for the shared IMKAN component primitives. */
+html[data-theme="dark"] .imkan-panel,
+html[data-theme="dark"] .imkan-modal-surface,
+html[data-theme="dark"] .imkan-settings-card,
+html[data-theme="dark"] .imkan-shell-header,
+html[data-theme="dark"] .imkan-sidebar,
+html[data-theme="dark"] .imkan-profile-menu,
+html[data-theme="dark"] .auth-card,
+html[data-theme="dark"] .google-button {
+  background: var(--wd-bg) !important;
+  color: var(--wd-text) !important;
+  border-color: var(--wd-line) !important;
+}
+html[data-theme="dark"] .imkan-input,
+html[data-theme="dark"] .imkan-select,
+html[data-theme="dark"] .imkan-button-secondary,
+html[data-theme="dark"] .imkan-button-destructive {
+  background: var(--wd-bg) !important;
+  color: var(--wd-text) !important;
+  border-color: var(--wd-line) !important;
+}
+html[data-theme="dark"] .imkan-input::placeholder,
+html[data-theme="dark"] .imkan-select::placeholder { color: var(--wd-text-soft) !important; }
+html[data-theme="dark"] .imkan-muted,
+html[data-theme="dark"] .imkan-meta,
+html[data-theme="dark"] .imkan-label { color: var(--wd-text-soft) !important; }
+html[data-theme="dark"] .imkan-title,
+html[data-theme="dark"] .imkan-heading,
+html[data-theme="dark"] .imkan-panel-title,
+html[data-theme="dark"] .imkan-table th,
+html[data-theme="dark"] .imkan-table td { color: var(--wd-text) !important; }
+html[data-theme="dark"] .imkan-table,
+html[data-theme="dark"] .imkan-table thead,
+html[data-theme="dark"] .imkan-table tbody { background: var(--wd-bg) !important; }
+html[data-theme="dark"] .imkan-table-row { border-color: var(--wd-line) !important; }
+html[data-theme="dark"] .imkan-table-row:hover { background: var(--wd-hover) !important; }
+html[data-theme="dark"] .imkan-alert { background: var(--wd-panel-2) !important; color: var(--wd-text) !important; border-color: var(--wd-line) !important; }
+html[data-theme="dark"] .imkan-modal-backdrop { background: rgba(0,0,0,.66) !important; }
+
+/* Main Zoho-style chrome — header, menus, navigation and organization switchers. */
+html[data-theme="dark"] .zoho-app-shell,
+html[data-theme="dark"] .zoho-main,
+html[data-theme="dark"] .zoho-content { background: var(--wd-canvas) !important; color: var(--wd-text) !important; }
+html[data-theme="dark"] .zoho-topbar,
+html[data-theme="dark"] .zoho-header,
+html[data-theme="dark"] .zoho-commandbar { background: var(--wd-bg) !important; color: var(--wd-text) !important; border-color: var(--wd-line) !important; }
+html[data-theme="dark"] .zoho-logo,
+html[data-theme="dark"] .zoho-logo strong,
+html[data-theme="dark"] .zoho-content h1,
+html[data-theme="dark"] .zoho-content h2,
+html[data-theme="dark"] .zoho-content h3,
+html[data-theme="dark"] .zoho-content h4 { color: var(--wd-text) !important; }
+html[data-theme="dark"] .zoho-sidebar { background: var(--wd-sidebar) !important; color: var(--wd-sidebar-text) !important; border-color: rgba(255,255,255,.08) !important; }
+html[data-theme="dark"] .zoho-sidebar-head { background: var(--wd-sidebar) !important; }
+html[data-theme="dark"] .zoho-side-link { color: var(--wd-sidebar-text) !important; }
+html[data-theme="dark"] .zoho-side-link:hover { background: rgba(255,255,255,.08) !important; color: #fff !important; }
+html[data-theme="dark"] .zoho-side-link.active { background: var(--wd-active) !important; color: #fff !important; }
+html[data-theme="dark"] .zoho-side-icon,
+html[data-theme="dark"] .zoho-nav-section-title { color: var(--wd-sidebar-muted) !important; }
+html[data-theme="dark"] .zoho-team-switch,
+html[data-theme="dark"] .zoho-org-switch .zoho-team-switch { background: transparent !important; color: var(--wd-sidebar-text) !important; border-color: transparent !important; }
+html[data-theme="dark"] .zoho-org-switch .zoho-team-meta strong,
+html[data-theme="dark"] .zoho-org-item-text strong { color: var(--wd-text) !important; }
+html[data-theme="dark"] .zoho-org-switch .zoho-team-meta small,
+html[data-theme="dark"] .zoho-org-item-text small,
+html[data-theme="dark"] .zoho-org-empty { color: var(--wd-sidebar-muted) !important; }
+html[data-theme="dark"] .zoho-profile-menu,
+html[data-theme="dark"] .zoho-org-menu,
+html[data-theme="dark"] .zoho-account-menu { background: var(--wd-bg) !important; color: var(--wd-text) !important; border-color: var(--wd-line) !important; box-shadow: var(--wd-shadow-dark) !important; }
+html[data-theme="dark"] .zoho-profile-menu a,
+html[data-theme="dark"] .zoho-profile-menu button,
+html[data-theme="dark"] .zoho-account-menu a,
+html[data-theme="dark"] .zoho-account-menu button { color: var(--wd-text) !important; }
+html[data-theme="dark"] .zoho-profile-menu a:hover,
+html[data-theme="dark"] .zoho-profile-menu button:hover,
+html[data-theme="dark"] .zoho-account-menu a:hover,
+html[data-theme="dark"] .zoho-account-menu button:hover { background: var(--wd-hover) !important; }
+
+/* Global search and filter surfaces — same dark language across every page. */
+html[data-theme="dark"] .zoho-global-search,
+html[data-theme="dark"] .zoho-global-search.expanded,
+html[data-theme="dark"] .zoho-search-panel,
+html[data-theme="dark"] .zoho-filter-menu,
+html[data-theme="dark"] .zoho-filter-dropdown { background: var(--wd-bg) !important; color: var(--wd-text) !important; border-color: var(--wd-line) !important; box-shadow: var(--wd-shadow-dark) !important; }
+html[data-theme="dark"] .zoho-global-search:focus-within { background: var(--wd-bg) !important; border-color: var(--wd-primary) !important; outline-color: var(--wd-primary) !important; }
+html[data-theme="dark"] .zoho-global-search input,
+html[data-theme="dark"] .zoho-search-row,
+html[data-theme="dark"] .zoho-search-name { color: var(--wd-text) !important; }
+html[data-theme="dark"] .zoho-global-search kbd { background: var(--wd-panel-2) !important; color: var(--wd-text-soft) !important; border-color: var(--wd-line) !important; }
+html[data-theme="dark"] .zoho-search-sub,
+html[data-theme="dark"] .zoho-search-group-title,
+html[data-theme="dark"] .zoho-search-empty { color: var(--wd-text-soft) !important; }
+html[data-theme="dark"] .zoho-search-row:hover,
+html[data-theme="dark"] .zoho-filter-chip:hover { background: var(--wd-hover) !important; }
+
+/* File cards, list rows, view controls and empty states. */
+html[data-theme="dark"] .zoho-grid-card,
+html[data-theme="dark"] .zoho-view-toggle,
+html[data-theme="dark"] .zoho-dashed-drop,
+html[data-theme="dark"] .zoho-upload-toast,
+html[data-theme="dark"] .wd-card,
+html[data-theme="dark"] .wd-table,
+html[data-theme="dark"] .wd-btn-ghost,
+html[data-theme="dark"] .wd-input,
+html[data-theme="dark"] .wd-empty,
+html[data-theme="dark"] .wd-empty-icon { background: var(--wd-bg) !important; color: var(--wd-text) !important; border-color: var(--wd-line) !important; }
+html[data-theme="dark"] .zoho-grid-card:hover,
+html[data-theme="dark"] .zoho-grid-card:has([data-radix-popper-content-wrapper]) { border-color: color-mix(in srgb,var(--wd-primary) 45%,var(--wd-line)) !important; box-shadow: 0 10px 30px rgba(0,0,0,.32) !important; }
+html[data-theme="dark"] .zoho-grid-name,
+html[data-theme="dark"] .wd-card-head h2,
+html[data-theme="dark"] .wd-name-link,
+html[data-theme="dark"] .wd-empty h2 { color: var(--wd-text) !important; }
+html[data-theme="dark"] .zoho-grid-meta,
+html[data-theme="dark"] .zoho-grid-date,
+html[data-theme="dark"] .zoho-grid-size,
+html[data-theme="dark"] .wd-subtext,
+html[data-theme="dark"] .wd-card-head p,
+html[data-theme="dark"] .wd-empty p,
+html[data-theme="dark"] .wd-meta-line { color: var(--wd-text-soft) !important; }
+html[data-theme="dark"] .zoho-view-btn { color: var(--wd-text-soft) !important; }
+html[data-theme="dark"] .zoho-view-btn:hover { background: var(--wd-hover) !important; color: var(--wd-text) !important; }
+html[data-theme="dark"] .zoho-view-btn.active { background: var(--wd-primary-light) !important; color: var(--wd-primary) !important; }
+html[data-theme="dark"] .zoho-dashed-drop { color: var(--wd-text-soft) !important; border-color: var(--wd-border-strong) !important; }
+html[data-theme="dark"] .wd-table thead th { background: var(--wd-panel-2) !important; color: var(--wd-text-soft) !important; border-color: var(--wd-line) !important; }
+html[data-theme="dark"] .wd-table tbody td { color: var(--wd-text) !important; border-color: var(--wd-line) !important; }
+html[data-theme="dark"] .wd-table tbody tr:hover { background: var(--wd-hover) !important; }
+html[data-theme="dark"] .wd-name-cell .icon,
+html[data-theme="dark"] .wd-empty-icon { background: var(--wd-hover) !important; color: var(--wd-text-soft) !important; }
+html[data-theme="dark"] .wd-btn-ghost { color: var(--wd-text) !important; }
+html[data-theme="dark"] .wd-btn-danger { background: transparent !important; color: #ff8f8f !important; border-color: #5d3b3b !important; }
+html[data-theme="dark"] .wd-btn-danger:hover:not(:disabled) { background: rgba(220,38,38,.14) !important; }
+html[data-theme="dark"] .wd-field label { color: var(--wd-text-soft) !important; }
+html[data-theme="dark"] .wd-input { color: var(--wd-text) !important; background: var(--wd-bg) !important; }
+html[data-theme="dark"] .wd-input::placeholder { color: var(--wd-text-soft) !important; }
+html[data-theme="dark"] .wd-alert { background: #302326 !important; border-color: #553638 !important; color: #ffc3c0 !important; }
+html[data-theme="dark"] .wd-alert-info { background: #202d42 !important; border-color: #334b6c !important; color: #b8d2f5 !important; }
+html[data-theme="dark"] .wd-alert-success { background: var(--wd-primary-light) !important; color: var(--wd-primary-ink) !important; border-color: color-mix(in srgb,var(--wd-primary) 35%,var(--wd-line)) !important; }
+html[data-theme="dark"] .wd-skel-row { border-color: var(--wd-line) !important; }
+html[data-theme="dark"] .wd-skel-bar { background: var(--wd-hover) !important; }
+
+/* Authentication, dialogs and common overlays. */
+html[data-theme="dark"] .auth-page { background: var(--wd-canvas) !important; }
+html[data-theme="dark"] .auth-heading h1,
+html[data-theme="dark"] .auth-form label { color: var(--wd-text) !important; }
+html[data-theme="dark"] .auth-heading p:last-child,
+html[data-theme="dark"] .auth-switch,
+html[data-theme="dark"] .auth-divider { color: var(--wd-text-soft) !important; }
+html[data-theme="dark"] .google-button:hover { background: var(--wd-hover) !important; }
+html[data-theme="dark"] .modal-overlay,
+html[data-theme="dark"] .modal-backdrop { background: rgba(0,0,0,.66) !important; }
+
+/* Preview/viewer surfaces intentionally stay high-contrast in dark mode. */
+html[data-theme="dark"] .zoho-preview-modal { background: rgba(5,7,10,.97) !important; color: #e8edf3 !important; }
+html[data-theme="dark"] .zoho-preview-head,
+html[data-theme="dark"] .zoho-viewer-controls,
+html[data-theme="dark"] .zoho-pdf-search { background: #171d26 !important; border-color: #2c3644 !important; color: #e8edf3 !important; }
+html[data-theme="dark"] .zoho-preview-body,
+html[data-theme="dark"] .zoho-pdf-stage { background: #0f141b !important; }
+html[data-theme="dark"] .zoho-preview-chip,
+html[data-theme="dark"] .zoho-ctl,
+html[data-theme="dark"] .zoho-pdf-hits button { background: #222b36 !important; border-color: #354252 !important; color: #c7d0dc !important; }
+html[data-theme="dark"] .zoho-icon-btn { color: #b8c2cf !important; }
+html[data-theme="dark"] .zoho-icon-btn:hover,
+html[data-theme="dark"] .zoho-icon-btn.active { background: #2a3440 !important; color: #fff !important; }
+html[data-theme="dark"] .zoho-pdf-search input { background: #0f141b !important; border-color: #354252 !important; color: #e8edf3 !important; }
+html[data-theme="dark"] .zoho-office-frame { background: #fff !important; }
+
+/* Members / organization / team-folder legacy surfaces. */
+html[data-theme="dark"] .members-table,
+html[data-theme="dark"] .members-table-row,
+html[data-theme="dark"] .member-data-table,
+html[data-theme="dark"] .member-data-row,
+html[data-theme="dark"] .member-detail-card,
+html[data-theme="dark"] .member-modal,
+html[data-theme="dark"] .member-role-menu,
+html[data-theme="dark"] .team-folder-option,
+html[data-theme="dark"] .member-search-combo { background: var(--wd-bg) !important; color: var(--wd-text) !important; border-color: var(--wd-line) !important; }
+html[data-theme="dark"] .members-table-row:hover,
+html[data-theme="dark"] .member-data-row:hover,
+html[data-theme="dark"] .team-folder-option:hover { background: var(--wd-hover) !important; }
+html[data-theme="dark"] .member-tabs,
+html[data-theme="dark"] .member-data-head,
+html[data-theme="dark"] .member-data-row,
+html[data-theme="dark"] .member-detail-card,
+html[data-theme="dark"] .member-modal > header,
+html[data-theme="dark"] .member-modal > footer { border-color: var(--wd-line) !important; }
+html[data-theme="dark"] .member-tabs button,
+html[data-theme="dark"] .member-data-head,
+html[data-theme="dark"] .member-section-toolbar p,
+html[data-theme="dark"] .member-profile-email,
+html[data-theme="dark"] .members-license-panel,
+html[data-theme="dark"] .license-admin small { color: var(--wd-text-soft) !important; }
+html[data-theme="dark"] .member-tabs button.is-active { background: var(--wd-primary-light) !important; color: var(--wd-primary-ink) !important; }
+html[data-theme="dark"] .member-row-manage,
+html[data-theme="dark"] .member-modal > label input,
+html[data-theme="dark"] .member-modal > label select,
+html[data-theme="dark"] .member-modal-role select { background: var(--wd-bg) !important; color: var(--wd-text) !important; border-color: var(--wd-line) !important; }
+html[data-theme="dark"] .member-search-combo input { background: transparent !important; color: var(--wd-text) !important; }
+html[data-theme="dark"] .member-search-combo input::placeholder { color: var(--wd-text-soft) !important; }
+html[data-theme="dark"] .member-remove-x { background: transparent !important; color: var(--wd-text) !important; border-color: var(--wd-line) !important; }
+html[data-theme="dark"] .member-modal-backdrop { background: rgba(0,0,0,.68) !important; }
+html[data-theme="dark"] .license-info { background: #202d42 !important; color: #b8d2f5 !important; }
+html[data-theme="dark"] .license-list b { background: #4a5565 !important; color: #fff !important; }
+
+/* Account drawer and the Appearance/Theme customization UI. */
+html[data-theme="dark"] .account-drawer,
+html[data-theme="dark"] .appearance-card,
+html[data-theme="dark"] .appearance-subcard,
+html[data-theme="dark"] .appearance-mode { background: var(--wd-bg) !important; color: var(--wd-text) !important; border-color: var(--wd-line) !important; }
+html[data-theme="dark"] .account-drawer-head,
+html[data-theme="dark"] .account-profile,
+html[data-theme="dark"] .account-section,
+html[data-theme="dark"] .account-download,
+html[data-theme="dark"] .account-appearance-head { border-color: var(--wd-line) !important; }
+html[data-theme="dark"] .account-profile-line,
+html[data-theme="dark"] .appearance-desc { color: var(--wd-text-soft) !important; }
+html[data-theme="dark"] .account-action:hover,
+html[data-theme="dark"] .account-signout:hover,
+html[data-theme="dark"] .account-back:hover { background: var(--wd-hover) !important; }
+html[data-theme="dark"] .appearance-preview { background: #fff !important; border-color: var(--wd-line) !important; }
+html[data-theme="dark"] .appearance-preview-main { background: #fff !important; }
+html[data-theme="dark"] .appearance-check { color: var(--wd-text) !important; }
+html[data-theme="dark"] .account-qr { border-color: #fff !important; }
+
+/* Workflow UI — theme the literal-white/slate surfaces used by the builder. */
+html[data-theme="dark"] .workflow-ui,
+html[data-theme="dark"] .workflow-ui .workflow-action-card,
+html[data-theme="dark"] .workflow-ui .workflow-action-card-head,
+html[data-theme="dark"] .workflow-ui .workflow-picker-modal,
+html[data-theme="dark"] .workflow-ui .workflow-user-menu,
+html[data-theme="dark"] .workflow-ui .workflow-action-menu { background: var(--wd-bg) !important; color: var(--wd-text) !important; border-color: var(--wd-line) !important; }
+html[data-theme="dark"] .workflow-ui .workflow-action-card-head { background: var(--wd-hover) !important; }
+html[data-theme="dark"] .workflow-ui .workflow-add-action-trigger { background: var(--wd-hover) !important; border-color: var(--wd-border-strong) !important; color: var(--wd-text) !important; }
+html[data-theme="dark"] .workflow-ui .workflow-picker-control,
+html[data-theme="dark"] .workflow-ui .workflow-picker-search { background: var(--wd-bg) !important; color: var(--wd-text) !important; border-color: var(--wd-line) !important; }
+html[data-theme="dark"] .workflow-ui .workflow-picker-header,
+html[data-theme="dark"] .workflow-ui .workflow-picker-footer { border-color: var(--wd-line) !important; }
+html[data-theme="dark"] .workflow-ui input,
+html[data-theme="dark"] .workflow-ui textarea,
+html[data-theme="dark"] .workflow-ui select { background: var(--wd-bg) !important; color: var(--wd-text) !important; border-color: var(--wd-line) !important; }
+html[data-theme="dark"] .workflow-ui [class*="bg-white"] { background: var(--wd-bg) !important; }
+html[data-theme="dark"] .workflow-ui [class*="bg-slate-50"] { background: var(--wd-hover) !important; }
+html[data-theme="dark"] .workflow-ui [class*="text-slate-900"],
+html[data-theme="dark"] .workflow-ui [class*="text-slate-800"],
+html[data-theme="dark"] .workflow-ui [class*="text-slate-700"] { color: var(--wd-text) !important; }
+html[data-theme="dark"] .workflow-ui [class*="text-slate-600"],
+html[data-theme="dark"] .workflow-ui [class*="text-slate-500"],
+html[data-theme="dark"] .workflow-ui [class*="text-slate-400"] { color: var(--wd-text-soft) !important; }
+html[data-theme="dark"] .workflow-ui [class*="border-slate-"] { border-color: var(--wd-line) !important; }
+
+/* Connections and provider-configuration workspace. */
+html[data-theme="dark"] .imkan-connections-page { background: var(--wd-canvas) !important; color: var(--wd-text) !important; }
+html[data-theme="dark"] .imkan-connections-page .connections-sidebar,
+html[data-theme="dark"] .imkan-connections-page .connections-header,
+html[data-theme="dark"] .imkan-connections-page .connections-card,
+html[data-theme="dark"] .imkan-connections-page .connections-panel,
+html[data-theme="dark"] .imkan-connections-page .connections-picker,
+html[data-theme="dark"] .imkan-connections-page .connections-menu,
+html[data-theme="dark"] .imkan-connections-page .connections-search,
+html[data-theme="dark"] .imkan-connections-page .connections-input { background: var(--wd-bg) !important; color: var(--wd-text) !important; border-color: var(--wd-line) !important; }
+html[data-theme="dark"] .imkan-connections-page input,
+html[data-theme="dark"] .imkan-connections-page textarea,
+html[data-theme="dark"] .imkan-connections-page select { background: var(--wd-bg) !important; color: var(--wd-text) !important; border-color: var(--wd-line) !important; }
+html[data-theme="dark"] .imkan-connections-page input::placeholder,
+html[data-theme="dark"] .imkan-connections-page textarea::placeholder { color: var(--wd-text-soft) !important; }
+html[data-theme="dark"] .imkan-connections-page .bg-white { background: var(--wd-bg) !important; }
+html[data-theme="dark"] .imkan-connections-page [class*="bg-[#"] { color: var(--wd-text); }
+html[data-theme="dark"] .imkan-connections-page [class*="text-[#"] { color: var(--wd-text) !important; }
+html[data-theme="dark"] .imkan-connections-page [class*="border-[#"] { border-color: var(--wd-line) !important; }
+
+/* Native controls, links and focus rings. */
+html[data-theme="dark"] a { color: inherit; }
+html[data-theme="dark"] button:focus-visible,
+html[data-theme="dark"] input:focus-visible,
+html[data-theme="dark"] textarea:focus-visible,
+html[data-theme="dark"] select:focus-visible { outline-color: var(--wd-primary) !important; }
+html[data-theme="dark"] ::selection { background: color-mix(in srgb,var(--wd-primary) 35%,transparent); color: #fff; }
+html[data-theme="dark"] ::-webkit-scrollbar { width: 10px; height: 10px; }
+html[data-theme="dark"] ::-webkit-scrollbar-track { background: var(--wd-canvas); }
+html[data-theme="dark"] ::-webkit-scrollbar-thumb { background: #46536a; border-radius: 8px; border: 2px solid var(--wd-canvas); }
+html[data-theme="dark"] ::-webkit-scrollbar-thumb:hover { background: #5a6a84; }
+
+/* Font previews are deliberately tied to the real selected font variable. */
+.appearance-font { font-family: var(--user-font-family), "IBM Plex Sans Arabic", Arial, sans-serif !important; }
+html[data-theme="dark"] .appearance-font { background: transparent; color: var(--wd-text); }
+html[data-theme="dark"] .appearance-font.is-active { background: var(--wd-primary-light); color: var(--wd-primary-ink); }
+
+/* Dark-theme bridge for legacy Tailwind utility colors used by older pages.
+   It is scoped to application content shells so logos/illustrations keep their
+   original colors while white/slate UI surfaces become theme-aware. */
+html[data-theme="dark"] :where(.zoho-content,.imkan-main,.imkan-workspace-content,.imkan-settings-page,.members-page) [class*="bg-white"] { background: var(--wd-bg) !important; }
+html[data-theme="dark"] :where(.zoho-content,.imkan-main,.imkan-workspace-content,.imkan-settings-page,.members-page) [class*="bg-slate-50"],
+html[data-theme="dark"] :where(.zoho-content,.imkan-main,.imkan-workspace-content,.imkan-settings-page,.members-page) [class*="bg-gray-50"] { background: var(--wd-hover) !important; }
+html[data-theme="dark"] :where(.zoho-content,.imkan-main,.imkan-workspace-content,.imkan-settings-page,.members-page) [class*="text-slate-900"],
+html[data-theme="dark"] :where(.zoho-content,.imkan-main,.imkan-workspace-content,.imkan-settings-page,.members-page) [class*="text-slate-800"],
+html[data-theme="dark"] :where(.zoho-content,.imkan-main,.imkan-workspace-content,.imkan-settings-page,.members-page) [class*="text-gray-900"],
+html[data-theme="dark"] :where(.zoho-content,.imkan-main,.imkan-workspace-content,.imkan-settings-page,.members-page) [class*="text-gray-800"] { color: var(--wd-text) !important; }
+html[data-theme="dark"] :where(.zoho-content,.imkan-main,.imkan-workspace-content,.imkan-settings-page,.members-page) [class*="text-slate-600"],
+html[data-theme="dark"] :where(.zoho-content,.imkan-main,.imkan-workspace-content,.imkan-settings-page,.members-page) [class*="text-slate-500"],
+html[data-theme="dark"] :where(.zoho-content,.imkan-main,.imkan-workspace-content,.imkan-settings-page,.members-page) [class*="text-gray-600"],
+html[data-theme="dark"] :where(.zoho-content,.imkan-main,.imkan-workspace-content,.imkan-settings-page,.members-page) [class*="text-gray-500"] { color: var(--wd-text-soft) !important; }
+html[data-theme="dark"] :where(.zoho-content,.imkan-main,.imkan-workspace-content,.imkan-settings-page,.members-page) [class*="border-slate-"],
+html[data-theme="dark"] :where(.zoho-content,.imkan-main,.imkan-workspace-content,.imkan-settings-page,.members-page) [class*="border-gray-"] { border-color: var(--wd-line) !important; }
+
+/* -------------------------------------------------------------------------
+   GLOBALS.CSS STYLE DOCUMENTATION
+   -------------------------------------------------------------------------
+   Every selector in this stylesheet belongs to one of the functional areas
+   below. Keep new rules inside the closest area and keep dark-only changes
+   inside [data-theme="dark"]. Existing daytime declarations are intentionally
+   left untouched.
+
+   Core IMKAN primitives:
+   - .imkan-*              → shared panels, buttons, inputs, tables, alerts,
+                              settings cards, shell helpers and focus states.
+   - .auth-* / .google-*   → login, signup, password reset and auth callbacks.
+
+   WorkDrive application shell:
+   - .zoho-app-shell       → global WorkDrive shell and content canvas.
+   - .zoho-topbar-*        → top navigation, account actions and search.
+   - .zoho-sidebar-*       → organization/team navigation and sidebar footer.
+   - .zoho-side-*          → sidebar navigation links/icons and active state.
+   - .zoho-org-* / .zoho-team-* → organization/team selector menus.
+   - .zoho-profile-* / .zoho-account-* → profile menu and account controls.
+
+   Files and browsing:
+   - .zoho-grid-*          → file/folder cards and their metadata.
+   - .zoho-view-*          → list/grid view switchers.
+   - .zoho-global-search-* / .zoho-search-* → global search, results and filters.
+   - .zoho-upload-*        → upload progress, toast and upload state.
+   - .zoho-storage-*       → quota/storage indicator.
+   - .zoho-preview-* / .zoho-pdf-* / .zoho-office-* → file preview/viewers.
+   - .wd-*                 → reusable WorkDrive page, card, table, badge,
+                              button, field, alert, empty-state and avatar UI.
+
+   Organization/admin/member areas:
+   - .imkan-admin-*        → admin metrics and chips.
+   - .members-* / .member-*→ members list, member detail, role menus, invites,
+                              license panel and member dialogs.
+   - .team-folder-* / .group-option → team-folder and group selection surfaces.
+
+   Account customization:
+   - .account-*             → account drawer, profile, referral, downloads,
+                               sign-out and account actions.
+   - .appearance-*           → theme mode, accent color and font selection UI.
+
+   Workflow automation:
+   - .workflow-ui           → workflow builder and workflow route theme scope.
+   - .workflow-*            → action menus, pickers, dynamic-value controls,
+                               workflow tables and user menus.
+
+   Connections:
+   - .imkan-connections-page → Connections, Default Services, My Connections,
+                               Custom Services, Provider Configuration and
+                               connection creation/editing surfaces.
+   - .connections-*          → Connections-specific cards, sidebar, menus,
+                               search, picker, inputs and empty states.
+
+   Responsive/RTL:
+   - @media blocks           → mobile/tablet layout adaptations.
+   - [dir="rtl"] selectors   → Arabic/RTL alignment and ordering.
+
+   Typography:
+   - --user-font-family      → account-selected font stack, applied at the
+                               document root and inherited by all normal UI.
+   - Code/monospace selectors intentionally keep monospace fonts for code,
+     technical identifiers and preview content where readability requires it.
+
+   Theme contract:
+   - Light/daytime rules above remain the visual baseline and are not modified
+     by the dark layer.
+   - html[data-theme="dark"] rules at the end override only dark-mode colors,
+     borders, shadows, controls and surfaces.
+   ------------------------------------------------------------------------- */
+
+/* Dark mode always wins over the optional light-sidebar preference. The
+   preference remains available in light mode exactly as before. */
+html[data-theme="dark"][data-sidebar-light="true"] .primary-sidebar,
+html[data-theme="dark"][data-sidebar-light="true"] .primary-sidebar a {
+  background: var(--wd-sidebar) !important;
+  color: var(--wd-sidebar-text) !important;
+}
+html[data-theme="dark"][data-sidebar-light="true"] .primary-sidebar a:hover {
+  background: rgba(255,255,255,.08) !important;
+}
