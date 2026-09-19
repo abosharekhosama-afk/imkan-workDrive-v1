@@ -280,6 +280,7 @@ model Organization {
   malwareScans        MalwareScan[]
   securityEvents      SecurityEvent[]
   connections         Connection[]
+  connectionCustomServices ConnectionCustomService[]
   connectionUsages    ConnectionUsage[]
   devices             UserDevice[]
   dataTransfers       DataTransfer[]
@@ -346,6 +347,7 @@ model User {
   membershipsRemoved     OrganizationMembership[] @relation("MembershipRemover")
   dataTransfersInitiated DataTransfer[]         @relation("DataTransferInitiator")
   connections            Connection[] @relation("ConnectionOwner")
+  connectionCustomServices ConnectionCustomService[] @relation("ConnectionCustomServiceOwner")
   connectionSecrets      ConnectionSecret[]
   connectionSecretVersions ConnectionSecretVersion[] @relation("ConnectionSecretVersionCreator")
   connectionUsages       ConnectionUsage[]
@@ -1054,6 +1056,38 @@ enum ConnectionStatus {
   REAUTH_REQUIRED
   DISABLED
   ERROR
+}
+
+model ConnectionCustomService {
+  id                 String             @id @default(uuid()) @db.Char(36)
+  orgId              String             @map("org_id") @db.Char(36)
+  ownerId            String             @map("owner_id") @db.Char(36)
+  name               String
+  linkName           String             @map("link_name")
+  authType           ConnectionAuthType @map("auth_type")
+  parameterKey      String?            @map("parameter_key")
+  parameterLabel    String?            @map("parameter_label")
+  parameterType     String?            @map("parameter_type")
+  baseUrl            String?            @map("base_url") @db.VarChar(1000)
+  oauthAuthUrl      String?            @map("oauth_auth_url") @db.VarChar(2000)
+  oauthTokenUrl     String?            @map("oauth_token_url") @db.VarChar(2000)
+  oauthRevokeUrl    String?            @map("oauth_revoke_url") @db.VarChar(2000)
+  oauthClientId    String?            @map("oauth_client_id") @db.Text
+  oauthClientSecret String?            @map("oauth_client_secret") @db.Text
+  scopes            Json?
+  defaultScopes    Json?              @map("default_scopes")
+  metadata         Json?
+  status           String             @default("ACTIVE") @db.VarChar(30)
+  createdAt        DateTime           @default(now()) @map("created_at")
+  updatedAt        DateTime           @updatedAt @map("updated_at")
+
+  organization Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  owner        User         @relation("ConnectionCustomServiceOwner", fields: [ownerId], references: [id], onDelete: Cascade)
+
+  @@unique([orgId, linkName])
+  @@index([orgId, status, updatedAt])
+  @@index([orgId, ownerId])
+  @@map("connection_custom_services")
 }
 
 model Connection {

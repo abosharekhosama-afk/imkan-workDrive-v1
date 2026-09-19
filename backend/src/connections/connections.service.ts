@@ -5,7 +5,7 @@ import { ConnectionAuthType, ConnectionShareRole, ConnectionStatus, ConnectionVi
 import type { AccessTokenPayload } from '../auth/jwt.types';
 import { PrismaService } from '../prisma/prisma.service';
 import { ConnectionCryptoService } from './connection-crypto.service';
-import { ConnectionProviderRegistry } from './provider-registry.service';
+import { ConnectionProviderRegistry, type ConnectionProviderDefinition, type ConnectionScopeDefinition } from './provider-registry.service';
 import { URL } from 'node:url';
 import { isIP } from 'node:net';
 import { lookup } from 'node:dns/promises';
@@ -17,6 +17,7 @@ type SecretInput = Partial<Record<SecretKey, string>>;
 type OAuthProvider = string;
 
 type DecryptedSecrets = Record<string, string>;
+type ResolvedProviderDefinition = ConnectionProviderDefinition & { oauthClientId?: string; oauthClientSecret?: string };
 
 @Injectable()
 export class ConnectionsService {
@@ -25,7 +26,7 @@ export class ConnectionsService {
   providers() {
     return this.registry.list().map((provider) => ({
       ...provider,
-      configured: !provider.oauth || Boolean(this.oauthConfig(provider.key).clientId && this.oauthConfig(provider.key).clientSecret),
+      configured: !provider.oauth || Boolean(this.oauthConfig(provider.key, provider).clientId && this.oauthConfig(provider.key, provider).clientSecret),
     }));
   }
 
@@ -43,6 +44,68 @@ export class ConnectionsService {
     }));
   }
 
+  async customServices(user: AccessTokenPayload) {
+    const rows = await this.prisma.connectionCustomService.findMany({ where: { orgId: user.org_id, status: 'ACTIVE', OR: [{ ownerId: user.sub }, { ownerId: { not: user.sub } }] }, orderBy: { name: 'asc' } });
+    return rows.map((row) => this.serializeCustomService(row));
+  }
+
+  async createCustomService(user: AccessTokenPayload, input: any) {
+    const name = String(input?.name ?? '').trim();
+    const linkName = String(input?.linkName ?? input?.key ?? '').trim().toLowerCase();
+    const authType = String(input?.authType ?? 'API_KEY') as ConnectionAuthType;
+    if (!name || name.length > 120) throw new BadRequestException('Service name is required');
+    if (!/^[a-z][a-z0-9_-]{2,63}$/.test(linkName)) throw new BadRequestException('Service Link Name must start with a letter and contain only lowercase letters, numbers, hyphens or underscores');
+    if (![ConnectionAuthType.OAUTH2, ConnectionAuthType.API_KEY, ConnectionAuthType.BEARER, ConnectionAuthType.BASIC, ConnectionAuthType.CUSTOM_HEADER, ConnectionAuthType.NONE].includes(authType)) throw new BadRequestException('Unsupported authentication type');
+    if (authType === ConnectionAuthType.API_KEY && !String(input?.parameterKey ?? '').trim()) throw new BadRequestException('Parameter Key is required for API Key authentication');
+    const baseUrl = input?.baseUrl ? String(input.baseUrl).trim() : null;
+    if (baseUrl && !/^https:\/\//i.test(baseUrl)) throw new BadRequestException('Base URL must use HTTPS');
+    const scopeDefinitions = Array.isArray(input?.scopes) ? input.scopes.filter((x: any) => x && typeof x.value === 'string').slice(0, 200).map((x: any) => ({ value: String(x.value).slice(0, 500), label: String(x.label ?? x.value).slice(0, 160), description: String(x.description ?? '').slice(0, 500), group: String(x.group ?? 'General').slice(0, 100), risk: ['STANDARD','SENSITIVE','RESTRICTED'].includes(x.risk) ? x.risk : 'STANDARD' })) : [];
+    const defaultScopes = (Array.isArray(input?.defaultScopes) ? input.defaultScopes : []).map(String).filter((value: string) => scopeDefinitions.some((x: any) => x.value === value)).slice(0, 100);
+    let oauthClientId: string | null = null;
+    let oauthClientSecret: string | null = null;
+    if (authType === ConnectionAuthType.OAUTH2) {
+      const authUrl = String(input?.oauthAuthUrl ?? '').trim();
+      const tokenUrl = String(input?.oauthTokenUrl ?? '').trim();
+      if (!/^https:\/\//i.test(authUrl) || !/^https:\/\//i.test(tokenUrl)) throw new BadRequestException('OAuth Authorization URL and Token URL must use HTTPS');
+      if (!String(input?.oauthClientId ?? '').trim() || !String(input?.oauthClientSecret ?? '').trim()) throw new BadRequestException('OAuth Client ID and Client Secret are required for a custom OAuth service');
+      oauthClientId = this.crypto.encrypt(String(input.oauthClientId).trim());
+      oauthClientSecret = this.crypto.encrypt(String(input.oauthClientSecret).trim());
+    }
+    try {
+      const row = await this.prisma.connectionCustomService.create({ data: { id: randomUUID(), orgId: user.org_id, ownerId: user.sub, name, linkName, authType, parameterKey: input?.parameterKey ? String(input.parameterKey).slice(0, 120) : null, parameterLabel: input?.parameterLabel ? String(input.parameterLabel).slice(0, 160) : null, parameterType: input?.parameterType ? String(input.parameterType).slice(0, 40) : null, baseUrl, oauthAuthUrl: authType === ConnectionAuthType.OAUTH2 ? String(input.oauthAuthUrl).trim() : null, oauthTokenUrl: authType === ConnectionAuthType.OAUTH2 ? String(input.oauthTokenUrl).trim() : null, oauthRevokeUrl: authType === ConnectionAuthType.OAUTH2 && input?.oauthRevokeUrl ? String(input.oauthRevokeUrl).trim() : null, oauthClientId, oauthClientSecret, scopes: scopeDefinitions as Prisma.InputJsonValue, defaultScopes: defaultScopes as Prisma.InputJsonValue, metadata: (input?.metadata ?? {}) as Prisma.InputJsonValue } });
+      await this.audit(user, 'connection.custom_service.created', row.id, { name: row.name, linkName: row.linkName, authType: row.authType });
+      return this.serializeCustomService(row);
+    } catch (error) {
+      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') throw new ConflictException('A custom service with this Link Name already exists');
+      throw error;
+    }
+  }
+
+  async deleteCustomService(user: AccessTokenPayload, id: string) {
+    const row = await this.prisma.connectionCustomService.findFirst({ where: { id, orgId: user.org_id, ownerId: user.sub } });
+    if (!row) throw new NotFoundException('Custom service not found');
+    const connectionCount = await this.prisma.connection.count({ where: { orgId: user.org_id, provider: `custom:${id}` } });
+    if (connectionCount) throw new ConflictException('Delete the connections using this custom service before deleting the service');
+    await this.prisma.connectionCustomService.delete({ where: { id } });
+    await this.audit(user, 'connection.custom_service.deleted', id, { name: row.name });
+    return { id, deleted: true };
+  }
+
+  private serializeCustomService(row: any) {
+    const scopes = Array.isArray(row.scopes) ? row.scopes : [];
+    return { id: row.id, name: row.name, linkName: row.linkName, provider: `custom:${row.id}`, authType: row.authType, parameterKey: row.parameterKey, parameterLabel: row.parameterLabel, parameterType: row.parameterType, baseUrl: row.baseUrl, oauth: row.authType === ConnectionAuthType.OAUTH2, configured: row.authType !== ConnectionAuthType.OAUTH2 || Boolean(row.oauthClientId && row.oauthClientSecret), oauthCallbackUrl: row.authType === ConnectionAuthType.OAUTH2 ? `${this.config.get<string>('PUBLIC_API_URL') ?? 'http://localhost:3001'}/connections/oauth/custom:${row.id}/callback` : null, scopes, defaultScopes: Array.isArray(row.defaultScopes) ? row.defaultScopes : [], scopeGroups: [...new Set(scopes.map((x: any) => x.group ?? 'General'))], createdAt: row.createdAt, updatedAt: row.updatedAt };
+  }
+
+  private async resolveProviderDefinition(provider: string, orgId?: string): Promise<ResolvedProviderDefinition> {
+    if (!provider.startsWith('custom:')) return this.registry.get(provider);
+    const id = provider.slice('custom:'.length);
+    if (!orgId) throw new BadRequestException('Custom service organization is required');
+    const row = await this.prisma.connectionCustomService.findFirst({ where: { id, orgId, status: 'ACTIVE' } });
+    if (!row) throw new NotFoundException('Custom service not found');
+    const scopes = Array.isArray(row.scopes) ? row.scopes as ConnectionScopeDefinition[] : [];
+    return { key: provider, name: row.name, category: 'Other', authTypes: [row.authType], oauth: row.authType === ConnectionAuthType.OAUTH2, capabilities: row.baseUrl ? ['request', ...(row.authType === ConnectionAuthType.OAUTH2 ? ['oauth'] : [])] : (row.authType === ConnectionAuthType.OAUTH2 ? ['oauth'] : []), baseUrl: row.baseUrl ?? undefined, scopes, defaultScopes: Array.isArray(row.defaultScopes) ? row.defaultScopes.map(String) : [], scopeGroups: [...new Set(scopes.map((x: any) => x.group ?? 'General'))], credentialHeader: row.parameterType === 'HEADER' ? (row.parameterKey ?? 'X-API-Key') : undefined, credentialPrefix: '', credentialQueryKey: row.parameterType === 'QUERY' ? (row.parameterKey ?? undefined) : undefined, oauthAuthUrl: row.oauthAuthUrl ?? undefined, oauthTokenUrl: row.oauthTokenUrl ?? undefined, oauthRevokeUrl: row.oauthRevokeUrl ?? undefined, oauthClientId: row.oauthClientId ? this.crypto.decrypt(row.oauthClientId) : undefined, oauthClientSecret: row.oauthClientSecret ? this.crypto.decrypt(row.oauthClientSecret) : undefined };
+  }
+
   private visibleWhere(user: AccessTokenPayload, id?: string): Prisma.ConnectionWhereInput {
     return { ...(id ? { id } : {}), orgId: user.org_id, OR: [{ ownerId: user.sub }, { visibility: ConnectionVisibility.ORGANIZATION }, { shares: { some: { userId: user.sub } } }] };
   }
@@ -53,7 +116,12 @@ export class ConnectionsService {
     return row;
   }
 
-  private assertProvider(provider: string, authType: ConnectionAuthType) {
+  private async assertProvider(provider: string, authType: ConnectionAuthType, orgId?: string) {
+    if (provider.startsWith('custom:')) {
+      const definition = await this.resolveProviderDefinition(provider, orgId);
+      if (!definition.authTypes.includes(String(authType))) throw new BadRequestException('Unsupported authentication type for custom service');
+      return;
+    }
     if (!this.registry.supports(provider, String(authType))) throw new BadRequestException('Unsupported provider/authentication type');
   }
 
@@ -71,8 +139,8 @@ export class ConnectionsService {
   async create(user: AccessTokenPayload, input: { name: string; provider: string; authType: ConnectionAuthType; visibility?: ConnectionVisibility; baseUrl?: string; scope?: string | string[]; metadata?: Record<string, unknown>; secrets?: SecretInput }) {
     const name = String(input.name ?? '').trim();
     if (!name || name.length > 120) throw new BadRequestException('Connection name is required');
-    this.assertProvider(input.provider, input.authType);
-    const providerDefinition = this.registry.get(input.provider);
+    await this.assertProvider(input.provider, input.authType, user.org_id);
+    const providerDefinition = await this.resolveProviderDefinition(input.provider, user.org_id);
     const baseUrl = input.baseUrl?.trim() || providerDefinition.baseUrl || undefined;
     if (baseUrl && !/^https:\/\//i.test(baseUrl)) throw new BadRequestException('Connection base URL must use HTTPS');
     if (input.authType === ConnectionAuthType.OAUTH2 && !providerDefinition.oauth) throw new BadRequestException('OAuth is not supported for this service');
@@ -159,7 +227,7 @@ export class ConnectionsService {
     if (current.authType !== ConnectionAuthType.OAUTH2) throw new BadRequestException('Remote revoke is supported for OAuth connections only');
     const secret = await this.prisma.connectionSecret.findUnique({ where: { connectionId: id } });
     const token = secret?.accessToken ? this.crypto.decrypt(secret.accessToken) : null;
-    try { if (token) await this.providerRevoke(current.provider, token); } catch { /* local revoke still proceeds */ }
+    try { if (token) await this.providerRevoke(current.provider, token, current.orgId); } catch { /* local revoke still proceeds */ }
     await this.prisma.connection.update({ where: { id }, data: { status: ConnectionStatus.DISABLED, errorCode: 'REVOKED', errorMessage: 'OAuth access was revoked by the owner' } });
     await this.prisma.connectionSecret.deleteMany({ where: { connectionId: id } });
     await this.audit(user, 'connection.revoked', id, { provider: current.provider });
@@ -206,7 +274,7 @@ export class ConnectionsService {
       if (row.authType === ConnectionAuthType.OAUTH2) {
         const token = await this.getAccessTokenById(row.id);
         if (!token) throw new Error('Missing OAuth access token');
-        await this.providerProbe(row.provider, token, row.baseUrl);
+        await this.providerProbe(row.provider, token, row.baseUrl, row.orgId);
       } else {
         const secret = await this.prisma.connectionSecret.findUnique({ where: { connectionId: id } });
         const missing = this.requiredSecretFields(row.authType).filter((key) => !secret?.[key as SecretKey]);
@@ -228,11 +296,12 @@ export class ConnectionsService {
     const row = await this.findVisible(user, id);
     const secret = await this.prisma.connectionSecret.findUnique({ where: { connectionId: id }, select: { accessToken: true, refreshToken: true, apiKey: true, bearerToken: true, username: true, password: true, customHeaders: true } });
     const usage = await this.prisma.connectionUsage.aggregate({ where: { connectionId: id, orgId: user.org_id }, _count: { _all: true }, _avg: { durationMs: true } });
+    const providerDefinition = await this.resolveProviderDefinition(row.provider, row.orgId);
     const checks = {
       organizationAccess: row.orgId === user.org_id,
       enabled: row.status === ConnectionStatus.ACTIVE,
       credentialsPresent: !!secret && Object.values(secret).some(Boolean),
-      baseUrl: !this.registry.get(row.provider).capabilities.includes('request') || !!row.baseUrl || !!this.registry.get(row.provider).baseUrl,
+      baseUrl: !providerDefinition.capabilities.includes('request') || !!row.baseUrl || !!providerDefinition.baseUrl,
       oauthExpiry: row.authType !== ConnectionAuthType.OAUTH2 || !row.expiresAt || row.expiresAt.getTime() > Date.now(),
     };
     return { id: row.id, provider: row.provider, authType: row.authType, status: row.status, checks, lastTestedAt: row.lastTestedAt, lastUsedAt: row.lastUsedAt, errorCode: row.errorCode, errorMessage: row.errorMessage, usageCount: usage._count._all, averageDurationMs: usage._avg.durationMs };
@@ -251,8 +320,9 @@ export class ConnectionsService {
   }
 
   async beginOAuth(user: AccessTokenPayload, provider: OAuthProvider, folderId: string | null = null, connectionId: string | null = null) {
-    this.assertOAuthProvider(provider);
-    const cfg = this.oauthConfig(provider);
+    const definition = await this.resolveProviderDefinition(provider, user.org_id);
+    this.assertOAuthProvider(provider, definition);
+    const cfg = this.oauthConfig(provider, definition);
     if (!cfg.clientId || !cfg.clientSecret) throw new BadRequestException(`${provider} OAuth integration is not configured. Set ${cfg.clientIdEnv} and ${cfg.clientSecretEnv} in the backend environment.`);
     let connection: any = null;
     if (connectionId) {
@@ -261,7 +331,6 @@ export class ConnectionsService {
     }
     const state = randomBytes(32).toString('base64url');
     await this.prisma.connectionOAuthState.create({ data: { id: randomUUID(), stateHash: this.hash(state), orgId: user.org_id, userId: user.sub, provider, connectionId: connection?.id ?? null, folderId, expiresAt: new Date(Date.now() + OAUTH_STATE_TTL_MS) } });
-    const definition = this.registry.get(provider);
     const selectedScopes = connection?.scope?.trim() || definition.defaultScopes.join(' ');
     const params = new URLSearchParams({ client_id: cfg.clientId, redirect_uri: cfg.callbackUrl, response_type: 'code', state });
     if (selectedScopes) params.set('scope', selectedScopes);
@@ -273,12 +342,15 @@ export class ConnectionsService {
   }
 
   async completeOAuth(provider: OAuthProvider, code: string, state: string) {
-    this.assertOAuthProvider(provider);
+    const statePreview = await this.prisma.connectionOAuthState.findFirst({ where: { stateHash: this.hash(state), provider }, select: { orgId: true } });
+    const definition = statePreview ? await this.resolveProviderDefinition(provider, statePreview.orgId) : (provider.startsWith('custom:') ? null : this.registry.get(provider));
+    if (!definition) throw new BadRequestException('Custom service not found');
+    this.assertOAuthProvider(provider, definition);
     if (!code || !state) throw new BadRequestException('Missing OAuth callback parameters');
     const row = await this.prisma.connectionOAuthState.findFirst({ where: { stateHash: this.hash(state), provider, usedAt: null, expiresAt: { gt: new Date() } } });
     if (!row) throw new BadRequestException('OAuth state is invalid or expired');
     await this.prisma.connectionOAuthState.update({ where: { id: row.id }, data: { usedAt: new Date() } });
-    const cfg = this.oauthConfig(provider);
+    const cfg = this.oauthConfig(provider, definition);
     if (!cfg.clientId || !cfg.clientSecret) throw new BadRequestException(`${provider} OAuth integration is not configured`);
     const body = new URLSearchParams({ client_id: cfg.clientId, client_secret: cfg.clientSecret, code, redirect_uri: cfg.callbackUrl, grant_type: 'authorization_code' });
     const response = await fetch(cfg.tokenUrl, { method: 'POST', headers: { 'content-type': 'application/x-www-form-urlencoded', accept: 'application/json' }, body });
@@ -287,7 +359,7 @@ export class ConnectionsService {
     const expiresAt = typeof payload.expires_in === 'number' ? new Date(Date.now() + payload.expires_in * 1000) : null;
     const stateConnection = row.connectionId ? await this.prisma.connection.findFirst({ where: { id: row.connectionId, orgId: row.orgId, ownerId: row.userId, provider, authType: ConnectionAuthType.OAUTH2 } }) : null;
     const existing = stateConnection ?? await this.prisma.connection.findFirst({ where: { orgId: row.orgId, ownerId: row.userId, provider, authType: ConnectionAuthType.OAUTH2 }, orderBy: { updatedAt: 'desc' } });
-    const name = existing?.name ?? `${this.registry.get(provider).name} connection`;
+    const name = existing?.name ?? `${definition.name} connection`;
     const providerPayloadBaseUrl = typeof payload.api_endpoint === 'string' ? payload.api_endpoint.replace(/\/$/, '') : typeof payload.instance_url === 'string' ? payload.instance_url.replace(/\/$/, '') : undefined;
     const metadata = { ...(existing?.metadata && typeof existing.metadata === 'object' ? existing.metadata as Record<string, unknown> : {}), oauthProvider: provider, oauthConnectedAt: new Date().toISOString() };
     const accessToken = this.crypto.encrypt(payload.access_token);
@@ -331,16 +403,16 @@ export class ConnectionsService {
 
   async executeRestFunction(user: AccessTokenPayload, id: string, method: string, path: string, rawBody?: unknown, rawHeaders?: unknown, options: { responseMode?: string; jsonPath?: string; retries?: number; idempotencyKey?: string; workflowId?: string; runId?: string; maxResponseBytes?: number; actionType?: string } = {}) {
     const row = await this.findVisible(user, id);
-    const providerDefinition = this.registry.get(row.provider);
+    const providerDefinition = await this.resolveProviderDefinition(row.provider, row.orgId);
     if (!providerDefinition.capabilities.includes('request')) throw new BadRequestException('HTTP_REQUEST is not supported for this connection service');
     if (row.status !== ConnectionStatus.ACTIVE) throw new ForbiddenException('Connection is not active');
     const effectiveBaseUrl = row.baseUrl || providerDefinition.baseUrl;
     if (!effectiveBaseUrl) throw new BadRequestException('Connection base URL is missing');
     const base = new URL(effectiveBaseUrl); if (base.protocol !== 'https:') throw new BadRequestException('REST connection must use HTTPS');
     const target = new URL(path, base); if (target.origin !== base.origin) throw new BadRequestException('HTTP_REQUEST target must remain on the connection origin');
-    await this.assertSafeFunctionHost(target.hostname);
     const { secrets } = await this.getSecretsForExecution(user, id); const headers = new Headers();
-    if (row.authType === ConnectionAuthType.API_KEY && secrets.apiKey) headers.set(providerDefinition.credentialHeader ?? 'X-API-Key', `${providerDefinition.credentialPrefix ?? ''}${secrets.apiKey}`);
+    if (row.authType === ConnectionAuthType.API_KEY && secrets.apiKey) { if (providerDefinition.credentialQueryKey) target.searchParams.set(providerDefinition.credentialQueryKey, secrets.apiKey); else headers.set(providerDefinition.credentialHeader ?? 'X-API-Key', `${providerDefinition.credentialPrefix ?? ''}${secrets.apiKey}`); }
+    if (row.authType === ConnectionAuthType.OAUTH2 && secrets.accessToken) headers.set('Authorization', `Bearer ${secrets.accessToken}`);
     if (row.authType === ConnectionAuthType.BEARER && secrets.bearerToken) headers.set(providerDefinition.credentialHeader ?? 'Authorization', `${providerDefinition.credentialPrefix ?? 'Bearer '}${secrets.bearerToken}`);
     if (row.authType === ConnectionAuthType.BASIC && secrets.username) headers.set('Authorization', `Basic ${Buffer.from(`${secrets.username}:${secrets.password ?? ''}`).toString('base64')}`);
     if (row.authType === ConnectionAuthType.CUSTOM_HEADER && secrets.customHeaders) { const h=JSON.parse(secrets.customHeaders); if (h && typeof h==='object') for (const [k,v] of Object.entries(h)) if (!/^(authorization|cookie|proxy-authorization)$/i.test(k) && typeof v==='string') headers.set(k,v); }
@@ -380,7 +452,7 @@ export class ConnectionsService {
     const accessToken = this.crypto.decrypt(secret.accessToken);
     if (!row.expiresAt || row.expiresAt.getTime() > Date.now() + 60_000) return accessToken;
     if (!secret.refreshToken) return accessToken;
-    return this.refreshOAuthToken(row.provider as OAuthProvider, id, this.crypto.decrypt(secret.refreshToken));
+    return this.refreshOAuthToken(row.provider as OAuthProvider, id, this.crypto.decrypt(secret.refreshToken), row.orgId);
   }
 
   async getSecretsForExecution(user: AccessTokenPayload, id: string) {
@@ -396,8 +468,9 @@ export class ConnectionsService {
     return { row, secrets: out };
   }
 
-  private async refreshOAuthToken(provider: OAuthProvider, id: string, currentRefreshToken: string) {
-    const cfg = this.oauthConfig(provider);
+  private async refreshOAuthToken(provider: OAuthProvider, id: string, currentRefreshToken: string, orgId?: string) {
+    const definition = await this.resolveProviderDefinition(provider, orgId);
+    const cfg = this.oauthConfig(provider, definition);
     if (!cfg.clientId || !cfg.clientSecret) throw new BadRequestException('OAuth provider is not configured');
     const body = new URLSearchParams({ client_id: cfg.clientId, client_secret: cfg.clientSecret, refresh_token: currentRefreshToken, grant_type: 'refresh_token' });
     const response = await fetch(cfg.tokenUrl, { method: 'POST', headers: { 'content-type': 'application/x-www-form-urlencoded', accept: 'application/json' }, body });
@@ -412,7 +485,13 @@ export class ConnectionsService {
     return payload.access_token as string;
   }
 
-  private async providerRevoke(provider: string, token: string) {
+  private async providerRevoke(provider: string, token: string, orgId?: string) {
+    const definition = await this.resolveProviderDefinition(provider, orgId);
+    if (definition.oauthRevokeUrl) {
+      const headers: Record<string,string> = { authorization: `Bearer ${token}` };
+      await fetch(definition.oauthRevokeUrl, { method: 'POST', headers, redirect: 'error', signal: AbortSignal.timeout(10000) });
+      return;
+    }
     if (provider === 'google') {
       await fetch(`https://oauth2.googleapis.com/revoke?token=${encodeURIComponent(token)}`, { method: 'POST', redirect: 'error', signal: AbortSignal.timeout(10000) });
       return;
@@ -426,26 +505,26 @@ export class ConnectionsService {
     }
   }
 
-  private async providerProbe(provider: string, token: string, baseUrl?: string | null) {
-    const url = this.registry.get(provider).probeUrl ?? baseUrl;
+  private async providerProbe(provider: string, token: string, baseUrl?: string | null, orgId?: string) {
+    const definition = await this.resolveProviderDefinition(provider, orgId);
+    const url = definition.probeUrl ?? baseUrl;
     if (!url) return;
     const response = await fetch(url, { headers: { authorization: `Bearer ${token}` } });
     if (!response.ok) throw new Error(`Provider returned HTTP ${response.status}`);
   }
 
-  private assertOAuthProvider(provider: string): asserts provider is OAuthProvider {
-    const definition = this.registry.get(provider);
+  private assertOAuthProvider(provider: string, definition: ResolvedProviderDefinition) {
     if (!definition.oauth || !definition.oauthAuthUrl || !definition.oauthTokenUrl) throw new BadRequestException('Unsupported OAuth provider');
+    if (provider.startsWith('custom:') && (!definition.oauthClientId || !definition.oauthClientSecret)) throw new BadRequestException('Custom OAuth service is missing Client ID or Client Secret');
   }
 
-  private oauthConfig(provider: OAuthProvider) {
-    const definition = this.registry.get(provider);
-    const prefix = definition.oauthEnvPrefix ?? provider.toUpperCase();
+  private oauthConfig(provider: OAuthProvider, definition: ResolvedProviderDefinition) {
+    const prefix = definition.oauthEnvPrefix ?? provider.toUpperCase().replace(/[^A-Z0-9]/g, '_');
     const frontend = this.frontendUrl();
     const clientIdEnv = `${prefix}_CLIENT_ID`;
     const clientSecretEnv = `${prefix}_CLIENT_SECRET`;
-    const clientId = (this.config.get<string>(clientIdEnv) ?? (provider === 'google' ? this.config.get<string>('GOOGLE_ID') : undefined) ?? this.config.get<string>(`${prefix}_OAUTH_CLIENT_ID`))?.trim();
-    const clientSecret = (this.config.get<string>(clientSecretEnv) ?? (provider === 'google' ? this.config.get<string>('GOOGLE_SECRET') : undefined) ?? this.config.get<string>(`${prefix}_OAUTH_CLIENT_SECRET`))?.trim();
+    const clientId = definition.oauthClientId ?? ((this.config.get<string>(clientIdEnv) ?? (provider === 'google' ? this.config.get<string>('GOOGLE_ID') : undefined) ?? this.config.get<string>(`${prefix}_OAUTH_CLIENT_ID`))?.trim());
+    const clientSecret = definition.oauthClientSecret ?? ((this.config.get<string>(clientSecretEnv) ?? (provider === 'google' ? this.config.get<string>('GOOGLE_SECRET') : undefined) ?? this.config.get<string>(`${prefix}_OAUTH_CLIENT_SECRET`))?.trim());
     const callbackUrl = (this.config.get<string>(`${prefix}_CONNECTION_CALLBACK_URL`) ?? `${this.config.get<string>('PUBLIC_API_URL') ?? 'http://localhost:3001'}/connections/oauth/${provider}/callback`).trim();
     return { frontend, clientId, clientSecret, clientIdEnv, clientSecretEnv, callbackUrl, authBase: definition.oauthAuthUrl!, tokenUrl: definition.oauthTokenUrl! };
   }

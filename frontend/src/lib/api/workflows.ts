@@ -106,8 +106,12 @@ export type WorkflowAuditEntry = { id:string; action:string; resourceType:string
 export function listWorkflowAudit(params?: { action?:string; resourceType?:string }) { const q=new URLSearchParams(); if(params?.action) q.set('action',params.action); if(params?.resourceType) q.set('resourceType',params.resourceType); return apiRequest<WorkflowAuditEntry[]>(`/workflows/audit${q.toString()?`?${q}`:''}`); }
 
 
-export type ConnectionScope = { value: string; label: string; description: string };
-export type ConnectionProvider = { key: string; name: string; category?: string; authTypes: string[]; oauth?: boolean; capabilities?: string[]; configured?: boolean; baseUrl?: string; scopes?: ConnectionScope[]; defaultScopes?: string[] };
+export type ConnectionScope = { value: string; label: string; description: string; group?: string; risk?: 'STANDARD'|'SENSITIVE'|'RESTRICTED' };
+export type ConnectionProvider = { key: string; name: string; category?: string; authTypes: string[]; oauth?: boolean; capabilities?: string[]; configured?: boolean; baseUrl?: string; scopes?: ConnectionScope[]; defaultScopes?: string[]; scopeGroups?: string[] };
+export type CustomConnectionService = { id:string; name:string; linkName:string; provider:string; authType:string; parameterKey?:string|null; parameterLabel?:string|null; parameterType?:string|null; baseUrl?:string|null; oauth:boolean; configured:boolean; oauthCallbackUrl?:string|null; scopes:ConnectionScope[]; defaultScopes:string[]; scopeGroups:string[]; createdAt:string; updatedAt:string };
+export function listCustomConnectionServices() { return apiRequest<CustomConnectionService[]>('/connections/custom-services'); }
+export function createCustomConnectionService(input: Record<string, unknown>) { return apiRequest<CustomConnectionService>('/connections/custom-services', { method:'POST', body: JSON.stringify(input) }); }
+export function deleteCustomConnectionService(id:string) { return apiRequest<{id:string;deleted:boolean}>(`/connections/custom-services/${encodeURIComponent(id)}`, { method:'DELETE' }); }
 export type Connection = { canManage: boolean; id: string; orgId: string; ownerId: string; name: string; provider: string; authType: string; visibility: 'PRIVATE' | 'ORGANIZATION'; status: 'ACTIVE' | 'REAUTH_REQUIRED' | 'DISABLED' | 'ERROR'; baseUrl?: string | null; metadata?: Record<string, unknown> | null; expiresAt?: string | null; scope?: string | null; lastTestedAt?: string | null; lastUsedAt?: string | null; errorCode?: string | null; errorMessage?: string | null; createdAt: string; updatedAt: string };
 export type ConnectionUsage = { id: string; userId?: string | null; workflowId?: string | null; runId?: string | null; actionType?: string | null; status: string; durationMs?: number | null; createdAt: string };
 export function listConnectionProviders() { return apiRequest<ConnectionProvider[]>('/connections/providers'); }
