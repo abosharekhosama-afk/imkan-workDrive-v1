@@ -1,15 +1,547 @@
 "use client";
-import { useMemo, useState } from "react";
+
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { SecondarySidebar } from "@/components/layout/secondary-sidebar";
-import { useLocale } from "@/components/locale-provider";
 import { Icons } from "@/components/layout/icons";
-import { uploadFileToFolder } from "@/lib/api/upload-file";
-type Category="documents"|"spreadsheets"|"presentations";type Template={id:string;name:string;category:Category;description:string;icon:keyof typeof Icons;extension:string;content:string};
-const templates:Template[]=[
-{id:"blank-doc",name:"Blank document",category:"documents",description:"Start with a clean document.",icon:"doc",extension:"txt",content:"IMKAN WorkDrive document\n\n"},
-{id:"project-plan",name:"Project plan",category:"documents",description:"Plan goals, milestones, owners and dates.",icon:"doc",extension:"txt",content:"PROJECT PLAN\n\nGoals:\n- \n\nMilestones:\n- \n\nOwners:\n- \n\nDates:\n- \n"},
-{id:"budget",name:"Budget tracker",category:"spreadsheets",description:"Track planned and actual project costs.",icon:"sheet",extension:"csv",content:"Item,Owner,Planned,Actual,Status\n,,,,Draft\n"},
-{id:"weekly-report",name:"Weekly report",category:"spreadsheets",description:"Summarize weekly progress and metrics.",icon:"sheet",extension:"csv",content:"Metric,This week,Last week,Notes\nProgress,,,,\nRisks,,,,\n"},
-{id:"pitch",name:"Project presentation",category:"presentations",description:"Present a project clearly to stakeholders.",icon:"slide",extension:"html",content:"<!doctype html><html><head><meta charset=\"utf-8\"><title>Project presentation</title></head><body><h1>Project presentation</h1><h2>Problem</h2><p></p><h2>Solution</h2><p></p><h2>Next steps</h2><p></p></body></html>"}];
-export default function TemplatesPage(){const{label}=useLocale();const router=useRouter();const params=useSearchParams();const category=params.get("category");const folderId=params.get("folderId");const[q,setQ]=useState("");const[preview,setPreview]=useState<Template|null>(null);const createParam=params.get("create");const[busy,setBusy]=useState<string|null>(null);const[message,setMessage]=useState("");const filtered=useMemo(()=>templates.filter(t=>(!category||category==="my"||t.category===category)&&`${t.name} ${t.description}`.toLowerCase().includes(q.toLowerCase())),[category,q]);const useTemplate=async(t:Template)=>{setBusy(t.id);setMessage("");try{const file=new File([t.content],`${t.name}.${t.extension}`,{type:t.extension==="csv"?"text/csv":t.extension==="html"?"text/html":"text/plain"});await uploadFileToFolder(folderId,file);setMessage(`${t.name} created in My Files`);setTimeout(()=>router.push("/files"),500)}catch(e){setMessage(e instanceof Error?e.message:"Unable to create template")}finally{setBusy(null)}};return <div className="flex min-h-0 flex-1"><SecondarySidebar section="templates"/><main className="min-w-0 flex-1 overflow-y-auto bg-white"><div className="border-b border-[color:var(--imkan-color-border)] px-5 py-4"><div className="flex flex-wrap items-center justify-between gap-3"><div><h1 className="text-[18px] font-semibold text-slate-900">{label("templates.title")}</h1><p className="mt-1 text-[12.5px] text-slate-500">{label("templates.description")}</p></div><button type="button" onClick={()=>setPreview(templates[0])} className="rounded-lg border border-slate-200 px-3 py-2 text-[12.5px] font-medium text-slate-700 hover:bg-slate-50">+ {label("templates.title")}</button></div><div className="mt-4 flex max-w-xl items-center gap-2 rounded-lg border border-slate-200 px-3 py-2"><Icons.search size={15}/><input value={q} onChange={e=>setQ(e.target.value)} placeholder={label("templates.search")} className="min-w-0 flex-1 text-[13px] outline-none"/></div>{message&&<div className="mt-3 rounded-lg bg-[#EEF4FF] px-3 py-2 text-[12px] text-[#1B66EA]">{message}</div>}</div>{filtered.length===0?<div className="p-6"><div className="wd-empty"><span className="wd-empty-icon"><Icons.layout size={24}/></span><h2>{label("templates.empty")}</h2></div></div>:<div className="grid grid-cols-[repeat(auto-fill,minmax(230px,1fr))] gap-4 p-5">{filtered.map(t=>{const I=Icons[t.icon];return <article key={t.id} className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm hover:border-slate-300"><div className="flex h-28 items-center justify-center rounded-lg bg-slate-50 text-[var(--wd-primary)]"><I size={42}/></div><h2 className="mt-3 truncate text-[14px] font-semibold text-slate-900">{t.name}</h2><p className="mt-1 min-h-10 text-[12px] leading-5 text-slate-500">{t.description}</p><div className="mt-3 flex gap-2"><button type="button" disabled={busy===t.id} onClick={()=>void useTemplate(t)} className="flex-1 rounded-lg bg-[var(--wd-primary)] px-3 py-2 text-[12px] font-medium text-white disabled:opacity-50">{busy===t.id?"Creating…":label("templates.use")}</button><button type="button" onClick={()=>setPreview(t)} className="rounded-lg border border-slate-200 px-3 py-2 text-[12px] text-slate-600">{label("templates.preview")}</button></div></article>})}</div>}{preview&&<div className="fixed inset-0 z-[120] flex items-center justify-center p-4"><div className="absolute inset-0 bg-black/30" onClick={()=>setPreview(null)}/><div className="relative w-[min(620px,94vw)] rounded-2xl bg-white shadow-2xl"><div className="flex items-center justify-between border-b border-slate-100 px-5 py-4"><div><h2 className="text-[16px] font-semibold">{preview.name}</h2><p className="mt-1 text-[12px] text-slate-500">{preview.description}</p></div><button onClick={()=>setPreview(null)} className="rounded-lg px-2 py-1 hover:bg-slate-100">✕</button></div><pre className="max-h-[55vh] overflow-auto whitespace-pre-wrap p-5 text-[11.5px] text-slate-600">{preview.content}</pre></div></div>}</main></div>}
+import { useLocale } from "@/components/locale-provider";
+import { TemplatePreview } from "@/components/templates/template-preview";
+import {
+  listTemplates,
+  getTemplate,
+  getTemplateCapabilities,
+  useTemplate,
+  listTemplateCategories,
+  saveFileAsTemplate,
+  createTemplateCategory,
+  updateTemplate,
+  updateTemplateFromFile,
+  duplicateTemplate,
+  deleteTemplate,
+  listTemplateVersions,
+  useTemplateVersion,
+  listTemplateTrash,
+  restoreTemplate,
+  permanentlyDeleteTemplate,
+  type TemplateCategory,
+  type TemplateLibrary,
+  type TemplateRecord,
+  type TemplateType,
+} from "@/lib/api/templates";
+
+const tabs: { id: TemplateLibrary; en: string; ar: string }[] = [
+  { id: "PERSONAL", en: "My Templates", ar: "قوالبي" },
+  { id: "ORGANIZATION", en: "Organization", ar: "قوالب المؤسسة" },
+  { id: "PUBLIC", en: "Public", ar: "العامة" },
+];
+
+const typeLabels: Record<TemplateType, [string, string]> = {
+  DOCUMENT: ["Document", "مستند"],
+  SPREADSHEET: ["Spreadsheet", "جدول بيانات"],
+  PRESENTATION: ["Presentation", "عرض تقديمي"],
+};
+
+function text(ar: boolean, en: string, value: string) { return ar ? value : en; }
+
+export default function TemplatesPage() {
+  const { locale } = useLocale();
+  const ar = locale === "ar";
+  const router = useRouter();
+  const params = useSearchParams();
+  const folderId = params.get("folderId");
+  const sourceFileId = params.get("sourceFileId");
+  const sourceName = params.get("sourceName") || "";
+  const [library, setLibrary] = useState<TemplateLibrary>((params.get("library") as TemplateLibrary) || "PERSONAL");
+  const [type, setType] = useState<TemplateType | undefined>();
+  const [categoryId, setCategoryId] = useState<string | undefined>();
+  const [q, setQ] = useState("");
+  const [sort, setSort] = useState<"name" | "name_desc" | "updated" | "updated_asc">("updated");
+  const [layout, setLayout] = useState<"grid" | "list">("grid");
+  const [templates, setTemplates] = useState<TemplateRecord[]>([]);
+  const [categories, setCategories] = useState<TemplateCategory[]>([]);
+  const [libraryCapabilities, setLibraryCapabilities] = useState<import("@/lib/api/templates").TemplateLibraryCapabilities | null>(null);
+  const [preview, setPreview] = useState<{ template: TemplateRecord; url: string } | null>(null);
+  const [useTarget, setUseTarget] = useState<TemplateRecord | null>(null);
+  const [editTarget, setEditTarget] = useState<TemplateRecord | null>(null);
+  const [editName, setEditName] = useState("");
+  const [editDescription, setEditDescription] = useState("");
+  const [editCategoryId, setEditCategoryId] = useState<string>("");
+  const [versionTarget, setVersionTarget] = useState<TemplateRecord | null>(null);
+  const [versionFileId, setVersionFileId] = useState("");
+  const [versionName, setVersionName] = useState("");
+  const [duplicateTarget, setDuplicateTarget] = useState<TemplateRecord | null>(null);
+  const [duplicateName, setDuplicateName] = useState("");
+  const [versionsTarget, setVersionsTarget] = useState<TemplateRecord | null>(null);
+  const [versions, setVersions] = useState<import("@/lib/api/templates").TemplateVersion[]>([]);
+  const [trashOpen, setTrashOpen] = useState(false);
+  const [trash, setTrash] = useState<import("@/lib/api/templates").TrashedTemplate[]>([]);
+  const [versionUse, setVersionUse] = useState<import("@/lib/api/templates").TemplateVersion | null>(null);
+  const [versionUseName, setVersionUseName] = useState("");
+  const [saveTargetOpen, setSaveTargetOpen] = useState(Boolean(sourceFileId));
+  const [saveName, setSaveName] = useState(sourceName.replace(/\.[^.]+$/, "") || "");
+  const [saveDescription, setSaveDescription] = useState("");
+  const [saveCategoryId, setSaveCategoryId] = useState("");
+  const [menuTemplateId, setMenuTemplateId] = useState<string | null>(null);
+  const [categoryTarget, setCategoryTarget] = useState<TemplateRecord | null>(null);
+  const [categoryTargetId, setCategoryTargetId] = useState("");
+  const [newName, setNewName] = useState("");
+  const [newCategory, setNewCategory] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [message, setMessage] = useState("");
+  const [error, setError] = useState("");
+
+  const load = useCallback(async () => {
+    setError("");
+    try {
+      const [items, cats, capabilities] = await Promise.all([
+        listTemplates({ library, type, categoryId, q: q.trim(), sort }),
+        listTemplateCategories(library),
+        getTemplateCapabilities(library),
+      ]);
+      setTemplates(items);
+      setCategories(cats);
+      setLibraryCapabilities(capabilities);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : text(ar, "Unable to load templates.", "تعذر تحميل القوالب."));
+    }
+  }, [library, type, categoryId, q, sort, ar]);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => { void load(); }, q.trim() ? 250 : 0);
+    return () => window.clearTimeout(timer);
+  }, [load, q]);
+
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setMenuTemplateId(null);
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, []);
+
+  const empty = useMemo(() => !busy && templates.length === 0, [busy, templates.length]);
+
+  const previewTemplate = async (template: TemplateRecord) => {
+    setError("");
+    try {
+      const detail = await getTemplate(template.id);
+      setPreview({ template, url: detail.preview_url });
+    } catch (e) {
+      setError(e instanceof Error ? e.message : text(ar, "Preview unavailable.", "المعاينة غير متاحة."));
+    }
+  };
+
+  const confirmUse = async () => {
+    if (!useTarget || !newName.trim()) return;
+    setBusy(true); setError(""); setMessage("");
+    try {
+      const created = await useTemplate(useTarget.id, { name: newName.trim(), folderId });
+      setUseTarget(null);
+      setNewName("");
+      setMessage(text(ar, `Created “${created.name}”.`, `تم إنشاء «${created.name}».`));
+      window.setTimeout(() => router.push(`/files/${created.file_id}`), 350);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : text(ar, "Unable to create file.", "تعذر إنشاء الملف."));
+    } finally { setBusy(false); }
+  };
+
+  const saveSourceAsTemplate = async () => {
+    if (!sourceFileId || !saveName.trim()) return;
+    setBusy(true); setError("");
+    try {
+      await saveFileAsTemplate({ fileId: sourceFileId, name: saveName.trim(), description: saveDescription.trim() || undefined, library, categoryId: saveCategoryId || null });
+      setSaveTargetOpen(false);
+      setSaveCategoryId("");
+      router.replace("/files/templates");
+      setMessage(text(ar, "Template saved successfully.", "تم حفظ القالب بنجاح."));
+      await load();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : text(ar, "Unable to save template.", "تعذر حفظ القالب."));
+    } finally { setBusy(false); }
+  };
+
+  const openEdit = (template: TemplateRecord) => {
+    setEditTarget(template);
+    setEditName(template.name);
+    setEditDescription(template.description || "");
+    setEditCategoryId(template.category?.id || "");
+  };
+
+  const saveEdit = async () => {
+    if (!editTarget || !editName.trim()) return;
+    setBusy(true); setError("");
+    try {
+      await updateTemplate(editTarget.id, { name: editName.trim(), description: editDescription.trim(), categoryId: editCategoryId || null });
+      setEditTarget(null);
+      setMessage(text(ar, "Template updated successfully.", "تم تحديث القالب بنجاح."));
+      await load();
+    } catch (e) { setError(e instanceof Error ? e.message : text(ar, "Unable to update template.", "تعذر تحديث القالب.")); }
+    finally { setBusy(false); }
+  };
+
+  const saveNewVersion = async () => {
+    if (!versionTarget || !versionFileId.trim() || !versionName.trim()) return;
+    setBusy(true); setError("");
+    try {
+      await updateTemplateFromFile(versionTarget.id, { fileId: versionFileId.trim(), name: versionName.trim(), description: versionTarget.description || undefined, categoryId: versionTarget.category?.id || null });
+      setVersionTarget(null); setVersionFileId(""); setVersionName("");
+      setMessage(text(ar, "New template version created.", "تم إنشاء إصدار جديد للقالب."));
+      await load();
+    } catch (e) { setError(e instanceof Error ? e.message : text(ar, "Unable to create version.", "تعذر إنشاء الإصدار.")); }
+    finally { setBusy(false); }
+  };
+
+  const doDuplicate = async () => {
+    if (!duplicateTarget || !duplicateName.trim()) return;
+    setBusy(true); setError("");
+    try {
+      await duplicateTemplate(duplicateTarget.id, duplicateName.trim());
+      setDuplicateTarget(null); setDuplicateName("");
+      setMessage(text(ar, "Template duplicated.", "تم نسخ القالب."));
+      await load();
+    } catch (e) { setError(e instanceof Error ? e.message : text(ar, "Unable to duplicate template.", "تعذر نسخ القالب.")); }
+    finally { setBusy(false); }
+  };
+
+  const openVersions = async (template: TemplateRecord) => {
+    setBusy(true); setError("");
+    try {
+      const items = await listTemplateVersions(template.id);
+      setVersionsTarget(template); setVersions(items);
+    } catch (e) { setError(e instanceof Error ? e.message : text(ar, "Unable to load version history.", "تعذر تحميل سجل الإصدارات.")); }
+    finally { setBusy(false); }
+  };
+
+  const changeCategory = async () => {
+    if (!categoryTarget) return;
+    setBusy(true); setError("");
+    try {
+      await updateTemplate(categoryTarget.id, { categoryId: categoryTargetId || null });
+      setCategoryTarget(null); setCategoryTargetId(""); setMenuTemplateId(null);
+      setMessage(text(ar, "Category updated.", "تم تحديث التصنيف."));
+      await load();
+    } catch (e) { setError(e instanceof Error ? e.message : text(ar, "Unable to change category.", "تعذر تغيير التصنيف.")); }
+    finally { setBusy(false); }
+  };
+
+  const doDelete = async (template: TemplateRecord) => {
+    if (!template.permissions.canDelete) return;
+    if (!window.confirm(text(ar, `Move “${template.name}” to template trash?`, `نقل «${template.name}» إلى سلة القوالب؟`))) return;
+    setBusy(true); setError("");
+    try {
+      await deleteTemplate(template.id);
+      setMessage(text(ar, "Template moved to trash.", "تم نقل القالب إلى السلة."));
+      await load();
+    } catch (e) { setError(e instanceof Error ? e.message : text(ar, "Unable to delete template.", "تعذر حذف القالب.")); }
+    finally { setBusy(false); }
+  };
+
+  const openTrash = async () => {
+    setBusy(true); setError("");
+    try { setTrash(await listTemplateTrash()); setTrashOpen(true); }
+    catch (e) { setError(e instanceof Error ? e.message : text(ar, "Unable to load template trash.", "تعذر تحميل سلة القوالب.")); }
+    finally { setBusy(false); }
+  };
+
+  const restoreFromTrash = async (id: string) => {
+    setBusy(true); setError("");
+    try { await restoreTemplate(id); setTrash((items) => items.filter((item) => item.id !== id)); await load(); setMessage(text(ar, "Template restored.", "تمت استعادة القالب.")); }
+    catch (e) { setError(e instanceof Error ? e.message : text(ar, "Unable to restore template.", "تعذر استعادة القالب.")); }
+    finally { setBusy(false); }
+  };
+
+  const purgeFromTrash = async (id: string) => {
+    if (!window.confirm(text(ar, "Permanently delete this template and all its versions?", "حذف هذا القالب وجميع إصداراته نهائيًا؟"))) return;
+    setBusy(true); setError("");
+    try { await permanentlyDeleteTemplate(id); setTrash((items) => items.filter((item) => item.id !== id)); setMessage(text(ar, "Template permanently deleted.", "تم حذف القالب نهائيًا.")); }
+    catch (e) { setError(e instanceof Error ? e.message : text(ar, "Unable to permanently delete template.", "تعذر الحذف النهائي للقالب.")); }
+    finally { setBusy(false); }
+  };
+
+  const createFromVersion = async () => {
+    if (!versionsTarget || !versionUse || !versionUseName.trim()) return;
+    setBusy(true); setError("");
+    try { const created = await useTemplateVersion(versionsTarget.id, versionUse.id, { name: versionUseName.trim(), folderId }); setVersionUse(null); setVersionsTarget(null); setMessage(text(ar, `Created “${created.name}”.`, `تم إنشاء «${created.name}».`)); router.push(`/files/${created.file_id}`); }
+    catch (e) { setError(e instanceof Error ? e.message : text(ar, "Unable to create file from version.", "تعذر إنشاء الملف من الإصدار.")); }
+    finally { setBusy(false); }
+  };
+
+  const addCategory = async () => {
+    if (!newCategory.trim()) return;
+    setBusy(true); setError("");
+    try {
+      const category = await createTemplateCategory(library, newCategory.trim());
+      setCategories((items) => [...items, category].sort((a, b) => a.name.localeCompare(b.name)));
+      setNewCategory("");
+    } catch (e) {
+      setError(e instanceof Error ? e.message : text(ar, "Unable to create category.", "تعذر إنشاء التصنيف."));
+    } finally { setBusy(false); }
+  };
+
+  return (
+    <div className="flex min-h-0 flex-1">
+      <SecondarySidebar section="templates" />
+      <main className="min-w-0 flex-1 overflow-y-auto bg-white">
+        <div className="border-b border-[color:var(--imkan-color-border)] px-5 py-4">
+          <div className="flex flex-wrap items-start justify-between gap-4">
+            <div>
+              <h1 className="text-[18px] font-semibold text-slate-900">{text(ar, "Templates", "القوالب")}</h1>
+              <p className="mt-1 text-[12.5px] text-slate-500">{text(ar, "Create files faster with reusable templates.", "أنشئ الملفات بسرعة باستخدام القوالب القابلة لإعادة الاستخدام.")}</p>
+            </div>
+            <div className="flex items-center gap-2">
+            <button type="button" onClick={() => void openTrash()} className="rounded-lg border border-slate-200 px-3 py-2 text-[12.5px] font-medium text-slate-700 hover:bg-slate-50">{text(ar, "Template trash", "سلة القوالب")}</button>
+            <button type="button" onClick={() => router.push(folderId ? `/files?folderId=${encodeURIComponent(folderId)}` : "/files")} className="rounded-lg border border-slate-200 px-3 py-2 text-[12.5px] font-medium text-slate-700 hover:bg-slate-50">
+              {text(ar, "Back to files", "العودة إلى الملفات")}
+            </button>
+            </div>
+          </div>
+
+          <div className="mt-4 flex flex-wrap gap-1 border-b border-slate-100">
+            {tabs.map((tab) => (
+              <button key={tab.id} type="button" onClick={() => { setLibrary(tab.id); setCategoryId(undefined); }} className={`border-b-2 px-3 py-2 text-[12.5px] font-medium ${library === tab.id ? "border-[var(--wd-primary)] text-[var(--wd-primary)]" : "border-transparent text-slate-500 hover:text-slate-800"}`}>
+                {ar ? tab.ar : tab.en}
+              </button>
+            ))}
+          </div>
+
+          <div className="mt-3 flex flex-wrap gap-2">
+            <div className="flex min-w-[260px] flex-1 items-center gap-2 rounded-lg border border-slate-200 px-3 py-2">
+              <Icons.search size={15} />
+              <input value={q} onChange={(e) => setQ(e.target.value)} placeholder={text(ar, "Search templates", "ابحث في القوالب")} className="min-w-0 flex-1 text-[13px] outline-none" />
+            </div>
+            <select value={type ?? ""} onChange={(e) => setType((e.target.value || undefined) as TemplateType | undefined)} className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-[12px] text-slate-600">
+              <option value="">{text(ar, "All types", "كل الأنواع")}</option>
+              <option value="DOCUMENT">{text(ar, "Documents", "مستندات")}</option>
+              <option value="SPREADSHEET">{text(ar, "Spreadsheets", "جداول")}</option>
+            </select>
+            <select value={categoryId ?? ""} onChange={(e) => setCategoryId(e.target.value || undefined)} className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-[12px] text-slate-600">
+              <option value="">{text(ar, "All categories", "كل التصنيفات")}</option>
+              {categories.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+            </select>
+            <select value={sort} onChange={(e) => setSort(e.target.value as "name" | "name_desc" | "updated" | "updated_asc")} className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-[12px] text-slate-600">
+              <option value="updated">{text(ar, "Recently modified", "آخر تعديل")}</option>
+              <option value="updated_asc">{text(ar, "Oldest modified", "أقدم تعديل")}</option>
+              <option value="name">{text(ar, "Name (A–Z)", "الاسم (أ–ي)")}</option>
+              <option value="name_desc">{text(ar, "Name (Z–A)", "الاسم (ي–أ)")}</option>
+            </select>
+            <div className="flex items-center rounded-lg border border-slate-200 bg-white p-0.5">
+              <button type="button" onClick={() => setLayout("grid")} aria-label={text(ar, "Grid view", "عرض شبكي")} className={`rounded-md p-1.5 ${layout === "grid" ? "bg-slate-100 text-slate-800" : "text-slate-400"}`}><Icons.grid size={15} /></button>
+              <button type="button" onClick={() => setLayout("list")} aria-label={text(ar, "List view", "عرض قائمة")} className={`rounded-md p-1.5 ${layout === "list" ? "bg-slate-100 text-slate-800" : "text-slate-400"}`}><Icons.list size={15} /></button>
+            </div>
+          </div>
+
+          {libraryCapabilities?.canCreateCategory && <div className="mt-3 flex items-center gap-2">
+            <input id="new-template-category" value={newCategory} onChange={(e) => setNewCategory(e.target.value)} placeholder={text(ar, "New category", "تصنيف جديد")} className="w-44 rounded-lg border border-slate-200 px-3 py-2 text-[12px] outline-none focus:border-[var(--wd-primary)]" />
+            <button type="button" disabled={busy || !newCategory.trim()} onClick={() => void addCategory()} className="rounded-lg border border-slate-200 px-3 py-2 text-[12px] font-medium text-slate-700 disabled:opacity-50">+ {text(ar, "Category", "تصنيف")}</button>
+          </div>}
+          {message && <div className="mt-3 rounded-lg bg-[#EEF4FF] px-3 py-2 text-[12px] text-[#1B66EA]">{message}</div>}
+          {error && <div className="mt-3 rounded-lg bg-red-50 px-3 py-2 text-[12px] text-red-700">{error}</div>}
+        </div>
+
+        <div className="flex min-h-0 flex-col lg:flex-row">
+            <aside className="w-full shrink-0 border-b border-slate-200 bg-white p-3 lg:w-56 lg:border-b-0 lg:border-r">
+              <div className="flex items-center justify-between px-2 pb-2">
+                <div className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">{text(ar, "Category", "التصنيف")}</div>
+                {libraryCapabilities?.canCreateCategory && library !== "PUBLIC" && <button type="button" onClick={() => document.getElementById("new-template-category")?.focus()} className="rounded-md px-2 py-1 text-[15px] leading-none text-slate-500 hover:bg-slate-100" aria-label={text(ar, "Create category", "إنشاء تصنيف")}>+</button>}
+              </div>
+              <button type="button" onClick={() => setCategoryId(undefined)} className={`mb-1 flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-[12px] ${!categoryId ? "bg-[#EEF4FF] font-medium text-[var(--wd-primary)]" : "text-slate-600 hover:bg-slate-50"}`}>
+                <span>{text(ar, "All", "الكل")}</span>
+              </button>
+              {library !== "PUBLIC" && categories.map((c) => (
+                <button key={c.id} type="button" onClick={() => setCategoryId(c.id)} className={`mb-1 flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-[12px] ${categoryId === c.id ? "bg-[#EEF4FF] font-medium text-[var(--wd-primary)]" : "text-slate-600 hover:bg-slate-50"}`}>
+                  <span className="truncate">{c.name}</span>
+                </button>
+              ))}
+              {library === "PUBLIC" && <p className="px-2 pt-2 text-[11px] leading-5 text-slate-400">{text(ar, "Public templates are not organized with categories.", "القوالب العامة لا تُنظم بواسطة التصنيفات.")}</p>}
+            </aside>
+            {empty ? (
+              <div className="flex min-h-[420px] flex-1 items-center justify-center p-8">
+                <div className="max-w-sm text-center">
+                  <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-[#f6f8fb] text-slate-400"><Icons.layout size={28} /></div>
+                  <h2 className="mt-4 text-[15px] font-semibold text-slate-800">{text(ar, "No templates yet", "لا توجد قوالب بعد")}</h2>
+                  <p className="mt-1 text-[12px] leading-5 text-slate-500">{text(ar, library === "PUBLIC" ? "Public templates will appear here when available." : "Save a file as a template to populate this library.", library === "PUBLIC" ? "ستظهر القوالب العامة هنا عند توفرها." : "احفظ ملفًا كقالب لإضافة القوالب إلى هذه المكتبة.")}</p>
+                </div>
+              </div>
+            ) : (
+            <div className={layout === "grid" ? "grid flex-1 grid-cols-[repeat(auto-fill,minmax(245px,1fr))] gap-4 p-5" : "flex-1 space-y-2 p-5"}>
+            {templates.map((template) => (
+              <article key={template.id} className={layout === "grid" ? "relative overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm transition hover:border-slate-300 hover:shadow-md" : "relative flex items-center gap-4 rounded-xl border border-slate-200 bg-white p-3 shadow-sm transition hover:border-slate-300"}>
+                <button type="button" onClick={() => void previewTemplate(template)} className={layout === "grid" ? "group relative flex h-36 w-full items-center justify-center overflow-hidden bg-[#f6f8fb] text-[var(--wd-primary)]" : "group flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-[#f6f8fb] text-[var(--wd-primary)]"}>
+                  {layout === "grid" ? (
+                    <div className="relative h-28 w-20 rounded-[3px] border border-slate-200 bg-white p-2 shadow-sm transition group-hover:-translate-y-0.5">
+                      <div className="mb-2 h-1.5 w-9 rounded bg-slate-200" />
+                      <div className="mb-1 h-1 w-full rounded bg-slate-100" /><div className="mb-1 h-1 w-4/5 rounded bg-slate-100" />
+                      <div className="mt-4 h-10 w-full rounded bg-slate-50" />
+                      <div className="absolute bottom-2 left-2 rounded bg-white/90 p-1 text-[var(--wd-primary)] shadow-sm">{template.type === "DOCUMENT" ? <Icons.doc size={13} /> : <Icons.sheet size={13} />}</div>
+                    </div>
+                  ) : (template.type === "DOCUMENT" ? <Icons.doc size={28} /> : <Icons.sheet size={28} />)}
+                </button>
+                <div className={layout === "grid" ? "p-4" : "min-w-0 flex-1"}>
+                  <div className="flex items-start justify-between gap-2">
+                    <h2 className="truncate text-[14px] font-semibold text-slate-900">{template.name}</h2>
+                    <div className="relative flex shrink-0 items-center gap-1">
+                      <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] text-slate-500">{text(ar, typeLabels[template.type][0], typeLabels[template.type][1])}</span>
+                      <button type="button" aria-label={text(ar, "More actions", "إجراءات إضافية")} onClick={() => setMenuTemplateId(menuTemplateId === template.id ? null : template.id)} className="rounded-md px-1.5 py-0.5 text-slate-500 hover:bg-slate-100">⋯</button>
+                      {menuTemplateId === template.id && (
+                        <div className={`absolute ${ar ? "left-0" : "right-0"} top-7 z-30 w-44 rounded-xl border border-slate-200 bg-white p-1.5 shadow-xl`}>
+                          {template.permissions.canUse && <button type="button" onClick={() => { setUseTarget(template); setNewName(template.name); setMenuTemplateId(null); }} className="block w-full rounded-lg px-3 py-2 text-left text-[11.5px] text-slate-700 hover:bg-slate-50">{text(ar, "Use template", "استخدام القالب")}</button>}
+                          {template.permissions.canEdit && <button type="button" onClick={() => { openEdit(template); setMenuTemplateId(null); }} className="block w-full rounded-lg px-3 py-2 text-left text-[11.5px] text-slate-700 hover:bg-slate-50">{text(ar, "Edit", "تعديل")}</button>}
+                          {template.permissions.canEdit && <button type="button" onClick={() => { setCategoryTarget(template); setCategoryTargetId(template.category?.id || ""); setMenuTemplateId(null); }} className="block w-full rounded-lg px-3 py-2 text-left text-[11.5px] text-slate-700 hover:bg-slate-50">{text(ar, "Change category", "تغيير التصنيف")}</button>}
+                          {template.permissions.canDuplicate && <button type="button" onClick={() => { setDuplicateTarget(template); setDuplicateName(`${template.name} Copy`); setMenuTemplateId(null); }} className="block w-full rounded-lg px-3 py-2 text-left text-[11.5px] text-slate-700 hover:bg-slate-50">{text(ar, "Duplicate", "نسخ")}</button>}
+                          {template.permissions.canViewVersions && <button type="button" onClick={() => { void openVersions(template); setMenuTemplateId(null); }} className="block w-full rounded-lg px-3 py-2 text-left text-[11.5px] text-slate-700 hover:bg-slate-50">{text(ar, "Version history", "سجل الإصدارات")}</button>}
+                          {template.permissions.canDelete && <button type="button" onClick={() => { void doDelete(template); setMenuTemplateId(null); }} className="block w-full rounded-lg px-3 py-2 text-left text-[11.5px] text-red-600 hover:bg-red-50">{text(ar, "Delete", "حذف")}</button>}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                  <p className={`${layout === "grid" ? "mt-2 min-h-10" : "mt-1 max-w-2xl truncate"} text-[12px] leading-5 text-slate-500`}>{template.description || text(ar, "Reusable template", "قالب قابل لإعادة الاستخدام")}</p>
+                  <div className="mt-2 flex items-center gap-2 text-[10.5px] text-slate-400">
+                    {template.category?.name && <span>{template.category.name}</span>}
+                    {template.owner?.name && <span>• {template.owner.name}</span>}
+                  </div>
+                  <div className="mt-3 flex gap-2">
+                    <button type="button" onClick={() => { setUseTarget(template); setNewName(template.name); }} className="flex-1 rounded-lg bg-[var(--wd-primary)] px-3 py-2 text-[12px] font-medium text-white">{text(ar, "Use template", "استخدام القالب")}</button>
+                    <button type="button" onClick={() => void previewTemplate(template)} className="rounded-lg border border-slate-200 px-3 py-2 text-[12px] text-slate-600">{text(ar, "Preview", "معاينة")}</button>
+                  </div>
+                  <div className="mt-2 flex items-center justify-between text-[10.5px] text-slate-400">
+                    <span>{text(ar, `Version ${template.version}`, `الإصدار ${template.version}`)}</span>
+                    <span>{new Date(template.updatedAt).toLocaleDateString(ar ? "ar" : "en")}</span>
+                  </div>
+                </div>
+              </article>
+            ))}
+            </div>
+            )}
+          </div>
+      </main>
+
+      {preview && (
+        <div className="fixed inset-0 z-[120] flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/30" onClick={() => setPreview(null)} />
+          <div className="relative flex h-[min(760px,92vh)] w-[min(900px,95vw)] flex-col overflow-hidden rounded-2xl bg-white shadow-2xl">
+            <div className="flex items-center justify-between border-b border-slate-100 px-5 py-4">
+              <div><h2 className="text-[16px] font-semibold text-slate-900">{preview.template.name}</h2><p className="mt-1 text-[12px] text-slate-500">{preview.template.description}</p></div>
+              <button type="button" onClick={() => setPreview(null)} className="rounded-lg px-2 py-1 hover:bg-slate-100">✕</button>
+            </div>
+            <TemplatePreview url={preview.url} name={preview.template.name} mimeType={preview.template.mimeType} extension={preview.template.extension} className="min-h-0 flex-1" />
+          </div>
+        </div>
+      )}
+
+      {saveTargetOpen && sourceFileId && (
+        <div className="fixed inset-0 z-[135] flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/30" onClick={() => !busy && setSaveTargetOpen(false)} />
+          <div className="relative w-[min(500px,94vw)] rounded-2xl bg-white p-5 shadow-2xl">
+            <h2 className="text-[16px] font-semibold text-slate-900">{text(ar, "Save file as template", "حفظ الملف كقالب")}</h2>
+            <p className="mt-1 text-[12px] text-slate-500">{sourceName}</p>
+            <label className="mt-5 block text-[12px] font-medium text-slate-700">{text(ar, "Template name", "اسم القالب")}</label>
+            <input autoFocus value={saveName} onChange={(e) => setSaveName(e.target.value)} className="mt-2 w-full rounded-lg border border-slate-200 px-3 py-2.5 text-[13px] outline-none focus:border-[var(--wd-primary)]" />
+            <label className="mt-4 block text-[12px] font-medium text-slate-700">{text(ar, "Description", "الوصف")}</label>
+            <textarea value={saveDescription} onChange={(e) => setSaveDescription(e.target.value)} rows={3} className="mt-2 w-full resize-none rounded-lg border border-slate-200 px-3 py-2.5 text-[13px] outline-none focus:border-[var(--wd-primary)]" />
+            <label className="mt-4 block text-[12px] font-medium text-slate-700">{text(ar, "Category", "التصنيف")}</label>
+            <select value={saveCategoryId} onChange={(e) => setSaveCategoryId(e.target.value)} className="mt-2 w-full rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-[13px]">
+              <option value="">{text(ar, "No category", "بدون تصنيف")}</option>{categories.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+            </select>
+            <div className="mt-5 flex justify-end gap-2">
+              <button type="button" disabled={busy} onClick={() => { setSaveTargetOpen(false); router.replace("/files/templates"); }} className="rounded-lg border border-slate-200 px-4 py-2 text-[12px] text-slate-600">{text(ar, "Cancel", "إلغاء")}</button>
+              <button type="button" disabled={busy || !saveName.trim()} onClick={() => void saveSourceAsTemplate()} className="rounded-lg bg-[var(--wd-primary)] px-4 py-2 text-[12px] font-medium text-white disabled:opacity-50">{busy ? text(ar, "Saving…", "جارٍ الحفظ…") : text(ar, "Save template", "حفظ القالب")}</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {editTarget && (
+        <div className="fixed inset-0 z-[140] flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/30" onClick={() => !busy && setEditTarget(null)} />
+          <div className="relative w-[min(520px,94vw)] rounded-2xl bg-white p-5 shadow-2xl">
+            <h2 className="text-[16px] font-semibold text-slate-900">{text(ar, "Edit template", "تعديل القالب")}</h2>
+            <label className="mt-5 block text-[12px] font-medium text-slate-700">{text(ar, "Name", "الاسم")}</label>
+            <input autoFocus value={editName} onChange={(e) => setEditName(e.target.value)} className="mt-2 w-full rounded-lg border border-slate-200 px-3 py-2.5 text-[13px] outline-none" />
+            <label className="mt-4 block text-[12px] font-medium text-slate-700">{text(ar, "Description", "الوصف")}</label>
+            <textarea value={editDescription} onChange={(e) => setEditDescription(e.target.value)} rows={3} className="mt-2 w-full resize-none rounded-lg border border-slate-200 px-3 py-2.5 text-[13px] outline-none" />
+            <label className="mt-4 block text-[12px] font-medium text-slate-700">{text(ar, "Category", "التصنيف")}</label>
+            <select value={editCategoryId} onChange={(e) => setEditCategoryId(e.target.value)} className="mt-2 w-full rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-[13px]">
+              <option value="">{text(ar, "No category", "بدون تصنيف")}</option>{categories.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+            </select>
+            <div className="mt-5 flex justify-end gap-2"><button type="button" disabled={busy} onClick={() => setEditTarget(null)} className="rounded-lg border border-slate-200 px-4 py-2 text-[12px] text-slate-600">{text(ar, "Cancel", "إلغاء")}</button><button type="button" disabled={busy || !editName.trim()} onClick={() => void saveEdit()} className="rounded-lg bg-[var(--wd-primary)] px-4 py-2 text-[12px] font-medium text-white">{text(ar, "Save", "حفظ")}</button></div>
+          </div>
+        </div>
+      )}
+
+      {categoryTarget && (
+        <div className="fixed inset-0 z-[142] flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/30" onClick={() => !busy && setCategoryTarget(null)} />
+          <div className="relative w-[min(460px,94vw)] rounded-2xl bg-white p-5 shadow-2xl">
+            <h2 className="text-[16px] font-semibold text-slate-900">{text(ar, "Change category", "تغيير التصنيف")}</h2>
+            <p className="mt-1 text-[12px] text-slate-500">{categoryTarget.name}</p>
+            <label className="mt-5 block text-[12px] font-medium text-slate-700">{text(ar, "Category", "التصنيف")}</label>
+            <select autoFocus value={categoryTargetId} onChange={(e) => setCategoryTargetId(e.target.value)} className="mt-2 w-full rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-[13px]">
+              <option value="">{text(ar, "All / No category", "الكل / بدون تصنيف")}</option>{categories.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+            </select>
+            <div className="mt-5 flex justify-end gap-2"><button type="button" disabled={busy} onClick={() => setCategoryTarget(null)} className="rounded-lg border border-slate-200 px-4 py-2 text-[12px] text-slate-600">{text(ar, "Cancel", "إلغاء")}</button><button type="button" disabled={busy} onClick={() => void changeCategory()} className="rounded-lg bg-[var(--wd-primary)] px-4 py-2 text-[12px] font-medium text-white">{text(ar, "Save", "حفظ")}</button></div>
+          </div>
+        </div>
+      )}
+
+      {versionTarget && (
+        <div className="fixed inset-0 z-[140] flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/30" onClick={() => !busy && setVersionTarget(null)} />
+          <div className="relative w-[min(520px,94vw)] rounded-2xl bg-white p-5 shadow-2xl">
+            <h2 className="text-[16px] font-semibold text-slate-900">{text(ar, "Create new template version", "إنشاء إصدار جديد للقالب")}</h2>
+            <p className="mt-1 text-[12px] text-slate-500">{versionTarget.name}</p>
+            <label className="mt-5 block text-[12px] font-medium text-slate-700">{text(ar, "Source file ID", "معرّف الملف المصدر")}</label>
+            <input autoFocus value={versionFileId} onChange={(e) => setVersionFileId(e.target.value)} placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx" className="mt-2 w-full rounded-lg border border-slate-200 px-3 py-2.5 text-[13px] outline-none" />
+            <p className="mt-2 text-[11px] text-slate-400">{text(ar, "Use the ID of the updated file whose latest version should become the new template version.", "أدخل معرّف الملف المحدّث ليتم اعتماد أحدث إصدار منه كإصدار جديد للقالب.")}</p>
+            <div className="mt-4 flex justify-end gap-2"><button type="button" disabled={busy} onClick={() => setVersionTarget(null)} className="rounded-lg border border-slate-200 px-4 py-2 text-[12px] text-slate-600">{text(ar, "Cancel", "إلغاء")}</button><button type="button" disabled={busy || !versionFileId.trim()} onClick={() => void saveNewVersion()} className="rounded-lg bg-[var(--wd-primary)] px-4 py-2 text-[12px] font-medium text-white">{text(ar, "Create version", "إنشاء الإصدار")}</button></div>
+          </div>
+        </div>
+      )}
+
+      {duplicateTarget && (
+        <div className="fixed inset-0 z-[140] flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/30" onClick={() => !busy && setDuplicateTarget(null)} />
+          <div className="relative w-[min(460px,94vw)] rounded-2xl bg-white p-5 shadow-2xl">
+            <h2 className="text-[16px] font-semibold text-slate-900">{text(ar, "Duplicate template", "نسخ القالب")}</h2>
+            <label className="mt-5 block text-[12px] font-medium text-slate-700">{text(ar, "New name", "الاسم الجديد")}</label>
+            <input autoFocus value={duplicateName} onChange={(e) => setDuplicateName(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") void doDuplicate(); }} className="mt-2 w-full rounded-lg border border-slate-200 px-3 py-2.5 text-[13px] outline-none" />
+            <div className="mt-5 flex justify-end gap-2"><button type="button" disabled={busy} onClick={() => setDuplicateTarget(null)} className="rounded-lg border border-slate-200 px-4 py-2 text-[12px] text-slate-600">{text(ar, "Cancel", "إلغاء")}</button><button type="button" disabled={busy || !duplicateName.trim()} onClick={() => void doDuplicate()} className="rounded-lg bg-[var(--wd-primary)] px-4 py-2 text-[12px] font-medium text-white">{text(ar, "Duplicate", "نسخ")}</button></div>
+          </div>
+        </div>
+      )}
+
+      {versionsTarget && (
+        <div className="fixed inset-0 z-[145] flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/30" onClick={() => !busy && setVersionsTarget(null)} />
+          <div className="relative w-[min(760px,95vw)] max-h-[88vh] overflow-hidden rounded-2xl bg-white shadow-2xl">
+            <div className="flex items-center justify-between border-b border-slate-100 px-5 py-4"><div><h2 className="text-[16px] font-semibold text-slate-900">{text(ar, "Version history", "سجل الإصدارات")}</h2><p className="mt-1 text-[12px] text-slate-500">{versionsTarget.name}</p></div><button type="button" onClick={() => setVersionsTarget(null)} className="rounded-lg px-2 py-1 hover:bg-slate-100">✕</button></div>
+            <div className="max-h-[70vh] overflow-y-auto p-4">{versions.length === 0 ? <p className="p-6 text-center text-[12px] text-slate-500">{text(ar, "No versions found.", "لا توجد إصدارات.")}</p> : <div className="space-y-2">{versions.map((v) => <div key={v.id} className="flex items-center gap-3 rounded-xl border border-slate-200 p-3"><div className="flex h-9 w-9 items-center justify-center rounded-lg bg-slate-100 text-[12px] font-semibold text-slate-600">v{v.version}</div><div className="min-w-0 flex-1"><div className="text-[12.5px] font-semibold text-slate-800">{text(ar, `Version ${v.version}`, `الإصدار ${v.version}`)}</div><div className="mt-1 text-[10.5px] text-slate-500">{v.createdBy.name || v.createdBy.email} · {new Date(v.createdAt).toLocaleString()}</div></div><a href={v.preview_url} target="_blank" rel="noreferrer" className="rounded-lg border border-slate-200 px-3 py-2 text-[11px] text-slate-600">{text(ar, "Preview", "معاينة")}</a><button type="button" onClick={() => { setVersionUse(v); setVersionUseName(versionsTarget.name); }} className="rounded-lg bg-[var(--wd-primary)] px-3 py-2 text-[11px] font-medium text-white">{text(ar, "Use", "استخدام")}</button></div>)}</div>}</div>
+          </div>
+        </div>
+      )}
+
+      {versionUse && versionsTarget && (
+        <div className="fixed inset-0 z-[155] flex items-center justify-center p-4"><div className="absolute inset-0 bg-black/30" onClick={() => !busy && setVersionUse(null)} /><div className="relative w-[min(460px,94vw)] rounded-2xl bg-white p-5 shadow-2xl"><h2 className="text-[16px] font-semibold text-slate-900">{text(ar, "Create from version", "إنشاء من الإصدار")}</h2><p className="mt-1 text-[12px] text-slate-500">{versionsTarget.name} · v{versionUse.version}</p><input autoFocus value={versionUseName} onChange={(e) => setVersionUseName(e.target.value)} className="mt-5 w-full rounded-lg border border-slate-200 px-3 py-2.5 text-[13px] outline-none" /><div className="mt-5 flex justify-end gap-2"><button type="button" onClick={() => setVersionUse(null)} className="rounded-lg border border-slate-200 px-4 py-2 text-[12px]">{text(ar, "Cancel", "إلغاء")}</button><button type="button" disabled={busy || !versionUseName.trim()} onClick={() => void createFromVersion()} className="rounded-lg bg-[var(--wd-primary)] px-4 py-2 text-[12px] font-medium text-white">{text(ar, "Create", "إنشاء")}</button></div></div></div>
+      )}
+
+      {trashOpen && (
+        <div className="fixed inset-0 z-[150] flex items-center justify-center p-4"><div className="absolute inset-0 bg-black/30" onClick={() => !busy && setTrashOpen(false)} /><div className="relative w-[min(760px,95vw)] max-h-[88vh] overflow-hidden rounded-2xl bg-white shadow-2xl"><div className="flex items-center justify-between border-b border-slate-100 px-5 py-4"><div><h2 className="text-[16px] font-semibold text-slate-900">{text(ar, "Template trash", "سلة القوالب")}</h2><p className="mt-1 text-[12px] text-slate-500">{text(ar, "Restore templates or permanently delete them.", "استعد القوالب أو احذفها نهائيًا.")}</p></div><button type="button" onClick={() => setTrashOpen(false)} className="rounded-lg px-2 py-1 hover:bg-slate-100">✕</button></div><div className="max-h-[70vh] overflow-y-auto p-4">{trash.length === 0 ? <p className="p-8 text-center text-[12px] text-slate-500">{text(ar, "Template trash is empty.", "سلة القوالب فارغة.")}</p> : <div className="space-y-2">{trash.map((t) => <div key={t.id} className="flex items-center gap-3 rounded-xl border border-slate-200 p-3"><div className="flex h-10 w-10 items-center justify-center rounded-lg bg-slate-100">{t.type === "DOCUMENT" ? <Icons.doc size={20} /> : t.type === "SPREADSHEET" ? <Icons.sheet size={20} /> : <Icons.slide size={20} />}</div><div className="min-w-0 flex-1"><div className="truncate text-[12.5px] font-semibold text-slate-800">{t.name}</div><div className="mt-1 text-[10.5px] text-slate-500">{t.library} · v{t.version}{t.deletedAt ? ` · ${new Date(t.deletedAt).toLocaleString()}` : ""}</div></div><button type="button" onClick={() => void restoreFromTrash(t.id)} className="rounded-lg border border-slate-200 px-3 py-2 text-[11px]">{text(ar, "Restore", "استعادة")}</button><button type="button" onClick={() => void purgeFromTrash(t.id)} className="rounded-lg border border-red-200 px-3 py-2 text-[11px] text-red-600">{text(ar, "Delete forever", "حذف نهائي")}</button></div>)}</div>}</div></div></div>
+      )}
+
+      {useTarget && (
+        <div className="fixed inset-0 z-[130] flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/30" onClick={() => !busy && setUseTarget(null)} />
+          <div className="relative w-[min(460px,94vw)] rounded-2xl bg-white p-5 shadow-2xl">
+            <h2 className="text-[16px] font-semibold text-slate-900">{text(ar, "Create from template", "إنشاء من القالب")}</h2>
+            <p className="mt-1 text-[12px] text-slate-500">{useTarget.name}</p>
+            <label className="mt-5 block text-[12px] font-medium text-slate-700">{text(ar, "File name", "اسم الملف")}</label>
+            <input autoFocus value={newName} onChange={(e) => setNewName(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") void confirmUse(); }} className="mt-2 w-full rounded-lg border border-slate-200 px-3 py-2.5 text-[13px] outline-none focus:border-[var(--wd-primary)]" />
+            <div className="mt-5 flex justify-end gap-2">
+              <button type="button" disabled={busy} onClick={() => setUseTarget(null)} className="rounded-lg border border-slate-200 px-4 py-2 text-[12px] text-slate-600">{text(ar, "Cancel", "إلغاء")}</button>
+              <button type="button" disabled={busy || !newName.trim()} onClick={() => void confirmUse()} className="rounded-lg bg-[var(--wd-primary)] px-4 py-2 text-[12px] font-medium text-white disabled:opacity-50">{busy ? text(ar, "Creating…", "جارٍ الإنشاء…") : text(ar, "Create", "إنشاء")}</button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}

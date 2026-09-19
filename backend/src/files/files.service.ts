@@ -141,6 +141,16 @@ export class FilesService {
     if (input.folderId && (!folder || folder.orgId !== user.org_id)) throw new NotFoundException('Folder not found');
     if (folder) await this.assertCanUploadToFolder(user, folder);
 
+    const cleanName = input.name.trim();
+    if (!cleanName || cleanName.length > 255 || /[\x00-\x1F\x7F]/.test(cleanName)) {
+      throw new BadRequestException('Invalid file name');
+    }
+    const duplicate = await this.prisma.file.findFirst({
+      where: { orgId: user.org_id, folderId: folder?.id ?? null, name: cleanName, status: FileStatus.ACTIVE, deletedAt: null },
+      select: { id: true },
+    });
+    if (duplicate) throw new ConflictException('A file with this name already exists in the destination folder');
+
     const fileId = randomUUID();
     const versionId = randomUUID();
     const storageObjectId = randomUUID();
@@ -214,6 +224,145 @@ export class FilesService {
       upload_url: signed.url,
       upload_id: versionId,
       file_id: fileId,
+    };
+  }
+
+  async createFileFromStorageSnapshot(
+    user: AccessTokenPayload,
+    input: {
+      folderId?: string | null;
+      name: string;
+      mimeType: string;
+      extension?: string | null;
+      size: bigint;
+      sha256Hash: string;
+      sourceStorageKey: string;
+    },
+  ) {
+    await this.quota.assertAvailable(user, input.size);
+    const folder = input.folderId
+      ? await this.prisma.folder.findFirst({ where: { id: input.folderId } })
+      : null;
+    if (input.folderId && (!folder || folder.orgId !== user.org_id)) {
+      throw new NotFoundException('Folder not found');
+    }
+    if (folder) await this.assertCanUploadToFolder(user, folder);
+
+    const cleanName = input.name.trim();
+    if (!cleanName || cleanName.length > 255 || /[\x00-\x1F\x7F]/.test(cleanName)) {
+      throw new BadRequestException('Invalid file name');
+    }
+    const duplicate = await this.prisma.file.findFirst({
+      where: { orgId: user.org_id, folderId: folder?.id ?? null, name: cleanName, status: FileStatus.ACTIVE, deletedAt: null },
+      select: { id: true },
+    });
+    if (duplicate) throw new ConflictException('A file with this name already exists in the destination folder');
+
+    const fileId = randomUUID();
+    const versionId = randomUUID();
+    const storageObjectId = randomUUID();
+    const objectKey = this.storage.buildObjectKey(fileId, versionId);
+    const { bucket, region } = this.storageLocation();
+
+    await this.storage.copyStoredObject(input.sourceStorageKey, {
+      fileId,
+      versionId,
+      ownerOrgId: user.org_id,
+      contentType: input.mimeType,
+      storageKey: objectKey,
+    });
+
+    try {
+      await this.prisma.$transaction(async (tx) => {
+        await tx.file.create({
+          data: {
+            id: fileId,
+            orgId: user.org_id,
+            folderId: folder?.id ?? null,
+            name: cleanName,
+            originalName: cleanName,
+            extension: input.extension ?? null,
+            mimeType: input.mimeType,
+            fileType: classifyFileType(input.mimeType),
+            size: input.size,
+            sha256Hash: input.sha256Hash,
+            status: FileStatus.ACTIVE,
+            ownerId: user.sub,
+          },
+        });
+        await tx.storageObject.create({
+          data: {
+            id: storageObjectId,
+            orgId: user.org_id,
+            fileId,
+            storageKey: objectKey,
+            bucket,
+            region,
+            size: input.size,
+            checksum: input.sha256Hash,
+          },
+        });
+        await tx.fileVersion.create({
+          data: {
+            id: versionId,
+            orgId: user.org_id,
+            fileId,
+            versionNumber: 1,
+            storageObjectId,
+            size: input.size,
+            mimeType: input.mimeType,
+            extension: input.extension ?? null,
+            sha256Hash: input.sha256Hash,
+            uploadedById: user.sub,
+            status: VersionStatus.ACTIVE,
+          },
+        });
+        await tx.fileActivity.create({
+          data: {
+            orgId: user.org_id,
+            fileId,
+            userId: user.sub,
+            action: AuditAction.CREATE,
+            metadata: { source: 'template', name: cleanName },
+          },
+        });
+        await tx.storageQuota.upsert({
+          where: { orgId: user.org_id },
+          create: { orgId: user.org_id, quotaBytes: 10737418240n, usedBytes: input.size },
+          update: { usedBytes: { increment: input.size } },
+        });
+        await tx.auditLog.create({
+          data: {
+            orgId: user.org_id,
+            actorId: user.sub,
+            action: 'FILE_CREATED_FROM_TEMPLATE',
+            resourceType: 'FILE',
+            resourceId: fileId,
+          },
+        });
+      });
+    } catch (error) {
+      await this.storage.deleteStoredObject(objectKey).catch(() => undefined);
+      throw error;
+    }
+
+    void this.workflowEngine.executeTrigger(user, {
+      eventType: 'create',
+      fileId,
+      name: cleanName,
+      mimeType: input.mimeType,
+      fileType: classifyFileType(input.mimeType),
+      size: input.size.toString(),
+      userId: user.sub,
+      folderId: folder?.id ?? null,
+      resourceType: 'FILE',
+    }).catch(() => undefined);
+
+    return {
+      file_id: fileId,
+      name: cleanName,
+      folder_id: folder?.id ?? null,
+      file_type: classifyFileType(input.mimeType),
     };
   }
 

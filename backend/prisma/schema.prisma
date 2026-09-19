@@ -92,6 +92,7 @@ model OrganizationMembership {
   userId           String           @map("user_id") @db.Char(36)
   organizationId   String           @map("organization_id") @db.Char(36)
   role             OrgRole          @default(MEMBER)
+  isTemplateAdmin  Boolean          @default(false) @map("is_template_admin")
   status           MembershipStatus @default(ACTIVE)
   joinedAt         DateTime         @default(now()) @map("joined_at")
   invitedById      String?          @map("invited_by_id") @db.Char(36)
@@ -285,6 +286,9 @@ model Organization {
   connectionUsages    ConnectionUsage[]
   devices             UserDevice[]
   dataTransfers       DataTransfer[]
+  templateLibraries   TemplateLibrary[]
+  templateCategories  TemplateCategory[]
+  templates           Template[]
 
   workflows Workflow[]
   workflowRuns WorkflowRun[]
@@ -354,6 +358,9 @@ model User {
   connectionSecrets      ConnectionSecret[]
   connectionSecretVersions ConnectionSecretVersion[] @relation("ConnectionSecretVersionCreator")
   connectionUsages       ConnectionUsage[]
+  templateLibrariesOwned TemplateLibrary[] @relation("TemplateLibraryOwner")
+  templatesOwned         Template[] @relation("TemplateOwner")
+  templateVersionsCreated TemplateVersion[] @relation("TemplateVersionCreator")
 
   @@unique([email])
   @@index([email])
@@ -476,6 +483,109 @@ model File {
   @@index([ownerId])
   @@fulltext([name])
   @@map("files")
+}
+
+
+enum TemplateLibraryType {
+  PERSONAL
+  ORGANIZATION
+  PUBLIC
+}
+
+enum TemplateType {
+  DOCUMENT
+  SPREADSHEET
+  PRESENTATION
+}
+
+enum TemplateStatus {
+  ACTIVE
+  DISABLED
+  TRASHED
+}
+
+model TemplateLibrary {
+  id             String              @id @default(uuid()) @db.Char(36)
+  orgId          String?             @map("org_id") @db.Char(36)
+  ownerId        String?             @map("owner_id") @db.Char(36)
+  type           TemplateLibraryType
+  name           String
+  createdAt      DateTime            @default(now()) @map("created_at")
+  updatedAt      DateTime            @updatedAt @map("updated_at")
+
+  organization Organization? @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  owner        User?         @relation("TemplateLibraryOwner", fields: [ownerId], references: [id], onDelete: Cascade)
+  categories   TemplateCategory[]
+  templates    Template[]
+
+  @@unique([orgId, ownerId, type])
+  @@index([orgId, type])
+  @@map("template_libraries")
+}
+
+model TemplateCategory {
+  id          String   @id @default(uuid()) @db.Char(36)
+  orgId       String?  @map("org_id") @db.Char(36)
+  libraryId   String   @map("library_id") @db.Char(36)
+  name        String
+  position    Int      @default(0)
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  organization Organization? @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  library      TemplateLibrary @relation(fields: [libraryId], references: [id], onDelete: Cascade)
+  templates    Template[]
+
+  @@unique([libraryId, name])
+  @@index([orgId, libraryId])
+  @@map("template_categories")
+}
+
+model Template {
+  id             String         @id @default(uuid()) @db.Char(36)
+  orgId          String?        @map("org_id") @db.Char(36)
+  libraryId      String         @map("library_id") @db.Char(36)
+  categoryId     String?        @map("category_id") @db.Char(36)
+  ownerId        String?        @map("owner_id") @db.Char(36)
+  name           String
+  description    String?        @db.Text
+  type           TemplateType
+  status         TemplateStatus @default(ACTIVE)
+  createdAt      DateTime       @default(now()) @map("created_at")
+  updatedAt      DateTime       @updatedAt @map("updated_at")
+  deletedAt      DateTime?      @map("deleted_at")
+
+  organization Organization? @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  library      TemplateLibrary @relation(fields: [libraryId], references: [id], onDelete: Cascade)
+  category     TemplateCategory? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  owner        User? @relation("TemplateOwner", fields: [ownerId], references: [id], onDelete: Cascade)
+  versions     TemplateVersion[]
+
+  @@index([orgId, libraryId, status])
+  @@index([orgId, ownerId])
+  @@index([libraryId, categoryId])
+  @@fulltext([name, description])
+  @@map("templates")
+}
+
+model TemplateVersion {
+  id            String   @id @default(uuid()) @db.Char(36)
+  templateId    String   @map("template_id") @db.Char(36)
+  versionNumber Int      @map("version_number")
+  storageKey    String   @map("storage_key")
+  size          BigInt
+  mimeType      String   @map("mime_type")
+  extension     String?
+  sha256Hash    String   @map("sha256_hash") @db.Char(64)
+  createdById   String   @map("created_by_id") @db.Char(36)
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  template  Template @relation(fields: [templateId], references: [id], onDelete: Cascade)
+  createdBy User     @relation("TemplateVersionCreator", fields: [createdById], references: [id])
+
+  @@unique([templateId, versionNumber])
+  @@index([templateId, createdAt])
+  @@map("template_versions")
 }
 
 /// Technical metadata extracted from file content. One-to-one with File.

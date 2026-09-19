@@ -238,7 +238,7 @@ export function ActionToolbar({
             else if (k === "upload") WorkdriveEvents.upload(currentFolderId ?? null);
             else if (k === "uploadFolder") WorkdriveEvents.uploadFolder(currentFolderId ?? null);
             else if (k === "workflow") { close(); router.push("/files/workflows/builder"); }
-            else if (k === "templates") { close(); router.push(currentFolderId ? `/files/templates?folderId=${encodeURIComponent(currentFolderId)}` : "/files/templates"); }
+            else if (k === "templates") { close(); window.dispatchEvent(new CustomEvent("workdrive:template-picker", { detail: { folderId: currentFolderId ?? null } })); }
             else if (k === "externalApps") WorkdriveEvents.externalApps();
             else if (k === "record") dispatchRecord("video");
             else if (["doc", "sheet", "slide", "link", "code"].includes(k)) window.dispatchEvent(new CustomEvent("workdrive:new-file", { detail: { kind: k, folderId: currentFolderId ?? null } }));

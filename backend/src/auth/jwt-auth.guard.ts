@@ -11,6 +11,7 @@ import * as jwt from 'jsonwebtoken';
 import { IS_PUBLIC_KEY } from './public.decorator';
 import { AccessTokenPayload, JWT_SECRET_ENV } from './jwt.types';
 import { PrismaService } from '../prisma/prisma.service';
+import { OrgRole } from '@prisma/client';
 
 export type AuthenticatedRequest = Request & {
   user?: AccessTokenPayload;
@@ -72,7 +73,7 @@ export class JwtAuthGuard implements CanActivate {
           status: 'ACTIVE',
           ...(payload.membershipId ? { id: payload.membershipId } : {}),
         },
-        select: { id: true, role: true, status: true },
+        select: { id: true, role: true, status: true, isTemplateAdmin: true },
       });
       if (!membership) throw new UnauthorizedException('Organization membership is no longer active');
 
@@ -83,6 +84,7 @@ export class JwtAuthGuard implements CanActivate {
         role: membership.role,
         membershipId: membership.id,
         membershipStatus: membership.status,
+        templateAdmin: membership.isTemplateAdmin || membership.role === OrgRole.ADMIN || membership.role === OrgRole.SUPER_ADMIN,
       };
 
       void this.prisma.session.update({ where: { id: session.id }, data: { lastSeenAt: new Date() } });

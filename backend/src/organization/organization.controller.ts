@@ -17,7 +17,7 @@ import type { AccessTokenPayload } from '../auth/jwt.types';
 import { OrgRole } from '@prisma/client';
 import { AuthService } from '../auth.service';
 import { OrganizationService } from './organization.service';
-import { parseCreateAccount, parseInvite, parseUpdateOrganization, parseUpdateMemberRole, parseRemoveMember, parseTransferOwnership } from './organization.schemas';
+import { parseCreateAccount, parseInvite, parseUpdateOrganization, parseUpdateMemberRole, parseRemoveMember, parseTransferOwnership, parseTemplateAdminToggle } from './organization.schemas';
 
 @Controller('organization')
 export class OrganizationController {
@@ -29,6 +29,7 @@ export class OrganizationController {
   @Get('members/all') allMembers(@CurrentUser() u: AccessTokenPayload) { return this.service.allMembersWithPending(u); }
   @Get('members/management') management(@CurrentUser() u: AccessTokenPayload, @Query('status') status?: string) { return this.service.management(u, status); }
   @Get('members/:id/details') memberDetails(@CurrentUser() u: AccessTokenPayload, @Param('id') id: string) { return this.service.memberDetails(u, id); }
+  @Patch('members/:id/template-admin') toggleTemplateAdmin(@CurrentUser() u: AccessTokenPayload, @Param('id') id: string, @Body() b: unknown) { return this.service.toggleTemplateAdmin(u, id, parseTemplateAdminToggle(b).enabled); }
   @Patch('members/:id') updateMember(@CurrentUser() u: AccessTokenPayload, @Param('id') id: string, @Body() b: unknown) { return this.service.updateMemberRole(u, id, parseUpdateMemberRole(b).role); }
   @Post('members/:id/suspend') suspendMember(@CurrentUser() u: AccessTokenPayload, @Param('id') id: string) { return this.service.suspendMember(u, id); }
   @Post('members/:id/activate') activateMember(@CurrentUser() u: AccessTokenPayload, @Param('id') id: string) { return this.service.activateMember(u, id); }

@@ -5,6 +5,7 @@ export type AccessTokenPayload = {
   role: string;
   membershipId?: string;
   membershipStatus?: string;
+  templateAdmin?: boolean;
   jti?: string;
 };
 

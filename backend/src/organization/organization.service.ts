@@ -57,6 +57,7 @@ export class OrganizationService {
       email: m.user.email,
       avatarUrl: m.user.avatarUrl,
       role: m.role,
+      isTemplateAdmin: m.isTemplateAdmin || m.role === OrgRole.ADMIN || m.role === OrgRole.SUPER_ADMIN,
       status: m.status,
       joinedAt: m.joinedAt,
       invitedBy: m.invitedBy,
@@ -162,13 +163,23 @@ export class OrganizationService {
         suspended: counts[1],
         removed: counts[2],
         invited: pendingInvitations.length,
-        templateAdmins: 0,
+        templateAdmins: await this.prisma.organizationMembership.count({ where: { organizationId: user.org_id, status: MembershipStatus.ACTIVE, OR: [{ isTemplateAdmin: true }, { role: { in: [OrgRole.ADMIN, OrgRole.SUPER_ADMIN] } }] } }),
         teamAdmins: await this.prisma.organizationMembership.count({
           where: { organizationId: user.org_id, status: MembershipStatus.ACTIVE, role: { in: [OrgRole.ADMIN, OrgRole.SUPER_ADMIN] } },
         }),
       },
       licenseLimit: Number(process.env.WORKDRIVE_MEMBER_LICENSE_LIMIT ?? 10),
     };
+  }
+
+  async toggleTemplateAdmin(user: AccessTokenPayload, membershipId: string, enabled: boolean) {
+    if (user.role !== OrgRole.ADMIN && user.role !== OrgRole.SUPER_ADMIN) throw new ForbiddenException('Only Team Admins can manage Template Admins');
+    const membership = await this.prisma.organizationMembership.findFirst({ where: { id: membershipId, organizationId: user.org_id, status: MembershipStatus.ACTIVE } });
+    if (!membership) throw new NotFoundException('Member not found');
+    // Team Admins and Super Admins are always Template Admins by default.
+    if (membership.role !== OrgRole.MEMBER) return { id: membership.id, isTemplateAdmin: true };
+    const updated = await this.prisma.organizationMembership.update({ where: { id: membership.id }, data: { isTemplateAdmin: enabled } });
+    return { id: updated.id, isTemplateAdmin: updated.isTemplateAdmin };
   }
 
   async memberDetails(user: AccessTokenPayload, membershipId: string) {

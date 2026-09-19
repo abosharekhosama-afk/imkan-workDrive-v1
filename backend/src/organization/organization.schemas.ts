@@ -57,3 +57,8 @@ export function parseCreateAccount(body: unknown): { name: string; email: string
   // privilege is only attainable via the ownership-transfer flow.
   return { name, email, password, role: role as 'ADMIN' | 'MEMBER' };
 }
+
+export function parseTemplateAdminToggle(body: unknown): { enabled: boolean } {
+  if (!body || typeof body !== 'object' || typeof (body as any).enabled !== 'boolean') throw new BadRequestException('enabled must be a boolean');
+  return { enabled: (body as any).enabled };
+}
