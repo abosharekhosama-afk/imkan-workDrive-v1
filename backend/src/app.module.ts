@@ -24,6 +24,7 @@ import { WorkflowsModule } from './workflows/workflows.module';
 import { CloudImportModule } from './cloud-import/cloud-import.module';
 import { GroupsModule } from './groups/groups.module';
 import { ConnectionsModule } from './connections/connections.module';
+import { TemplatesModule } from './templates/templates.module';
 
 @Module({
   imports: [
@@ -49,6 +50,7 @@ import { ConnectionsModule } from './connections/connections.module';
     CloudImportModule,
     GroupsModule,
     ConnectionsModule,
+    TemplatesModule,
   ],
   controllers: [AppController],
   providers: [AppService],
