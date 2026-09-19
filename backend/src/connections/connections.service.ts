@@ -23,11 +23,105 @@ type ResolvedProviderDefinition = ConnectionProviderDefinition & { oauthClientId
 export class ConnectionsService {
   constructor(private readonly prisma: PrismaService, private readonly crypto: ConnectionCryptoService, private readonly config: ConfigService, private readonly registry: ConnectionProviderRegistry) {}
 
-  providers() {
-    return this.registry.list().map((provider) => ({
-      ...provider,
-      configured: !provider.oauth || Boolean(this.oauthConfig(provider.key, provider).clientId && this.oauthConfig(provider.key, provider).clientSecret),
-    }));
+  async providers(user?: AccessTokenPayload) {
+    const configs = user ? await this.prisma.connectionProviderConfig.findMany({ where: { orgId: user.org_id } }) : [];
+    const byProvider = new Map(configs.map((row) => [row.providerKey, row]));
+    return this.registry.list().map((provider) => {
+      const cfg = byProvider.get(provider.key);
+      const envCfg = this.oauthConfigFromEnv(provider.key, provider);
+      return {
+        ...provider,
+        configured: !provider.oauth || Boolean((cfg?.enabled !== false && cfg?.clientId && cfg?.clientSecret) || (!cfg && envCfg.clientId && envCfg.clientSecret)),
+        providerConfigured: !!cfg && cfg.enabled && !!cfg.clientId && !!cfg.clientSecret,
+        providerEnabled: cfg?.enabled ?? true,
+      };
+    });
+  }
+
+  async adminProviderConfigs(user: AccessTokenPayload) {
+    this.assertAdmin(user);
+    const rows = await this.prisma.connectionProviderConfig.findMany({ where: { orgId: user.org_id }, orderBy: { providerKey: 'asc' } });
+    const byProvider = new Map(rows.map((row) => [row.providerKey, row]));
+    return this.registry.list().filter((p) => p.oauth).map((provider) => {
+      const row = byProvider.get(provider.key);
+      const envCfg = this.oauthConfigFromEnv(provider.key, provider);
+      return {
+        provider: provider.key,
+        name: provider.name,
+        category: provider.category,
+        enabled: row?.enabled ?? true,
+        configured: !!row && !!row.clientId && !!row.clientSecret && row.enabled || (!row && !!envCfg.clientId && !!envCfg.clientSecret),
+        source: row ? 'DATABASE' : (envCfg.clientId && envCfg.clientSecret ? 'ENVIRONMENT' : 'NONE'),
+        clientId: row?.clientId ?? envCfg.clientId ?? '',
+        hasClientSecret: !!row?.clientSecret || !!envCfg.clientSecret,
+        tenantId: row?.tenantId ?? '',
+        callbackUrl: row?.callbackUrl ?? envCfg.callbackUrl,
+        authUrl: row?.authUrl ?? provider.oauthAuthUrl,
+        tokenUrl: row?.tokenUrl ?? provider.oauthTokenUrl,
+        revokeUrl: row?.revokeUrl ?? provider.oauthRevokeUrl ?? '',
+        scopes: Array.isArray(row?.scopes) ? row?.scopes : provider.defaultScopes,
+        lastTestedAt: row?.lastTestedAt ?? null,
+        lastTestOk: row?.lastTestOk ?? null,
+        lastTestMessage: row?.lastTestMessage ?? null,
+      };
+    });
+  }
+
+  async saveAdminProviderConfig(user: AccessTokenPayload, providerKey: string, input: any) {
+    this.assertAdmin(user);
+    const definition = this.registry.get(providerKey);
+    if (!definition.oauth) throw new BadRequestException('Only OAuth providers can be configured here');
+    const clientId = String(input?.clientId ?? '').trim();
+    const clientSecret = String(input?.clientSecret ?? '').trim();
+    const tenantId = String(input?.tenantId ?? '').trim();
+    const callbackUrl = String(input?.callbackUrl ?? '').trim();
+    const authUrl = String(input?.authUrl ?? definition.oauthAuthUrl ?? '').trim();
+    const tokenUrl = String(input?.tokenUrl ?? definition.oauthTokenUrl ?? '').trim();
+    const revokeUrl = String(input?.revokeUrl ?? definition.oauthRevokeUrl ?? '').trim();
+    const enabled = input?.enabled !== false;
+    if (!clientId) throw new BadRequestException('Client ID is required');
+    if (!clientSecret && !(await this.prisma.connectionProviderConfig.findUnique({ where: { orgId_providerKey: { orgId: user.org_id, providerKey } }, select: { clientSecret: true } }))?.clientSecret && !this.oauthConfigFromEnv(providerKey, definition).clientSecret) throw new BadRequestException('Client Secret is required');
+    if (!/^https:\/\//i.test(authUrl) || !/^https:\/\//i.test(tokenUrl)) throw new BadRequestException('OAuth URLs must use HTTPS');
+    if (!callbackUrl || !/^https:\/\//i.test(callbackUrl)) throw new BadRequestException('Callback URL must use HTTPS');
+    const existing = await this.prisma.connectionProviderConfig.findUnique({ where: { orgId_providerKey: { orgId: user.org_id, providerKey } } });
+    const data: any = { orgId: user.org_id, providerKey, enabled, clientId, tenantId: tenantId || null, callbackUrl, authUrl, tokenUrl, revokeUrl: revokeUrl || null, scopes: (Array.isArray(input?.scopes) ? input.scopes : definition.defaultScopes) as Prisma.InputJsonValue, updatedById: user.sub };
+    if (clientSecret) data.clientSecret = this.crypto.encrypt(clientSecret);
+    const row = existing ? await this.prisma.connectionProviderConfig.update({ where: { id: existing.id }, data }) : await this.prisma.connectionProviderConfig.create({ data: { id: randomUUID(), ...data, createdById: user.sub } });
+    await this.audit(user, 'connection.provider_config.updated', row.id, { provider: providerKey, source: 'DATABASE', enabled });
+    return this.serializeProviderConfig(row, definition);
+  }
+
+  async testAdminProviderConfig(user: AccessTokenPayload, providerKey: string) {
+    this.assertAdmin(user);
+    const definition = this.registry.get(providerKey);
+    if (!definition.oauth) throw new BadRequestException('Only OAuth providers can be tested here');
+    const cfg = await this.oauthConfig(providerKey, definition, user.org_id);
+    let ok = true;
+    let message = 'OAuth configuration is valid';
+    try {
+      const probe = new URL(cfg.authBase);
+      if (probe.protocol !== 'https:') throw new Error('Authorization URL must use HTTPS');
+      if (!cfg.clientId || !cfg.clientSecret) throw new Error('Client ID and Client Secret are required');
+      if (!cfg.callbackUrl || !cfg.callbackUrl.startsWith('https://')) throw new Error('Callback URL must use HTTPS');
+      const url = new URL(cfg.authBase);
+      url.searchParams.set('client_id', cfg.clientId);
+      url.searchParams.set('redirect_uri', cfg.callbackUrl);
+      url.searchParams.set('response_type', 'code');
+      if (definition.defaultScopes.length) url.searchParams.set('scope', definition.defaultScopes.join(' '));
+      const response = await fetch(url, { method: 'GET', redirect: 'manual', signal: AbortSignal.timeout(8000) });
+      if (!(response.status >= 200 && response.status < 400)) throw new Error(`Authorization endpoint returned HTTP ${response.status}`);
+    } catch (error) { ok = false; message = error instanceof Error ? error.message.slice(0, 500) : 'OAuth configuration test failed'; }
+    const row = await this.prisma.connectionProviderConfig.findUnique({ where: { orgId_providerKey: { orgId: user.org_id, providerKey } } });
+    if (row) await this.prisma.connectionProviderConfig.update({ where: { id: row.id }, data: { lastTestedAt: new Date(), lastTestOk: ok, lastTestMessage: message } });
+    return { provider: providerKey, ok, message, callbackUrl: cfg.callbackUrl, authUrl: cfg.authBase, tokenUrl: cfg.tokenUrl };
+  }
+
+  private assertAdmin(user: AccessTokenPayload) {
+    if (user.role !== 'ADMIN' && user.role !== 'SUPER_ADMIN') throw new ForbiddenException('Admin access required');
+  }
+
+  private serializeProviderConfig(row: any, definition: ConnectionProviderDefinition) {
+    return { provider: row.providerKey, name: definition.name, enabled: row.enabled, configured: !!row.clientId && !!row.clientSecret && row.enabled, clientId: row.clientId ?? '', hasClientSecret: !!row.clientSecret, tenantId: row.tenantId ?? '', callbackUrl: row.callbackUrl ?? '', authUrl: row.authUrl ?? definition.oauthAuthUrl, tokenUrl: row.tokenUrl ?? definition.oauthTokenUrl, revokeUrl: row.revokeUrl ?? definition.oauthRevokeUrl ?? '', scopes: Array.isArray(row.scopes) ? row.scopes : definition.defaultScopes, lastTestedAt: row.lastTestedAt ?? null, lastTestOk: row.lastTestOk ?? null, lastTestMessage: row.lastTestMessage ?? null };
   }
 
   templates() {
@@ -50,6 +144,7 @@ export class ConnectionsService {
   }
 
   async createCustomService(user: AccessTokenPayload, input: any) {
+    this.assertAdmin(user);
     const name = String(input?.name ?? '').trim();
     const linkName = String(input?.linkName ?? input?.key ?? '').trim().toLowerCase();
     const authType = String(input?.authType ?? 'API_KEY') as ConnectionAuthType;
@@ -82,6 +177,7 @@ export class ConnectionsService {
   }
 
   async deleteCustomService(user: AccessTokenPayload, id: string) {
+    this.assertAdmin(user);
     const row = await this.prisma.connectionCustomService.findFirst({ where: { id, orgId: user.org_id, ownerId: user.sub } });
     if (!row) throw new NotFoundException('Custom service not found');
     const connectionCount = await this.prisma.connection.count({ where: { orgId: user.org_id, provider: `custom:${id}` } });
@@ -322,8 +418,8 @@ export class ConnectionsService {
   async beginOAuth(user: AccessTokenPayload, provider: OAuthProvider, folderId: string | null = null, connectionId: string | null = null) {
     const definition = await this.resolveProviderDefinition(provider, user.org_id);
     this.assertOAuthProvider(provider, definition);
-    const cfg = this.oauthConfig(provider, definition);
-    if (!cfg.clientId || !cfg.clientSecret) throw new BadRequestException(`${provider} OAuth integration is not configured. Set ${cfg.clientIdEnv} and ${cfg.clientSecretEnv} in the backend environment.`);
+    const cfg = await this.oauthConfig(provider, definition, user?.org_id);
+    if (!cfg.clientId || !cfg.clientSecret) throw new BadRequestException(`${provider} OAuth integration is not configured. Ask an organization administrator to configure this provider in Connections → Provider Configuration.`);
     let connection: any = null;
     if (connectionId) {
       connection = await this.prisma.connection.findFirst({ where: { id: connectionId, orgId: user.org_id, ownerId: user.sub, provider, authType: ConnectionAuthType.OAUTH2 } });
@@ -350,7 +446,7 @@ export class ConnectionsService {
     const row = await this.prisma.connectionOAuthState.findFirst({ where: { stateHash: this.hash(state), provider, usedAt: null, expiresAt: { gt: new Date() } } });
     if (!row) throw new BadRequestException('OAuth state is invalid or expired');
     await this.prisma.connectionOAuthState.update({ where: { id: row.id }, data: { usedAt: new Date() } });
-    const cfg = this.oauthConfig(provider, definition);
+    const cfg = await this.oauthConfig(provider, definition, row.orgId);
     if (!cfg.clientId || !cfg.clientSecret) throw new BadRequestException(`${provider} OAuth integration is not configured`);
     const body = new URLSearchParams({ client_id: cfg.clientId, client_secret: cfg.clientSecret, code, redirect_uri: cfg.callbackUrl, grant_type: 'authorization_code' });
     const response = await fetch(cfg.tokenUrl, { method: 'POST', headers: { 'content-type': 'application/x-www-form-urlencoded', accept: 'application/json' }, body });
@@ -470,7 +566,7 @@ export class ConnectionsService {
 
   private async refreshOAuthToken(provider: OAuthProvider, id: string, currentRefreshToken: string, orgId?: string) {
     const definition = await this.resolveProviderDefinition(provider, orgId);
-    const cfg = this.oauthConfig(provider, definition);
+    const cfg = await this.oauthConfig(provider, definition, orgId);
     if (!cfg.clientId || !cfg.clientSecret) throw new BadRequestException('OAuth provider is not configured');
     const body = new URLSearchParams({ client_id: cfg.clientId, client_secret: cfg.clientSecret, refresh_token: currentRefreshToken, grant_type: 'refresh_token' });
     const response = await fetch(cfg.tokenUrl, { method: 'POST', headers: { 'content-type': 'application/x-www-form-urlencoded', accept: 'application/json' }, body });
@@ -518,15 +614,36 @@ export class ConnectionsService {
     if (provider.startsWith('custom:') && (!definition.oauthClientId || !definition.oauthClientSecret)) throw new BadRequestException('Custom OAuth service is missing Client ID or Client Secret');
   }
 
-  private oauthConfig(provider: OAuthProvider, definition: ResolvedProviderDefinition) {
+  private oauthConfigFromEnv(provider: OAuthProvider, definition: ResolvedProviderDefinition) {
     const prefix = definition.oauthEnvPrefix ?? provider.toUpperCase().replace(/[^A-Z0-9]/g, '_');
-    const frontend = this.frontendUrl();
     const clientIdEnv = `${prefix}_CLIENT_ID`;
     const clientSecretEnv = `${prefix}_CLIENT_SECRET`;
     const clientId = definition.oauthClientId ?? ((this.config.get<string>(clientIdEnv) ?? (provider === 'google' ? this.config.get<string>('GOOGLE_ID') : undefined) ?? this.config.get<string>(`${prefix}_OAUTH_CLIENT_ID`))?.trim());
     const clientSecret = definition.oauthClientSecret ?? ((this.config.get<string>(clientSecretEnv) ?? (provider === 'google' ? this.config.get<string>('GOOGLE_SECRET') : undefined) ?? this.config.get<string>(`${prefix}_OAUTH_CLIENT_SECRET`))?.trim());
     const callbackUrl = (this.config.get<string>(`${prefix}_CONNECTION_CALLBACK_URL`) ?? `${this.config.get<string>('PUBLIC_API_URL') ?? 'http://localhost:3001'}/connections/oauth/${provider}/callback`).trim();
-    return { frontend, clientId, clientSecret, clientIdEnv, clientSecretEnv, callbackUrl, authBase: definition.oauthAuthUrl!, tokenUrl: definition.oauthTokenUrl! };
+    return { clientId, clientSecret, clientIdEnv, clientSecretEnv, callbackUrl, authBase: definition.oauthAuthUrl!, tokenUrl: definition.oauthTokenUrl! };
+  }
+
+  private async oauthConfig(provider: OAuthProvider, definition: ResolvedProviderDefinition, orgId?: string) {
+    const envCfg = this.oauthConfigFromEnv(provider, definition);
+    if (!orgId || provider.startsWith('custom:') || definition.oauthClientId) return { frontend: this.frontendUrl(), ...envCfg };
+    const row = await this.prisma.connectionProviderConfig.findUnique({ where: { orgId_providerKey: { orgId, providerKey: provider } } });
+    if (!row || !row.enabled) return { frontend: this.frontendUrl(), ...envCfg };
+    const tenant = row.tenantId?.trim();
+    const authBase = row.authUrl ?? definition.oauthAuthUrl!;
+    const tokenUrl = row.tokenUrl ?? definition.oauthTokenUrl!;
+    const microsoftAuthBase = provider === 'microsoft' && tenant ? authBase.replace('/common/', `/${encodeURIComponent(tenant)}/`) : authBase;
+    const microsoftTokenUrl = provider === 'microsoft' && tenant ? tokenUrl.replace('/common/', `/${encodeURIComponent(tenant)}/`) : tokenUrl;
+    return {
+      frontend: this.frontendUrl(),
+      clientId: row.clientId ?? envCfg.clientId,
+      clientSecret: row.clientSecret ? this.crypto.decrypt(row.clientSecret) : envCfg.clientSecret,
+      clientIdEnv: envCfg.clientIdEnv,
+      clientSecretEnv: envCfg.clientSecretEnv,
+      callbackUrl: row.callbackUrl ?? envCfg.callbackUrl,
+      authBase: microsoftAuthBase,
+      tokenUrl: microsoftTokenUrl,
+    };
   }
 
   private frontendUrl() { return (this.config.get<string>('FRONTEND_URL') ?? 'http://localhost:3000').replace(/\/$/, ''); }

@@ -1,4 +1,4 @@
-import { Body, Controller, Delete, Get, Param, Patch, Post, Query, Res } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Patch, Post, Put, Query, Res } from '@nestjs/common';
 import type { Response } from 'express';
 import { Public } from '../auth/public.decorator';
 import { CurrentUser } from '../auth/current-user.decorator';
@@ -8,7 +8,10 @@ import { ConnectionsService } from './connections.service';
 @Controller('connections')
 export class ConnectionsController {
   constructor(private readonly service: ConnectionsService) {}
-  @Get('providers') providers() { return this.service.providers(); }
+  @Get('providers') providers(@CurrentUser() user: AccessTokenPayload) { return this.service.providers(user); }
+  @Get('admin/providers') adminProviderConfigs(@CurrentUser() user: AccessTokenPayload) { return this.service.adminProviderConfigs(user); }
+  @Put('admin/providers/:provider') saveAdminProviderConfig(@CurrentUser() user: AccessTokenPayload, @Param('provider') provider: string, @Body() body: any) { return this.service.saveAdminProviderConfig(user, provider, body); }
+  @Post('admin/providers/:provider/test') testAdminProviderConfig(@CurrentUser() user: AccessTokenPayload, @Param('provider') provider: string) { return this.service.testAdminProviderConfig(user, provider); }
   @Get('templates') templates() { return this.service.templates(); }
   @Get('custom-services') customServices(@CurrentUser() user: AccessTokenPayload) { return this.service.customServices(user); }
   @Post('custom-services') createCustomService(@CurrentUser() user: AccessTokenPayload, @Body() body: any) { return this.service.createCustomService(user, body); }

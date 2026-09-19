@@ -281,6 +281,7 @@ model Organization {
   securityEvents      SecurityEvent[]
   connections         Connection[]
   connectionCustomServices ConnectionCustomService[]
+  connectionProviderConfigs ConnectionProviderConfig[]
   connectionUsages    ConnectionUsage[]
   devices             UserDevice[]
   dataTransfers       DataTransfer[]
@@ -348,6 +349,8 @@ model User {
   dataTransfersInitiated DataTransfer[]         @relation("DataTransferInitiator")
   connections            Connection[] @relation("ConnectionOwner")
   connectionCustomServices ConnectionCustomService[] @relation("ConnectionCustomServiceOwner")
+  connectionProviderConfigsCreated ConnectionProviderConfig[] @relation("ConnectionProviderConfigCreatedBy")
+  connectionProviderConfigsUpdated ConnectionProviderConfig[] @relation("ConnectionProviderConfigUpdatedBy")
   connectionSecrets      ConnectionSecret[]
   connectionSecretVersions ConnectionSecretVersion[] @relation("ConnectionSecretVersionCreator")
   connectionUsages       ConnectionUsage[]
@@ -1056,6 +1059,36 @@ enum ConnectionStatus {
   REAUTH_REQUIRED
   DISABLED
   ERROR
+}
+
+model ConnectionProviderConfig {
+  id                   String   @id @default(uuid()) @db.Char(36)
+  orgId                String   @map("org_id") @db.Char(36)
+  providerKey          String   @map("provider_key") @db.VarChar(100)
+  enabled              Boolean  @default(true)
+  clientId             String?  @map("client_id") @db.Text
+  clientSecret         String?  @map("client_secret") @db.Text
+  tenantId             String?  @map("tenant_id") @db.VarChar(200)
+  callbackUrl          String?  @map("callback_url") @db.VarChar(2000)
+  authUrl              String?  @map("auth_url") @db.VarChar(2000)
+  tokenUrl             String?  @map("token_url") @db.VarChar(2000)
+  revokeUrl            String?  @map("revoke_url") @db.VarChar(2000)
+  scopes               Json?
+  lastTestedAt         DateTime? @map("last_tested_at")
+  lastTestOk           Boolean?  @map("last_test_ok")
+  lastTestMessage      String?   @map("last_test_message") @db.Text
+  createdById          String?   @map("created_by_id") @db.Char(36)
+  updatedById          String?   @map("updated_by_id") @db.Char(36)
+  createdAt            DateTime  @default(now()) @map("created_at")
+  updatedAt            DateTime  @updatedAt @map("updated_at")
+
+  organization Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  createdBy    User? @relation("ConnectionProviderConfigCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  updatedBy    User? @relation("ConnectionProviderConfigUpdatedBy", fields: [updatedById], references: [id], onDelete: SetNull)
+
+  @@unique([orgId, providerKey])
+  @@index([orgId, enabled])
+  @@map("connection_provider_configs")
 }
 
 model ConnectionCustomService {
