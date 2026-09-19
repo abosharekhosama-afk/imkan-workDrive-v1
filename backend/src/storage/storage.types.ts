@@ -57,4 +57,5 @@ export interface StorageService {
    * context and `ownerOrgId` are validated before any bytes are written.
    */
   storeObject(request: StorageObjectRequest, bytes: Buffer): Promise<void>;
+  copyStoredObject(sourceStorageKey: string, destination: StorageObjectRequest): Promise<void>;
 }

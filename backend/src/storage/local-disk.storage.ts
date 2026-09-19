@@ -1,4 +1,4 @@
-import { access, mkdir, readFile, unlink, writeFile } from 'node:fs/promises';
+import { access, copyFile, mkdir, readFile, unlink, writeFile } from 'node:fs/promises';
 import { dirname, resolve, sep } from 'node:path';
 import {
   BadRequestException,
@@ -128,6 +128,17 @@ export class LocalDiskStorageAdapter implements StorageService {
   }
 
   /** Server-side ingestion for direct multipart uploads (version upload). */
+  async copyStoredObject(sourceStorageKey: string, destination: StorageObjectRequest): Promise<void> {
+    const orgId = this.authorize(destination);
+    const source = parseTenantObjectKey(sourceStorageKey);
+    if (source.orgId !== orgId) throw new ForbiddenException('Resource does not belong to this organization');
+    const destinationKey = destination.storageKey ?? buildTenantObjectKey(orgId, destination.fileId, destination.versionId);
+    const sourcePath = this.resolveObjectPath(sourceStorageKey);
+    const destinationPath = this.resolveObjectPath(destinationKey);
+    await mkdir(dirname(destinationPath), { recursive: true });
+    await copyFile(sourcePath, destinationPath);
+  }
+
   async storeObject(request: StorageObjectRequest, bytes: Buffer): Promise<void> {
     const orgId = this.authorize(request);
     const objectKey = buildTenantObjectKey(
