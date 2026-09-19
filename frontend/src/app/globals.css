@@ -2845,3 +2845,43 @@ html[data-theme="dark"] .workflow-ui .workflow-picker-search{background:var(--wd
   .workflow-picker-body{max-height:60vh}
   .workflow-user-menu{width:min(310px,calc(100vw - 28px))}
 }
+
+/* Connections workspace — theme/font aware surface layer. */
+.imkan-connections-page{font-family:var(--user-font-family),Arial,system-ui,sans-serif;color:var(--wd-text);background:var(--wd-canvas)!important}
+.imkan-connections-page .connections-sidebar{background:color-mix(in srgb,var(--wd-bg) 94%,var(--wd-primary) 6%);border-color:var(--wd-line)}
+.imkan-connections-page .connections-header{border-color:var(--wd-line);background:var(--wd-bg)}
+.imkan-connections-page .connections-card,.imkan-connections-page .connections-panel,.imkan-connections-page .connections-picker,.imkan-connections-page .connections-menu,.imkan-connections-page .connections-search{background:var(--wd-bg)!important;color:var(--wd-text)}
+.imkan-connections-page .connections-input{background:var(--wd-bg);color:var(--wd-text);border-color:var(--wd-line)}
+.imkan-connections-page .connections-input::placeholder,.imkan-connections-page input::placeholder{color:var(--wd-text-muted)}
+.imkan-connections-page .connections-empty{color:var(--wd-text)}
+html[data-theme="dark"] .imkan-connections-page .connections-card,
+html[data-theme="dark"] .imkan-connections-page .connections-panel,
+html[data-theme="dark"] .imkan-connections-page .connections-picker,
+html[data-theme="dark"] .imkan-connections-page .connections-menu,
+html[data-theme="dark"] .imkan-connections-page .connections-search,
+html[data-theme="dark"] .imkan-connections-page .connections-input{border-color:var(--wd-line)!important}
+html[data-theme="dark"] .imkan-connections-page .connections-card [class*="text-[#17212B]"],
+html[data-theme="dark"] .imkan-connections-page [class*="text-[#202B38]"],
+html[data-theme="dark"] .imkan-connections-page [class*="text-[#253242]"],
+html[data-theme="dark"] .imkan-connections-page [class*="text-[#334155]"],
+html[data-theme="dark"] .imkan-connections-page [class*="text-[#344054]"],
+html[data-theme="dark"] .imkan-connections-page [class*="text-[#182230]"]{color:var(--wd-text)!important}
+html[data-theme="dark"] .imkan-connections-page [class*="text-[#7A8491]"],
+html[data-theme="dark"] .imkan-connections-page [class*="text-[#7D8996]"],
+html[data-theme="dark"] .imkan-connections-page [class*="text-[#667085]"],
+html[data-theme="dark"] .imkan-connections-page [class*="text-[#778391]"],
+html[data-theme="dark"] .imkan-connections-page [class*="text-[#98A2B3"]"]{color:var(--wd-text-muted)!important}
+html[data-theme="dark"] .imkan-connections-page .bg-white{background:var(--wd-bg)!important}
+html[data-theme="dark"] .imkan-connections-page .bg-\[\#FBFCFD\],
+html[data-theme="dark"] .imkan-connections-page .bg-\[\#FAFBFC\],
+html[data-theme="dark"] .imkan-connections-page .bg-\[\#F8FAFC\],
+html[data-theme="dark"] .imkan-connections-page .bg-\[\#F7F9FB\],
+html[data-theme="dark"] .imkan-connections-page .bg-\[\#F4F7FB\],
+html[data-theme="dark"] .imkan-connections-page .bg-\[\#EEF1F4\]{background:var(--wd-hover)!important}
+html[data-theme="dark"] .imkan-connections-page .border-\[\#EEF1F4\],
+html[data-theme="dark"] .imkan-connections-page .border-\[\#E7EBF0\],
+html[data-theme="dark"] .imkan-connections-page .border-\[\#E0E6EC\],
+html[data-theme="dark"] .imkan-connections-page .border-\[\#E3E7EB\],
+html[data-theme="dark"] .imkan-connections-page .border-\[\#DDE4EC\],
+html[data-theme="dark"] .imkan-connections-page .border-\[\#D8E0E8\]{border-color:var(--wd-line)!important}
+html[data-theme="dark"] .imkan-connections-page .connections-empty .border-\[\#D7E1EA\]{border-color:var(--wd-line)!important;background:var(--wd-hover)!important}
