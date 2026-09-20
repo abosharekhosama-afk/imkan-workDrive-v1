@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import Image from "next/image";
 import { SecondarySidebar } from "@/components/layout/secondary-sidebar";
 import { Icons } from "@/components/layout/icons";
 import { useLocale } from "@/components/locale-provider";
@@ -43,6 +44,9 @@ const typeLabels: Record<TemplateType, [string, string]> = {
 };
 
 function text(ar: boolean, en: string, value: string) { return ar ? value : en; }
+function templateSlug(name: string) {
+  return name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+}
 
 export default function TemplatesPage() {
   const { locale } = useLocale();
@@ -95,10 +99,12 @@ export default function TemplatesPage() {
   const [createTemplateDescription, setCreateTemplateDescription] = useState("");
   const [createTemplateCategoryId, setCreateTemplateCategoryId] = useState("");
   const [busy, setBusy] = useState(false);
+  const [loadingTemplates, setLoadingTemplates] = useState(true);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
 
   const load = useCallback(async () => {
+    setLoadingTemplates(true);
     setError("");
     try {
       const [items, cats, capabilities] = await Promise.all([
@@ -111,6 +117,8 @@ export default function TemplatesPage() {
       setLibraryCapabilities(capabilities);
     } catch (e) {
       setError(e instanceof Error ? e.message : text(ar, "Unable to load templates.", "تعذر تحميل القوالب."));
+    } finally {
+      setLoadingTemplates(false);
     }
   }, [library, type, categoryId, q, sort, ar]);
 
@@ -416,7 +424,21 @@ export default function TemplatesPage() {
               ))}
               {library === "PUBLIC" && <p className="px-2 pt-2 text-[11px] leading-5 text-slate-400">{text(ar, "Public templates are not organized with categories.", "القوالب العامة لا تُنظم بواسطة التصنيفات.")}</p>}
             </aside>
-            {empty ? (
+            {loadingTemplates ? (
+              <div className="grid flex-1 grid-cols-[repeat(auto-fill,minmax(245px,1fr))] gap-4 p-5" aria-busy="true" aria-label={text(ar, "Loading templates", "جارٍ تحميل القوالب")}>
+                {Array.from({ length: 8 }).map((_, index) => (
+                  <div key={index} className="animate-pulse overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
+                    <div className="h-36 bg-slate-100" />
+                    <div className="space-y-3 p-4">
+                      <div className="h-4 w-3/5 rounded bg-slate-100" />
+                      <div className="h-3 w-full rounded bg-slate-100" />
+                      <div className="h-3 w-4/5 rounded bg-slate-100" />
+                      <div className="mt-4 h-9 w-full rounded-lg bg-slate-100" />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : empty ? (
               <div className="flex min-h-[420px] flex-1 items-center justify-center p-8">
                 <div className="max-w-sm text-center">
                   <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-[#f6f8fb] text-slate-400"><Icons.layout size={28} /></div>
@@ -427,16 +449,26 @@ export default function TemplatesPage() {
             ) : (
             <div className={layout === "grid" ? "grid flex-1 grid-cols-[repeat(auto-fill,minmax(245px,1fr))] gap-4 p-5" : "flex-1 space-y-2 p-5"}>
             {templates.map((template) => (
-              <article key={template.id} className={layout === "grid" ? "relative overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm transition hover:border-slate-300 hover:shadow-md" : "relative flex items-center gap-4 rounded-xl border border-slate-200 bg-white p-3 shadow-sm transition hover:border-slate-300"}>
+              <article key={template.id} className={layout === "grid" ? `relative overflow-visible rounded-xl border border-slate-200 bg-white shadow-sm transition hover:border-slate-300 hover:shadow-md ${menuTemplateId === template.id ? "z-50" : "z-0"}` : `relative flex items-center gap-4 rounded-xl border border-slate-200 bg-white p-3 shadow-sm transition hover:border-slate-300 ${menuTemplateId === template.id ? "z-50" : "z-0"}`}>
                 <button type="button" onClick={() => void previewTemplate(template)} className={layout === "grid" ? "group relative flex h-36 w-full items-center justify-center overflow-hidden bg-[#f6f8fb] text-[var(--wd-primary)]" : "group flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-[#f6f8fb] text-[var(--wd-primary)]"}>
                   {layout === "grid" ? (
-                    <div className="relative h-28 w-20 rounded-[3px] border border-slate-200 bg-white p-2 shadow-sm transition group-hover:-translate-y-0.5">
-                      <div className="mb-2 h-1.5 w-9 rounded bg-slate-200" />
-                      <div className="mb-1 h-1 w-full rounded bg-slate-100" /><div className="mb-1 h-1 w-4/5 rounded bg-slate-100" />
-                      <div className="mt-4 h-10 w-full rounded bg-slate-50" />
-                      <div className="absolute bottom-2 left-2 rounded bg-white/90 p-1 text-[var(--wd-primary)] shadow-sm">{template.type === "DOCUMENT" ? <Icons.doc size={13} /> : <Icons.sheet size={13} />}</div>
-                    </div>
-                  ) : (template.type === "DOCUMENT" ? <Icons.doc size={28} /> : <Icons.sheet size={28} />)}
+                    library === "PUBLIC" ? (
+                      <div className="relative h-36 w-full overflow-hidden bg-slate-100">
+                        <Image src={`/templates/catalog/${templateSlug(template.name)}.webp`} alt={template.name} fill sizes="(max-width: 768px) 90vw, 245px" className="object-cover object-top transition duration-200 group-hover:scale-[1.02]" />
+                        <div className="absolute inset-x-0 bottom-0 flex items-center justify-between bg-gradient-to-t from-black/55 to-transparent px-3 pb-2 pt-8 text-white">
+                          <span className="truncate text-[10px] font-medium">{template.name}</span>
+                          <span className="rounded bg-white/90 px-1.5 py-0.5 text-[9px] text-slate-700">DOCX</span>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="relative h-28 w-20 rounded-[3px] border border-slate-200 bg-white p-2 shadow-sm transition group-hover:-translate-y-0.5">
+                        <div className="mb-2 h-1.5 w-9 rounded bg-slate-200" />
+                        <div className="mb-1 h-1 w-full rounded bg-slate-100" /><div className="mb-1 h-1 w-4/5 rounded bg-slate-100" />
+                        <div className="mt-4 h-10 w-full rounded bg-slate-50" />
+                        <div className="absolute bottom-2 left-2 rounded bg-white/90 p-1 text-[var(--wd-primary)] shadow-sm">{template.type === "DOCUMENT" ? <Icons.doc size={13} /> : template.type === "SPREADSHEET" ? <Icons.sheet size={13} /> : <Icons.slide size={13} />}</div>
+                      </div>
+                    )
+                  ) : (template.type === "DOCUMENT" ? <Icons.doc size={28} /> : template.type === "SPREADSHEET" ? <Icons.sheet size={28} /> : <Icons.slide size={28} />)}
                 </button>
                 <div className={layout === "grid" ? "p-4" : "min-w-0 flex-1"}>
                   <div className="flex items-start justify-between gap-2">
@@ -445,7 +477,7 @@ export default function TemplatesPage() {
                       <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] text-slate-500">{text(ar, typeLabels[template.type][0], typeLabels[template.type][1])}</span>
                       <button type="button" aria-label={text(ar, "More actions", "إجراءات إضافية")} onClick={() => setMenuTemplateId(menuTemplateId === template.id ? null : template.id)} className="rounded-md px-1.5 py-0.5 text-slate-500 hover:bg-slate-100">⋯</button>
                       {menuTemplateId === template.id && (
-                        <div className={`absolute ${ar ? "left-0" : "right-0"} top-7 z-30 w-44 rounded-xl border border-slate-200 bg-white p-1.5 shadow-xl`}>
+                        <div className={`absolute ${ar ? "left-0" : "right-0"} top-7 z-[80] w-44 rounded-xl border border-slate-200 bg-white p-1.5 shadow-xl`}>
                           {template.permissions.canUse && <button type="button" onClick={() => { setUseTarget(template); setNewName(template.name); setMenuTemplateId(null); }} className="block w-full rounded-lg px-3 py-2 text-left text-[11.5px] text-slate-700 hover:bg-slate-50">{text(ar, "Use template", "استخدام القالب")}</button>}
                           {template.permissions.canEdit && <button type="button" onClick={() => { openEdit(template); setMenuTemplateId(null); }} className="block w-full rounded-lg px-3 py-2 text-left text-[11.5px] text-slate-700 hover:bg-slate-50">{text(ar, "Edit", "تعديل")}</button>}
                           {template.permissions.canEdit && <button type="button" onClick={() => { setCategoryTarget(template); setCategoryTargetId(template.category?.id || ""); setMenuTemplateId(null); }} className="block w-full rounded-lg px-3 py-2 text-left text-[11.5px] text-slate-700 hover:bg-slate-50">{text(ar, "Change category", "تغيير التصنيف")}</button>}
@@ -497,7 +529,7 @@ export default function TemplatesPage() {
             <div className="flex items-start justify-between gap-3">
               <div>
                 <h2 className="text-[16px] font-semibold text-slate-900">{text(ar, "Create template", "إنشاء قالب")}</h2>
-                <p className="mt-1 text-[12px] text-slate-500">{text(ar, "Choose an existing file to use as the template source.", "اختر ملفًا موجودًا ليكون مصدر القالب.")}</p>
+                <p className="mt-1 text-[12px] text-slate-500">{text(ar, "A template is created from a real file snapshot. Enter its details, then choose the file to use as the source.", "يتم إنشاء القالب من نسخة حقيقية لملف موجود. أدخل بيانات القالب ثم اختر الملف الذي سيكون مصدره.")}</p>
               </div>
               <button type="button" onClick={() => !busy && setCreateTemplateOpen(false)} className="rounded-lg px-2 py-1 hover:bg-slate-100">✕</button>
             </div>
@@ -522,7 +554,11 @@ export default function TemplatesPage() {
             {!createFile && createFileResults.length > 0 && (
               <div className="mt-2 max-h-44 overflow-y-auto rounded-lg border border-slate-200">
                 {createFileResults.slice(0, 12).map((file) => (
-                  <button key={file.id} type="button" onClick={() => { setCreateFile(file); setCreateFileQuery(file.name); }} className="flex w-full items-center justify-between px-3 py-2 text-left hover:bg-slate-50">
+                  <button key={file.id} type="button" onClick={() => {
+                       setCreateFile(file);
+                       setCreateFileQuery(file.name);
+                       setCreateTemplateName((current) => current.trim() ? current : file.name.replace(/\.[^.]+$/, ""));
+                     }} className="flex w-full items-center justify-between px-3 py-2 text-left hover:bg-slate-50">
                     <span className="truncate text-[12px] text-slate-700">{file.name}</span>
                     <span className="ml-3 shrink-0 text-[10px] text-slate-400">{file.extension || file.fileType || ""}</span>
                   </button>
@@ -530,14 +566,14 @@ export default function TemplatesPage() {
               </div>
             )}
 
-            <label className="mt-4 block text-[12px] font-medium text-slate-700">{text(ar, "Template name", "اسم القالب")}</label>
-            <input value={createTemplateName} onChange={(e) => setCreateTemplateName(e.target.value)} disabled={!createFile} className="mt-2 w-full rounded-lg border border-slate-200 px-3 py-2.5 text-[13px] outline-none focus:border-[var(--wd-primary)] disabled:bg-slate-50" />
+            <label className="mt-4 block text-[12px] font-medium text-slate-700">{text(ar, "Template name", "اسم القالب")} <span className="text-red-500">*</span></label>
+            <input autoFocus={!createFile} value={createTemplateName} onChange={(e) => setCreateTemplateName(e.target.value)} placeholder={text(ar, "e.g. Sales Proposal", "مثال: عرض مبيعات")} className="mt-2 w-full rounded-lg border border-slate-200 px-3 py-2.5 text-[13px] outline-none focus:border-[var(--wd-primary)]" />
 
             <label className="mt-4 block text-[12px] font-medium text-slate-700">{text(ar, "Description", "الوصف")}</label>
-            <textarea value={createTemplateDescription} onChange={(e) => setCreateTemplateDescription(e.target.value)} disabled={!createFile} rows={3} className="mt-2 w-full rounded-lg border border-slate-200 px-3 py-2.5 text-[13px] outline-none focus:border-[var(--wd-primary)] disabled:bg-slate-50" />
+            <textarea value={createTemplateDescription} onChange={(e) => setCreateTemplateDescription(e.target.value)} rows={3} placeholder={text(ar, "Describe when this template should be used.", "اكتب وصفًا يوضح متى يستخدم هذا القالب.")} className="mt-2 w-full rounded-lg border border-slate-200 px-3 py-2.5 text-[13px] outline-none focus:border-[var(--wd-primary)]" />
 
             <label className="mt-4 block text-[12px] font-medium text-slate-700">{text(ar, "Category", "التصنيف")}</label>
-            <select value={createTemplateCategoryId} onChange={(e) => setCreateTemplateCategoryId(e.target.value)} disabled={!createFile} className="mt-2 w-full rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-[13px] outline-none disabled:bg-slate-50">
+            <select value={createTemplateCategoryId} onChange={(e) => setCreateTemplateCategoryId(e.target.value)} className="mt-2 w-full rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-[13px] outline-none">
               <option value="">{text(ar, "All / No category", "الكل / بدون تصنيف")}</option>
               {categories.map((category) => <option key={category.id} value={category.id}>{category.name}</option>)}
             </select>
