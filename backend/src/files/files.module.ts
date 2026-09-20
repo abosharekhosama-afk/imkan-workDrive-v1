@@ -10,6 +10,7 @@ import { FilesService } from './files.service';
   imports: [StorageModule, QuotaModule, RecentModule, forwardRef(() => WorkflowsModule)],
   controllers: [FilesController],
   providers: [FilesService],
+  exports: [FilesService],
 })
 export class FilesModule {}
 
