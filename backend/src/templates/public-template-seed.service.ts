@@ -83,7 +83,7 @@ export class PublicTemplateSeedService implements OnModuleInit {
     };
 
     for (const item of manifest) {
-      const normalizedType = typeMap[String(item.type).trim()];
+      const normalizedType = typeMap[String(item.type).trim().toLowerCase()] ?? typeMap[String(item.type).trim().toUpperCase()];
       if (!normalizedType) {
         this.logger.warn(`Skipping public template ${item.name}: unsupported type ${String(item.type)}`);
         continue;
@@ -99,7 +99,7 @@ export class PublicTemplateSeedService implements OnModuleInit {
       await this.prisma.$transaction(async (tx) => {
         const template = existing
           ? await tx.template.update({ where: { id: templateId }, data: { status: TemplateStatus.ACTIVE, deletedAt: null, description: item.description, type: normalizedType, ownerId: null, orgId: null } })
-          : await tx.template.create({ data: { id: templateId, orgId: null, libraryId: library!.id, ownerId: null, name: item.name, description: item.description, type: item.type, status: TemplateStatus.ACTIVE } });
+          : await tx.template.create({ data: { id: templateId, orgId: null, libraryId: library!.id, ownerId: null, name: item.name, description: item.description, type: normalizedType, status: TemplateStatus.ACTIVE } });
         await tx.templateVersion.create({ data: { id: versionId, templateId: template.id, versionNumber: 1, storageKey, size: BigInt(bytes.length), mimeType: item.mime, extension: item.extension, sha256Hash, createdById: creator.id } });
       });
       created += 1;
