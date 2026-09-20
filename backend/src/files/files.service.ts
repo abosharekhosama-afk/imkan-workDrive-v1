@@ -9,6 +9,7 @@ import {
   Inject,
   Injectable,
   Logger,
+  forwardRef,
   NotFoundException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
@@ -131,7 +132,7 @@ export class FilesService {
     private readonly permissions: PermissionService,
     private readonly quota: QuotaService,
     private readonly config: ConfigService,
-    private readonly workflowEngine: WorkflowEngineService,
+    @Inject(forwardRef(() => WorkflowEngineService)) private readonly workflowEngine: WorkflowEngineService,
   ) {}
 
   async requestUpload(

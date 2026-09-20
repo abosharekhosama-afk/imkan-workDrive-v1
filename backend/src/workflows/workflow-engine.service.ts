@@ -1,4 +1,4 @@
-import { BadRequestException, ForbiddenException, Injectable, Logger, NotFoundException, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, forwardRef, Inject, Injectable, Logger, NotFoundException, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { randomUUID } from 'node:crypto';
 import { PrismaService } from '../prisma/prisma.service';
@@ -27,7 +27,7 @@ type RunResult = { actions?: unknown[]; fieldValues?: Record<string, unknown>; c
 @Injectable()
 export class WorkflowEngineService implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(WorkflowEngineService.name); private timer?: NodeJS.Timeout; private processing = false; private readonly workerId = `workdrive-workflow-${randomUUID()}`;
-  constructor(private readonly prisma: PrismaService, private readonly shares: SharesService, private readonly functionExecutor: CustomFunctionExecutor, private readonly permissions: PermissionService, private readonly connections: ConnectionsService, private readonly templates: TemplatesService) {}
+  constructor(private readonly prisma: PrismaService, private readonly shares: SharesService, private readonly functionExecutor: CustomFunctionExecutor, private readonly permissions: PermissionService, private readonly connections: ConnectionsService, @Inject(forwardRef(() => TemplatesService)) private readonly templates: TemplatesService) {}
   onModuleInit() { this.timer = setInterval(() => void this.drain(), 1500); void this.drain(); }
   onModuleDestroy() { if (this.timer) clearInterval(this.timer); }
   private async recordAudit(orgId: string, actorId: string | null, action: string, resourceType: string, resourceId: string, metadata?: Record<string, unknown>) {

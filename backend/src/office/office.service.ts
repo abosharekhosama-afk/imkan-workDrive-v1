@@ -2,6 +2,7 @@ import {
   ConflictException,
   ForbiddenException,
   Injectable,
+  forwardRef,
   NotFoundException,
 } from '@nestjs/common';
 import { OfficeDocumentType, OfficeSessionStatus, FileStatus, Prisma } from '@prisma/client';
@@ -169,7 +170,7 @@ export class OfficeService implements OfficeEngine {
   constructor(
     private readonly prisma: PrismaService,
     private readonly permissions: PermissionService,
-    private readonly files: FilesService,
+    @Inject(forwardRef(() => FilesService)) private readonly files: FilesService,
     private readonly conversion: OfficeConversionService,
     @Inject(STORAGE_SERVICE) private readonly storage: StorageService,
   ) {}

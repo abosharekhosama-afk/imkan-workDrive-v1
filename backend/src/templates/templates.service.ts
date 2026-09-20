@@ -5,6 +5,7 @@ import {
   ForbiddenException,
   Injectable,
   NotFoundException,
+  forwardRef,
 } from '@nestjs/common';
 import {
   FileStatus,
@@ -33,11 +34,11 @@ import { OfficeService } from '../office/office.service';
 export class TemplatesService {
   constructor(
     private readonly prisma: PrismaService,
-    private readonly files: FilesService,
+    @Inject(forwardRef(() => FilesService)) private readonly files: FilesService,
     @Inject(STORAGE_SERVICE) private readonly storage: StorageService,
     private readonly permissions: PermissionService,
     private readonly publicTemplateSeed: PublicTemplateSeedService,
-    private readonly office: OfficeService,
+    @Inject(forwardRef(() => OfficeService)) private readonly office: OfficeService,
   ) {}
 
   private isAdmin(user: AccessTokenPayload) {
