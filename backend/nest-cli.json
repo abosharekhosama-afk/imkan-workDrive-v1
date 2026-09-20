@@ -8,6 +8,10 @@
       {
         "include": "templates/public-assets/**/*",
         "watchAssets": false
+      },
+      {
+        "include": "templates/blank-assets/**/*",
+        "watchAssets": false
       }
     ]
   }

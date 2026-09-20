@@ -13,6 +13,7 @@ import {
   useTemplate,
   listTemplateCategories,
   saveFileAsTemplate,
+  createTemplateFromBlank,
   createTemplateCategory,
   updateTemplate,
   updateTemplateFromFile,
@@ -90,6 +91,8 @@ export default function TemplatesPage() {
   const [newName, setNewName] = useState("");
   const [newCategory, setNewCategory] = useState("");
   const [createTemplateOpen, setCreateTemplateOpen] = useState(false);
+  const [createMode, setCreateMode] = useState<"blank" | "existing">("blank");
+  const [createType, setCreateType] = useState<TemplateType>("DOCUMENT");
   const [createFileQuery, setCreateFileQuery] = useState("");
   const [createFileResults, setCreateFileResults] = useState<import("@/lib/api/types").FileRecord[]>([]);
   const [createFile, setCreateFile] = useState<import("@/lib/api/types").FileRecord | null>(null);
@@ -164,6 +167,8 @@ export default function TemplatesPage() {
   const openCreateTemplate = () => {
     if (library === "PUBLIC") return;
     setCreateTemplateOpen(true);
+    setCreateMode("blank");
+    setCreateType("DOCUMENT");
     setCreateFile(null);
     setCreateFileQuery("");
     setCreateFileResults([]);
@@ -172,32 +177,25 @@ export default function TemplatesPage() {
     setCreateTemplateCategoryId("");
   };
 
-  const createTemplateFromFile = async () => {
-    if (!createFile) {
-      setError(text(ar, "Select a source file first. The template is created from that file's content.", "اختر ملفًا مصدرًا أولًا. القالب يتم إنشاؤه من محتوى هذا الملف."));
-      return;
-    }
-    if (!createTemplateName.trim()) {
-      setError(text(ar, "Enter a template name.", "أدخل اسم القالب."));
-      return;
-    }
-    setBusy(true); setError("");
+  const createTemplate = async () => {
+    if (!createTemplateName.trim()) return;
+    setBusy(true); setError(""); setMessage("");
     try {
-      await saveFileAsTemplate({
-        fileId: createFile.id,
-        name: createTemplateName.trim(),
-        description: createTemplateDescription.trim() || undefined,
-        library,
-        categoryId: createTemplateCategoryId || null,
-      });
-      setCreateTemplateOpen(false);
-      setMessage(text(ar, "Template created successfully.", "تم إنشاء القالب بنجاح."));
-      cacheRef.current.clear(); await load(true);
+      if (createMode === "existing") {
+        if (!createFile) { setError(text(ar, "Choose a source file first.", "اختر ملفًا مصدرًا أولًا.")); return; }
+        await saveFileAsTemplate({ fileId: createFile.id, name: createTemplateName.trim(), description: createTemplateDescription.trim() || undefined, library, categoryId: createTemplateCategoryId || null });
+        setCreateTemplateOpen(false);
+        setMessage(text(ar, "Template created successfully.", "تم إنشاء القالب بنجاح."));
+        cacheRef.current.clear(); await load(true);
+      } else {
+        const result = await createTemplateFromBlank({ name: createTemplateName.trim(), description: createTemplateDescription.trim() || undefined, type: createType, library, categoryId: createTemplateCategoryId || null });
+        setCreateTemplateOpen(false);
+        cacheRef.current.clear();
+        router.push(`/files/editor/${result.file_id}?templateId=${encodeURIComponent(result.template.id)}`);
+      }
     } catch (e) {
       setError(e instanceof Error ? e.message : text(ar, "Unable to create template.", "تعذر إنشاء القالب."));
-    } finally {
-      setBusy(false);
-    }
+    } finally { setBusy(false); }
   };
 
   const empty = useMemo(() => !loadingTemplates && templates.length === 0, [loadingTemplates, templates.length]);
@@ -541,79 +539,57 @@ export default function TemplatesPage() {
       {createTemplateOpen && (
         <div className="fixed inset-0 z-[140] flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-black/30" onClick={() => !busy && setCreateTemplateOpen(false)} />
-          <div className="relative w-[min(560px,94vw)] max-h-[88vh] overflow-y-auto rounded-2xl bg-white p-5 shadow-2xl">
+          <div className="relative w-[min(620px,94vw)] max-h-[90vh] overflow-y-auto rounded-2xl bg-white p-5 shadow-2xl">
             <div className="flex items-start justify-between gap-3">
               <div>
-                <h2 className="text-[16px] font-semibold text-slate-900">{text(ar, "Create template", "إنشاء قالب")}</h2>
-                <p className="mt-1 text-[12px] text-slate-500">{text(ar, "A template is a reusable copy of an existing office file. Select the file first, then name the template.", "القالب هو نسخة قابلة لإعادة الاستخدام من ملف Office موجود. اختر الملف أولًا، ثم اكتب اسم القالب.")}</p>
+                <h2 className="text-[16px] font-semibold text-slate-900">{text(ar, "Create a template", "إنشاء قالب جديد")}</h2>
+                <p className="mt-1 text-[12px] leading-5 text-slate-500">{text(ar, "Create a new office template in the browser, or turn an existing file into a reusable template.", "أنشئ قالب Office جديدًا من داخل المتصفح، أو حوّل ملفًا موجودًا إلى قالب قابل لإعادة الاستخدام.")}</p>
               </div>
               <button type="button" onClick={() => !busy && setCreateTemplateOpen(false)} className="rounded-lg px-2 py-1 hover:bg-slate-100">✕</button>
             </div>
 
-            <div className="mt-4 grid grid-cols-3 gap-2 rounded-xl border border-slate-200 bg-slate-50 p-3">
-              <div className="rounded-lg bg-white p-2">
-                <div className="text-[10px] font-semibold text-slate-400">1</div>
-                <div className="mt-1 text-[11px] font-medium text-slate-700">{text(ar, "Choose file", "اختر الملف")}</div>
-              </div>
-              <div className="rounded-lg bg-white p-2">
-                <div className="text-[10px] font-semibold text-slate-400">2</div>
-                <div className="mt-1 text-[11px] font-medium text-slate-700">{text(ar, "Name template", "سمِّ القالب")}</div>
-              </div>
-              <div className="rounded-lg bg-white p-2">
-                <div className="text-[10px] font-semibold text-slate-400">3</div>
-                <div className="mt-1 text-[11px] font-medium text-slate-700">{text(ar, "Create", "أنشئ")}</div>
-              </div>
+            <div className="mt-5 grid grid-cols-2 gap-2 rounded-xl bg-slate-100 p-1">
+              <button type="button" onClick={() => setCreateMode("blank")} className={`rounded-lg px-3 py-2 text-[12px] font-medium ${createMode === "blank" ? "bg-white text-slate-900 shadow-sm" : "text-slate-500"}`}>{text(ar, "Start from scratch", "إنشاء من الصفر")}</button>
+              <button type="button" onClick={() => setCreateMode("existing")} className={`rounded-lg px-3 py-2 text-[12px] font-medium ${createMode === "existing" ? "bg-white text-slate-900 shadow-sm" : "text-slate-500"}`}>{text(ar, "Use existing file", "استخدام ملف موجود")}</button>
             </div>
 
-            <label className="mt-5 block text-[12px] font-medium text-slate-700">{text(ar, "Source file", "الملف المصدر")}</label>
-            <input
-              autoFocus
-              value={createFileQuery}
-              onChange={(e) => { setCreateFileQuery(e.target.value); setCreateFile(null); }}
-              placeholder={text(ar, "Search your files...", "ابحث في ملفاتك...")}
-              className="mt-2 w-full rounded-lg border border-slate-200 px-3 py-2.5 text-[13px] outline-none focus:border-[var(--wd-primary)]"
-            />
-            {createFile && (
-              <div className="mt-2 flex items-center justify-between rounded-lg border border-blue-200 bg-blue-50 px-3 py-2">
-                <div className="min-w-0">
-                  <div className="truncate text-[12px] font-medium text-slate-800">{createFile.name}</div>
-                  <div className="text-[10px] text-slate-500">{createFile.extension || createFile.mimeType || ""}</div>
+            {createMode === "blank" && (
+              <>
+                <div className="mt-5 text-[12px] font-medium text-slate-700">{text(ar, "Choose the office type", "اختر نوع القالب")}</div>
+                <div className="mt-2 grid grid-cols-3 gap-2">
+                  {(["DOCUMENT", "SPREADSHEET", "PRESENTATION"] as TemplateType[]).map((kind) => (
+                    <button key={kind} type="button" onClick={() => setCreateType(kind)} className={`rounded-xl border p-3 text-left transition ${createType === kind ? "border-[var(--wd-primary)] bg-blue-50" : "border-slate-200 hover:border-slate-300"}`}>
+                      <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-white shadow-sm">{kind === "DOCUMENT" ? <Icons.doc size={20} /> : kind === "SPREADSHEET" ? <Icons.sheet size={20} /> : <Icons.slide size={20} />}</div>
+                      <div className="mt-2 text-[12px] font-semibold text-slate-800">{typeLabels[kind][ar ? 1 : 0]}</div>
+                      <div className="mt-1 text-[10px] leading-4 text-slate-500">{kind === "DOCUMENT" ? text(ar, "Writer-style document", "مستند بأسلوب Writer") : kind === "SPREADSHEET" ? text(ar, "Sheet-style workbook", "جدول بأسلوب Sheet") : text(ar, "Show-style presentation", "عرض بأسلوب Show")}</div>
+                    </button>
+                  ))}
                 </div>
-                <button type="button" onClick={() => setCreateFile(null)} className="text-[11px] text-slate-500">{text(ar, "Change", "تغيير")}</button>
-              </div>
-            )}
-            {!createFile && createFileResults.length > 0 && (
-              <div className="mt-2 max-h-44 overflow-y-auto rounded-lg border border-slate-200">
-                {createFileResults.slice(0, 12).map((file) => (
-                  <button key={file.id} type="button" onClick={() => { setCreateFile(file); setCreateFileQuery(file.name); setCreateTemplateName((current) => current || file.name.replace(/\.[^.]+$/, "")); }} className="flex w-full items-center justify-between px-3 py-2 text-left hover:bg-slate-50">
-                    <span className="truncate text-[12px] text-slate-700">{file.name}</span>
-                    <span className="ml-3 shrink-0 text-[10px] text-slate-400">{file.extension || file.fileType || ""}</span>
-                  </button>
-                ))}
-              </div>
+                <div className="mt-3 rounded-xl border border-blue-100 bg-blue-50 px-3 py-2.5 text-[11px] leading-5 text-blue-800">{text(ar, "After Create, IMKAN opens the online Office editor immediately. Design the template, then click Publish to template to save the next template version.", "بعد الإنشاء سيفتح IMKAN محرر Office داخل المتصفح مباشرة. صمّم القالب ثم اضغط «اعتماد التغييرات على القالب» لحفظ الإصدار الجديد.")}</div>
+              </>
             )}
 
-            {!createFile && (
-              <div className="mt-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-[11px] leading-5 text-amber-800">
-                {text(ar, "The Create button becomes active after you select one of your files above. If you do not have a file yet, create/upload a DOCX, XLSX, or PPTX in My Files first, then return here.", "سيصبح زر «إنشاء القالب» فعالًا بعد اختيار أحد ملفاتك أعلاه. إذا لم يكن لديك ملف بعد، أنشئ/ارفع ملف DOCX أو XLSX أو PPTX في «ملفاتي» أولًا، ثم عد إلى هنا.")}
-              </div>
+            {createMode === "existing" && (
+              <>
+                <label className="mt-5 block text-[12px] font-medium text-slate-700">{text(ar, "Source file", "الملف المصدر")}</label>
+                <input autoFocus value={createFileQuery} onChange={(e) => { setCreateFileQuery(e.target.value); setCreateFile(null); }} placeholder={text(ar, "Search your files...", "ابحث في ملفاتك...")} className="mt-2 w-full rounded-lg border border-slate-200 px-3 py-2.5 text-[13px] outline-none focus:border-[var(--wd-primary)]" />
+                {createFile && <div className="mt-2 flex items-center justify-between rounded-lg border border-blue-200 bg-blue-50 px-3 py-2"><div className="min-w-0"><div className="truncate text-[12px] font-medium text-slate-800">{createFile.name}</div><div className="text-[10px] text-slate-500">{createFile.extension || createFile.mimeType || ""}</div></div><button type="button" onClick={() => setCreateFile(null)} className="text-[11px] text-slate-500">{text(ar, "Change", "تغيير")}</button></div>}
+                {!createFile && createFileResults.length > 0 && <div className="mt-2 max-h-44 overflow-y-auto rounded-lg border border-slate-200">{createFileResults.slice(0, 12).map((file) => <button key={file.id} type="button" onClick={() => { setCreateFile(file); setCreateFileQuery(file.name); setCreateType(file.extension?.toLowerCase() === "xlsx" ? "SPREADSHEET" : file.extension?.toLowerCase() === "pptx" ? "PRESENTATION" : "DOCUMENT"); setCreateTemplateName((current) => current || file.name.replace(/\.[^.]+$/, "")); }} className="flex w-full items-center justify-between px-3 py-2 text-left hover:bg-slate-50"><span className="truncate text-[12px] text-slate-700">{file.name}</span><span className="ml-3 shrink-0 text-[10px] text-slate-400">{file.extension || file.fileType || ""}</span></button>)}</div>}
+                <div className="mt-3 rounded-xl border border-amber-100 bg-amber-50 px-3 py-2.5 text-[11px] leading-5 text-amber-800">{text(ar, "The source file is copied into the template. Your original file is not modified.", "سيتم نسخ الملف المصدر إلى القالب ولن يتم تعديل ملفك الأصلي.")}</div>
+              </>
             )}
 
             <label className="mt-4 block text-[12px] font-medium text-slate-700">{text(ar, "Template name", "اسم القالب")}</label>
-            <input value={createTemplateName} onChange={(e) => setCreateTemplateName(e.target.value)} className="mt-2 w-full rounded-lg border border-slate-200 px-3 py-2.5 text-[13px] outline-none focus:border-[var(--wd-primary)] disabled:bg-slate-50" />
-
+            <input autoFocus={createMode === "blank"} value={createTemplateName} onChange={(e) => setCreateTemplateName(e.target.value)} className="mt-2 w-full rounded-lg border border-slate-200 px-3 py-2.5 text-[13px] outline-none focus:border-[var(--wd-primary)]" placeholder={text(ar, "e.g. Project Proposal", "مثال: مقترح مشروع")} />
             <label className="mt-4 block text-[12px] font-medium text-slate-700">{text(ar, "Description", "الوصف")}</label>
-            <textarea value={createTemplateDescription} onChange={(e) => setCreateTemplateDescription(e.target.value)} rows={3} className="mt-2 w-full rounded-lg border border-slate-200 px-3 py-2.5 text-[13px] outline-none focus:border-[var(--wd-primary)] disabled:bg-slate-50" />
-
+            <textarea value={createTemplateDescription} onChange={(e) => setCreateTemplateDescription(e.target.value)} rows={2} className="mt-2 w-full rounded-lg border border-slate-200 px-3 py-2.5 text-[13px] outline-none focus:border-[var(--wd-primary)]" />
             <label className="mt-4 block text-[12px] font-medium text-slate-700">{text(ar, "Category", "التصنيف")}</label>
-            <select value={createTemplateCategoryId} onChange={(e) => setCreateTemplateCategoryId(e.target.value)} className="mt-2 w-full rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-[13px] outline-none disabled:bg-slate-50">
-              <option value="">{text(ar, "All / No category", "الكل / بدون تصنيف")}</option>
-              {categories.map((category) => <option key={category.id} value={category.id}>{category.name}</option>)}
+            <select value={createTemplateCategoryId} onChange={(e) => setCreateTemplateCategoryId(e.target.value)} className="mt-2 w-full rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-[13px] outline-none">
+              <option value="">{text(ar, "No category", "بدون تصنيف")}</option>{categories.map((category) => <option key={category.id} value={category.id}>{category.name}</option>)}
             </select>
-
             <div className="mt-5 flex justify-end gap-2">
               <button type="button" onClick={() => !busy && setCreateTemplateOpen(false)} className="rounded-lg border border-slate-200 px-4 py-2 text-[12px] text-slate-600">{text(ar, "Cancel", "إلغاء")}</button>
-              <button type="button" disabled={busy || !createFile || !createTemplateName.trim()} onClick={() => void createTemplateFromFile()} className="rounded-lg bg-[var(--wd-primary)] px-4 py-2 text-[12px] font-medium text-white disabled:opacity-50">{text(ar, "Create template", "إنشاء القالب")}</button>
+              <button type="button" disabled={busy || !createTemplateName.trim() || (createMode === "existing" && !createFile)} onClick={() => void createTemplate()} className="rounded-lg bg-[var(--wd-primary)] px-4 py-2 text-[12px] font-medium text-white disabled:opacity-50">{busy ? text(ar, "Creating…", "جارٍ الإنشاء…") : text(ar, "Create and open editor", "إنشاء وفتح المحرر")}</button>
             </div>
           </div>
         </div>

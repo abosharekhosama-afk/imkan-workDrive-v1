@@ -234,6 +234,49 @@ export class FilesService {
     };
   }
 
+  async createFileFromBytes(
+    user: AccessTokenPayload,
+    input: {
+      folderId?: string | null;
+      name: string;
+      mimeType: string;
+      extension?: string | null;
+      bytes: Buffer;
+    },
+  ) {
+    const size = BigInt(input.bytes.length);
+    await this.quota.assertAvailable(user, size);
+    const folder = input.folderId ? await this.prisma.folder.findFirst({ where: { id: input.folderId } }) : null;
+    if (input.folderId && (!folder || folder.orgId !== user.org_id)) throw new NotFoundException('Folder not found');
+    if (folder) await this.assertCanUploadToFolder(user, folder);
+    const cleanName = input.name.trim();
+    if (!cleanName || cleanName.length > 255 || /[\x00-\x1F\x7F]/.test(cleanName)) throw new BadRequestException('Invalid file name');
+    const duplicate = await this.prisma.file.findFirst({ where: { orgId: user.org_id, folderId: folder?.id ?? null, name: cleanName, status: FileStatus.ACTIVE, deletedAt: null }, select: { id: true } });
+    if (duplicate) throw new ConflictException('A file with this name already exists in the destination folder');
+
+    const fileId = randomUUID();
+    const versionId = randomUUID();
+    const storageObjectId = randomUUID();
+    const objectKey = this.storage.buildObjectKey(fileId, versionId);
+    const { bucket, region } = this.storageLocation();
+    const sha256 = createHash('sha256').update(input.bytes).digest('hex');
+    const extension = (input.extension ?? extractExtension(cleanName) ?? '').replace(/^\./, '').toLowerCase() || null;
+    await this.storage.storeObject({ fileId, versionId, ownerOrgId: user.org_id, storageKey: objectKey, contentType: input.mimeType }, input.bytes);
+    try {
+      await this.prisma.$transaction(async (tx) => {
+        await tx.file.create({ data: { id: fileId, orgId: user.org_id, folderId: folder?.id ?? null, name: cleanName, originalName: cleanName, extension, mimeType: input.mimeType, fileType: classifyFileType(input.mimeType), size, sha256Hash: sha256, status: FileStatus.ACTIVE, ownerId: user.sub } });
+        await tx.storageObject.create({ data: { id: storageObjectId, orgId: user.org_id, fileId, storageKey: objectKey, bucket, region, size, checksum: sha256 } });
+        await tx.fileVersion.create({ data: { id: versionId, orgId: user.org_id, fileId, versionNumber: 1, storageObjectId, size, mimeType: input.mimeType, extension, sha256Hash: sha256, uploadedById: user.sub, status: VersionStatus.ACTIVE } });
+        await tx.fileActivity.create({ data: { orgId: user.org_id, fileId, userId: user.sub, action: AuditAction.CREATE, metadata: { versionNumber: 1, name: cleanName, mimeType: input.mimeType, source: 'office-template-wizard' } } });
+        await tx.storageQuota.upsert({ where: { orgId: user.org_id }, create: { orgId: user.org_id, quotaBytes: 10737418240n, usedBytes: size }, update: { usedBytes: { increment: size } } });
+      });
+    } catch (error) {
+      await this.storage.deleteStoredObject(objectKey).catch(() => undefined);
+      throw error;
+    }
+    return { file_id: fileId, version_id: versionId, name: cleanName, extension, mime_type: input.mimeType, size: input.bytes.length };
+  }
+
   async createFileFromStorageSnapshot(
     user: AccessTokenPayload,
     input: {

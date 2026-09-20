@@ -13,6 +13,8 @@ import {
   TemplateType,
 } from '@prisma/client';
 import { randomUUID } from 'node:crypto';
+import { readFile } from 'node:fs/promises';
+import { join } from 'node:path';
 import type { AccessTokenPayload } from '../auth/jwt.types';
 import { FilesService } from '../files/files.service';
 import { PrismaService } from '../prisma/prisma.service';
@@ -265,6 +267,35 @@ export class TemplatesService {
     return { success: true };
   }
 
+  async createFromBlank(user: AccessTokenPayload, input: ReturnType<typeof parseTemplateCreate>) {
+    if (input.library === TemplateLibraryType.PUBLIC) throw new ForbiddenException('Public templates are managed by WorkDrive and cannot be created directly');
+    const library = await this.ensureLibrary(user, input.library);
+    if (!this.canManageLibrary(user, library)) throw new ForbiddenException('You cannot manage this template library');
+    const category = await this.assertCategory(user, input.categoryId, library.id);
+    const assets = join(__dirname, 'blank-assets');
+    const definitions: Record<TemplateType, { file: string; extension: string; mimeType: string }> = {
+      [TemplateType.DOCUMENT]: { file: 'blank-document.docx', extension: 'docx', mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' },
+      [TemplateType.SPREADSHEET]: { file: 'blank-spreadsheet.xlsx', extension: 'xlsx', mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' },
+      [TemplateType.PRESENTATION]: { file: 'blank-presentation.pptx', extension: 'pptx', mimeType: 'application/vnd.openxmlformats-officedocument.presentationml.presentation' },
+    };
+    const definition = definitions[input.type];
+    const bytes = await readFile(join(assets, definition.file)).catch(async () => readFile(join(process.cwd(), 'src/templates/blank-assets', definition.file)));
+    const file = await this.files.createFileFromBytes(user, {
+      name: `${input.name}.${definition.extension}`,
+      mimeType: definition.mimeType,
+      extension: definition.extension,
+      bytes,
+    });
+    const template = await this.saveFromFile(user, {
+      fileId: file.file_id,
+      name: input.name,
+      description: input.description,
+      library: input.library,
+      categoryId: category?.id ?? null,
+    });
+    return { template, file_id: file.file_id };
+  }
+
   async saveFromFile(user: AccessTokenPayload, input: ReturnType<typeof parseTemplateFromFile>) {
     if (input.library === TemplateLibraryType.PUBLIC) throw new ForbiddenException('Public templates cannot be created directly');
     const library = await this.ensureLibrary(user, input.library);
@@ -403,9 +434,7 @@ export class TemplatesService {
     const mime = (mimeType ?? '').toLowerCase();
     const ext = (extension ?? '').toLowerCase();
     if (mime.includes('spreadsheet') || ['csv', 'xls', 'xlsx'].includes(ext)) return TemplateType.SPREADSHEET;
-    if (mime.includes('presentation') || ['ppt', 'pptx'].includes(ext)) {
-      throw new BadRequestException('WorkDrive templates currently support documents and spreadsheets only');
-    }
+    if (mime.includes('presentation') || ['ppt', 'pptx', 'pps', 'ppsx'].includes(ext)) return TemplateType.PRESENTATION;
     return TemplateType.DOCUMENT;
   }
 }

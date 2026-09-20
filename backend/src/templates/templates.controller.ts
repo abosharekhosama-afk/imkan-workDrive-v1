@@ -3,7 +3,7 @@ import { CurrentUser } from '../auth/current-user.decorator';
 import type { AccessTokenPayload } from '../auth/jwt.types';
 import { TemplateLibraryType } from '@prisma/client';
 import { TemplatesService } from './templates.service';
-import { parseCategory, parseTemplateFromFile, parseTemplateUpdate, parseTemplateUse } from './templates.schemas';
+import { parseCategory, parseTemplateCreate, parseTemplateFromFile, parseTemplateUpdate, parseTemplateUse } from './templates.schemas';
 
 @Controller('templates')
 export class TemplatesController {
@@ -34,6 +34,9 @@ export class TemplatesController {
 
   @Get(':id')
   get(@CurrentUser() user: AccessTokenPayload, @Param('id', new ParseUUIDPipe({ version: '4' })) id: string) { return this.templates.get(user, id); }
+
+  @Post('from-blank')
+  createFromBlank(@CurrentUser() user: AccessTokenPayload, @Body() body: unknown) { return this.templates.createFromBlank(user, parseTemplateCreate(body)); }
 
   @Post('from-file')
   saveFromFile(@CurrentUser() user: AccessTokenPayload, @Body() body: unknown) { return this.templates.saveFromFile(user, parseTemplateFromFile(body)); }

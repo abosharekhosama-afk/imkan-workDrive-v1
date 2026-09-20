@@ -73,6 +73,11 @@ export function useTemplate(id: string, input: { name: string; folderId?: string
   return apiRequest<{ file_id: string; name: string; folder_id: string | null; file_type: string }>(`/templates/${id}/use`, { method: 'POST', body: JSON.stringify(input) });
 }
 
+
+export function createTemplateFromBlank(input: { name: string; description?: string; type: TemplateType; library?: TemplateLibrary; categoryId?: string | null }) {
+  return apiRequest<{ template: TemplatePreview; file_id: string }>('/templates/from-blank', { method: 'POST', body: JSON.stringify(input) });
+}
+
 export function saveFileAsTemplate(input: { fileId: string; name: string; description?: string; library?: TemplateLibrary; categoryId?: string | null }) {
   return apiRequest<TemplatePreview>('/templates/from-file', { method: 'POST', body: JSON.stringify(input) });
 }
