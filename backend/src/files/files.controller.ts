@@ -18,6 +18,7 @@ import { FileInterceptor } from '@nestjs/platform-express';
 import type { Response } from 'express';
 import { AccessAction, ResourceType } from '@prisma/client';
 import { CurrentUser } from '../auth/current-user.decorator';
+import { Public } from '../auth/public.decorator';
 import type { AccessTokenPayload } from '../auth/jwt.types';
 import { parseResourceName } from '../common/parse-resource-name';
 import { RecentService } from '../recent/recent.service';
@@ -69,6 +70,24 @@ export class FilesController {
     @Param('id', new ParseUUIDPipe({ version: '4' })) id: string,
   ) {
     return this.files.getDetails(user, id);
+  }
+
+  @Get(':id/onlyoffice/config')
+  getOnlyOfficeConfig(
+    @CurrentUser() user: AccessTokenPayload,
+    @Param('id', new ParseUUIDPipe({ version: '4' })) id: string,
+  ) {
+    return this.files.createOnlyOfficeEditorConfig(user, id);
+  }
+
+  @Public()
+  @Post(':id/onlyoffice/callback')
+  async onlyOfficeCallback(
+    @Param('id', new ParseUUIDPipe({ version: '4' })) id: string,
+    @Query('token') token: string,
+    @Body() body: unknown,
+  ) {
+    return this.files.handleOnlyOfficeCallback(id, token, body);
   }
 
   @Get(':id/preview-url')

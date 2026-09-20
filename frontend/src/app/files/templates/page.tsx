@@ -63,6 +63,8 @@ export default function TemplatesPage() {
   const [libraryCapabilities, setLibraryCapabilities] = useState<import("@/lib/api/templates").TemplateLibraryCapabilities | null>(null);
   const [preview, setPreview] = useState<{ template: TemplateRecord; url: string } | null>(null);
   const [useTarget, setUseTarget] = useState<TemplateRecord | null>(null);
+  const [contentEditTarget, setContentEditTarget] = useState<TemplateRecord | null>(null);
+  const [contentEditName, setContentEditName] = useState("");
   const [editTarget, setEditTarget] = useState<TemplateRecord | null>(null);
   const [editName, setEditName] = useState("");
   const [editDescription, setEditDescription] = useState("");
@@ -214,6 +216,26 @@ export default function TemplatesPage() {
       window.setTimeout(() => router.push(`/files?query=${encodeURIComponent(created.name)}`), 350);
     } catch (e) {
       setError(e instanceof Error ? e.message : text(ar, "Unable to create file.", "تعذر إنشاء الملف."));
+    } finally { setBusy(false); }
+  };
+
+  const openContentEditor = (template: TemplateRecord) => {
+    if (!template.permissions.canEdit) return;
+    setContentEditTarget(template);
+    setContentEditName(`${template.name} - Draft`);
+    setMenuTemplateId(null);
+  };
+
+  const confirmContentEditor = async () => {
+    if (!contentEditTarget || !contentEditName.trim()) return;
+    setBusy(true); setError(""); setMessage("");
+    try {
+      const created = await useTemplate(contentEditTarget.id, { name: contentEditName.trim(), folderId });
+      setContentEditTarget(null);
+      setContentEditName("");
+      router.push(`/files/editor/${created.file_id}?templateId=${encodeURIComponent(contentEditTarget.id)}`);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : text(ar, "Unable to start template editor.", "تعذر بدء محرر القالب."));
     } finally { setBusy(false); }
   };
 
@@ -465,6 +487,7 @@ export default function TemplatesPage() {
                       {menuTemplateId === template.id && (
                         <div className={`absolute ${ar ? "left-0" : "right-0"} top-7 z-[100] w-48 rounded-xl border border-slate-200 bg-white p-1.5 shadow-xl`}>
                           {template.permissions.canUse && <button type="button" onClick={() => { setUseTarget(template); setNewName(template.name); setMenuTemplateId(null); }} className="block w-full rounded-lg px-3 py-2 text-left text-[11.5px] text-slate-700 hover:bg-slate-50">{text(ar, "Use template", "استخدام القالب")}</button>}
+                          {template.permissions.canEdit && <button type="button" onClick={() => openContentEditor(template)} className="block w-full rounded-lg px-3 py-2 text-left text-[11.5px] font-medium text-[var(--wd-primary)] hover:bg-slate-50">{text(ar, "Edit content", "تحرير المحتوى")}</button>}
                           {template.permissions.canEdit && <button type="button" onClick={() => { openEdit(template); setMenuTemplateId(null); }} className="block w-full rounded-lg px-3 py-2 text-left text-[11.5px] text-slate-700 hover:bg-slate-50">{text(ar, "Edit", "تعديل")}</button>}
                           {template.permissions.canEdit && <button type="button" onClick={() => { setCategoryTarget(template); setCategoryTargetId(template.category?.id || ""); setMenuTemplateId(null); }} className="block w-full rounded-lg px-3 py-2 text-left text-[11.5px] text-slate-700 hover:bg-slate-50">{text(ar, "Change category", "تغيير التصنيف")}</button>}
                           {template.permissions.canDuplicate && <button type="button" onClick={() => { setDuplicateTarget(template); setDuplicateName(`${template.name} Copy`); setMenuTemplateId(null); }} className="block w-full rounded-lg px-3 py-2 text-left text-[11.5px] text-slate-700 hover:bg-slate-50">{text(ar, "Duplicate", "نسخ")}</button>}
@@ -665,6 +688,22 @@ export default function TemplatesPage() {
 
       {trashOpen && (
         <div className="fixed inset-0 z-[150] flex items-center justify-center p-4"><div className="absolute inset-0 bg-black/30" onClick={() => !busy && setTrashOpen(false)} /><div className="relative w-[min(760px,95vw)] max-h-[88vh] overflow-hidden rounded-2xl bg-white shadow-2xl"><div className="flex items-center justify-between border-b border-slate-100 px-5 py-4"><div><h2 className="text-[16px] font-semibold text-slate-900">{text(ar, "Template trash", "سلة القوالب")}</h2><p className="mt-1 text-[12px] text-slate-500">{text(ar, "Restore templates or permanently delete them.", "استعد القوالب أو احذفها نهائيًا.")}</p></div><button type="button" onClick={() => setTrashOpen(false)} className="rounded-lg px-2 py-1 hover:bg-slate-100">✕</button></div><div className="max-h-[70vh] overflow-y-auto p-4">{trash.length === 0 ? <p className="p-8 text-center text-[12px] text-slate-500">{text(ar, "Template trash is empty.", "سلة القوالب فارغة.")}</p> : <div className="space-y-2">{trash.map((t) => <div key={t.id} className="flex items-center gap-3 rounded-xl border border-slate-200 p-3"><div className="flex h-10 w-10 items-center justify-center rounded-lg bg-slate-100">{t.type === "DOCUMENT" ? <Icons.doc size={20} /> : t.type === "SPREADSHEET" ? <Icons.sheet size={20} /> : <Icons.slide size={20} />}</div><div className="min-w-0 flex-1"><div className="truncate text-[12.5px] font-semibold text-slate-800">{t.name}</div><div className="mt-1 text-[10.5px] text-slate-500">{t.library} · v{t.version}{t.deletedAt ? ` · ${new Date(t.deletedAt).toLocaleString()}` : ""}</div></div><button type="button" onClick={() => void restoreFromTrash(t.id)} className="rounded-lg border border-slate-200 px-3 py-2 text-[11px]">{text(ar, "Restore", "استعادة")}</button><button type="button" onClick={() => void purgeFromTrash(t.id)} className="rounded-lg border border-red-200 px-3 py-2 text-[11px] text-red-600">{text(ar, "Delete forever", "حذف نهائي")}</button></div>)}</div>}</div></div></div>
+      )}
+
+      {contentEditTarget && (
+        <div className="fixed inset-0 z-[135] flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/30" onClick={() => !busy && setContentEditTarget(null)} />
+          <div className="relative w-[min(500px,94vw)] rounded-2xl bg-white p-5 shadow-2xl">
+            <h2 className="text-[16px] font-semibold text-slate-900">{text(ar, "Edit template content", "تحرير محتوى القالب")}</h2>
+            <p className="mt-2 text-[12px] leading-5 text-slate-500">{text(ar, "A working copy will be created and opened in the online office editor. After editing, use “Publish to template” to create the next template version.", "سيتم إنشاء نسخة عمل من القالب وفتحها في محرر Office داخل المتصفح. بعد تعديل المحتوى اضغط «اعتماد التغييرات على القالب» لإنشاء إصدار جديد للقالب.")}</p>
+            <label className="mt-5 block text-[12px] font-medium text-slate-700">{text(ar, "Working file name", "اسم ملف العمل")}</label>
+            <input autoFocus value={contentEditName} onChange={(e) => setContentEditName(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") void confirmContentEditor(); }} className="mt-2 w-full rounded-lg border border-slate-200 px-3 py-2.5 text-[13px] outline-none focus:border-[var(--wd-primary)]" />
+            <div className="mt-5 flex justify-end gap-2">
+              <button type="button" disabled={busy} onClick={() => setContentEditTarget(null)} className="rounded-lg border border-slate-200 px-4 py-2 text-[12px] text-slate-600">{text(ar, "Cancel", "إلغاء")}</button>
+              <button type="button" disabled={busy || !contentEditName.trim()} onClick={() => void confirmContentEditor()} className="rounded-lg bg-[var(--wd-primary)] px-4 py-2 text-[12px] font-medium text-white disabled:opacity-50">{busy ? text(ar, "Opening…", "جارٍ الفتح…") : text(ar, "Open editor", "فتح المحرر")}</button>
+            </div>
+          </div>
+        </div>
       )}
 
       {useTarget && (
