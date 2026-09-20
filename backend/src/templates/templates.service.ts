@@ -146,7 +146,7 @@ export class TemplatesService {
     if (!template || !this.canUseTemplate(user, template)) throw new NotFoundException('Template not found');
     const version = template.versions[0];
     if (!version) throw new NotFoundException('Template content not found');
-    const signed = await this.storage.createDownloadUrl({ fileId: template.id, versionId: version.id, ownerOrgId: user.org_id, storageKey: version.storageKey, contentType: version.mimeType, disposition: 'inline', fileName: `${template.name}${version.extension ? `.${version.extension}` : ''}` });
+    const signed = await this.storage.createDownloadUrl({ fileId: template.id, versionId: version.id, ownerOrgId: user.org_id, storageKey: version.storageKey, publicAccess: template.library.type === TemplateLibraryType.PUBLIC, contentType: version.mimeType, disposition: 'inline', fileName: `${template.name}${version.extension ? `.${version.extension}` : ''}` });
     return { id: template.id, name: template.name, description: template.description, type: template.type, library: template.library.type, category: template.category, owner: template.owner, version: version.versionNumber, mimeType: version.mimeType, extension: version.extension, preview_url: signed.url, expires_in_seconds: signed.expiresInSeconds, permissions: this.templatePermissions(user, template) };
   }
 
@@ -308,7 +308,7 @@ export class TemplatesService {
     });
     return Promise.all(rows.map(async (v) => {
       const signed = await this.storage.createDownloadUrl({
-        fileId: template.id, versionId: v.id, ownerOrgId: user.org_id, storageKey: v.storageKey,
+        fileId: template.id, versionId: v.id, ownerOrgId: user.org_id, storageKey: v.storageKey, publicAccess: template.library.type === TemplateLibraryType.PUBLIC,
         contentType: v.mimeType, disposition: 'inline', fileName: `${template.name}${v.extension ? `.${v.extension}` : ''}`,
       });
       return { id: v.id, version: v.versionNumber, size: Number(v.size), mimeType: v.mimeType, extension: v.extension, createdAt: v.createdAt.toISOString(), createdBy: v.createdBy, preview_url: signed.url, expires_in_seconds: signed.expiresInSeconds };

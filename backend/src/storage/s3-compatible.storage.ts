@@ -17,7 +17,7 @@ import {
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { Inject } from '@nestjs/common';
 import { getTenantStore } from '../auth/tenant-context';
-import { buildTenantObjectKey, parseTenantObjectKey } from './object-key';
+import { buildTenantObjectKey, parseTenantObjectKey, buildPublicTemplateObjectKey, isPublicTemplateObjectKey } from './object-key';
 import { contentDispositionInline } from '../common/content-disposition';
 import {
   S3_CLIENT,
@@ -41,6 +41,8 @@ export class S3CompatibleStorageAdapter implements StorageService {
     @Inject(S3_PRESIGNER) private readonly presign: S3Presigner,
   ) {}
 
+  buildPublicTemplateObjectKey(fileId: string, versionId: string): string { return buildPublicTemplateObjectKey(fileId, versionId); }
+
   buildObjectKey(fileId: string, versionId: string): string {
     return buildTenantObjectKey(this.requireOrgId(), fileId, versionId);
   }
@@ -49,8 +51,7 @@ export class S3CompatibleStorageAdapter implements StorageService {
     request: StorageObjectRequest,
   ): Promise<SignedUrlResult> {
     const orgId = this.authorize(request);
-    const objectKey =
-      request.storageKey ?? buildTenantObjectKey(orgId, request.fileId, request.versionId);
+    const objectKey = request.publicAccess ? (request.storageKey ?? buildPublicTemplateObjectKey(request.fileId, request.versionId)) : (request.storageKey ?? buildTenantObjectKey(orgId, request.fileId, request.versionId));
     const expiresInSeconds = this.expiresInSeconds();
     const command = new PutObjectCommand({
       Bucket: this.bucket(),
@@ -67,8 +68,7 @@ export class S3CompatibleStorageAdapter implements StorageService {
     request: StorageObjectRequest,
   ): Promise<SignedUrlResult> {
     const orgId = this.authorize(request);
-    const objectKey =
-      request.storageKey ?? buildTenantObjectKey(orgId, request.fileId, request.versionId);
+    const objectKey = request.publicAccess ? (request.storageKey ?? buildPublicTemplateObjectKey(request.fileId, request.versionId)) : (request.storageKey ?? buildTenantObjectKey(orgId, request.fileId, request.versionId));
     const expiresInSeconds = this.expiresInSeconds();
     const command = new GetObjectCommand({
       Bucket: this.bucket(),
@@ -100,15 +100,15 @@ export class S3CompatibleStorageAdapter implements StorageService {
   }
 
   async deleteStoredObject(storageKey: string): Promise<void> {
-    parseTenantObjectKey(storageKey);
+    if (!isPublicTemplateObjectKey(storageKey)) parseTenantObjectKey(storageKey);
     await this.client.send(new DeleteObjectCommand({ Bucket: this.bucket(), Key: storageKey }));
   }
 
   /** Server-side ingestion for direct multipart uploads (version upload). */
   async copyStoredObject(sourceStorageKey: string, destination: StorageObjectRequest): Promise<void> {
     const orgId = this.authorize(destination);
-    const source = parseTenantObjectKey(sourceStorageKey);
-    if (source.orgId !== orgId) throw new ForbiddenException('Resource does not belong to this organization');
+    const source = isPublicTemplateObjectKey(sourceStorageKey) ? null : parseTenantObjectKey(sourceStorageKey);
+    if (source && source.orgId !== orgId) throw new ForbiddenException('Resource does not belong to this organization');
     const destinationKey = destination.storageKey ?? buildTenantObjectKey(orgId, destination.fileId, destination.versionId);
     await this.client.send(new CopyObjectCommand({
       Bucket: this.bucket(),
@@ -121,11 +121,7 @@ export class S3CompatibleStorageAdapter implements StorageService {
 
   async storeObject(request: StorageObjectRequest, bytes: Buffer): Promise<void> {
     const orgId = this.authorize(request);
-    const objectKey = buildTenantObjectKey(
-      orgId,
-      request.fileId,
-      request.versionId,
-    );
+    const objectKey = request.publicAccess ? (request.storageKey ?? buildPublicTemplateObjectKey(request.fileId, request.versionId)) : (request.storageKey ?? buildTenantObjectKey(orgId, request.fileId, request.versionId));
     await this.client.send(
       new PutObjectCommand({
         Bucket: this.bucket(),
@@ -138,8 +134,7 @@ export class S3CompatibleStorageAdapter implements StorageService {
 
   async assertObjectExists(request: StorageObjectRequest): Promise<void> {
     const orgId = this.authorize(request);
-    const objectKey =
-      request.storageKey ?? buildTenantObjectKey(orgId, request.fileId, request.versionId);
+    const objectKey = request.publicAccess ? (request.storageKey ?? buildPublicTemplateObjectKey(request.fileId, request.versionId)) : (request.storageKey ?? buildTenantObjectKey(orgId, request.fileId, request.versionId));
     try {
       await this.client.send(
         new HeadObjectCommand({
@@ -176,6 +171,7 @@ export class S3CompatibleStorageAdapter implements StorageService {
     if ('orgId' in request) {
       throw new ForbiddenException('orgId must not be supplied by the client');
     }
+    if (request.publicAccess) return request.ownerOrgId;
     const orgId = this.requireOrgId();
     if (request.ownerOrgId !== orgId) {
       throw new ForbiddenException(

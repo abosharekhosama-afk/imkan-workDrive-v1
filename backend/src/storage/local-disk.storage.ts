@@ -14,7 +14,7 @@ import {
   verifyObjectAccess,
   type ObjectAccessMethod,
 } from './object-access-token';
-import { buildTenantObjectKey, parseTenantObjectKey } from './object-key';
+import { buildTenantObjectKey, parseTenantObjectKey, buildPublicTemplateObjectKey, parsePublicTemplateObjectKey, isPublicTemplateObjectKey } from './object-key';
 import type {
   SignedUrlResult,
   StorageObjectRequest,
@@ -25,6 +25,8 @@ import type {
 export class LocalDiskStorageAdapter implements StorageService {
   constructor(private readonly config: ConfigService) {}
 
+  buildPublicTemplateObjectKey(fileId: string, versionId: string): string { return buildPublicTemplateObjectKey(fileId, versionId); }
+
   buildObjectKey(fileId: string, versionId: string): string {
     return buildTenantObjectKey(this.requireOrgId(), fileId, versionId);
   }
@@ -33,8 +35,7 @@ export class LocalDiskStorageAdapter implements StorageService {
     request: StorageObjectRequest,
   ): Promise<SignedUrlResult> {
     const orgId = this.authorize(request);
-    const objectKey =
-      request.storageKey ?? buildTenantObjectKey(orgId, request.fileId, request.versionId);
+    const objectKey = request.publicAccess ? (request.storageKey ?? buildPublicTemplateObjectKey(request.fileId, request.versionId)) : (request.storageKey ?? buildTenantObjectKey(orgId, request.fileId, request.versionId));
     const expiresInSeconds = this.expiresInSeconds();
     const token = signObjectAccess(this.signingSecret(), {
       method: 'PUT',
@@ -54,8 +55,7 @@ export class LocalDiskStorageAdapter implements StorageService {
     request: StorageObjectRequest,
   ): Promise<SignedUrlResult> {
     const orgId = this.authorize(request);
-    const objectKey =
-      request.storageKey ?? buildTenantObjectKey(orgId, request.fileId, request.versionId);
+    const objectKey = request.publicAccess ? (request.storageKey ?? buildPublicTemplateObjectKey(request.fileId, request.versionId)) : (request.storageKey ?? buildTenantObjectKey(orgId, request.fileId, request.versionId));
     const expiresInSeconds = this.expiresInSeconds();
     const token = signObjectAccess(this.signingSecret(), {
       method: 'GET',
@@ -75,8 +75,7 @@ export class LocalDiskStorageAdapter implements StorageService {
 
   async assertObjectExists(request: StorageObjectRequest): Promise<void> {
     const orgId = this.authorize(request);
-    const objectKey =
-      request.storageKey ?? buildTenantObjectKey(orgId, request.fileId, request.versionId);
+    const objectKey = request.publicAccess ? (request.storageKey ?? buildPublicTemplateObjectKey(request.fileId, request.versionId)) : (request.storageKey ?? buildTenantObjectKey(orgId, request.fileId, request.versionId));
     try {
       await access(this.resolveObjectPath(objectKey));
     } catch {
@@ -91,13 +90,14 @@ export class LocalDiskStorageAdapter implements StorageService {
    * 404 so the restore transaction is never entered against phantom data.
    */
   async assertStoredObjectExists(storageKey: string): Promise<void> {
-    const parsed = parseTenantObjectKey(storageKey);
-    if (parsed.orgId !== this.requireOrgId()) {
-      throw new ForbiddenException('Resource does not belong to this organization');
-    }
     try {
+      if (!isPublicTemplateObjectKey(storageKey)) {
+        const parsed = parseTenantObjectKey(storageKey);
+        if (parsed.orgId !== this.requireOrgId()) throw new ForbiddenException('Resource does not belong to this organization');
+      }
       await access(this.resolveObjectPath(storageKey));
-    } catch {
+    } catch (error) {
+      if (error instanceof ForbiddenException) throw error;
       throw new NotFoundException('File object not found on storage');
     }
   }
@@ -130,8 +130,8 @@ export class LocalDiskStorageAdapter implements StorageService {
   /** Server-side ingestion for direct multipart uploads (version upload). */
   async copyStoredObject(sourceStorageKey: string, destination: StorageObjectRequest): Promise<void> {
     const orgId = this.authorize(destination);
-    const source = parseTenantObjectKey(sourceStorageKey);
-    if (source.orgId !== orgId) throw new ForbiddenException('Resource does not belong to this organization');
+    const source = isPublicTemplateObjectKey(sourceStorageKey) ? null : parseTenantObjectKey(sourceStorageKey);
+    if (source && source.orgId !== orgId) throw new ForbiddenException('Resource does not belong to this organization');
     const destinationKey = destination.storageKey ?? buildTenantObjectKey(orgId, destination.fileId, destination.versionId);
     const sourcePath = this.resolveObjectPath(sourceStorageKey);
     const destinationPath = this.resolveObjectPath(destinationKey);
@@ -141,11 +141,7 @@ export class LocalDiskStorageAdapter implements StorageService {
 
   async storeObject(request: StorageObjectRequest, bytes: Buffer): Promise<void> {
     const orgId = this.authorize(request);
-    const objectKey = buildTenantObjectKey(
-      orgId,
-      request.fileId,
-      request.versionId,
-    );
+    const objectKey = request.publicAccess ? (request.storageKey ?? buildPublicTemplateObjectKey(request.fileId, request.versionId)) : (request.storageKey ?? buildTenantObjectKey(orgId, request.fileId, request.versionId));
     const path = this.resolveObjectPath(objectKey);
     await mkdir(dirname(path), { recursive: true });
     await writeFile(path, bytes);
@@ -190,15 +186,10 @@ export class LocalDiskStorageAdapter implements StorageService {
   }
 
   resolveObjectPath(objectKey: string): string {
-    const parsed = parseTenantObjectKey(objectKey);
     const root = resolve(this.localRoot());
-    const target = resolve(
-      root,
-      `tenant_${parsed.orgId}`,
-      'files',
-      parsed.fileId,
-      parsed.versionId,
-    );
+    const target = isPublicTemplateObjectKey(objectKey)
+      ? resolve(root, 'public_templates', parsePublicTemplateObjectKey(objectKey).fileId, parsePublicTemplateObjectKey(objectKey).versionId)
+      : (() => { const parsed = parseTenantObjectKey(objectKey); return resolve(root, `tenant_${parsed.orgId}`, 'files', parsed.fileId, parsed.versionId); })();
     if (target !== root && !target.startsWith(root + sep)) {
       throw new ForbiddenException('Invalid object path');
     }
@@ -209,6 +200,7 @@ export class LocalDiskStorageAdapter implements StorageService {
     if ('orgId' in request) {
       throw new ForbiddenException('orgId must not be supplied by the client');
     }
+    if (request.publicAccess) return request.ownerOrgId;
     const orgId = this.requireOrgId();
     if (request.ownerOrgId !== orgId) {
       throw new ForbiddenException(

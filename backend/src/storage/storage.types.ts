@@ -27,6 +27,7 @@ export type StorageObjectRequest = {
    * browsers render the bytes in-place instead of forcing a download.
    */
   disposition?: 'inline' | 'attachment';
+  publicAccess?: boolean;
   /** Original file name used to build a RFC 6266 compliant disposition. */
   fileName?: string;
 };
@@ -57,5 +58,6 @@ export interface StorageService {
    * context and `ownerOrgId` are validated before any bytes are written.
    */
   storeObject(request: StorageObjectRequest, bytes: Buffer): Promise<void>;
+  buildPublicTemplateObjectKey(fileId: string, versionId: string): string;
   copyStoredObject(sourceStorageKey: string, destination: StorageObjectRequest): Promise<void>;
 }

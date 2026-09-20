@@ -34,3 +34,9 @@ export function parseTenantObjectKey(objectKey: string): ParsedTenantObjectKey {
   }
   return { orgId: match[1], fileId: match[2], versionId: match[3] };
 }
+
+export type ParsedPublicTemplateObjectKey = { fileId: string; versionId: string };
+const PUBLIC_TEMPLATE_KEY_RE = /^public_templates\/([0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12})\/([0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12})$/i;
+export function buildPublicTemplateObjectKey(fileId: string, versionId: string): string { assertUuid(fileId, 'fileId'); assertUuid(versionId, 'versionId'); return `public_templates/${fileId}/${versionId}`; }
+export function parsePublicTemplateObjectKey(objectKey: string): ParsedPublicTemplateObjectKey { const match = PUBLIC_TEMPLATE_KEY_RE.exec(objectKey); if (!match) throw new Error('Invalid public template object key'); return { fileId: match[1], versionId: match[2] }; }
+export function isPublicTemplateObjectKey(objectKey: string): boolean { return PUBLIC_TEMPLATE_KEY_RE.test(objectKey); }
