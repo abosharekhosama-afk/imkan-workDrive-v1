@@ -30,17 +30,30 @@ export class PublicTemplateSeedService implements OnModuleInit {
 
   async ensureSeed(): Promise<void> {
     if (this.seeded) return;
-    if (this.seeding) return this.seeding;
-    this.seeding = this.seed().finally(() => { this.seeding = null; });
+    if (this.seeding) {
+      await this.seeding;
+      return;
+    }
+
+    this.seeding = this.seed()
+      .then((completed) => {
+        if (completed) this.seeded = true;
+      })
+      .finally(() => {
+        this.seeding = null;
+      });
+
     await this.seeding;
-    this.seeded = true;
   }
 
-  private async seed(): Promise<void> {
+  private async seed(): Promise<boolean> {
     const creator = await this.prisma.user.findFirst({ orderBy: { createdAt: 'asc' }, select: { id: true } });
     if (!creator) {
-      this.logger.warn('Public template catalog will be seeded on the first authenticated request after a user exists.');
-      return;
+      // Do not mark the seed as complete here. On fresh deployments the Nest
+      // module can initialize before the first user exists; the next public
+      // request must be allowed to retry the seed.
+      this.logger.warn('Public template catalog seed deferred: no user exists yet.');
+      return false;
     }
 
     let library = await this.prisma.templateLibrary.findFirst({ where: { orgId: null, ownerId: null, type: TemplateLibraryType.PUBLIC } });
@@ -70,5 +83,6 @@ export class PublicTemplateSeedService implements OnModuleInit {
       created += 1;
     }
     this.logger.log(`Public template catalog ready: ${manifest.length} templates (${created} created).`);
+    return true;
   }
 }

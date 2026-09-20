@@ -173,7 +173,14 @@ export default function TemplatesPage() {
   };
 
   const createTemplateFromFile = async () => {
-    if (!createFile || !createTemplateName.trim()) return;
+    if (!createFile) {
+      setError(text(ar, "Select a source file first. The template is created from that file's content.", "اختر ملفًا مصدرًا أولًا. القالب يتم إنشاؤه من محتوى هذا الملف."));
+      return;
+    }
+    if (!createTemplateName.trim()) {
+      setError(text(ar, "Enter a template name.", "أدخل اسم القالب."));
+      return;
+    }
     setBusy(true); setError("");
     try {
       await saveFileAsTemplate({
@@ -538,9 +545,24 @@ export default function TemplatesPage() {
             <div className="flex items-start justify-between gap-3">
               <div>
                 <h2 className="text-[16px] font-semibold text-slate-900">{text(ar, "Create template", "إنشاء قالب")}</h2>
-                <p className="mt-1 text-[12px] text-slate-500">{text(ar, "Choose an existing file to use as the template source.", "اختر ملفًا موجودًا ليكون مصدر القالب.")}</p>
+                <p className="mt-1 text-[12px] text-slate-500">{text(ar, "A template is a reusable copy of an existing office file. Select the file first, then name the template.", "القالب هو نسخة قابلة لإعادة الاستخدام من ملف Office موجود. اختر الملف أولًا، ثم اكتب اسم القالب.")}</p>
               </div>
               <button type="button" onClick={() => !busy && setCreateTemplateOpen(false)} className="rounded-lg px-2 py-1 hover:bg-slate-100">✕</button>
+            </div>
+
+            <div className="mt-4 grid grid-cols-3 gap-2 rounded-xl border border-slate-200 bg-slate-50 p-3">
+              <div className="rounded-lg bg-white p-2">
+                <div className="text-[10px] font-semibold text-slate-400">1</div>
+                <div className="mt-1 text-[11px] font-medium text-slate-700">{text(ar, "Choose file", "اختر الملف")}</div>
+              </div>
+              <div className="rounded-lg bg-white p-2">
+                <div className="text-[10px] font-semibold text-slate-400">2</div>
+                <div className="mt-1 text-[11px] font-medium text-slate-700">{text(ar, "Name template", "سمِّ القالب")}</div>
+              </div>
+              <div className="rounded-lg bg-white p-2">
+                <div className="text-[10px] font-semibold text-slate-400">3</div>
+                <div className="mt-1 text-[11px] font-medium text-slate-700">{text(ar, "Create", "أنشئ")}</div>
+              </div>
             </div>
 
             <label className="mt-5 block text-[12px] font-medium text-slate-700">{text(ar, "Source file", "الملف المصدر")}</label>
@@ -568,6 +590,12 @@ export default function TemplatesPage() {
                     <span className="ml-3 shrink-0 text-[10px] text-slate-400">{file.extension || file.fileType || ""}</span>
                   </button>
                 ))}
+              </div>
+            )}
+
+            {!createFile && (
+              <div className="mt-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-[11px] leading-5 text-amber-800">
+                {text(ar, "The Create button becomes active after you select one of your files above. If you do not have a file yet, create/upload a DOCX, XLSX, or PPTX in My Files first, then return here.", "سيصبح زر «إنشاء القالب» فعالًا بعد اختيار أحد ملفاتك أعلاه. إذا لم يكن لديك ملف بعد، أنشئ/ارفع ملف DOCX أو XLSX أو PPTX في «ملفاتي» أولًا، ثم عد إلى هنا.")}
               </div>
             )}
 
