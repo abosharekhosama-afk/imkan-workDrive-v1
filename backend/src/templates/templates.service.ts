@@ -12,6 +12,7 @@ import {
   TemplateLibraryType,
   TemplateStatus,
   TemplateType,
+  Prisma,
 } from '@prisma/client';
 import { randomUUID } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
@@ -200,16 +201,17 @@ export class TemplatesService {
       include: { library: true },
     });
     if (!template || !this.canUseTemplate(user, template)) throw new NotFoundException('Template not found');
-    let builder = await this.prisma.templateBuilder.findUnique({ where: { templateId: id }, include: { publishedBy: { select: { id: true, name: true, email: true } } } });
+    let builder = await this.prisma.templateBuilder.findUnique({ where: { templateId: id } });
     if (!builder) {
-      builder = await this.prisma.templateBuilder.create({ data: { id: randomUUID(), templateId: id, draft: defaultTemplateBuilderConfig() } , include: { publishedBy: { select: { id: true, name: true, email: true } } } });
+      builder = await this.prisma.templateBuilder.create({ data: { id: randomUUID(), templateId: id, draft: defaultTemplateBuilderConfig() as Prisma.InputJsonValue } });
     }
-    return { id: builder.id, templateId: id, draft: builder.draft, published: builder.published, publishedAt: builder.publishedAt?.toISOString() ?? null, publishedBy: builder.publishedBy, updatedAt: builder.updatedAt.toISOString(), canEdit: this.canManageLibrary(user, template.library), canPublish: this.canManageLibrary(user, template.library) };
+    const publishedBy = builder.publishedById ? await this.prisma.user.findUnique({ where: { id: builder.publishedById }, select: { id: true, name: true, email: true } }) : null;
+    return { id: builder.id, templateId: id, draft: builder.draft, published: builder.published, publishedAt: builder.publishedAt?.toISOString() ?? null, publishedBy, updatedAt: builder.updatedAt.toISOString(), canEdit: this.canManageLibrary(user, template.library), canPublish: this.canManageLibrary(user, template.library) };
   }
 
   async saveBuilder(user: AccessTokenPayload, id: string, input: ReturnType<typeof parseTemplateBuilder>) {
     const template = await this.getManagedTemplate(user, id);
-    const builder = await this.prisma.templateBuilder.upsert({ where: { templateId: id }, create: { id: randomUUID(), templateId: id, draft: input }, update: { draft: input } });
+    const builder = await this.prisma.templateBuilder.upsert({ where: { templateId: id }, create: { id: randomUUID(), templateId: id, draft: input as Prisma.InputJsonValue }, update: { draft: input as Prisma.InputJsonValue } });
     await this.prisma.auditLog.create({ data: { orgId: user.org_id, actorId: user.sub, action: 'TEMPLATE_BUILDER_UPDATED', resourceType: 'TEMPLATE', resourceId: id, metadata: { fields: input.fields.length, sections: input.sections.length, tables: input.tables.length, images: input.images.length, rules: input.rules.length } } });
     return { id: builder.id, templateId: id, draft: builder.draft, published: builder.published, publishedAt: builder.publishedAt?.toISOString() ?? null, canEdit: true, canPublish: true };
   }
@@ -217,15 +219,16 @@ export class TemplatesService {
   async publishBuilder(user: AccessTokenPayload, id: string) {
     const template = await this.getManagedTemplate(user, id);
     const existing = await this.prisma.templateBuilder.findUnique({ where: { templateId: id } });
-    const draft = existing ? existing.draft : defaultTemplateBuilderConfig();
-    const builder = await this.prisma.templateBuilder.upsert({ where: { templateId: id }, create: { id: randomUUID(), templateId: id, draft, published: draft, publishedAt: new Date(), publishedById: user.sub }, update: { published: draft, publishedAt: new Date(), publishedById: user.sub } , include: { publishedBy: { select: { id: true, name: true, email: true } } } });
+    const draft = (existing?.draft ?? defaultTemplateBuilderConfig()) as Prisma.InputJsonValue;
+    const builder = await this.prisma.templateBuilder.upsert({ where: { templateId: id }, create: { id: randomUUID(), templateId: id, draft, published: draft, publishedAt: new Date(), publishedById: user.sub }, update: { published: draft, publishedAt: new Date(), publishedById: user.sub } });
     await this.prisma.auditLog.create({ data: { orgId: user.org_id, actorId: user.sub, action: 'TEMPLATE_BUILDER_PUBLISHED', resourceType: 'TEMPLATE', resourceId: id, metadata: { templateVersion: template.versions[0]?.versionNumber ?? 0 } } });
-    return { id: builder.id, templateId: id, draft: builder.draft, published: builder.published, publishedAt: builder.publishedAt?.toISOString() ?? null, publishedBy: builder.publishedBy, canEdit: true, canPublish: true };
+    const publishedBy = await this.prisma.user.findUnique({ where: { id: user.sub }, select: { id: true, name: true, email: true } });
+    return { id: builder.id, templateId: id, draft: builder.draft, published: builder.published, publishedAt: builder.publishedAt?.toISOString() ?? null, publishedBy, canEdit: true, canPublish: true };
   }
 
   async unpublishBuilder(user: AccessTokenPayload, id: string) {
     await this.getManagedTemplate(user, id);
-    const builder = await this.prisma.templateBuilder.upsert({ where: { templateId: id }, create: { id: randomUUID(), templateId: id, draft: defaultTemplateBuilderConfig() }, update: { published: null, publishedAt: null, publishedById: null }, include: { publishedBy: { select: { id: true, name: true, email: true } } } });
+    const builder = await this.prisma.templateBuilder.upsert({ where: { templateId: id }, create: { id: randomUUID(), templateId: id, draft: defaultTemplateBuilderConfig() as Prisma.InputJsonValue }, update: { published: Prisma.JsonNull, publishedAt: null, publishedById: null } });
     await this.prisma.auditLog.create({ data: { orgId: user.org_id, actorId: user.sub, action: 'TEMPLATE_BUILDER_UNPUBLISHED', resourceType: 'TEMPLATE', resourceId: id, metadata: {} } });
     return { id: builder.id, templateId: id, draft: builder.draft, published: null, publishedAt: null, publishedBy: null, canEdit: true, canPublish: true };
   }
@@ -344,7 +347,7 @@ export class TemplatesService {
     }
     const sourceBuilder = await this.prisma.templateBuilder.findUnique({ where: { templateId: source.id } });
     if (sourceBuilder) {
-      await this.prisma.templateBuilder.create({ data: { id: randomUUID(), templateId, draft: sourceBuilder.draft, published: sourceBuilder.published, publishedAt: sourceBuilder.publishedAt, publishedById: sourceBuilder.publishedById } });
+      await this.prisma.templateBuilder.create({ data: { id: randomUUID(), templateId, draft: sourceBuilder.draft === null ? Prisma.JsonNull : sourceBuilder.draft as Prisma.InputJsonValue, published: sourceBuilder.published === null ? Prisma.JsonNull : sourceBuilder.published as Prisma.InputJsonValue, publishedAt: sourceBuilder.publishedAt, publishedById: sourceBuilder.publishedById } });
     }
     return this.get(user, templateId);
   }
