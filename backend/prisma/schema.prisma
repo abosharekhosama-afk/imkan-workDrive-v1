@@ -525,7 +525,6 @@ model OfficeDocument {
   organization Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
   file         File         @relation(fields: [fileId], references: [id], onDelete: Cascade)
   sessions     OfficeSession[]
-  presences    OfficePresence[]
   operations   OfficeOperation[]
 
   @@index([orgId, type])
