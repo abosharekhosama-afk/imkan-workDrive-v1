@@ -95,7 +95,6 @@ export class OfficeConversionService {
     // Phase 24: relationship-aware merge. Native parts remain authoritative, but preserved
     // relationships are merged into native .rels parts with deterministic Id remapping. When an
     // Id is remapped, the source XML is patched so preserved r:id references remain valid.
-    const relationshipPatches: Array<{source:string; from:string; to:string}> = [];
     for (const [relsPath, edges] of Object.entries(bundle.relationships || {})) {
       const nativeRelsPath = this.relationshipPathForSource(relsPath);
       const preservedEncoded = bundle.parts[relsPath] || bundle.parts[nativeRelsPath];
@@ -105,11 +104,7 @@ export class OfficeConversionService {
         if (!z.file(relsPath)) z.file(relsPath, Buffer.from(preservedEncoded, 'base64'));
         continue;
       }
-      try {
-        const nativeXml = nativeFile.async ? null : null;
-        // JSZip file data is synchronously unavailable; relationship merging is handled from the
-        // already-captured preserved XML and the native XML is read by the async helper below.
-      } catch {}
+      // Native relationship XML is merged asynchronously by mergePreservedRelationships below.
     }
     // Actual asynchronous relationship merge is performed by mergePreservedRelationships.
     // This synchronous wrapper remains responsible for opaque/package-part restoration.
@@ -129,6 +124,7 @@ export class OfficeConversionService {
 
   private async mergePreservedRelationships(z: JSZip, bundle: PreservationBundle | undefined) {
     if (!bundle?.parts) return;
+    const relationshipPatches: Array<{source:string; from:string; to:string}> = [];
     const xmlEsc = (v:string) => esc(v);
     for (const [source, edges] of Object.entries(bundle.relationships || {})) {
       const relsPath = this.relationshipPathForSource(source);
@@ -329,7 +325,7 @@ export class OfficeConversionService {
 
   private async importDocx(buffer:Buffer,filename:string):Promise<OfficeImportResult>{
     const z=await JSZip.loadAsync(buffer);
-    const xml=await this.required(z,'word/document.xml').async('string');
+    const xml=await (await this.required(z,'word/document.xml')).async('string');
     const stylesXml=z.file('word/styles.xml') ? await z.file('word/styles.xml')!.async('string') : '';
     const numberingXml=z.file('word/numbering.xml') ? await z.file('word/numbering.xml')!.async('string') : '';
     const numberingMap:Record<string,any>={};
@@ -386,6 +382,7 @@ export class OfficeConversionService {
   private async importXlsx(buffer:Buffer,filename:string):Promise<OfficeImportResult>{
     const z=await JSZip.loadAsync(buffer);
     const workbookXml=await this.required(z,'xl/workbook.xml').then(f=>f.async('string'));
+    const definedNames:any[]=[...workbookXml.matchAll(/<definedName\s+([^>]*)>([\s\S]*?)<\/definedName>/g)].map(m=>{const attrs=m[1]||'';return {name:/\bname="([^"]+)"/.exec(attrs)?.[1]||'',localSheetId:/\blocalSheetId="(\d+)"/.exec(attrs)?.[1]!==undefined?Number(/\blocalSheetId="(\d+)"/.exec(attrs)![1]):undefined,formula:decodeXml(m[2])};}).filter((x:any)=>x.name);
     const stylesXml=z.file('xl/styles.xml')?await z.file('xl/styles.xml')!.async('string'):''; const xlsxStyles=parseXlsxStyles(stylesXml);
     const relXml=z.file('xl/_rels/workbook.xml.rels')?await z.file('xl/_rels/workbook.xml.rels')!.async('string'):'';
     const rels:Record<string,string>={}; for(const m of relXml.matchAll(/<Relationship\s+([^>]*)\/>/g)){const id=/Id="([^"]+)"/.exec(m[1])?.[1],target=/Target="([^"]+)"/.exec(m[1])?.[1];if(id&&target)rels[id]=target.startsWith('/')?target.slice(1):`xl/${target.replace(/^\//,'')}`;}
