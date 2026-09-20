@@ -22,7 +22,7 @@ import { STORAGE_SERVICE, type StorageService } from '../storage/storage.types';
 import { Inject } from '@nestjs/common';
 import { PermissionService } from '../permissions/permission.service';
 import { extractExtension } from '../common/file-classification';
-import type { parseCategory, parseTemplateFromFile, parseTemplateUpdate, parseTemplateUse } from './templates.schemas';
+import type { parseCategory, parseTemplateCreate, parseTemplateFromFile, parseTemplateUpdate, parseTemplateUse } from './templates.schemas';
 import { PublicTemplateSeedService } from './public-template-seed.service';
 
 @Injectable()
