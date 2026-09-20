@@ -1,0 +1,402 @@
+[
+  {
+    "slug": "business-proposal",
+    "name": "Business Proposal",
+    "category": "Business",
+    "description": "Client-ready proposal with scope, value, delivery plan, and commercial terms.",
+    "type": "docx",
+    "file": "business-proposal.docx",
+    "extension": "docx",
+    "mime": "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+  },
+  {
+    "slug": "company-profile",
+    "name": "Company Profile",
+    "category": "Business",
+    "description": "Corporate profile with mission, capabilities, leadership, and contact information.",
+    "type": "docx",
+    "file": "company-profile.docx",
+    "extension": "docx",
+    "mime": "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+  },
+  {
+    "slug": "annual-report",
+    "name": "Annual Report",
+    "category": "Business",
+    "description": "Annual performance review with highlights, metrics, financial snapshot, and outlook.",
+    "type": "docx",
+    "file": "annual-report.docx",
+    "extension": "docx",
+    "mime": "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+  },
+  {
+    "slug": "partnership-proposal",
+    "name": "Partnership Proposal",
+    "category": "Business",
+    "description": "Partnership case covering shared value, responsibilities, milestones, and terms.",
+    "type": "docx",
+    "file": "partnership-proposal.docx",
+    "extension": "docx",
+    "mime": "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+  },
+  {
+    "slug": "project-plan",
+    "name": "Project Plan",
+    "category": "Projects",
+    "description": "Project execution plan with milestones, owners, dependencies, and status.",
+    "type": "docx",
+    "file": "project-plan.docx",
+    "extension": "docx",
+    "mime": "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+  },
+  {
+    "slug": "project-charter",
+    "name": "Project Charter",
+    "category": "Projects",
+    "description": "Project charter defining objectives, scope, stakeholders, governance, and success criteria.",
+    "type": "docx",
+    "file": "project-charter.docx",
+    "extension": "docx",
+    "mime": "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+  },
+  {
+    "slug": "project-status-report",
+    "name": "Project Status Report",
+    "category": "Projects",
+    "description": "Weekly project status with progress, blockers, risks, and next actions.",
+    "type": "docx",
+    "file": "project-status-report.docx",
+    "extension": "docx",
+    "mime": "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+  },
+  {
+    "slug": "meeting-agenda",
+    "name": "Meeting Agenda",
+    "category": "Meetings",
+    "description": "Meeting agenda with time-boxed topics, owners, and outcomes.",
+    "type": "docx",
+    "file": "meeting-agenda.docx",
+    "extension": "docx",
+    "mime": "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+  },
+  {
+    "slug": "meeting-notes",
+    "name": "Meeting Notes",
+    "category": "Meetings",
+    "description": "Structured notes with decisions and action items.",
+    "type": "docx",
+    "file": "meeting-notes.docx",
+    "extension": "docx",
+    "mime": "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+  },
+  {
+    "slug": "marketing-plan",
+    "name": "Marketing Plan",
+    "category": "Marketing",
+    "description": "Marketing strategy with audience, channels, campaigns, and KPIs.",
+    "type": "docx",
+    "file": "marketing-plan.docx",
+    "extension": "docx",
+    "mime": "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+  },
+  {
+    "slug": "campaign-brief",
+    "name": "Campaign Brief",
+    "category": "Marketing",
+    "description": "Campaign brief with objective, audience, message, budget, and timeline.",
+    "type": "docx",
+    "file": "campaign-brief.docx",
+    "extension": "docx",
+    "mime": "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+  },
+  {
+    "slug": "content-calendar",
+    "name": "Content Calendar",
+    "category": "Marketing",
+    "description": "Editorial calendar with channels, themes, dates, owners, and status.",
+    "type": "xlsx",
+    "file": "content-calendar.xlsx",
+    "extension": "xlsx",
+    "mime": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+  },
+  {
+    "slug": "newsletter",
+    "name": "Newsletter",
+    "category": "Communications",
+    "description": "Newsletter layout for announcements, features, and calls to action.",
+    "type": "docx",
+    "file": "newsletter.docx",
+    "extension": "docx",
+    "mime": "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+  },
+  {
+    "slug": "social-media-plan",
+    "name": "Social Media Plan",
+    "category": "Marketing",
+    "description": "Social media plan with content pillars, cadence, and measurement.",
+    "type": "xlsx",
+    "file": "social-media-plan.xlsx",
+    "extension": "xlsx",
+    "mime": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+  },
+  {
+    "slug": "sales-proposal",
+    "name": "Sales Proposal",
+    "category": "Sales",
+    "description": "Sales proposal covering customer needs, solution, pricing, and next steps.",
+    "type": "docx",
+    "file": "sales-proposal.docx",
+    "extension": "docx",
+    "mime": "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+  },
+  {
+    "slug": "sales-plan",
+    "name": "Sales Plan",
+    "category": "Sales",
+    "description": "Sales targets, pipeline, territories, activities, and KPIs.",
+    "type": "xlsx",
+    "file": "sales-plan.xlsx",
+    "extension": "xlsx",
+    "mime": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+  },
+  {
+    "slug": "customer-success-plan",
+    "name": "Customer Success Plan",
+    "category": "Sales",
+    "description": "Customer success plan with objectives, stakeholders, milestones, and health metrics.",
+    "type": "xlsx",
+    "file": "customer-success-plan.xlsx",
+    "extension": "xlsx",
+    "mime": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+  },
+  {
+    "slug": "job-description",
+    "name": "Job Description",
+    "category": "Human Resources",
+    "description": "Role description with responsibilities, qualifications, and success measures.",
+    "type": "docx",
+    "file": "job-description.docx",
+    "extension": "docx",
+    "mime": "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+  },
+  {
+    "slug": "performance-review",
+    "name": "Performance Review",
+    "category": "Human Resources",
+    "description": "Review form for achievements, competencies, goals, and development.",
+    "type": "xlsx",
+    "file": "performance-review.xlsx",
+    "extension": "xlsx",
+    "mime": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+  },
+  {
+    "slug": "employee-handbook",
+    "name": "Employee Handbook",
+    "category": "Human Resources",
+    "description": "Employee handbook structure for policies, benefits, conduct, and procedures.",
+    "type": "docx",
+    "file": "employee-handbook.docx",
+    "extension": "docx",
+    "mime": "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+  },
+  {
+    "slug": "onboarding-plan",
+    "name": "Employee Onboarding Plan",
+    "category": "Human Resources",
+    "description": "New-hire onboarding checklist and schedule.",
+    "type": "xlsx",
+    "file": "onboarding-plan.xlsx",
+    "extension": "xlsx",
+    "mime": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+  },
+  {
+    "slug": "interview-scorecard",
+    "name": "Interview Scorecard",
+    "category": "Human Resources",
+    "description": "Structured candidate scorecard with competencies and evidence.",
+    "type": "xlsx",
+    "file": "interview-scorecard.xlsx",
+    "extension": "xlsx",
+    "mime": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+  },
+  {
+    "slug": "finance-report",
+    "name": "Finance Report",
+    "category": "Finance",
+    "description": "Financial report with revenue, expenses, variance, and commentary.",
+    "type": "xlsx",
+    "file": "finance-report.xlsx",
+    "extension": "xlsx",
+    "mime": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+  },
+  {
+    "slug": "budget-request",
+    "name": "Budget Request",
+    "category": "Finance",
+    "description": "Budget request with business case, assumptions, costs, and approval.",
+    "type": "xlsx",
+    "file": "budget-request.xlsx",
+    "extension": "xlsx",
+    "mime": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+  },
+  {
+    "slug": "invoice-cover-letter",
+    "name": "Invoice Cover Letter",
+    "category": "Finance",
+    "description": "Professional billing cover letter with payment terms and contacts.",
+    "type": "docx",
+    "file": "invoice-cover-letter.docx",
+    "extension": "docx",
+    "mime": "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+  },
+  {
+    "slug": "expense-policy",
+    "name": "Expense Policy",
+    "category": "Finance",
+    "description": "Expense policy with eligibility, limits, approvals, and reimbursement.",
+    "type": "docx",
+    "file": "expense-policy.docx",
+    "extension": "docx",
+    "mime": "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+  },
+  {
+    "slug": "procurement-request",
+    "name": "Procurement Request",
+    "category": "Operations",
+    "description": "Purchase request with requirements, vendors, budget, and approval.",
+    "type": "xlsx",
+    "file": "procurement-request.xlsx",
+    "extension": "xlsx",
+    "mime": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+  },
+  {
+    "slug": "risk-register",
+    "name": "Risk Register",
+    "category": "Operations",
+    "description": "Risk log with likelihood, impact, score, mitigation, and owner.",
+    "type": "xlsx",
+    "file": "risk-register.xlsx",
+    "extension": "xlsx",
+    "mime": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+  },
+  {
+    "slug": "business-continuity-plan",
+    "name": "Business Continuity Plan",
+    "category": "Operations",
+    "description": "Continuity plan for critical services, recovery priorities, and procedures.",
+    "type": "docx",
+    "file": "business-continuity-plan.docx",
+    "extension": "docx",
+    "mime": "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+  },
+  {
+    "slug": "incident-report",
+    "name": "Incident Report",
+    "category": "Operations",
+    "description": "Incident timeline, impact, root cause, corrective actions, and lessons learned.",
+    "type": "docx",
+    "file": "incident-report.docx",
+    "extension": "docx",
+    "mime": "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+  },
+  {
+    "slug": "standard-operating-procedure",
+    "name": "Standard Operating Procedure",
+    "category": "Operations",
+    "description": "SOP with purpose, prerequisites, procedure, controls, and records.",
+    "type": "docx",
+    "file": "standard-operating-procedure.docx",
+    "extension": "docx",
+    "mime": "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+  },
+  {
+    "slug": "requirements-document",
+    "name": "Product Requirements Document",
+    "category": "Product",
+    "description": "Product requirements with users, requirements, constraints, and acceptance criteria.",
+    "type": "docx",
+    "file": "requirements-document.docx",
+    "extension": "docx",
+    "mime": "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+  },
+  {
+    "slug": "product-launch-plan",
+    "name": "Product Launch Plan",
+    "category": "Product",
+    "description": "Launch plan with readiness, positioning, channels, owners, and metrics.",
+    "type": "pptx",
+    "file": "product-launch-plan.pptx",
+    "extension": "pptx",
+    "mime": "application/vnd.openxmlformats-officedocument.presentationml.presentation"
+  },
+  {
+    "slug": "technical-design-document",
+    "name": "Technical Design Document",
+    "category": "Technology",
+    "description": "Technical architecture, components, data flows, security, and operations.",
+    "type": "pptx",
+    "file": "technical-design-document.pptx",
+    "extension": "pptx",
+    "mime": "application/vnd.openxmlformats-officedocument.presentationml.presentation"
+  },
+  {
+    "slug": "change-request",
+    "name": "Change Request",
+    "category": "Technology",
+    "description": "Controlled change request with impact, implementation, rollback, and approvals.",
+    "type": "docx",
+    "file": "change-request.docx",
+    "extension": "docx",
+    "mime": "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+  },
+  {
+    "slug": "training-plan",
+    "name": "Training Plan",
+    "category": "Education",
+    "description": "Training program with objectives, modules, schedule, trainers, and evaluation.",
+    "type": "xlsx",
+    "file": "training-plan.xlsx",
+    "extension": "xlsx",
+    "mime": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+  },
+  {
+    "slug": "event-plan",
+    "name": "Event Plan",
+    "category": "Events",
+    "description": "Event plan covering program, logistics, vendors, staffing, budget, and contingency.",
+    "type": "xlsx",
+    "file": "event-plan.xlsx",
+    "extension": "xlsx",
+    "mime": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+  },
+  {
+    "slug": "press-release",
+    "name": "Press Release",
+    "category": "Communications",
+    "description": "Press release with headline, announcement, quotes, boilerplate, and media contact.",
+    "type": "docx",
+    "file": "press-release.docx",
+    "extension": "docx",
+    "mime": "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+  },
+  {
+    "slug": "quarterly-business-review",
+    "name": "Quarterly Business Review",
+    "category": "Business",
+    "description": "Executive review deck for performance, priorities, risks, and next quarter.",
+    "type": "pptx",
+    "file": "quarterly-business-review.pptx",
+    "extension": "pptx",
+    "mime": "application/vnd.openxmlformats-officedocument.presentationml.presentation"
+  },
+  {
+    "slug": "weekly-team-update",
+    "name": "Weekly Team Update",
+    "category": "Meetings",
+    "description": "Weekly team update tracker for priorities, progress, blockers, and next steps.",
+    "type": "xlsx",
+    "file": "weekly-team-update.xlsx",
+    "extension": "xlsx",
+    "mime": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+  }
+]

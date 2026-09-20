@@ -118,7 +118,7 @@ export class TemplatesService {
         libraryId: { in: libraryIds },
         status: TemplateStatus.ACTIVE,
         ...(query.categoryId ? { categoryId: query.categoryId } : {}),
-        ...(type ? { type } : includesPublic ? { OR: [{ type: TemplateType.DOCUMENT }, { type: TemplateType.SPREADSHEET }] } : {}),
+        ...(type ? { type } : {}),
         ...(query.q ? { OR: [{ name: { contains: query.q } }, { description: { contains: query.q } }] } : {}),
       },
       include: { category: { select: { id: true, name: true } }, library: { select: { id: true, type: true, name: true, ownerId: true } }, owner: { select: { id: true, name: true, email: true } }, versions: { orderBy: { versionNumber: 'desc' }, take: 1 } },

@@ -1,8 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import Image from "next/image";
 import { SecondarySidebar } from "@/components/layout/secondary-sidebar";
 import { Icons } from "@/components/layout/icons";
 import { useLocale } from "@/components/locale-provider";
@@ -44,9 +43,6 @@ const typeLabels: Record<TemplateType, [string, string]> = {
 };
 
 function text(ar: boolean, en: string, value: string) { return ar ? value : en; }
-function templateSlug(name: string) {
-  return name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
-}
 
 export default function TemplatesPage() {
   const { locale } = useLocale();
@@ -99,19 +95,30 @@ export default function TemplatesPage() {
   const [createTemplateDescription, setCreateTemplateDescription] = useState("");
   const [createTemplateCategoryId, setCreateTemplateCategoryId] = useState("");
   const [busy, setBusy] = useState(false);
-  const [loadingTemplates, setLoadingTemplates] = useState(true);
+  const [loadingTemplates, setLoadingTemplates] = useState(false);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
+  const cacheRef = useRef(new Map<string, { items: TemplateRecord[]; categories: TemplateCategory[]; capabilities: import("@/lib/api/templates").TemplateLibraryCapabilities }>());
 
-  const load = useCallback(async () => {
-    setLoadingTemplates(true);
+  const cacheKey = useMemo(() => JSON.stringify({ library, type: type ?? "", categoryId: categoryId ?? "", q: q.trim(), sort }), [library, type, categoryId, q, sort]);
+
+  const load = useCallback(async (force = false) => {
     setError("");
+    const cached = cacheRef.current.get(cacheKey);
+    if (!force && cached) {
+      setTemplates(cached.items);
+      setCategories(cached.categories);
+      setLibraryCapabilities(cached.capabilities);
+      return;
+    }
+    setLoadingTemplates(true);
     try {
       const [items, cats, capabilities] = await Promise.all([
         listTemplates({ library, type, categoryId, q: q.trim(), sort }),
         listTemplateCategories(library),
         getTemplateCapabilities(library),
       ]);
+      cacheRef.current.set(cacheKey, { items, categories: cats, capabilities });
       setTemplates(items);
       setCategories(cats);
       setLibraryCapabilities(capabilities);
@@ -120,7 +127,7 @@ export default function TemplatesPage() {
     } finally {
       setLoadingTemplates(false);
     }
-  }, [library, type, categoryId, q, sort, ar]);
+  }, [library, type, categoryId, q, sort, ar, cacheKey]);
 
   useEffect(() => {
     const timer = window.setTimeout(() => { void load(); }, q.trim() ? 250 : 0);
@@ -176,7 +183,7 @@ export default function TemplatesPage() {
       });
       setCreateTemplateOpen(false);
       setMessage(text(ar, "Template created successfully.", "تم إنشاء القالب بنجاح."));
-      await load();
+      cacheRef.current.clear(); await load(true);
     } catch (e) {
       setError(e instanceof Error ? e.message : text(ar, "Unable to create template.", "تعذر إنشاء القالب."));
     } finally {
@@ -184,7 +191,7 @@ export default function TemplatesPage() {
     }
   };
 
-  const empty = useMemo(() => !busy && templates.length === 0, [busy, templates.length]);
+  const empty = useMemo(() => !loadingTemplates && templates.length === 0, [loadingTemplates, templates.length]);
 
   const previewTemplate = async (template: TemplateRecord) => {
     setError("");
@@ -204,7 +211,7 @@ export default function TemplatesPage() {
       setUseTarget(null);
       setNewName("");
       setMessage(text(ar, `Created “${created.name}”.`, `تم إنشاء «${created.name}».`));
-      window.setTimeout(() => router.push(`/files/${created.file_id}`), 350);
+      window.setTimeout(() => router.push(`/files?query=${encodeURIComponent(created.name)}`), 350);
     } catch (e) {
       setError(e instanceof Error ? e.message : text(ar, "Unable to create file.", "تعذر إنشاء الملف."));
     } finally { setBusy(false); }
@@ -219,7 +226,7 @@ export default function TemplatesPage() {
       setSaveCategoryId("");
       router.replace("/files/templates");
       setMessage(text(ar, "Template saved successfully.", "تم حفظ القالب بنجاح."));
-      await load();
+      cacheRef.current.clear(); await load(true);
     } catch (e) {
       setError(e instanceof Error ? e.message : text(ar, "Unable to save template.", "تعذر حفظ القالب."));
     } finally { setBusy(false); }
@@ -239,7 +246,7 @@ export default function TemplatesPage() {
       await updateTemplate(editTarget.id, { name: editName.trim(), description: editDescription.trim(), categoryId: editCategoryId || null });
       setEditTarget(null);
       setMessage(text(ar, "Template updated successfully.", "تم تحديث القالب بنجاح."));
-      await load();
+      cacheRef.current.clear(); await load(true);
     } catch (e) { setError(e instanceof Error ? e.message : text(ar, "Unable to update template.", "تعذر تحديث القالب.")); }
     finally { setBusy(false); }
   };
@@ -251,7 +258,7 @@ export default function TemplatesPage() {
       await updateTemplateFromFile(versionTarget.id, { fileId: versionFileId.trim(), name: versionName.trim(), description: versionTarget.description || undefined, categoryId: versionTarget.category?.id || null });
       setVersionTarget(null); setVersionFileId(""); setVersionName("");
       setMessage(text(ar, "New template version created.", "تم إنشاء إصدار جديد للقالب."));
-      await load();
+      cacheRef.current.clear(); await load(true);
     } catch (e) { setError(e instanceof Error ? e.message : text(ar, "Unable to create version.", "تعذر إنشاء الإصدار.")); }
     finally { setBusy(false); }
   };
@@ -263,7 +270,7 @@ export default function TemplatesPage() {
       await duplicateTemplate(duplicateTarget.id, duplicateName.trim());
       setDuplicateTarget(null); setDuplicateName("");
       setMessage(text(ar, "Template duplicated.", "تم نسخ القالب."));
-      await load();
+      cacheRef.current.clear(); await load(true);
     } catch (e) { setError(e instanceof Error ? e.message : text(ar, "Unable to duplicate template.", "تعذر نسخ القالب.")); }
     finally { setBusy(false); }
   };
@@ -284,7 +291,7 @@ export default function TemplatesPage() {
       await updateTemplate(categoryTarget.id, { categoryId: categoryTargetId || null });
       setCategoryTarget(null); setCategoryTargetId(""); setMenuTemplateId(null);
       setMessage(text(ar, "Category updated.", "تم تحديث التصنيف."));
-      await load();
+      cacheRef.current.clear(); await load(true);
     } catch (e) { setError(e instanceof Error ? e.message : text(ar, "Unable to change category.", "تعذر تغيير التصنيف.")); }
     finally { setBusy(false); }
   };
@@ -296,7 +303,7 @@ export default function TemplatesPage() {
     try {
       await deleteTemplate(template.id);
       setMessage(text(ar, "Template moved to trash.", "تم نقل القالب إلى السلة."));
-      await load();
+      cacheRef.current.clear(); await load(true);
     } catch (e) { setError(e instanceof Error ? e.message : text(ar, "Unable to delete template.", "تعذر حذف القالب.")); }
     finally { setBusy(false); }
   };
@@ -310,7 +317,7 @@ export default function TemplatesPage() {
 
   const restoreFromTrash = async (id: string) => {
     setBusy(true); setError("");
-    try { await restoreTemplate(id); setTrash((items) => items.filter((item) => item.id !== id)); await load(); setMessage(text(ar, "Template restored.", "تمت استعادة القالب.")); }
+    try { await restoreTemplate(id); setTrash((items) => items.filter((item) => item.id !== id)); cacheRef.current.clear(); await load(true); setMessage(text(ar, "Template restored.", "تمت استعادة القالب.")); }
     catch (e) { setError(e instanceof Error ? e.message : text(ar, "Unable to restore template.", "تعذر استعادة القالب.")); }
     finally { setBusy(false); }
   };
@@ -326,7 +333,7 @@ export default function TemplatesPage() {
   const createFromVersion = async () => {
     if (!versionsTarget || !versionUse || !versionUseName.trim()) return;
     setBusy(true); setError("");
-    try { const created = await useTemplateVersion(versionsTarget.id, versionUse.id, { name: versionUseName.trim(), folderId }); setVersionUse(null); setVersionsTarget(null); setMessage(text(ar, `Created “${created.name}”.`, `تم إنشاء «${created.name}».`)); router.push(`/files/${created.file_id}`); }
+    try { const created = await useTemplateVersion(versionsTarget.id, versionUse.id, { name: versionUseName.trim(), folderId }); setVersionUse(null); setVersionsTarget(null); setMessage(text(ar, `Created “${created.name}”.`, `تم إنشاء «${created.name}».`)); router.push(`/files?query=${encodeURIComponent(created.name)}`); }
     catch (e) { setError(e instanceof Error ? e.message : text(ar, "Unable to create file from version.", "تعذر إنشاء الملف من الإصدار.")); }
     finally { setBusy(false); }
   };
@@ -342,6 +349,8 @@ export default function TemplatesPage() {
       setError(e instanceof Error ? e.message : text(ar, "Unable to create category.", "تعذر إنشاء التصنيف."));
     } finally { setBusy(false); }
   };
+
+  const thumbnailSlug = (name: string) => name.toLowerCase().normalize("NFKD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
 
   return (
     <div className="flex min-h-0 flex-1">
@@ -378,6 +387,7 @@ export default function TemplatesPage() {
               <option value="">{text(ar, "All types", "كل الأنواع")}</option>
               <option value="DOCUMENT">{text(ar, "Documents", "مستندات")}</option>
               <option value="SPREADSHEET">{text(ar, "Spreadsheets", "جداول")}</option>
+              <option value="PRESENTATION">{text(ar, "Presentations", "عروض تقديمية")}</option>
             </select>
             <select value={categoryId ?? ""} onChange={(e) => setCategoryId(e.target.value || undefined)} className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-[12px] text-slate-600">
               <option value="">{text(ar, "All categories", "كل التصنيفات")}</option>
@@ -424,21 +434,7 @@ export default function TemplatesPage() {
               ))}
               {library === "PUBLIC" && <p className="px-2 pt-2 text-[11px] leading-5 text-slate-400">{text(ar, "Public templates are not organized with categories.", "القوالب العامة لا تُنظم بواسطة التصنيفات.")}</p>}
             </aside>
-            {loadingTemplates ? (
-              <div className="grid flex-1 grid-cols-[repeat(auto-fill,minmax(245px,1fr))] gap-4 p-5" aria-busy="true" aria-label={text(ar, "Loading templates", "جارٍ تحميل القوالب")}>
-                {Array.from({ length: 8 }).map((_, index) => (
-                  <div key={index} className="animate-pulse overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
-                    <div className="h-36 bg-slate-100" />
-                    <div className="space-y-3 p-4">
-                      <div className="h-4 w-3/5 rounded bg-slate-100" />
-                      <div className="h-3 w-full rounded bg-slate-100" />
-                      <div className="h-3 w-4/5 rounded bg-slate-100" />
-                      <div className="mt-4 h-9 w-full rounded-lg bg-slate-100" />
-                    </div>
-                  </div>
-                ))}
-              </div>
-            ) : empty ? (
+            {empty ? (
               <div className="flex min-h-[420px] flex-1 items-center justify-center p-8">
                 <div className="max-w-sm text-center">
                   <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-[#f6f8fb] text-slate-400"><Icons.layout size={28} /></div>
@@ -449,25 +445,15 @@ export default function TemplatesPage() {
             ) : (
             <div className={layout === "grid" ? "grid flex-1 grid-cols-[repeat(auto-fill,minmax(245px,1fr))] gap-4 p-5" : "flex-1 space-y-2 p-5"}>
             {templates.map((template) => (
-              <article key={template.id} className={layout === "grid" ? `relative overflow-visible rounded-xl border border-slate-200 bg-white shadow-sm transition hover:border-slate-300 hover:shadow-md ${menuTemplateId === template.id ? "z-50" : "z-0"}` : `relative flex items-center gap-4 rounded-xl border border-slate-200 bg-white p-3 shadow-sm transition hover:border-slate-300 ${menuTemplateId === template.id ? "z-50" : "z-0"}`}>
+              <article key={template.id} className={layout === "grid" ? `relative overflow-visible rounded-xl border border-slate-200 bg-white shadow-sm transition hover:border-slate-300 hover:shadow-md ${menuTemplateId === template.id ? "z-[70]" : "z-0"}` : `relative flex items-center gap-4 rounded-xl border border-slate-200 bg-white p-3 shadow-sm transition hover:border-slate-300 ${menuTemplateId === template.id ? "z-[70]" : "z-0"}`}>
                 <button type="button" onClick={() => void previewTemplate(template)} className={layout === "grid" ? "group relative flex h-36 w-full items-center justify-center overflow-hidden bg-[#f6f8fb] text-[var(--wd-primary)]" : "group flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-[#f6f8fb] text-[var(--wd-primary)]"}>
                   {layout === "grid" ? (
-                    library === "PUBLIC" ? (
-                      <div className="relative h-36 w-full overflow-hidden bg-slate-100">
-                        <Image src={`/templates/catalog/${templateSlug(template.name)}.webp`} alt={template.name} fill sizes="(max-width: 768px) 90vw, 245px" className="object-cover object-top transition duration-200 group-hover:scale-[1.02]" />
-                        <div className="absolute inset-x-0 bottom-0 flex items-center justify-between bg-gradient-to-t from-black/55 to-transparent px-3 pb-2 pt-8 text-white">
-                          <span className="truncate text-[10px] font-medium">{template.name}</span>
-                          <span className="rounded bg-white/90 px-1.5 py-0.5 text-[9px] text-slate-700">DOCX</span>
-                        </div>
-                      </div>
-                    ) : (
-                      <div className="relative h-28 w-20 rounded-[3px] border border-slate-200 bg-white p-2 shadow-sm transition group-hover:-translate-y-0.5">
-                        <div className="mb-2 h-1.5 w-9 rounded bg-slate-200" />
-                        <div className="mb-1 h-1 w-full rounded bg-slate-100" /><div className="mb-1 h-1 w-4/5 rounded bg-slate-100" />
-                        <div className="mt-4 h-10 w-full rounded bg-slate-50" />
-                        <div className="absolute bottom-2 left-2 rounded bg-white/90 p-1 text-[var(--wd-primary)] shadow-sm">{template.type === "DOCUMENT" ? <Icons.doc size={13} /> : template.type === "SPREADSHEET" ? <Icons.sheet size={13} /> : <Icons.slide size={13} />}</div>
-                      </div>
-                    )
+                    <img
+                      src={`/templates/thumbnails/${thumbnailSlug(template.name)}.png`}
+                      alt={template.name}
+                      className="h-full w-full object-cover transition duration-200 group-hover:scale-[1.02]"
+                      onError={(event) => { event.currentTarget.style.display = "none"; }}
+                    />
                   ) : (template.type === "DOCUMENT" ? <Icons.doc size={28} /> : template.type === "SPREADSHEET" ? <Icons.sheet size={28} /> : <Icons.slide size={28} />)}
                 </button>
                 <div className={layout === "grid" ? "p-4" : "min-w-0 flex-1"}>
@@ -477,7 +463,7 @@ export default function TemplatesPage() {
                       <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] text-slate-500">{text(ar, typeLabels[template.type][0], typeLabels[template.type][1])}</span>
                       <button type="button" aria-label={text(ar, "More actions", "إجراءات إضافية")} onClick={() => setMenuTemplateId(menuTemplateId === template.id ? null : template.id)} className="rounded-md px-1.5 py-0.5 text-slate-500 hover:bg-slate-100">⋯</button>
                       {menuTemplateId === template.id && (
-                        <div className={`absolute ${ar ? "left-0" : "right-0"} top-7 z-[80] w-44 rounded-xl border border-slate-200 bg-white p-1.5 shadow-xl`}>
+                        <div className={`absolute ${ar ? "left-0" : "right-0"} top-7 z-[100] w-48 rounded-xl border border-slate-200 bg-white p-1.5 shadow-xl`}>
                           {template.permissions.canUse && <button type="button" onClick={() => { setUseTarget(template); setNewName(template.name); setMenuTemplateId(null); }} className="block w-full rounded-lg px-3 py-2 text-left text-[11.5px] text-slate-700 hover:bg-slate-50">{text(ar, "Use template", "استخدام القالب")}</button>}
                           {template.permissions.canEdit && <button type="button" onClick={() => { openEdit(template); setMenuTemplateId(null); }} className="block w-full rounded-lg px-3 py-2 text-left text-[11.5px] text-slate-700 hover:bg-slate-50">{text(ar, "Edit", "تعديل")}</button>}
                           {template.permissions.canEdit && <button type="button" onClick={() => { setCategoryTarget(template); setCategoryTargetId(template.category?.id || ""); setMenuTemplateId(null); }} className="block w-full rounded-lg px-3 py-2 text-left text-[11.5px] text-slate-700 hover:bg-slate-50">{text(ar, "Change category", "تغيير التصنيف")}</button>}
@@ -529,7 +515,7 @@ export default function TemplatesPage() {
             <div className="flex items-start justify-between gap-3">
               <div>
                 <h2 className="text-[16px] font-semibold text-slate-900">{text(ar, "Create template", "إنشاء قالب")}</h2>
-                <p className="mt-1 text-[12px] text-slate-500">{text(ar, "A template is created from a real file snapshot. Enter its details, then choose the file to use as the source.", "يتم إنشاء القالب من نسخة حقيقية لملف موجود. أدخل بيانات القالب ثم اختر الملف الذي سيكون مصدره.")}</p>
+                <p className="mt-1 text-[12px] text-slate-500">{text(ar, "Choose an existing file to use as the template source.", "اختر ملفًا موجودًا ليكون مصدر القالب.")}</p>
               </div>
               <button type="button" onClick={() => !busy && setCreateTemplateOpen(false)} className="rounded-lg px-2 py-1 hover:bg-slate-100">✕</button>
             </div>
@@ -554,11 +540,7 @@ export default function TemplatesPage() {
             {!createFile && createFileResults.length > 0 && (
               <div className="mt-2 max-h-44 overflow-y-auto rounded-lg border border-slate-200">
                 {createFileResults.slice(0, 12).map((file) => (
-                  <button key={file.id} type="button" onClick={() => {
-                       setCreateFile(file);
-                       setCreateFileQuery(file.name);
-                       setCreateTemplateName((current) => current.trim() ? current : file.name.replace(/\.[^.]+$/, ""));
-                     }} className="flex w-full items-center justify-between px-3 py-2 text-left hover:bg-slate-50">
+                  <button key={file.id} type="button" onClick={() => { setCreateFile(file); setCreateFileQuery(file.name); setCreateTemplateName((current) => current || file.name.replace(/\.[^.]+$/, "")); }} className="flex w-full items-center justify-between px-3 py-2 text-left hover:bg-slate-50">
                     <span className="truncate text-[12px] text-slate-700">{file.name}</span>
                     <span className="ml-3 shrink-0 text-[10px] text-slate-400">{file.extension || file.fileType || ""}</span>
                   </button>
@@ -566,14 +548,14 @@ export default function TemplatesPage() {
               </div>
             )}
 
-            <label className="mt-4 block text-[12px] font-medium text-slate-700">{text(ar, "Template name", "اسم القالب")} <span className="text-red-500">*</span></label>
-            <input autoFocus={!createFile} value={createTemplateName} onChange={(e) => setCreateTemplateName(e.target.value)} placeholder={text(ar, "e.g. Sales Proposal", "مثال: عرض مبيعات")} className="mt-2 w-full rounded-lg border border-slate-200 px-3 py-2.5 text-[13px] outline-none focus:border-[var(--wd-primary)]" />
+            <label className="mt-4 block text-[12px] font-medium text-slate-700">{text(ar, "Template name", "اسم القالب")}</label>
+            <input value={createTemplateName} onChange={(e) => setCreateTemplateName(e.target.value)} className="mt-2 w-full rounded-lg border border-slate-200 px-3 py-2.5 text-[13px] outline-none focus:border-[var(--wd-primary)] disabled:bg-slate-50" />
 
             <label className="mt-4 block text-[12px] font-medium text-slate-700">{text(ar, "Description", "الوصف")}</label>
-            <textarea value={createTemplateDescription} onChange={(e) => setCreateTemplateDescription(e.target.value)} rows={3} placeholder={text(ar, "Describe when this template should be used.", "اكتب وصفًا يوضح متى يستخدم هذا القالب.")} className="mt-2 w-full rounded-lg border border-slate-200 px-3 py-2.5 text-[13px] outline-none focus:border-[var(--wd-primary)]" />
+            <textarea value={createTemplateDescription} onChange={(e) => setCreateTemplateDescription(e.target.value)} rows={3} className="mt-2 w-full rounded-lg border border-slate-200 px-3 py-2.5 text-[13px] outline-none focus:border-[var(--wd-primary)] disabled:bg-slate-50" />
 
             <label className="mt-4 block text-[12px] font-medium text-slate-700">{text(ar, "Category", "التصنيف")}</label>
-            <select value={createTemplateCategoryId} onChange={(e) => setCreateTemplateCategoryId(e.target.value)} className="mt-2 w-full rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-[13px] outline-none">
+            <select value={createTemplateCategoryId} onChange={(e) => setCreateTemplateCategoryId(e.target.value)} className="mt-2 w-full rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-[13px] outline-none disabled:bg-slate-50">
               <option value="">{text(ar, "All / No category", "الكل / بدون تصنيف")}</option>
               {categories.map((category) => <option key={category.id} value={category.id}>{category.name}</option>)}
             </select>
