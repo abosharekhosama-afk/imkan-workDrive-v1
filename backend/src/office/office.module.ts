@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { Module, forwardRef } from '@nestjs/common';
 import { FilesModule } from '../files/files.module';
 import { PermissionsModule } from '../permissions/permissions.module';
 import { OfficeController } from './office.controller';
@@ -7,7 +7,7 @@ import { OfficeCollaborationService } from './office-collaboration.service';
 import { OfficeConversionService } from './office-conversion.service';
 
 @Module({
-  imports: [FilesModule, PermissionsModule],
+  imports: [forwardRef(() => FilesModule), PermissionsModule],
   controllers: [OfficeController],
   providers: [OfficeService, OfficeConversionService, OfficeCollaborationService],
   exports: [OfficeService],
