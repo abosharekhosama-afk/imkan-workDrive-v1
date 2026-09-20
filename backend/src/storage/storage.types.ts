@@ -60,4 +60,6 @@ export interface StorageService {
   storeObject(request: StorageObjectRequest, bytes: Buffer): Promise<void>;
   buildPublicTemplateObjectKey(fileId: string, versionId: string): string;
   copyStoredObject(sourceStorageKey: string, destination: StorageObjectRequest): Promise<void>;
+  /** Reads an already-authorized tenant storage object server-side. */
+  readStoredObject(storageKey: string): Promise<Buffer>;
 }

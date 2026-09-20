@@ -8,6 +8,7 @@ import type { AccessTokenPayload } from '../auth/jwt.types';
 import { dynamicValueCatalog, evaluateCondition, walkDynamicValues, resolveDynamicValue } from './workflow-runtime';
 import { CustomFunctionExecutor } from './custom-function.executor';
 import { ConnectionsService } from '../connections/connections.service';
+import { TemplatesService } from '../templates/templates.service';
 
 export type WorkflowFileEvent = {
   eventType?: string; fileId: string; resourceId?: string; name: string; mimeType?: string | null; fileType?: string | null; size?: string;
@@ -26,7 +27,7 @@ type RunResult = { actions?: unknown[]; fieldValues?: Record<string, unknown>; c
 @Injectable()
 export class WorkflowEngineService implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(WorkflowEngineService.name); private timer?: NodeJS.Timeout; private processing = false; private readonly workerId = `workdrive-workflow-${randomUUID()}`;
-  constructor(private readonly prisma: PrismaService, private readonly shares: SharesService, private readonly functionExecutor: CustomFunctionExecutor, private readonly permissions: PermissionService, private readonly connections: ConnectionsService) {}
+  constructor(private readonly prisma: PrismaService, private readonly shares: SharesService, private readonly functionExecutor: CustomFunctionExecutor, private readonly permissions: PermissionService, private readonly connections: ConnectionsService, private readonly templates: TemplatesService) {}
   onModuleInit() { this.timer = setInterval(() => void this.drain(), 1500); void this.drain(); }
   onModuleDestroy() { if (this.timer) clearInterval(this.timer); }
   private async recordAudit(orgId: string, actorId: string | null, action: string, resourceType: string, resourceId: string, metadata?: Record<string, unknown>) {
@@ -447,6 +448,27 @@ export class WorkflowEngineService implements OnModuleInit, OnModuleDestroy {
           await this.prisma.workflowRun.update({ where: { id: runId }, data: { result: { ...previous, fieldValues: { ...fv, [outputFieldId]: result.body } } as unknown as Prisma.InputJsonValue } });
         }
         return { action: 'http_request', connectionId, method, statusCode: result.status, responseMode, outputFieldId: outputFieldId || null, body: result.body };
+      }
+      case 'create_document_from_template': {
+        const templateId = typeof config.templateId === 'string' ? config.templateId.trim() : '';
+        if (!templateId) throw new Error('Create document from template requires a templateId');
+        const run = await this.prisma.workflowRun.findUnique({ where: { id: runId }, select: { result: true } });
+        const result = run?.result && typeof run.result === 'object' ? run.result as Record<string, unknown> : {};
+        const fieldValues = result.fieldValues && typeof result.fieldValues === 'object' ? result.fieldValues as Record<string, unknown> : {};
+        const configuredValues = config.values && typeof config.values === 'object' && !Array.isArray(config.values) ? config.values as Record<string, unknown> : {};
+        const values: Record<string, unknown> = { ...fieldValues };
+        for (const [key, value] of Object.entries(configuredValues)) values[key] = typeof value === 'string' ? await this.renderWorkflowText(value, user, event, workflowId, runId) : value;
+        const nameTemplate = typeof config.name === 'string' ? config.name : `${event.name || 'Generated document'} - generated`;
+        const name = await this.renderWorkflowText(nameTemplate, user, event, workflowId, runId);
+        const output = await this.templates.automateFromTemplate(user, templateId, { name, folderId: typeof config.folderId === 'string' ? config.folderId : event.folderId ?? null, values, generatePdf: config.generatePdf === true, pdfFolderId: typeof config.pdfFolderId === 'string' ? config.pdfFolderId : event.folderId ?? null });
+        const outputFieldId = typeof config.outputFieldId === 'string' ? config.outputFieldId.trim() : '';
+        if (outputFieldId) {
+          const latest = await this.prisma.workflowRun.findUnique({ where: { id: runId }, select: { result: true } });
+          const previous = latest?.result && typeof latest.result === 'object' ? latest.result as Record<string, unknown> : {};
+          const fv = previous.fieldValues && typeof previous.fieldValues === 'object' ? previous.fieldValues as Record<string, unknown> : {};
+          await this.prisma.workflowRun.update({ where: { id: runId }, data: { result: { ...previous, fieldValues: { ...fv, [outputFieldId]: output.fileId } } as unknown as Prisma.InputJsonValue } });
+        }
+        return { action: 'create_document_from_template', ...output, outputFieldId: outputFieldId || null };
       }
       case 'notify': { const configuredIds = Array.isArray(config.userIds) ? config.userIds.filter((id): id is string => typeof id === 'string' && id.trim().length > 0) : []; const ids = configuredIds.length ? configuredIds : [user.sub]; const recipients = await this.prisma.organizationMembership.findMany({ where: { organizationId: user.org_id, userId: { in: ids }, status: 'ACTIVE' }, select: { userId: true } }); const resourceType = (event.resourceType ?? 'FILE') as 'FILE' | 'FOLDER'; const titleTemplate = String(config.title ?? 'Workflow notification'); const bodyTemplate = typeof config.message === 'string' ? config.message : typeof config.body === 'string' ? config.body : `Workflow action completed for ${event.name}`; const title = await this.renderWorkflowText(titleTemplate, user, event, workflowId, runId); const body = await this.renderWorkflowText(bodyTemplate, user, event, workflowId, runId); for (const r of recipients) await this.prisma.notification.create({ data: { orgId: user.org_id, userId: r.userId, type: 'SYSTEM', title, body, resourceType, resourceId: event.fileId } }); return { action: 'notify', deliveredTo: recipients.map((r) => r.userId), title, body }; }
       case 'favorite': { if ((event.resourceType ?? 'FILE') === 'FOLDER') throw new Error('Favorite action is only supported for files'); await this.prisma.favorite.upsert({ where: { userId_resourceType_resourceId: { userId: user.sub, resourceType: 'FILE', resourceId: event.fileId } }, create: { orgId: user.org_id, userId: user.sub, resourceType: 'FILE', resourceId: event.fileId }, update: {} }); return { action: 'favorite', resourceId: event.fileId }; }

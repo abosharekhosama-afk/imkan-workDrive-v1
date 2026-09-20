@@ -119,6 +119,20 @@ export class S3CompatibleStorageAdapter implements StorageService {
     }));
   }
 
+  async readStoredObject(storageKey: string): Promise<Buffer> {
+    const source = isPublicTemplateObjectKey(storageKey) ? null : parseTenantObjectKey(storageKey);
+    if (source && source.orgId !== this.requireOrgId()) throw new ForbiddenException('Resource does not belong to this organization');
+    try {
+      const result = await this.client.send(new GetObjectCommand({ Bucket: this.bucket(), Key: storageKey }));
+      const body: any = result.Body;
+      if (!body) throw new Error('empty body');
+      if (typeof body.transformToByteArray === 'function') return Buffer.from(await body.transformToByteArray());
+      const chunks: Buffer[] = [];
+      for await (const chunk of body as AsyncIterable<Uint8Array>) chunks.push(Buffer.from(chunk));
+      return Buffer.concat(chunks);
+    } catch { throw new NotFoundException('File object not found on storage'); }
+  }
+
   async storeObject(request: StorageObjectRequest, bytes: Buffer): Promise<void> {
     const orgId = this.authorize(request);
     const objectKey = request.publicAccess ? (request.storageKey ?? buildPublicTemplateObjectKey(request.fileId, request.versionId)) : (request.storageKey ?? buildTenantObjectKey(orgId, request.fileId, request.versionId));

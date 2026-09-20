@@ -139,6 +139,15 @@ export class LocalDiskStorageAdapter implements StorageService {
     await copyFile(sourcePath, destinationPath);
   }
 
+  async readStoredObject(storageKey: string): Promise<Buffer> {
+    if (!isPublicTemplateObjectKey(storageKey)) {
+      const parsed = parseTenantObjectKey(storageKey);
+      if (parsed.orgId !== this.requireOrgId()) throw new ForbiddenException('Resource does not belong to this organization');
+    }
+    try { return await readFile(this.resolveObjectPath(storageKey)); }
+    catch { throw new NotFoundException('File object not found on storage disk'); }
+  }
+
   async storeObject(request: StorageObjectRequest, bytes: Buffer): Promise<void> {
     const orgId = this.authorize(request);
     const objectKey = request.publicAccess ? (request.storageKey ?? buildPublicTemplateObjectKey(request.fileId, request.versionId)) : (request.storageKey ?? buildTenantObjectKey(orgId, request.fileId, request.versionId));

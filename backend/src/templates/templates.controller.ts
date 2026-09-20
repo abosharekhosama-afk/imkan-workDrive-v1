@@ -1,9 +1,9 @@
-import { Controller, Delete, Get, Param, ParseUUIDPipe, Patch, Post, Query, Body } from '@nestjs/common';
+import { Controller, Delete, Get, Param, ParseUUIDPipe, Patch, Post, Put, Query, Body } from '@nestjs/common';
 import { CurrentUser } from '../auth/current-user.decorator';
 import type { AccessTokenPayload } from '../auth/jwt.types';
 import { TemplateLibraryType } from '@prisma/client';
 import { TemplatesService } from './templates.service';
-import { parseCategory, parseTemplateCreate, parseTemplateFromFile, parseTemplateUpdate, parseTemplateUse } from './templates.schemas';
+import { parseCategory, parseTemplateCreate, parseTemplateFromFile, parseTemplateUpdate, parseTemplateUse, parseTemplateVariable, parseTemplateBuilder } from './templates.schemas';
 
 @Controller('templates')
 export class TemplatesController {
@@ -28,6 +28,38 @@ export class TemplatesController {
 
   @Get('trash')
   trash(@CurrentUser() user: AccessTokenPayload) { return this.templates.trash(user); }
+
+  @Get(':id/variables')
+  variables(@CurrentUser() user: AccessTokenPayload, @Param('id', new ParseUUIDPipe({ version: '4' })) id: string) {
+    return this.templates.listVariables(user, id);
+  }
+
+  @Post(':id/variables')
+  createVariable(@CurrentUser() user: AccessTokenPayload, @Param('id', new ParseUUIDPipe({ version: '4' })) id: string, @Body() body: unknown) {
+    return this.templates.createVariable(user, id, parseTemplateVariable(body));
+  }
+
+  @Patch(':id/variables/:variableId')
+  updateVariable(@CurrentUser() user: AccessTokenPayload, @Param('id', new ParseUUIDPipe({ version: '4' })) id: string, @Param('variableId', new ParseUUIDPipe({ version: '4' })) variableId: string, @Body() body: unknown) {
+    return this.templates.updateVariable(user, id, variableId, parseTemplateVariable(body));
+  }
+
+  @Delete(':id/variables/:variableId')
+  deleteVariable(@CurrentUser() user: AccessTokenPayload, @Param('id', new ParseUUIDPipe({ version: '4' })) id: string, @Param('variableId', new ParseUUIDPipe({ version: '4' })) variableId: string) {
+    return this.templates.deleteVariable(user, id, variableId);
+  }
+
+  @Get(':id/builder')
+  builder(@CurrentUser() user: AccessTokenPayload, @Param('id', new ParseUUIDPipe({ version: '4' })) id: string) { return this.templates.getBuilder(user, id); }
+
+  @Put(':id/builder')
+  saveBuilder(@CurrentUser() user: AccessTokenPayload, @Param('id', new ParseUUIDPipe({ version: '4' })) id: string, @Body() body: unknown) { return this.templates.saveBuilder(user, id, parseTemplateBuilder(body)); }
+
+  @Post(':id/builder/publish')
+  publishBuilder(@CurrentUser() user: AccessTokenPayload, @Param('id', new ParseUUIDPipe({ version: '4' })) id: string) { return this.templates.publishBuilder(user, id); }
+
+  @Post(':id/builder/unpublish')
+  unpublishBuilder(@CurrentUser() user: AccessTokenPayload, @Param('id', new ParseUUIDPipe({ version: '4' })) id: string) { return this.templates.unpublishBuilder(user, id); }
 
   @Get(':id/versions')
   versions(@CurrentUser() user: AccessTokenPayload, @Param('id', new ParseUUIDPipe({ version: '4' })) id: string) { return this.templates.versions(user, id); }
@@ -61,6 +93,14 @@ export class TemplatesController {
 
   @Delete(':id/permanent')
   purge(@CurrentUser() user: AccessTokenPayload, @Param('id', new ParseUUIDPipe({ version: '4' })) id: string) { return this.templates.purge(user, id); }
+
+  @Post(':id/automation/run')
+  automate(@CurrentUser() user: AccessTokenPayload, @Param('id', new ParseUUIDPipe({ version: '4' })) id: string, @Body() body: unknown) {
+    const b = (body ?? {}) as Record<string, unknown>;
+    const name = typeof b.name === 'string' && b.name.trim() ? b.name.trim() : 'Generated document';
+    const values = b.values && typeof b.values === 'object' && !Array.isArray(b.values) ? b.values as Record<string, unknown> : {};
+    return this.templates.automateFromTemplate(user, id, { name, folderId: typeof b.folderId === 'string' ? b.folderId : null, values, generatePdf: b.generatePdf === true, pdfFolderId: typeof b.pdfFolderId === 'string' ? b.pdfFolderId : null });
+  }
 
   @Post(':id/use')
   use(@CurrentUser() user: AccessTokenPayload, @Param('id', new ParseUUIDPipe({ version: '4' })) id: string, @Body() body: unknown) { return this.templates.use(user, id, parseTemplateUse(body)); }

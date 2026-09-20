@@ -6,6 +6,7 @@ import { SecondarySidebar } from "@/components/layout/secondary-sidebar";
 import { Icons } from "@/components/layout/icons";
 import { useLocale } from "@/components/locale-provider";
 import { TemplatePreview } from "@/components/templates/template-preview";
+import { TemplateVariablesPanel } from "@/components/templates/template-variables-panel";
 import {
   listTemplates,
   getTemplate,
@@ -65,6 +66,7 @@ export default function TemplatesPage() {
   const [preview, setPreview] = useState<{ template: TemplateRecord; url: string } | null>(null);
   const [useTarget, setUseTarget] = useState<TemplateRecord | null>(null);
   const [contentEditTarget, setContentEditTarget] = useState<TemplateRecord | null>(null);
+  const [variablesTarget, setVariablesTarget] = useState<TemplateRecord | null>(null);
   const [contentEditName, setContentEditName] = useState("");
   const [editTarget, setEditTarget] = useState<TemplateRecord | null>(null);
   const [editName, setEditName] = useState("");
@@ -238,7 +240,8 @@ export default function TemplatesPage() {
       const created = await useTemplate(contentEditTarget.id, { name: contentEditName.trim(), folderId });
       setContentEditTarget(null);
       setContentEditName("");
-      router.push(`/files/editor/${created.file_id}?templateId=${encodeURIComponent(contentEditTarget.id)}`);
+      const officeRoute = created.office?.type === 'SHEET' ? 'sheet' : created.office?.type === 'SHOW' ? 'show' : 'writer';
+      router.push(created.office ? `/office/${officeRoute}/${created.file_id}?templateId=${encodeURIComponent(contentEditTarget.id)}` : `/files/editor/${created.file_id}?templateId=${encodeURIComponent(contentEditTarget.id)}`);
     } catch (e) {
       setError(e instanceof Error ? e.message : text(ar, "Unable to start template editor.", "تعذر بدء محرر القالب."));
     } finally { setBusy(false); }
@@ -493,6 +496,8 @@ export default function TemplatesPage() {
                         <div className={`absolute ${ar ? "left-0" : "right-0"} top-7 z-[100] w-48 rounded-xl border border-slate-200 bg-white p-1.5 shadow-xl`}>
                           {template.permissions.canUse && <button type="button" onClick={() => { setUseTarget(template); setNewName(template.name); setMenuTemplateId(null); }} className="block w-full rounded-lg px-3 py-2 text-left text-[11.5px] text-slate-700 hover:bg-slate-50">{text(ar, "Use template", "استخدام القالب")}</button>}
                           {template.permissions.canEdit && <button type="button" onClick={() => openContentEditor(template)} className="block w-full rounded-lg px-3 py-2 text-left text-[11.5px] font-medium text-[var(--wd-primary)] hover:bg-slate-50">{text(ar, "Edit content", "تحرير المحتوى")}</button>}
+                          {template.permissions.canEdit && <button type="button" onClick={() => { setMenuTemplateId(null); router.push(`/files/templates/builder/${template.id}`); }} className="block w-full rounded-lg px-3 py-2 text-left text-[11.5px] font-medium text-[var(--wd-primary)] hover:bg-slate-50">{text(ar, "Template Builder", "منشئ القالب")}</button>}
+                          {template.permissions.canManage && <button type="button" onClick={() => { setVariablesTarget(template); setMenuTemplateId(null); }} className="block w-full rounded-lg px-3 py-2 text-left text-[11.5px] text-slate-700 hover:bg-slate-50">{text(ar, "Variables", "المتغيرات")}</button>}
                           {template.permissions.canEdit && <button type="button" onClick={() => { openEdit(template); setMenuTemplateId(null); }} className="block w-full rounded-lg px-3 py-2 text-left text-[11.5px] text-slate-700 hover:bg-slate-50">{text(ar, "Edit", "تعديل")}</button>}
                           {template.permissions.canEdit && <button type="button" onClick={() => { setCategoryTarget(template); setCategoryTargetId(template.category?.id || ""); setMenuTemplateId(null); }} className="block w-full rounded-lg px-3 py-2 text-left text-[11.5px] text-slate-700 hover:bg-slate-50">{text(ar, "Change category", "تغيير التصنيف")}</button>}
                           {template.permissions.canDuplicate && <button type="button" onClick={() => { setDuplicateTarget(template); setDuplicateName(`${template.name} Copy`); setMenuTemplateId(null); }} className="block w-full rounded-lg px-3 py-2 text-left text-[11.5px] text-slate-700 hover:bg-slate-50">{text(ar, "Duplicate", "نسخ")}</button>}
@@ -692,6 +697,10 @@ export default function TemplatesPage() {
 
       {trashOpen && (
         <div className="fixed inset-0 z-[150] flex items-center justify-center p-4"><div className="absolute inset-0 bg-black/30" onClick={() => !busy && setTrashOpen(false)} /><div className="relative w-[min(760px,95vw)] max-h-[88vh] overflow-hidden rounded-2xl bg-white shadow-2xl"><div className="flex items-center justify-between border-b border-slate-100 px-5 py-4"><div><h2 className="text-[16px] font-semibold text-slate-900">{text(ar, "Template trash", "سلة القوالب")}</h2><p className="mt-1 text-[12px] text-slate-500">{text(ar, "Restore templates or permanently delete them.", "استعد القوالب أو احذفها نهائيًا.")}</p></div><button type="button" onClick={() => setTrashOpen(false)} className="rounded-lg px-2 py-1 hover:bg-slate-100">✕</button></div><div className="max-h-[70vh] overflow-y-auto p-4">{trash.length === 0 ? <p className="p-8 text-center text-[12px] text-slate-500">{text(ar, "Template trash is empty.", "سلة القوالب فارغة.")}</p> : <div className="space-y-2">{trash.map((t) => <div key={t.id} className="flex items-center gap-3 rounded-xl border border-slate-200 p-3"><div className="flex h-10 w-10 items-center justify-center rounded-lg bg-slate-100">{t.type === "DOCUMENT" ? <Icons.doc size={20} /> : t.type === "SPREADSHEET" ? <Icons.sheet size={20} /> : <Icons.slide size={20} />}</div><div className="min-w-0 flex-1"><div className="truncate text-[12.5px] font-semibold text-slate-800">{t.name}</div><div className="mt-1 text-[10.5px] text-slate-500">{t.library} · v{t.version}{t.deletedAt ? ` · ${new Date(t.deletedAt).toLocaleString()}` : ""}</div></div><button type="button" onClick={() => void restoreFromTrash(t.id)} className="rounded-lg border border-slate-200 px-3 py-2 text-[11px]">{text(ar, "Restore", "استعادة")}</button><button type="button" onClick={() => void purgeFromTrash(t.id)} className="rounded-lg border border-red-200 px-3 py-2 text-[11px] text-red-600">{text(ar, "Delete forever", "حذف نهائي")}</button></div>)}</div>}</div></div></div>
+      )}
+
+      {variablesTarget && (
+        <TemplateVariablesPanel templateId={variablesTarget.id} ar={ar} canManage={variablesTarget.permissions.canManage} onClose={() => setVariablesTarget(null)} />
       )}
 
       {contentEditTarget && (

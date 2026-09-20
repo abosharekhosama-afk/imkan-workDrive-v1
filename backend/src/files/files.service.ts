@@ -1,5 +1,4 @@
 import { createHash, randomUUID } from 'node:crypto';
-import * as jwt from 'jsonwebtoken';
 import { createReadStream, type ReadStream } from 'node:fs';
 import { stat } from 'node:fs/promises';
 import type { Response } from 'express';
@@ -76,10 +75,6 @@ export type FilePreviewUrlResponse = {
   updated_at: string | null;
 };
 
-export type OnlyOfficeEditorConfigResponse = {
-  config: Record<string, unknown>;
-  onlyoffice_url: string;
-};
 
 
 export type FileActivityEntry = {
@@ -873,136 +868,6 @@ export class FilesService {
     };
   }
 
-  async createOnlyOfficeEditorConfig(
-    user: AccessTokenPayload,
-    fileId: string,
-  ): Promise<OnlyOfficeEditorConfigResponse> {
-    const onlyOfficeUrl = this.config.get<string>('ONLYOFFICE_URL')?.replace(/\/+$/, '');
-    if (!onlyOfficeUrl) {
-      throw new BadRequestException('ONLYOFFICE_URL is not configured on the backend');
-    }
-
-    const file = await this.prisma.file.findFirst({
-      where: { id: fileId, orgId: user.org_id, deletedAt: null, status: FileStatus.ACTIVE },
-      include: {
-        folder: { select: { teamFolderId: true } },
-        versions: { where: { status: VersionStatus.ACTIVE }, orderBy: { versionNumber: 'desc' }, take: 1 },
-      },
-    });
-    if (!file || !file.versions[0]) throw new NotFoundException('File not found');
-    const resource = await this.toFileAccessResource(user, file);
-    if (!this.permissions.canRead(user, resource) || !this.permissions.canWrite(user, resource)) {
-      throw new ForbiddenException('You do not have permission to edit this file');
-    }
-
-    const version = file.versions[0];
-    const extension = (version.extension ?? file.extension ?? '').replace(/^\./, '').toLowerCase();
-    const supported: Record<string, { documentType: 'word' | 'cell' | 'slide'; mimeType: string }> = {
-      doc: { documentType: 'word', mimeType: 'application/msword' },
-      docx: { documentType: 'word', mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' },
-      xls: { documentType: 'cell', mimeType: 'application/vnd.ms-excel' },
-      xlsx: { documentType: 'cell', mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' },
-      ppt: { documentType: 'slide', mimeType: 'application/vnd.ms-powerpoint' },
-      pptx: { documentType: 'slide', mimeType: 'application/vnd.openxmlformats-officedocument.presentationml.presentation' },
-    };
-    const kind = supported[extension];
-    if (!kind) throw new BadRequestException('This file type cannot be edited in the online office editor');
-
-    const storageObject = await this.resolveVersionStorageObject(version);
-    if (!storageObject) throw new NotFoundException('File storage object not found');
-    const signed = await this.storage.createDownloadUrl({
-      fileId: file.id,
-      versionId: version.id,
-      storageKey: storageObject.storageKey,
-      ownerOrgId: user.org_id,
-      contentType: version.mimeType || kind.mimeType,
-      disposition: 'inline',
-      fileName: file.name,
-    });
-
-    const callbackBase = this.config.get<string>('PUBLIC_API_URL')?.replace(/\/+$/, '')
-      ?? this.config.get<string>('STORAGE_PUBLIC_BASE_URL')?.replace(/\/+$/, '');
-    if (!callbackBase) throw new BadRequestException('PUBLIC_API_URL or STORAGE_PUBLIC_BASE_URL is required for ONLYOFFICE callbacks');
-
-    const callbackToken = jwt.sign(
-      { kind: 'onlyoffice-callback', fileId: file.id, sub: user.sub, org_id: user.org_id, jti: user.jti },
-      this.config.get<string>('JWT_SECRET') ?? 'development-only-secret',
-      { expiresIn: '2h' },
-    );
-    const callbackUrl = `${callbackBase}/files/${encodeURIComponent(file.id)}/onlyoffice/callback?token=${encodeURIComponent(callbackToken)}`;
-    const key = version.id.replace(/[^A-Za-z0-9_-]/g, '').slice(0, 120);
-    const config: Record<string, unknown> = {
-      documentType: kind.documentType,
-      type: 'desktop',
-      height: '100%',
-      width: '100%',
-      document: {
-        fileType: extension,
-        key,
-        title: file.name,
-        url: signed.url,
-        permissions: { edit: true, download: true, print: true, comment: true, review: true },
-      },
-      editorConfig: {
-        mode: 'edit',
-        callbackUrl,
-        lang: 'ar',
-        customization: { autosave: true, forcesave: true, compactHeader: false },
-      },
-    };
-    const secret = this.config.get<string>('JWT_SECRET');
-    if (secret) config.token = jwt.sign(config, secret, { expiresIn: '10m' });
-    return { config, onlyoffice_url: onlyOfficeUrl };
-  }
-
-  async handleOnlyOfficeCallback(fileId: string, token: string, body: unknown): Promise<{ error: 0 }> {
-    const secret = this.config.get<string>('JWT_SECRET');
-    if (!secret) throw new BadRequestException('JWT is not configured');
-    let claims: { kind?: string; fileId?: string; sub?: string; org_id?: string; jti?: string };
-    try {
-      claims = jwt.verify(token, secret) as typeof claims;
-    } catch {
-      throw new ForbiddenException('Invalid ONLYOFFICE callback token');
-    }
-    if (claims.kind !== 'onlyoffice-callback' || claims.fileId !== fileId || !claims.sub || !claims.org_id) {
-      throw new ForbiddenException('Invalid ONLYOFFICE callback token');
-    }
-    const payload = (body ?? {}) as Record<string, unknown>;
-    const status = Number(payload.status);
-    if (![2, 6].includes(status)) return { error: 0 };
-    const url = typeof payload.url === 'string' ? payload.url : '';
-    if (!url) throw new BadRequestException('ONLYOFFICE callback did not provide a saved document URL');
-
-    const membership = await this.prisma.organizationMembership.findFirst({
-      where: { userId: claims.sub, organizationId: claims.org_id, status: 'ACTIVE' },
-      select: { id: true, role: true, status: true, isTemplateAdmin: true },
-    });
-    if (!membership) throw new ForbiddenException('User membership is no longer active');
-    const callbackUser: AccessTokenPayload = {
-      sub: claims.sub,
-      org_id: claims.org_id,
-      email: '',
-      role: membership.role,
-      membershipId: membership.id,
-      membershipStatus: membership.status,
-      templateAdmin: membership.isTemplateAdmin || membership.role === 'ADMIN' || membership.role === 'SUPER_ADMIN',
-      jti: claims.jti,
-    };
-
-    const response = await fetch(url);
-    if (!response.ok) throw new BadRequestException(`ONLYOFFICE saved document download failed (${response.status})`);
-    const buffer = Buffer.from(await response.arrayBuffer());
-    if (!buffer.length) throw new BadRequestException('ONLYOFFICE returned an empty document');
-    const file = await this.prisma.file.findFirst({ where: { id: fileId, orgId: claims.org_id, deletedAt: null }, select: { name: true, mimeType: true, extension: true } });
-    if (!file) throw new NotFoundException('File not found');
-    await this.uploadNewVersion(callbackUser, fileId, {
-      buffer,
-      originalName: file.name,
-      mimeType: file.mimeType || response.headers.get('content-type') || 'application/octet-stream',
-      size: buffer.length,
-    });
-    return { error: 0 };
-  }
 
   /**
    * Fast inline preview URL (PVW-04): same ACL/malware gating as downloads

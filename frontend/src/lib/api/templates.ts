@@ -70,7 +70,7 @@ export function listTemplates(params: { library?: TemplateLibrary; categoryId?: 
 export function getTemplate(id: string) { return apiRequest<TemplatePreview>(`/templates/${id}`); }
 
 export function useTemplate(id: string, input: { name: string; folderId?: string | null }) {
-  return apiRequest<{ file_id: string; name: string; folder_id: string | null; file_type: string }>(`/templates/${id}/use`, { method: 'POST', body: JSON.stringify(input) });
+  return apiRequest<{ file_id: string; name: string; folder_id: string | null; file_type: string; office?: { documentId: string; type: 'WRITER'|'SHEET'|'SHOW'; nativeFormat: string; revision: number } | null }>(`/templates/${id}/use`, { method: 'POST', body: JSON.stringify(input) });
 }
 
 
@@ -97,7 +97,69 @@ export function deleteTemplate(id: string) { return apiRequest<{ success: boolea
 export type TemplateVersion = { id: string; version: number; size: number; mimeType: string; extension: string | null; createdAt: string; createdBy: { id: string; name: string | null; email: string }; preview_url: string; expires_in_seconds: number };
 export type TrashedTemplate = { id: string; name: string; description: string | null; type: TemplateType; library: TemplateLibrary; category: { id: string; name: string } | null; version: number; deletedAt: string | null; canManage: boolean };
 export function listTemplateVersions(id: string) { return apiRequest<TemplateVersion[]>(`/templates/${id}/versions`); }
-export function useTemplateVersion(id: string, versionId: string, input: { name: string; folderId?: string | null }) { return apiRequest<{ file_id: string; name: string; folder_id: string | null; file_type: string }>(`/templates/${id}/versions/${versionId}/use`, { method: 'POST', body: JSON.stringify(input) }); }
+export function useTemplateVersion(id: string, versionId: string, input: { name: string; folderId?: string | null }) { return apiRequest<{ file_id: string; name: string; folder_id: string | null; file_type: string; office?: { documentId: string; type: 'WRITER'|'SHEET'|'SHOW'; nativeFormat: string; revision: number } | null }>(`/templates/${id}/versions/${versionId}/use`, { method: 'POST', body: JSON.stringify(input) }); }
 export function listTemplateTrash() { return apiRequest<TrashedTemplate[]>('/templates/trash'); }
 export function restoreTemplate(id: string) { return apiRequest<{ success: boolean }>(`/templates/${id}/restore`, { method: 'POST' }); }
 export function permanentlyDeleteTemplate(id: string) { return apiRequest<{ success: boolean }>(`/templates/${id}/permanent`, { method: 'DELETE' }); }
+
+
+export type TemplateVariableType = 'TEXT'|'NUMBER'|'DATE'|'BOOLEAN'|'EMAIL'|'URL'|'CURRENCY'|'IMAGE'|'USER'|'FILE'|'CHOICE';
+export type TemplateVariable = {
+  id: string;
+  templateId: string;
+  name: string;
+  label: string;
+  type: TemplateVariableType;
+  defaultValue: string | null;
+  required: boolean;
+  description: string | null;
+  options?: string[] | null;
+  format?: string | null;
+  position: number;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export function listTemplateVariables(templateId: string) {
+  return apiRequest<TemplateVariable[]>(`/templates/${templateId}/variables`);
+}
+export function createTemplateVariable(templateId: string, input: Omit<TemplateVariable, 'id'|'templateId'|'createdAt'|'updatedAt'>) {
+  return apiRequest<TemplateVariable>(`/templates/${templateId}/variables`, { method: 'POST', body: JSON.stringify(input) });
+}
+export function updateTemplateVariable(templateId: string, variableId: string, input: Omit<TemplateVariable, 'id'|'templateId'|'createdAt'|'updatedAt'>) {
+  return apiRequest<TemplateVariable>(`/templates/${templateId}/variables/${variableId}`, { method: 'PATCH', body: JSON.stringify(input) });
+}
+export function deleteTemplateVariable(templateId: string, variableId: string) {
+  return apiRequest<{ success: boolean }>(`/templates/${templateId}/variables/${variableId}`, { method: 'DELETE' });
+}
+
+export type TemplateBuilderField = { id: string; kind: string; label: string; variableId?: string | null; sectionId?: string | null; required?: boolean; position?: number; [key: string]: unknown };
+export type TemplateBuilderConfig = {
+  version: 1;
+  fields: TemplateBuilderField[];
+  sections: Array<{ id: string; name: string; description?: string; layout?: string; position?: number; [key: string]: unknown }>;
+  tables: Array<{ id: string; name: string; columns: Array<{ id: string; label: string; type?: string; variableId?: string | null }>; position?: number; [key: string]: unknown }>;
+  images: Array<{ id: string; name: string; sourceType: string; source: string; alt?: string; position?: number; [key: string]: unknown }>;
+  branding: { companyName: string; logoFileId: string; primaryColor: string; secondaryColor: string; fontFamily: string; [key: string]: unknown };
+  header: { enabled: boolean; content: string; align: string; [key: string]: unknown };
+  footer: { enabled: boolean; content: string; align: string; [key: string]: unknown };
+  rules: Array<{ id: string; name: string; when: Record<string, unknown>; action: Record<string, unknown>; [key: string]: unknown }>;
+  preview: { mode: string; [key: string]: unknown };
+};
+
+export type TemplateBuilderState = {
+  id: string;
+  templateId: string;
+  draft: TemplateBuilderConfig;
+  published: TemplateBuilderConfig | null;
+  publishedAt: string | null;
+  publishedBy: { id: string; name: string | null; email: string } | null;
+  updatedAt: string;
+  canEdit: boolean;
+  canPublish: boolean;
+};
+
+export function getTemplateBuilder(templateId: string) { return apiRequest<TemplateBuilderState>(`/templates/${templateId}/builder`); }
+export function saveTemplateBuilder(templateId: string, config: TemplateBuilderConfig) { return apiRequest<TemplateBuilderState>(`/templates/${templateId}/builder`, { method: 'PUT', body: JSON.stringify(config) }); }
+export function publishTemplateBuilder(templateId: string) { return apiRequest<TemplateBuilderState>(`/templates/${templateId}/builder/publish`, { method: 'POST' }); }
+export function unpublishTemplateBuilder(templateId: string) { return apiRequest<TemplateBuilderState>(`/templates/${templateId}/builder/unpublish`, { method: 'POST' }); }

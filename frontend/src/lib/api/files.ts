@@ -69,11 +69,3 @@ export type FileDetailsResponse = {
 
 export function getFileDetails(id: string) { return apiRequest<FileDetailsResponse>(`/files/${id}/details`); }
 
-export type OnlyOfficeEditorConfig = {
-  config: Record<string, unknown>;
-  onlyoffice_url: string;
-};
-
-export function getOnlyOfficeEditorConfig(fileId: string) {
-  return apiRequest<OnlyOfficeEditorConfig>(`/files/${fileId}/onlyoffice/config`);
-}

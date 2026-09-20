@@ -287,6 +287,10 @@ model Organization {
   devices             UserDevice[]
   dataTransfers       DataTransfer[]
   templateLibraries   TemplateLibrary[]
+  officeDocuments OfficeDocument[]
+  officePresences OfficePresence[]
+  officeOperations OfficeOperation[]
+  officeSessions OfficeSession[]
   templateCategories  TemplateCategory[]
   templates           Template[]
 
@@ -361,6 +365,10 @@ model User {
   templateLibrariesOwned TemplateLibrary[] @relation("TemplateLibraryOwner")
   templatesOwned         Template[] @relation("TemplateOwner")
   templateVersionsCreated TemplateVersion[] @relation("TemplateVersionCreator")
+  templateBuildersPublished TemplateBuilder[] @relation("TemplateBuilderPublisher")
+  officeSessions OfficeSession[]
+  officePresences OfficePresence[]
+  officeOperations OfficeOperation[]
 
   @@unique([email])
   @@index([email])
@@ -475,6 +483,10 @@ model File {
   trashEntries   TrashEntry[]
   shares         FileShare[]
   malwareScans   MalwareScan[]
+  officeDocument OfficeDocument?
+  officeSessions OfficeSession[]
+  officePresences OfficePresence[]
+  officeOperations OfficeOperation[]
 
   @@index([orgId, folderId])
   @@index([orgId, status])
@@ -486,10 +498,139 @@ model File {
 }
 
 
+enum OfficeDocumentType {
+  WRITER
+  SHEET
+  SHOW
+}
+
+enum OfficeSessionStatus {
+  ACTIVE
+  CLOSED
+}
+
+model OfficeDocument {
+  id           String             @id @default(uuid()) @db.Char(36)
+  orgId        String             @map("org_id") @db.Char(36)
+  fileId       String             @unique @map("file_id") @db.Char(36)
+  type         OfficeDocumentType
+  nativeFormat String             @map("native_format")
+  content      Json
+  revision     Int                @default(1)
+  sourceTemplateId        String? @map("source_template_id") @db.Char(36)
+  sourceTemplateVersionId String? @map("source_template_version_id") @db.Char(36)
+  createdAt    DateTime           @default(now()) @map("created_at")
+  updatedAt    DateTime           @updatedAt @map("updated_at")
+
+  organization Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  file         File         @relation(fields: [fileId], references: [id], onDelete: Cascade)
+  sessions     OfficeSession[]
+  presences    OfficePresence[]
+  operations   OfficeOperation[]
+
+  @@index([orgId, type])
+  @@index([orgId, updatedAt])
+  @@index([orgId, sourceTemplateId])
+  @@index([sourceTemplateId, sourceTemplateVersionId])
+  @@map("office_documents")
+}
+
+model OfficeSession {
+  id             String              @id @default(uuid()) @db.Char(36)
+  orgId          String              @map("org_id") @db.Char(36)
+  fileId         String              @map("file_id") @db.Char(36)
+  documentId     String              @map("document_id") @db.Char(36)
+  userId         String              @map("user_id") @db.Char(36)
+  type           OfficeDocumentType
+  status         OfficeSessionStatus @default(ACTIVE)
+  openedAt       DateTime            @default(now()) @map("opened_at")
+  lastActivityAt DateTime            @updatedAt @map("last_activity_at")
+  closedAt       DateTime?           @map("closed_at")
+
+  organization Organization  @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  file         File          @relation(fields: [fileId], references: [id], onDelete: Cascade)
+  document     OfficeDocument @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  presence     OfficePresence?
+  operations   OfficeOperation[]
+
+  @@index([orgId, fileId, status])
+  @@index([orgId, userId, status])
+  @@index([documentId, status])
+  @@map("office_sessions")
+}
+
+enum OfficePresenceStatus {
+  ACTIVE
+  IDLE
+}
+
+model OfficePresence {
+  id         String @id @default(uuid()) @db.Char(36)
+  orgId      String @map("org_id") @db.Char(36)
+  fileId     String @map("file_id") @db.Char(36)
+  sessionId  String @unique @map("session_id") @db.Char(36)
+  userId     String @map("user_id") @db.Char(36)
+  cursor     Json?
+  selection  Json?
+  status     OfficePresenceStatus @default(ACTIVE)
+  lastSeenAt DateTime @default(now()) @map("last_seen_at")
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
+
+  organization Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  file         File @relation(fields: [fileId], references: [id], onDelete: Cascade)
+  session      OfficeSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  user         User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([orgId, fileId, status])
+  @@index([userId, status])
+  @@map("office_presence")
+}
+
+model OfficeOperation {
+  id           String @id @default(uuid()) @db.Char(36)
+  orgId        String @map("org_id") @db.Char(36)
+  fileId       String @map("file_id") @db.Char(36)
+  documentId   String @map("document_id") @db.Char(36)
+  sessionId    String? @map("session_id") @db.Char(36)
+  userId       String @map("user_id") @db.Char(36)
+  kind         String @db.VarChar(64)
+  baseRevision Int @map("base_revision")
+  revision     Int
+  payload      Json
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  organization Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  file         File @relation(fields: [fileId], references: [id], onDelete: Cascade)
+  document     OfficeDocument @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  session      OfficeSession? @relation(fields: [sessionId], references: [id], onDelete: SetNull)
+  user         User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([orgId, fileId, revision])
+  @@index([documentId, revision])
+  @@index([userId, createdAt])
+  @@map("office_operations")
+}
+
 enum TemplateLibraryType {
   PERSONAL
   ORGANIZATION
   PUBLIC
+}
+
+enum TemplateVariableType {
+  TEXT
+  NUMBER
+  DATE
+  BOOLEAN
+  EMAIL
+  URL
+  CURRENCY
+  IMAGE
+  USER
+  FILE
+  CHOICE
 }
 
 enum TemplateType {
@@ -560,12 +701,55 @@ model Template {
   category     TemplateCategory? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
   owner        User? @relation("TemplateOwner", fields: [ownerId], references: [id], onDelete: Cascade)
   versions     TemplateVersion[]
+  variables    TemplateVariable[]
+  builder      TemplateBuilder?
 
   @@index([orgId, libraryId, status])
   @@index([orgId, ownerId])
   @@index([libraryId, categoryId])
   @@fulltext([name, description])
   @@map("templates")
+}
+
+
+
+model TemplateBuilder {
+  id             String    @id @default(uuid()) @db.Char(36)
+  templateId     String    @unique @map("template_id") @db.Char(36)
+  draft          Json
+  published      Json?
+  publishedAt    DateTime? @map("published_at")
+  publishedById  String?   @map("published_by_id") @db.Char(36)
+  createdAt      DateTime  @default(now()) @map("created_at")
+  updatedAt      DateTime  @updatedAt @map("updated_at")
+
+  template       Template  @relation(fields: [templateId], references: [id], onDelete: Cascade)
+  publishedBy    User?     @relation("TemplateBuilderPublisher", fields: [publishedById], references: [id], onDelete: SetNull)
+
+  @@index([publishedById])
+  @@map("template_builders")
+}
+
+model TemplateVariable {
+  id          String                 @id @default(uuid()) @db.Char(36)
+  templateId  String                 @map("template_id") @db.Char(36)
+  name        String
+  label       String
+  type        TemplateVariableType
+  defaultValue String?               @map("default_value") @db.Text
+  required    Boolean                @default(false)
+  description String?                @db.Text
+  options     Json?
+  format      String?
+  position    Int                    @default(0)
+  createdAt   DateTime               @default(now()) @map("created_at")
+  updatedAt   DateTime               @updatedAt @map("updated_at")
+
+  template Template @relation(fields: [templateId], references: [id], onDelete: Cascade)
+
+  @@unique([templateId, name])
+  @@index([templateId, position])
+  @@map("template_variables")
 }
 
 model TemplateVersion {

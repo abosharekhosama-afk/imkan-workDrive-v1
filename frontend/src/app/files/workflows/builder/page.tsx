@@ -29,7 +29,7 @@ const TRIGGERS = [
   ["properties_updated", "Properties updated", "تم تحديث الخصائص"], ["ready", "File marked as ready", "تم تعليم الملف كجاهز"],
 ] as const;
 const ACTIONS = [
-  ["http_request", "HTTP request", "طلب HTTP"], ["notify", "System notification", "إشعار للنظام"], ["move", "Move", "نقل"], ["copy", "Copy", "نسخ"], ["generate_link", "Generate link", "إنشاء رابط"],
+  ["http_request", "HTTP request", "طلب HTTP"], ["create_document_from_template", "Create document from template", "إنشاء مستند من قالب"], ["notify", "System notification", "إشعار للنظام"], ["move", "Move", "نقل"], ["copy", "Copy", "نسخ"], ["generate_link", "Generate link", "إنشاء رابط"],
   ["share", "Share", "مشاركة"], ["request_approval", "Request approval", "طلب موافقة"], ["favorite", "Add to favorites", "إضافة للمفضلة"],
   ["tag", "Add tag", "إضافة وسم"], ["mark_final", "Mark as final", "تعليم كنهائي"], ["create_folder", "Create folder", "إنشاء مجلد"],
   ["data_template", "Apply data template", "تطبيق قالب بيانات"], ["custom_function", "Run custom function", "تشغيل دالة آمنة"],
@@ -185,7 +185,7 @@ function ActionEditor({ actions, onChange, resourceType, ar, workflowFields }: {
   };
   const actionIcon = (type: string) => {
     const icons: Record<string, string> = {
-      http_request: "↗", notify: "◔", move: "↗", copy: "▣", generate_link: "↗", share: "↗",
+      http_request: "↗", create_document_from_template: "▤", notify: "◔", move: "↗", copy: "▣", generate_link: "↗", share: "↗",
       request_approval: "✓", favorite: "☆", tag: "#", mark_final: "✓", create_folder: "＋",
       data_template: "Aa", custom_function: "ƒ",
     };
@@ -222,6 +222,12 @@ function ActionEditor({ actions, onChange, resourceType, ar, workflowFields }: {
         </div>
 
         <div className="workflow-action-card-body">
+          {a.type === "create_document_from_template" && <>
+            <label className="workflow-action-field sm:col-span-2"><span>{txt(ar,"Office template","قالب Office")}</span><select value={String(a.config.templateId ?? "")} onChange={e=>update(i,"templateId",e.target.value)}><option value="">{txt(ar,"Select template","اختر قالباً")}</option>{templates.map(t=><option key={t.id} value={t.id}>{t.name} · v{t.activeVersion?.version ?? t.version ?? 1}</option>)}</select></label>
+            {field(txt(ar,"Output file name","اسم ملف الإخراج"),a.config.name,v=>update(i,"name",v),"{{file.name}} - generated")}
+            <label className="workflow-action-check"><input type="checkbox" checked={a.config.generatePdf === true} onChange={e=>update(i,"generatePdf",e.target.checked)} />{txt(ar,"Generate PDF copy","إنشاء نسخة PDF")}</label>
+            <label className="workflow-action-field sm:col-span-2"><span>{txt(ar,"Output workflow field (optional)","حقل إخراج سير العمل (اختياري)")}</span><select value={String(a.config.outputFieldId ?? "")} onChange={e=>update(i,"outputFieldId",e.target.value)}><option value="">{txt(ar,"No output field","بدون حقل إخراج")}</option>{workflowFields.map(f=><option key={f.id} value={f.id}>{f.name || f.id}</option>)}</select></label>
+          </>}
           {a.type === "http_request" && <>
             <label className="workflow-action-field sm:col-span-2"><span>{txt(ar,"Connection","الاتصال")}</span><select value={String(a.config.connectionId ?? "")} onChange={e=>update(i,"connectionId",e.target.value)}><option value="">{txt(ar,"Select REST connection","اختر اتصال REST")}</option>{connections.map(c=><option key={c.id} value={c.id}>{c.name}</option>)}</select></label>
             {field(txt(ar,"Path / URL path","المسار"), a.config.path, v => update(i,"path",v), "/v1/resource or ?id={{file.id}}")}

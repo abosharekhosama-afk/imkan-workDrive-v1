@@ -25,6 +25,7 @@ import { CloudImportModule } from './cloud-import/cloud-import.module';
 import { GroupsModule } from './groups/groups.module';
 import { ConnectionsModule } from './connections/connections.module';
 import { TemplatesModule } from './templates/templates.module';
+import { OfficeModule } from './office/office.module';
 
 @Module({
   imports: [
@@ -51,6 +52,7 @@ import { TemplatesModule } from './templates/templates.module';
     GroupsModule,
     ConnectionsModule,
     TemplatesModule,
+    OfficeModule,
   ],
   controllers: [AppController],
   providers: [AppService],
