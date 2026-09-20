@@ -1,6 +1,7 @@
 import {
   BadRequestException,
   ConflictException,
+  InternalServerErrorException,
   ForbiddenException,
   Injectable,
   NotFoundException,
@@ -272,28 +273,59 @@ export class TemplatesService {
     const library = await this.ensureLibrary(user, input.library);
     if (!this.canManageLibrary(user, library)) throw new ForbiddenException('You cannot manage this template library');
     const category = await this.assertCategory(user, input.categoryId, library.id);
-    const assets = join(__dirname, 'blank-assets');
     const definitions: Record<TemplateType, { file: string; extension: string; mimeType: string }> = {
       [TemplateType.DOCUMENT]: { file: 'blank-document.docx', extension: 'docx', mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' },
       [TemplateType.SPREADSHEET]: { file: 'blank-spreadsheet.xlsx', extension: 'xlsx', mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' },
       [TemplateType.PRESENTATION]: { file: 'blank-presentation.pptx', extension: 'pptx', mimeType: 'application/vnd.openxmlformats-officedocument.presentationml.presentation' },
     };
     const definition = definitions[input.type];
-    const bytes = await readFile(join(assets, definition.file)).catch(async () => readFile(join(process.cwd(), 'src/templates/blank-assets', definition.file)));
+
+    // Nest copies assets to dist/templates/blank-assets in production, while
+    // local/dev runs commonly read them directly from src/templates/blank-assets.
+    // Render can also start the app from either the backend directory or the
+    // repository root, so try the known layouts instead of returning a raw ENOENT 500.
+    const assetCandidates = [
+      join(__dirname, 'blank-assets', definition.file),
+      join(process.cwd(), 'dist', 'templates', 'blank-assets', definition.file),
+      join(process.cwd(), 'src', 'templates', 'blank-assets', definition.file),
+      join(process.cwd(), 'backend', 'src', 'templates', 'blank-assets', definition.file),
+    ];
+    let bytes: Buffer | null = null;
+    for (const assetPath of assetCandidates) {
+      try {
+        bytes = await readFile(assetPath);
+        break;
+      } catch {
+        // Try the next deployment layout.
+      }
+    }
+    if (!bytes) {
+      throw new InternalServerErrorException(
+        `Blank ${input.type.toLowerCase()} template asset is not available on the server`,
+      );
+    }
+
     const file = await this.files.createFileFromBytes(user, {
       name: `${input.name}.${definition.extension}`,
       mimeType: definition.mimeType,
       extension: definition.extension,
       bytes,
     });
-    const template = await this.saveFromFile(user, {
-      fileId: file.file_id,
-      name: input.name,
-      description: input.description,
-      library: input.library,
-      categoryId: category?.id ?? null,
-    });
-    return { template, file_id: file.file_id };
+
+    try {
+      const template = await this.saveFromFile(user, {
+        fileId: file.file_id,
+        name: input.name,
+        description: input.description,
+        library: input.library,
+        categoryId: category?.id ?? null,
+      });
+      return { template, file_id: file.file_id };
+    } catch (error) {
+      // A failed template transaction must not leave an orphan working file.
+      await this.files.trash(user, file.file_id).catch(() => undefined);
+      throw error;
+    }
   }
 
   async saveFromFile(user: AccessTokenPayload, input: ReturnType<typeof parseTemplateFromFile>) {
@@ -362,29 +394,77 @@ export class TemplatesService {
   }
 
   async trash(user: AccessTokenPayload) {
+    // Personal/organization templates belong to the current org. Public
+    // templates are global (orgId = null), but an admin/template-admin may
+    // still manage them. Keep both scopes visible in the template trash.
     const rows = await this.prisma.template.findMany({
-      where: { orgId: user.org_id, deletedAt: { not: null }, OR: [{ ownerId: user.sub }, { library: { type: { in: [TemplateLibraryType.ORGANIZATION, TemplateLibraryType.PUBLIC] } } }] },
+      where: {
+        deletedAt: { not: null },
+        OR: [
+          { orgId: user.org_id, ownerId: user.sub },
+          { orgId: user.org_id, library: { type: TemplateLibraryType.ORGANIZATION } },
+          { orgId: null, library: { type: TemplateLibraryType.PUBLIC } },
+        ],
+      },
       include: { library: true, category: true, versions: { orderBy: { versionNumber: 'desc' }, take: 1 } },
       orderBy: { deletedAt: 'desc' },
     });
-    return rows.filter(t => this.canManageLibrary(user, t.library)).map(t => ({ id: t.id, name: t.name, description: t.description, type: t.type, library: t.library.type, category: t.category, version: t.versions[0]?.versionNumber ?? 0, deletedAt: t.deletedAt?.toISOString() ?? null, canManage: true }));
+    return rows
+      .filter(t => this.canManageLibrary(user, t.library))
+      .map(t => ({
+        id: t.id,
+        name: t.name,
+        description: t.description,
+        type: t.type,
+        library: t.library.type,
+        category: t.category,
+        version: t.versions[0]?.versionNumber ?? 0,
+        deletedAt: t.deletedAt?.toISOString() ?? null,
+        canManage: true,
+      }));
   }
 
   async restore(user: AccessTokenPayload, id: string) {
-    const template = await this.prisma.template.findFirst({ where: { id, orgId: user.org_id }, include: { library: true } });
-    if (!template || template.status !== TemplateStatus.TRASHED || !this.canManageLibrary(user, template.library)) throw new NotFoundException('Template not found in trash');
+    const template = await this.prisma.template.findFirst({
+      where: {
+        id,
+        OR: [
+          { orgId: user.org_id },
+          { orgId: null, library: { type: TemplateLibraryType.PUBLIC } },
+        ],
+      },
+      include: { library: true },
+    });
+    if (!template || template.status !== TemplateStatus.TRASHED || !this.canManageLibrary(user, template.library)) {
+      throw new NotFoundException('Template not found in trash');
+    }
     await this.prisma.template.update({ where: { id }, data: { status: TemplateStatus.ACTIVE, deletedAt: null } });
-    await this.prisma.auditLog.create({ data: { orgId: user.org_id, actorId: user.sub, action: 'TEMPLATE_RESTORED', resourceType: 'TEMPLATE', resourceId: id } });
+    await this.prisma.auditLog.create({
+      data: { orgId: user.org_id, actorId: user.sub, action: 'TEMPLATE_RESTORED', resourceType: 'TEMPLATE', resourceId: id },
+    });
     return { success: true };
   }
 
   async purge(user: AccessTokenPayload, id: string) {
-    const template = await this.prisma.template.findFirst({ where: { id, orgId: user.org_id }, include: { library: true, versions: { select: { storageKey: true } } } });
-    if (!template || template.status !== TemplateStatus.TRASHED || !this.canManageLibrary(user, template.library)) throw new NotFoundException('Template not found in trash');
+    const template = await this.prisma.template.findFirst({
+      where: {
+        id,
+        OR: [
+          { orgId: user.org_id },
+          { orgId: null, library: { type: TemplateLibraryType.PUBLIC } },
+        ],
+      },
+      include: { library: true, versions: { select: { storageKey: true } } },
+    });
+    if (!template || template.status !== TemplateStatus.TRASHED || !this.canManageLibrary(user, template.library)) {
+      throw new NotFoundException('Template not found in trash');
+    }
     const keys = template.versions.map(v => v.storageKey);
     await this.prisma.template.delete({ where: { id } });
     await Promise.all(keys.map(key => this.storage.deleteStoredObject(key).catch(() => undefined)));
-    await this.prisma.auditLog.create({ data: { orgId: user.org_id, actorId: user.sub, action: 'TEMPLATE_PERMANENTLY_DELETED', resourceType: 'TEMPLATE', resourceId: id } });
+    await this.prisma.auditLog.create({
+      data: { orgId: user.org_id, actorId: user.sub, action: 'TEMPLATE_PERMANENTLY_DELETED', resourceType: 'TEMPLATE', resourceId: id },
+    });
     return { success: true };
   }
 
