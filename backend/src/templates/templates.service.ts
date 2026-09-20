@@ -22,7 +22,7 @@ import { STORAGE_SERVICE, type StorageService } from '../storage/storage.types';
 import { Inject } from '@nestjs/common';
 import { PermissionService } from '../permissions/permission.service';
 import { extractExtension } from '../common/file-classification';
-import type { parseCategory, parseTemplateFromFile, parseTemplateUpdate, parseTemplateUse } from './templates.schemas';
+import type { parseCategory, parseTemplateCreate, parseTemplateFromFile, parseTemplateUpdate, parseTemplateUse } from './templates.schemas';
 import { PublicTemplateSeedService } from './public-template-seed.service';
 
 @Injectable()
@@ -272,31 +272,14 @@ export class TemplatesService {
     const library = await this.ensureLibrary(user, input.library);
     if (!this.canManageLibrary(user, library)) throw new ForbiddenException('You cannot manage this template library');
     const category = await this.assertCategory(user, input.categoryId, library.id);
-    const assetCandidates = [
-      join(__dirname, 'blank-assets'),
-      join(process.cwd(), 'dist/templates/blank-assets'),
-      join(process.cwd(), 'dist/src/templates/blank-assets'),
-      join(process.cwd(), 'src/templates/blank-assets'),
-    ];
+    const assets = join(__dirname, 'blank-assets');
     const definitions: Record<TemplateType, { file: string; extension: string; mimeType: string }> = {
       [TemplateType.DOCUMENT]: { file: 'blank-document.docx', extension: 'docx', mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' },
       [TemplateType.SPREADSHEET]: { file: 'blank-spreadsheet.xlsx', extension: 'xlsx', mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' },
       [TemplateType.PRESENTATION]: { file: 'blank-presentation.pptx', extension: 'pptx', mimeType: 'application/vnd.openxmlformats-officedocument.presentationml.presentation' },
     };
     const definition = definitions[input.type];
-    let bytes: Buffer | null = null;
-    let assetError: unknown = null;
-    for (const assetRoot of assetCandidates) {
-      try {
-        bytes = await readFile(join(assetRoot, definition.file));
-        break;
-      } catch (error) {
-        assetError = error;
-      }
-    }
-    if (!bytes) {
-      throw new Error(`Blank template asset '${definition.file}' is missing. Checked: ${assetCandidates.join(', ')}. Last error: ${assetError instanceof Error ? assetError.message : String(assetError)}`);
-    }
+    const bytes = await readFile(join(assets, definition.file)).catch(async () => readFile(join(process.cwd(), 'src/templates/blank-assets', definition.file)));
     const file = await this.files.createFileFromBytes(user, {
       name: `${input.name}.${definition.extension}`,
       mimeType: definition.mimeType,
