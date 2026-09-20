@@ -28,6 +28,7 @@ import {
   type TemplateRecord,
   type TemplateType,
 } from "@/lib/api/templates";
+import { searchNames } from "@/lib/api/search";
 
 const tabs: { id: TemplateLibrary; en: string; ar: string }[] = [
   { id: "PERSONAL", en: "My Templates", ar: "قوالبي" },
@@ -86,6 +87,13 @@ export default function TemplatesPage() {
   const [categoryTargetId, setCategoryTargetId] = useState("");
   const [newName, setNewName] = useState("");
   const [newCategory, setNewCategory] = useState("");
+  const [createTemplateOpen, setCreateTemplateOpen] = useState(false);
+  const [createFileQuery, setCreateFileQuery] = useState("");
+  const [createFileResults, setCreateFileResults] = useState<import("@/lib/api/types").FileRecord[]>([]);
+  const [createFile, setCreateFile] = useState<import("@/lib/api/types").FileRecord | null>(null);
+  const [createTemplateName, setCreateTemplateName] = useState("");
+  const [createTemplateDescription, setCreateTemplateDescription] = useState("");
+  const [createTemplateCategoryId, setCreateTemplateCategoryId] = useState("");
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
@@ -118,6 +126,55 @@ export default function TemplatesPage() {
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
   }, []);
+
+  useEffect(() => {
+    if (!createTemplateOpen || createFileQuery.trim().length < 2) {
+      setCreateFileResults([]);
+      return;
+    }
+    let cancelled = false;
+    const timer = window.setTimeout(async () => {
+      try {
+        const result = await searchNames(createFileQuery.trim(), "files");
+        if (!cancelled) setCreateFileResults(result.files || []);
+      } catch {
+        if (!cancelled) setCreateFileResults([]);
+      }
+    }, 250);
+    return () => { cancelled = true; window.clearTimeout(timer); };
+  }, [createTemplateOpen, createFileQuery]);
+
+  const openCreateTemplate = () => {
+    if (library === "PUBLIC") return;
+    setCreateTemplateOpen(true);
+    setCreateFile(null);
+    setCreateFileQuery("");
+    setCreateFileResults([]);
+    setCreateTemplateName("");
+    setCreateTemplateDescription("");
+    setCreateTemplateCategoryId("");
+  };
+
+  const createTemplateFromFile = async () => {
+    if (!createFile || !createTemplateName.trim()) return;
+    setBusy(true); setError("");
+    try {
+      await saveFileAsTemplate({
+        fileId: createFile.id,
+        name: createTemplateName.trim(),
+        description: createTemplateDescription.trim() || undefined,
+        library,
+        categoryId: createTemplateCategoryId || null,
+      });
+      setCreateTemplateOpen(false);
+      setMessage(text(ar, "Template created successfully.", "تم إنشاء القالب بنجاح."));
+      await load();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : text(ar, "Unable to create template.", "تعذر إنشاء القالب."));
+    } finally {
+      setBusy(false);
+    }
+  };
 
   const empty = useMemo(() => !busy && templates.length === 0, [busy, templates.length]);
 
@@ -330,9 +387,14 @@ export default function TemplatesPage() {
             </div>
           </div>
 
-          {libraryCapabilities?.canCreateCategory && <div className="mt-3 flex items-center gap-2">
+          {library !== "PUBLIC" && libraryCapabilities?.canCreate && <div className="mt-3 flex flex-wrap items-center gap-2">
+            <button type="button" onClick={openCreateTemplate} disabled={busy} className="rounded-lg bg-[var(--wd-primary)] px-3 py-2 text-[12px] font-medium text-white shadow-sm disabled:opacity-50">
+              + {text(ar, "Create template", "إنشاء قالب")}
+            </button>
+            {libraryCapabilities?.canCreateCategory && <div className="flex items-center gap-2">
             <input id="new-template-category" value={newCategory} onChange={(e) => setNewCategory(e.target.value)} placeholder={text(ar, "New category", "تصنيف جديد")} className="w-44 rounded-lg border border-slate-200 px-3 py-2 text-[12px] outline-none focus:border-[var(--wd-primary)]" />
             <button type="button" disabled={busy || !newCategory.trim()} onClick={() => void addCategory()} className="rounded-lg border border-slate-200 px-3 py-2 text-[12px] font-medium text-slate-700 disabled:opacity-50">+ {text(ar, "Category", "تصنيف")}</button>
+            </div>}
           </div>}
           {message && <div className="mt-3 rounded-lg bg-[#EEF4FF] px-3 py-2 text-[12px] text-[#1B66EA]">{message}</div>}
           {error && <div className="mt-3 rounded-lg bg-red-50 px-3 py-2 text-[12px] text-red-700">{error}</div>}
@@ -424,6 +486,66 @@ export default function TemplatesPage() {
               <button type="button" onClick={() => setPreview(null)} className="rounded-lg px-2 py-1 hover:bg-slate-100">✕</button>
             </div>
             <TemplatePreview url={preview.url} name={preview.template.name} mimeType={preview.template.mimeType} extension={preview.template.extension} className="min-h-0 flex-1" />
+          </div>
+        </div>
+      )}
+
+      {createTemplateOpen && (
+        <div className="fixed inset-0 z-[140] flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/30" onClick={() => !busy && setCreateTemplateOpen(false)} />
+          <div className="relative w-[min(560px,94vw)] max-h-[88vh] overflow-y-auto rounded-2xl bg-white p-5 shadow-2xl">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <h2 className="text-[16px] font-semibold text-slate-900">{text(ar, "Create template", "إنشاء قالب")}</h2>
+                <p className="mt-1 text-[12px] text-slate-500">{text(ar, "Choose an existing file to use as the template source.", "اختر ملفًا موجودًا ليكون مصدر القالب.")}</p>
+              </div>
+              <button type="button" onClick={() => !busy && setCreateTemplateOpen(false)} className="rounded-lg px-2 py-1 hover:bg-slate-100">✕</button>
+            </div>
+
+            <label className="mt-5 block text-[12px] font-medium text-slate-700">{text(ar, "Source file", "الملف المصدر")}</label>
+            <input
+              autoFocus
+              value={createFileQuery}
+              onChange={(e) => { setCreateFileQuery(e.target.value); setCreateFile(null); }}
+              placeholder={text(ar, "Search your files...", "ابحث في ملفاتك...")}
+              className="mt-2 w-full rounded-lg border border-slate-200 px-3 py-2.5 text-[13px] outline-none focus:border-[var(--wd-primary)]"
+            />
+            {createFile && (
+              <div className="mt-2 flex items-center justify-between rounded-lg border border-blue-200 bg-blue-50 px-3 py-2">
+                <div className="min-w-0">
+                  <div className="truncate text-[12px] font-medium text-slate-800">{createFile.name}</div>
+                  <div className="text-[10px] text-slate-500">{createFile.extension || createFile.mimeType || ""}</div>
+                </div>
+                <button type="button" onClick={() => setCreateFile(null)} className="text-[11px] text-slate-500">{text(ar, "Change", "تغيير")}</button>
+              </div>
+            )}
+            {!createFile && createFileResults.length > 0 && (
+              <div className="mt-2 max-h-44 overflow-y-auto rounded-lg border border-slate-200">
+                {createFileResults.slice(0, 12).map((file) => (
+                  <button key={file.id} type="button" onClick={() => { setCreateFile(file); setCreateFileQuery(file.name); }} className="flex w-full items-center justify-between px-3 py-2 text-left hover:bg-slate-50">
+                    <span className="truncate text-[12px] text-slate-700">{file.name}</span>
+                    <span className="ml-3 shrink-0 text-[10px] text-slate-400">{file.extension || file.fileType || ""}</span>
+                  </button>
+                ))}
+              </div>
+            )}
+
+            <label className="mt-4 block text-[12px] font-medium text-slate-700">{text(ar, "Template name", "اسم القالب")}</label>
+            <input value={createTemplateName} onChange={(e) => setCreateTemplateName(e.target.value)} disabled={!createFile} className="mt-2 w-full rounded-lg border border-slate-200 px-3 py-2.5 text-[13px] outline-none focus:border-[var(--wd-primary)] disabled:bg-slate-50" />
+
+            <label className="mt-4 block text-[12px] font-medium text-slate-700">{text(ar, "Description", "الوصف")}</label>
+            <textarea value={createTemplateDescription} onChange={(e) => setCreateTemplateDescription(e.target.value)} disabled={!createFile} rows={3} className="mt-2 w-full rounded-lg border border-slate-200 px-3 py-2.5 text-[13px] outline-none focus:border-[var(--wd-primary)] disabled:bg-slate-50" />
+
+            <label className="mt-4 block text-[12px] font-medium text-slate-700">{text(ar, "Category", "التصنيف")}</label>
+            <select value={createTemplateCategoryId} onChange={(e) => setCreateTemplateCategoryId(e.target.value)} disabled={!createFile} className="mt-2 w-full rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-[13px] outline-none disabled:bg-slate-50">
+              <option value="">{text(ar, "All / No category", "الكل / بدون تصنيف")}</option>
+              {categories.map((category) => <option key={category.id} value={category.id}>{category.name}</option>)}
+            </select>
+
+            <div className="mt-5 flex justify-end gap-2">
+              <button type="button" onClick={() => !busy && setCreateTemplateOpen(false)} className="rounded-lg border border-slate-200 px-4 py-2 text-[12px] text-slate-600">{text(ar, "Cancel", "إلغاء")}</button>
+              <button type="button" disabled={busy || !createFile || !createTemplateName.trim()} onClick={() => void createTemplateFromFile()} className="rounded-lg bg-[var(--wd-primary)] px-4 py-2 text-[12px] font-medium text-white disabled:opacity-50">{text(ar, "Create template", "إنشاء القالب")}</button>
+            </div>
           </div>
         </div>
       )}

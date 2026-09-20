@@ -61,9 +61,18 @@ export class PublicTemplateSeedService implements OnModuleInit {
 
   async onModuleInit(): Promise<void> {
     try {
+      await this.ensureSeed();
+    } catch (error) {
+      this.logger.error(`Public template catalog seed failed: ${error instanceof Error ? error.message : String(error)}`);
+    }
+  }
+
+  async ensureSeed(): Promise<void> {
+    try {
       await this.seed();
     } catch (error) {
       this.logger.error(`Public template catalog seed failed: ${error instanceof Error ? error.message : String(error)}`);
+      throw error;
     }
   }
 

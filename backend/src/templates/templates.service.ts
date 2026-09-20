@@ -21,6 +21,7 @@ import { Inject } from '@nestjs/common';
 import { PermissionService } from '../permissions/permission.service';
 import { extractExtension } from '../common/file-classification';
 import type { parseCategory, parseTemplateFromFile, parseTemplateUpdate, parseTemplateUse } from './templates.schemas';
+import { PublicTemplateSeedService } from './public-template-seed.service';
 
 @Injectable()
 export class TemplatesService {
@@ -29,6 +30,7 @@ export class TemplatesService {
     private readonly files: FilesService,
     @Inject(STORAGE_SERVICE) private readonly storage: StorageService,
     private readonly permissions: PermissionService,
+    private readonly publicTemplateSeed: PublicTemplateSeedService,
   ) {}
 
   private isAdmin(user: AccessTokenPayload) {
@@ -93,6 +95,9 @@ export class TemplatesService {
   }
 
   async list(user: AccessTokenPayload, query: { library?: string; categoryId?: string; type?: string; q?: string; sort?: string }) {
+    if (query.library === TemplateLibraryType.PUBLIC) {
+      await this.publicTemplateSeed.ensureSeed();
+    }
     const libraries = await this.prisma.templateLibrary.findMany({
       where: {
         OR: [
