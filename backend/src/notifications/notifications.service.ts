@@ -10,7 +10,7 @@ export type OfficeNotificationInput = {
   category: OfficeNotificationCategory;
   title: string;
   body?: string | null;
-  resourceType?: 'FILE' | 'FOLDER' | null;
+  resourceType?: 'FILE' | 'FOLDER' | 'TEMPLATE' | null;
   resourceId?: string | null;
   priority?: 'LOW' | 'NORMAL' | 'HIGH' | 'URGENT';
 };
