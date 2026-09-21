@@ -222,10 +222,10 @@ export class OfficeService implements OfficeEngine {
   ) {}
 
   async requestApproval(user: AccessTokenPayload, fileId: string, body: { workflowId: string; participantRules?: unknown; fieldValues?: Record<string, unknown>; comment?: string }) {
-    const document = await this.prisma.officeDocument.findFirst({ where: { fileId, orgId: user.org_id }, select: { id: true, type: true } });
+    const document = await this.prisma.officeDocument.findFirst({ where: { fileId, orgId: user.org_id }, select: { id: true, type: true, file: { select: { name: true, mimeType: true, fileType: true, size: true, extension: true } } } });
     if (!document) throw new NotFoundException('Office document not found');
     const result = await this.workflowEngine.startManual(user, body.workflowId, {
-      fileId, resourceId: fileId, resourceType: 'FILE', eventType: 'manual', userId: user.sub,
+      fileId, resourceId: fileId, resourceType: 'FILE', eventType: 'manual', userId: user.sub, name: document.file.name, mimeType: document.file.mimeType, fileType: document.file.fileType, size: String(document.file.size), extension: document.file.extension,
       startInput: { participantRules: Array.isArray(body.participantRules) ? body.participantRules : undefined, fieldValues: body.fieldValues ?? {}, comment: typeof body.comment === 'string' ? body.comment : '' },
     });
     await this.auditOfficeEvent(user, 'OFFICE_APPROVAL_REQUESTED', fileId, { workflowId: body.workflowId, type: document.type, runId: result?.id ?? null }, 'OFFICE_DOCUMENT');
@@ -235,7 +235,7 @@ export class OfficeService implements OfficeEngine {
   async getApprovalStatus(user: AccessTokenPayload, fileId: string) {
     const document = await this.prisma.officeDocument.findFirst({ where: { fileId, orgId: user.org_id }, select: { id: true, type: true } });
     if (!document) throw new NotFoundException('Office document not found');
-    const tasks = await this.prisma.workflowTask.findMany({ where: { orgId: user.org_id }, include: { workflow: { select: { id: true, name: true } }, state: { select: { id: true, name: true } }, participants: { include: { user: { select: { id: true, name: true, email: true } } } }, run: { select: { id: true, status: true, createdAt: true, currentStateId: true, trigger: true, result: true } } }, orderBy: { createdAt: 'desc' }, take: 200 });
+    const tasks = await this.prisma.workflowTask.findMany({ where: { orgId: user.org_id }, include: { workflow: { select: { id: true, name: true } }, state: { select: { id: true, name: true } }, participants: { include: { user: { select: { id: true, name: true, email: true } } } }, run: { select: { id: true, status: true, startedAt: true, currentStateId: true, trigger: true, result: true } } }, orderBy: { createdAt: 'desc' }, take: 200 });
     const relevant = tasks.filter((task) => { const trigger = task.run?.trigger; return !!trigger && typeof trigger === 'object' && !Array.isArray(trigger) && String((trigger as Record<string, unknown>).fileId ?? (trigger as Record<string, unknown>).resourceId ?? '') === fileId; });
     return { fileId, officeType: document.type, current: relevant.find((t) => t.status === 'PENDING') ?? null, history: relevant.slice(0, 50) };
   }
@@ -733,14 +733,16 @@ export class OfficeService implements OfficeEngine {
       const session = await this.prisma.officeSession.findFirst({ where: { id: input.sessionId, orgId: user.org_id, userId: user.sub, fileId, status: OfficeSessionStatus.ACTIVE } });
       if (!session) throw new ForbiddenException('Invalid Office session');
     }
-    const previousOperation = await this.prisma.officeOperation.findFirst({ where: { orgId: user.org_id, fileId, payload: { path: ['opId'], equals: input.opId } } });
+    const recentOperations = await this.prisma.officeOperation.findMany({ where: { orgId: user.org_id, fileId }, orderBy: { revision: 'desc' }, take: 200 });
+    const previousOperation = recentOperations.find((operation) => { const payload = operation.payload && typeof operation.payload === 'object' && !Array.isArray(operation.payload) ? operation.payload as Record<string, unknown> : {}; return String(payload.opId ?? '') === input.opId; });
     if (previousOperation) return { document: await this.open(user, fileId), operationId: previousOperation.id, opId: input.opId, revision: previousOperation.revision, acknowledged: true };
 
     // Phase 45 operation-engine identity/order guard. sequence is monotonic per client/session.
-    if (input.clientId && Number.isInteger(input.sequence) && input.sequence >= 0) {
-      const latest = await this.prisma.officeOperation.findFirst({ where: { orgId: user.org_id, fileId, sessionId: input.sessionId || undefined, payload: { path: ['clientId'], equals: input.clientId } }, orderBy: { revision: 'desc' } });
+    if (input.clientId && typeof input.sequence === 'number' && Number.isInteger(input.sequence) && input.sequence >= 0) {
+      const clientOperations = await this.prisma.officeOperation.findMany({ where: { orgId: user.org_id, fileId, sessionId: input.sessionId || undefined }, orderBy: { revision: 'desc' }, take: 200 });
+      const latest = clientOperations.find((operation) => { const payload = operation.payload && typeof operation.payload === 'object' && !Array.isArray(operation.payload) ? operation.payload as Record<string, unknown> : {}; return String(payload.clientId ?? '') === input.clientId; });
       const latestSequence = Number((latest?.payload as any)?.sequence);
-      if (latest && Number.isInteger(latestSequence) && input.sequence <= latestSequence) {
+      if (latest && Number.isInteger(latestSequence) && typeof input.sequence === 'number' && input.sequence <= latestSequence) {
         throw new ConflictException({ message: 'Out-of-order Office operation', code: 'OFFICE_OPERATION_OUT_OF_ORDER', revision: latest.revision, sequence: latestSequence });
       }
     }

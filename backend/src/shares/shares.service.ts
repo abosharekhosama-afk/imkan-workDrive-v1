@@ -32,6 +32,7 @@ import { OfficeEmailService } from '../office-email/office-email.service';
 
 export type CreateShareResponse = {
   link_url: string;
+  emailed?: number;
 };
 
 export type VerifyShareResponse = {

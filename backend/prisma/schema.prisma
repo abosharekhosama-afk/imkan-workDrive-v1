@@ -1178,8 +1178,6 @@ model Favorite {
   resourceType ResourceType @map("resource_type")
   resourceId   String       @map("resource_id") @db.Char(36)
   createdAt    DateTime     @default(now()) @map("created_at")
-  previousHash String?      @map("previous_hash") @db.Char(64)
-  integrityHash String?     @map("integrity_hash") @db.Char(64)
 
   organization Organization @relation(fields: [orgId], references: [id])
   user         User         @relation(fields: [userId], references: [id])
@@ -1216,6 +1214,8 @@ model AuditLog {
   ipAddress    String?  @map("ip_address")
   metadata     Json?
   createdAt    DateTime @default(now()) @map("created_at")
+  previousHash String?  @map("previous_hash") @db.Char(64)
+  integrityHash String? @map("integrity_hash") @db.Char(64)
 
   organization Organization @relation(fields: [orgId], references: [id])
   actor        User?        @relation(fields: [actorId], references: [id])

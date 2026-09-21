@@ -466,7 +466,7 @@ export class WorkflowEngineService implements OnModuleInit, OnModuleDestroy {
         }
         const attachments = attachmentFileId ? [await this.email.loadAttachment(user, attachmentFileId)] : undefined;
         const result = await this.email.send(user, { to: recipients, subject, text: body, attachments });
-        return { action: 'send_email', recipients: recipients.length, attachmentFileId: attachmentFileId || null, ...result };
+        return { action: 'send_email', ...result, recipients: recipients.length, attachmentFileId: attachmentFileId || null };
       }
       case 'create_document_from_template': {
         const templateId = typeof config.templateId === 'string' ? config.templateId.trim() : '';
