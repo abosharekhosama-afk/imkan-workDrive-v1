@@ -64,6 +64,22 @@ export class TemplatesController {
   @Get(':id/versions')
   versions(@CurrentUser() user: AccessTokenPayload, @Param('id', new ParseUUIDPipe({ version: '4' })) id: string) { return this.templates.versions(user, id); }
 
+  @Get(':id/activity')
+  activity(@CurrentUser() user: AccessTokenPayload, @Param('id', new ParseUUIDPipe({ version: '4' })) id: string, @Query('limit') limit?: string) {
+    const parsed = Number(limit);
+    return this.templates.activity(user, id, Number.isFinite(parsed) ? parsed : 50);
+  }
+
+  @Get(':id/versions/compare')
+  compareVersions(@CurrentUser() user: AccessTokenPayload, @Param('id', new ParseUUIDPipe({ version: '4' })) id: string, @Query('left') left: string, @Query('right') right: string) {
+    return this.templates.compareVersions(user, id, left, right);
+  }
+
+  @Post(':id/versions/:versionId/restore')
+  restoreVersion(@CurrentUser() user: AccessTokenPayload, @Param('id', new ParseUUIDPipe({ version: '4' })) id: string, @Param('versionId', new ParseUUIDPipe({ version: '4' })) versionId: string) {
+    return this.templates.restoreVersion(user, id, versionId);
+  }
+
   @Get(':id')
   get(@CurrentUser() user: AccessTokenPayload, @Param('id', new ParseUUIDPipe({ version: '4' })) id: string) { return this.templates.get(user, id); }
 
@@ -78,6 +94,15 @@ export class TemplatesController {
 
   @Post(':id/from-file')
   updateFromFile(@CurrentUser() user: AccessTokenPayload, @Param('id', new ParseUUIDPipe({ version: '4' })) id: string, @Body() body: unknown) { return this.templates.updateFromFile(user, id, parseTemplateFromFile(body)); }
+
+  @Post(':id/publish-content')
+  publishContent(@CurrentUser() user: AccessTokenPayload, @Param('id', new ParseUUIDPipe({ version: '4' })) id: string, @Body() body: unknown) {
+    const b = (body ?? {}) as Record<string, unknown>;
+    return this.templates.publishContentFromOffice(user, id, {
+      fileId: typeof b.fileId === 'string' ? b.fileId : '',
+      versionNote: typeof b.versionNote === 'string' ? b.versionNote : null,
+    });
+  }
 
   @Post(':id/duplicate')
   duplicate(@CurrentUser() user: AccessTokenPayload, @Param('id', new ParseUUIDPipe({ version: '4' })) id: string, @Body() body: unknown) { return this.templates.duplicate(user, id, body); }

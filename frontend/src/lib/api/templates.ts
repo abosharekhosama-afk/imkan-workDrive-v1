@@ -90,6 +90,7 @@ export function deleteTemplateCategory(id: string) { return apiRequest<{ success
 
 export function updateTemplate(id: string, input: { name?: string; description?: string; categoryId?: string | null }) { return apiRequest<TemplatePreview>(`/templates/${id}`, { method: 'PATCH', body: JSON.stringify(input) }); }
 export function updateTemplateFromFile(id: string, input: { fileId: string; name: string; description?: string; library?: TemplateLibrary; categoryId?: string | null }) { return apiRequest<TemplatePreview>(`/templates/${id}/from-file`, { method: 'POST', body: JSON.stringify(input) }); }
+export function publishTemplateContent(id: string, input: { fileId: string; versionNote?: string | null }) { return apiRequest<{ templateId: string; templateVersionId: string; version: number; fileId: string; officeDocumentId: string; revision: number; extension: string; mimeType: string; size: number; versionNote: string | null }>(`/templates/${id}/publish-content`, { method: 'POST', body: JSON.stringify(input) }); }
 export function duplicateTemplate(id: string, name?: string) { return apiRequest<TemplatePreview>(`/templates/${id}/duplicate`, { method: 'POST', body: JSON.stringify(name ? { name } : {}) }); }
 export function deleteTemplate(id: string) { return apiRequest<{ success: boolean }>(`/templates/${id}`, { method: 'DELETE' }); }
 
@@ -97,6 +98,11 @@ export function deleteTemplate(id: string) { return apiRequest<{ success: boolea
 export type TemplateVersion = { id: string; version: number; size: number; mimeType: string; extension: string | null; createdAt: string; createdBy: { id: string; name: string | null; email: string }; preview_url: string; expires_in_seconds: number };
 export type TrashedTemplate = { id: string; name: string; description: string | null; type: TemplateType; library: TemplateLibrary; category: { id: string; name: string } | null; version: number; deletedAt: string | null; canManage: boolean };
 export function listTemplateVersions(id: string) { return apiRequest<TemplateVersion[]>(`/templates/${id}/versions`); }
+export type TemplateActivity = { id: string; action: string; createdAt: string; actor: { id: string; name: string | null; email: string } | null; metadata: unknown };
+export function listTemplateActivity(id: string, limit = 50) { return apiRequest<TemplateActivity[]>(`/templates/${id}/activity?limit=${Math.min(Math.max(limit, 1), 200)}`); }
+export type TemplateVersionComparison = { templateId: string; templateName: string; left: TemplateVersion & { sha256Hash: string }; right: TemplateVersion & { sha256Hash: string }; sameContent: boolean; changes: { sizeDelta: number; mimeChanged: boolean; extensionChanged: boolean; hashChanged: boolean } };
+export function compareTemplateVersions(id: string, left: string, right: string) { return apiRequest<TemplateVersionComparison>(`/templates/${id}/versions/compare?left=${encodeURIComponent(left)}&right=${encodeURIComponent(right)}`); }
+export function restoreTemplateVersion(id: string, versionId: string) { return apiRequest<{ templateId: string; restoredFromVersionId: string; restoredFromVersion: number; templateVersionId: string; version: number }>(`/templates/${id}/versions/${versionId}/restore`, { method: 'POST' }); }
 export function useTemplateVersion(id: string, versionId: string, input: { name: string; folderId?: string | null }) { return apiRequest<{ file_id: string; name: string; folder_id: string | null; file_type: string; office?: { documentId: string; type: 'WRITER'|'SHEET'|'SHOW'; nativeFormat: string; revision: number } | null }>(`/templates/${id}/versions/${versionId}/use`, { method: 'POST', body: JSON.stringify(input) }); }
 export function listTemplateTrash() { return apiRequest<TrashedTemplate[]>('/templates/trash'); }
 export function restoreTemplate(id: string) { return apiRequest<{ success: boolean }>(`/templates/${id}/restore`, { method: 'POST' }); }

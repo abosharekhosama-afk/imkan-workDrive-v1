@@ -494,6 +494,28 @@ export class OfficeService implements OfficeEngine {
     return { ...this.toState(document), importedFrom: result.sourceFormat };
   }
 
+  /** Exports the current native Office state for a Template publish operation.
+   * This is intentionally separate from user-facing export policy: publishing
+   * an edited template is an internal template lifecycle operation, not a
+   * WorkDrive file export. The caller must still prove template ownership and
+   * source-template linkage before persisting the snapshot.
+   */
+  async exportCurrentForTemplate(user: AccessTokenPayload, fileId: string) {
+    const policy = await this.getOfficePolicy(user, fileId);
+    if (policy.readOnly) throw new ForbiddenException('Office document is read-only by policy');
+    const document = await this.open(user, fileId);
+    const format = document.type === 'WRITER' ? 'docx' : document.type === 'SHEET' ? 'xlsx' : 'pptx';
+    const result = await this.conversion.export(document.type as OfficeType, document.content, format);
+    return {
+      ...result,
+      format,
+      revision: document.revision,
+      sourceTemplateId: document.sourceTemplateId ?? null,
+      sourceTemplateVersionId: document.sourceTemplateVersionId ?? null,
+      documentId: document.id,
+    };
+  }
+
   async exportFile(user: AccessTokenPayload, fileId: string, format: 'docx'|'xlsx'|'pptx') {
     const policy = await this.getOfficePolicy(user, fileId);
     if (!policy.allowExport) throw new ForbiddenException('Export is disabled by Office policy');

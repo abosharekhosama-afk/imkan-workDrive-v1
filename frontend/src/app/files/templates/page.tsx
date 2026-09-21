@@ -241,7 +241,8 @@ export default function TemplatesPage() {
       setContentEditTarget(null);
       setContentEditName("");
       const officeRoute = created.office?.type === 'SHEET' ? 'sheet' : created.office?.type === 'SHOW' ? 'show' : 'writer';
-      router.push(created.office ? `/office/${officeRoute}/${created.file_id}?templateId=${encodeURIComponent(contentEditTarget.id)}` : `/files/editor/${created.file_id}?templateId=${encodeURIComponent(contentEditTarget.id)}`);
+      if (!created.office) throw new Error(text(ar, 'The template was created, but IMKAN Office could not initialize the editable document.', 'تم إنشاء نسخة القالب، لكن تعذر تجهيز مستند IMKAN Office القابل للتحرير.'));
+      router.push(`/office/${officeRoute}/${created.file_id}?templateId=${encodeURIComponent(contentEditTarget.id)}`);
     } catch (e) {
       setError(e instanceof Error ? e.message : text(ar, "Unable to start template editor.", "تعذر بدء محرر القالب."));
     } finally { setBusy(false); }

@@ -14,10 +14,18 @@ import {
   certifyTemplate,
   runTemplateAutomation,
   validateTemplateAutomation,
+  listTemplateVersions,
+  listTemplateActivity,
+  compareTemplateVersions,
+  restoreTemplateVersion,
+  useTemplate,
   type TemplateAutomationRun,
   type TemplateCertification,
   type TemplateBuilderState,
   type TemplateVariable,
+  type TemplateVersion,
+  type TemplateActivity,
+  type TemplateVersionComparison,
 } from "@/lib/api/templates";
 
 const text = (ar: boolean, en: string, value: string) => ar ? value : en;
@@ -46,12 +54,20 @@ export default function TemplateStudioPage() {
   const [automationBusy, setAutomationBusy] = useState(false);
   const [automationError, setAutomationError] = useState("");
   const [automationMessage, setAutomationMessage] = useState("");
+  const [versions, setVersions] = useState<TemplateVersion[]>([]);
+  const [activity, setActivity] = useState<TemplateActivity[]>([]);
+  const [versionLeft, setVersionLeft] = useState("");
+  const [versionRight, setVersionRight] = useState("");
+  const [comparison, setComparison] = useState<TemplateVersionComparison | null>(null);
+  const [versionBusy, setVersionBusy] = useState(false);
+  const [studioTab, setStudioTab] = useState<'overview'|'versions'|'activity'>('overview');
 
   const load = useCallback(async () => {
     setLoading(true); setError("");
     try {
-      const [t, b, v, runs] = await Promise.all([getTemplate(templateId), getTemplateBuilder(templateId), listTemplateVariables(templateId), listTemplateAutomationRuns(templateId)]);
-      setTemplate(t); setBuilder(b); setVariables(v); setAutomationRuns(runs);
+      const [t, b, v, runs, versionRows, activityRows] = await Promise.all([getTemplate(templateId), getTemplateBuilder(templateId), listTemplateVariables(templateId), listTemplateAutomationRuns(templateId), listTemplateVersions(templateId), listTemplateActivity(templateId)]);
+      setTemplate(t); setBuilder(b); setVariables(v); setAutomationRuns(runs); setVersions(versionRows); setActivity(activityRows);
+      if (versionRows.length > 1) { setVersionLeft(versionRows[1].id); setVersionRight(versionRows[0].id); }
       setAutomationValues(Object.fromEntries(v.map((x) => [x.name, x.defaultValue ?? ""])));
     } catch (e) {
       setError(e instanceof Error ? e.message : text(ar, "Unable to load Template Studio.", "تعذر تحميل استوديو القوالب."));
@@ -114,12 +130,16 @@ export default function TemplateStudioPage() {
         {message && <span className="hidden rounded-lg bg-emerald-50 px-3 py-2 text-[10px] text-emerald-700 md:block">{message}</span>}
         {error && <span className="hidden max-w-[320px] truncate rounded-lg bg-red-50 px-3 py-2 text-[10px] text-red-600 md:block">{error}</span>}
         <button type="button" onClick={() => router.push(`/files/templates/builder/${templateId}`)} className="rounded-lg border border-slate-200 px-3 py-2 text-xs">{text(ar, "Open Builder", "فتح المنشئ")}</button>
+        <button type="button" onClick={async () => { try { const created = await useTemplate(templateId, { name: `${template.name} working copy` }); const route = created.office?.type === 'SHEET' ? 'sheet' : created.office?.type === 'SHOW' ? 'show' : 'writer'; router.push(`/office/${route}/${created.file_id}?templateId=${encodeURIComponent(templateId)}`); } catch (e) { setError(e instanceof Error ? e.message : text(ar, 'Unable to open the content editor.', 'تعذر فتح محرر المحتوى.')); } }} className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs font-medium text-emerald-700">{text(ar, "Edit Content", "تحرير المحتوى")}</button>
         <button type="button" onClick={() => setAutomationOpen(true)} className="rounded-lg bg-slate-900 px-3 py-2 text-xs font-medium text-white">{text(ar, "Generate", "إنشاء مستند")}</button>
         <button type="button" disabled={busy || !builder?.canPublish || !dirty} onClick={() => void publish()} className="rounded-lg bg-[var(--wd-primary)] px-3 py-2 text-xs font-medium text-white disabled:opacity-50">{text(ar, "Publish", "نشر")}</button>
       </div>
     </header>
 
     <main className="mx-auto max-w-[1500px] space-y-4 p-4">
+      <nav className="flex flex-wrap gap-1 rounded-xl border border-slate-200 bg-white p-1" aria-label={text(ar, "Template Studio sections", "أقسام استوديو القوالب")}>
+        {([['overview', text(ar,'Overview','نظرة عامة')], ['versions', text(ar,'Versions','الإصدارات')], ['activity', text(ar,'Activity','النشاط')]] as const).map(([key,label]) => <button key={key} type="button" onClick={() => setStudioTab(key)} className={`rounded-lg px-4 py-2 text-[10px] font-medium ${studioTab===key ? 'bg-slate-900 text-white' : 'text-slate-500 hover:bg-slate-50'}`}>{label}</button>)}
+      </nav>
       <section className="grid gap-4 lg:grid-cols-[1.25fr_.75fr]">
         <div className="rounded-2xl border border-slate-200 bg-white p-5">
           <div className="flex items-start justify-between gap-4">
@@ -160,6 +180,16 @@ export default function TemplateStudioPage() {
         </div>
       </section>
     </main>
+
+    {studioTab === 'versions' && <section className="mx-auto max-w-[1500px] rounded-2xl border border-slate-200 bg-white p-5">
+      <div className="flex flex-wrap items-center justify-between gap-3"><div><h2 className="text-sm font-semibold">{text(ar,'Version history','سجل الإصدارات')}</h2><p className="mt-1 text-[10px] text-slate-500">{text(ar,'Restore creates a new immutable version; it never overwrites history.','الاستعادة تنشئ إصدارًا جديدًا ولا تستبدل سجل الإصدارات.')}</p></div><button type="button" onClick={() => void load()} className="rounded-lg border px-3 py-2 text-[10px]">{text(ar,'Refresh','تحديث')}</button></div>
+      <div className="mt-4 grid gap-3 md:grid-cols-2"><label className="text-[10px] text-slate-500">{text(ar,'Version A','الإصدار A')}<select value={versionLeft} onChange={e=>setVersionLeft(e.target.value)} className="mt-1 w-full rounded-lg border px-3 py-2 text-xs">{versions.map(v=><option key={v.id} value={v.id}>v{v.version}</option>)}</select></label><label className="text-[10px] text-slate-500">{text(ar,'Version B','الإصدار B')}<select value={versionRight} onChange={e=>setVersionRight(e.target.value)} className="mt-1 w-full rounded-lg border px-3 py-2 text-xs">{versions.map(v=><option key={v.id} value={v.id}>v{v.version}</option>)}</select></label></div>
+      <button type="button" disabled={!versionLeft||!versionRight||versionLeft===versionRight||versionBusy} onClick={async()=>{setVersionBusy(true);try{setComparison(await compareTemplateVersions(templateId,versionLeft,versionRight));}catch(e){setError(e instanceof Error?e.message:text(ar,'Compare failed.','فشل المقارنة.'));}finally{setVersionBusy(false);}}} className="mt-3 rounded-lg bg-slate-900 px-3 py-2 text-[10px] font-medium text-white disabled:opacity-40">{text(ar,'Compare versions','مقارنة الإصدارات')}</button>
+      {comparison && <div className="mt-4 rounded-xl border bg-slate-50 p-4 text-[10px]"><strong>v{comparison.left.version} → v{comparison.right.version}</strong><div className="mt-2 grid grid-cols-2 gap-2 md:grid-cols-4"><span>Hash: {comparison.changes.hashChanged?'Changed':'Same'}</span><span>Size: {comparison.changes.sizeDelta>=0?'+':''}{comparison.changes.sizeDelta}</span><span>MIME: {comparison.changes.mimeChanged?'Changed':'Same'}</span><span>Extension: {comparison.changes.extensionChanged?'Changed':'Same'}</span></div></div>}
+      <div className="mt-5 divide-y rounded-xl border">{versions.map(v=><div key={v.id} className="flex flex-wrap items-center gap-3 px-3 py-3 text-[10px]"><span className="rounded-full bg-slate-100 px-2 py-1 font-semibold">v{v.version}</span><span className="min-w-0 flex-1 truncate">{v.createdBy?.name||v.createdBy?.email||'—'} · {new Date(v.createdAt).toLocaleString()}</span><button type="button" disabled={versionBusy||versions[0]?.id===v.id} onClick={async()=>{setVersionBusy(true);try{await restoreTemplateVersion(templateId,v.id);setMessage(text(ar,'Version restored as a new version.','تمت استعادة الإصدار كإصدار جديد.'));await load();}catch(e){setError(e instanceof Error?e.message:text(ar,'Restore failed.','فشلت الاستعادة.'));}finally{setVersionBusy(false);}}} className="rounded-lg border border-amber-200 px-3 py-1.5 text-[10px] text-amber-700 disabled:opacity-40">{text(ar,'Restore','استعادة')}</button></div>)}</div>
+    </section>}
+
+    {studioTab === 'activity' && <section className="mx-auto max-w-[1500px] rounded-2xl border border-slate-200 bg-white p-5"><div className="flex items-center justify-between"><div><h2 className="text-sm font-semibold">{text(ar,'Activity','النشاط')}</h2><p className="mt-1 text-[10px] text-slate-500">{text(ar,'Template lifecycle events and Office publishing actions.','أحداث دورة حياة القالب وعمليات نشر محتوى Office.')}</p></div><button type="button" onClick={() => void load()} className="rounded-lg border px-3 py-2 text-[10px]">{text(ar,'Refresh','تحديث')}</button></div><div className="mt-4 divide-y rounded-xl border">{activity.map(a=><div key={a.id} className="px-3 py-3 text-[10px]"><div className="flex items-center justify-between gap-3"><strong>{a.action}</strong><span className="text-slate-400">{new Date(a.createdAt).toLocaleString()}</span></div><div className="mt-1 text-slate-500">{a.actor?.name||a.actor?.email||'System'}</div></div>)}{!activity.length&&<div className="p-6 text-center text-[10px] text-slate-400">{text(ar,'No activity yet.','لا يوجد نشاط بعد.')}</div>}</div></section>}
 
     <section className="rounded-2xl border border-slate-200 bg-white p-5">
       <div className="flex items-center justify-between gap-3">

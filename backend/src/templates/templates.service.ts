@@ -15,7 +15,7 @@ import {
   TemplateType,
   Prisma,
 } from '@prisma/client';
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { AccessTokenPayload } from '../auth/jwt.types';
@@ -300,6 +300,98 @@ export class TemplatesService {
     return this.get(user, id);
   }
 
+  async publishContentFromOffice(user: AccessTokenPayload, id: string, input: { fileId: string; versionNote?: string | null }) {
+    const template = await this.getManagedTemplate(user, id);
+    const fileId = input.fileId?.trim();
+    if (!fileId) throw new BadRequestException('Office fileId is required');
+
+    const officeDocument = await this.prisma.officeDocument.findFirst({
+      where: { fileId, orgId: user.org_id },
+      select: { id: true, sourceTemplateId: true, sourceTemplateVersionId: true, type: true, revision: true },
+    });
+    if (!officeDocument) throw new ConflictException('The working file is not an IMKAN Office document');
+    if (officeDocument.sourceTemplateId !== id) throw new ForbiddenException('This Office document is not a working copy of the selected template');
+
+    const sourceVersion = template.versions[0];
+    if (!sourceVersion || officeDocument.sourceTemplateVersionId !== sourceVersion.id) {
+      throw new ConflictException('The working copy is not linked to a valid template version');
+    }
+
+    const exported = await this.office.exportCurrentForTemplate(user, fileId);
+    const extension = exported.format;
+    const mimeType = exported.mimeType;
+    const bytes = exported.buffer;
+    const versionNumber = (sourceVersion.versionNumber ?? 0) + 1;
+    const versionId = randomUUID();
+    const storageKey = this.storage.buildObjectKey(id, versionId);
+    const sha256Hash = createHash('sha256').update(bytes).digest('hex');
+
+    await this.storage.storeObject({ fileId: id, versionId, ownerOrgId: user.org_id, storageKey, contentType: mimeType }, bytes);
+    try {
+      const created = await this.prisma.$transaction(async tx => {
+        const version = await tx.templateVersion.create({
+          data: {
+            id: versionId,
+            templateId: id,
+            versionNumber,
+            storageKey,
+            size: BigInt(bytes.byteLength),
+            mimeType,
+            extension,
+            sha256Hash,
+            createdById: user.sub,
+          },
+        });
+        await tx.auditLog.create({
+          data: {
+            orgId: user.org_id,
+            actorId: user.sub,
+            action: 'TEMPLATE_CONTENT_PUBLISHED',
+            resourceType: 'TEMPLATE',
+            resourceId: id,
+            metadata: {
+              fileId,
+              documentId: officeDocument.id,
+              sourceTemplateVersionId: officeDocument.sourceTemplateVersionId,
+              versionId,
+              versionNumber,
+              revision: exported.revision,
+              versionNote: input.versionNote?.trim() || null,
+            },
+          },
+        });
+        return version;
+      });
+      await this.notifications.createOfficeNotification({
+        userId: user.sub,
+        orgId: user.org_id,
+        category: 'templateAutomation',
+        title: 'Template content published',
+        body: `${template.name} version ${created.versionNumber} is now available.`,
+        resourceType: 'TEMPLATE',
+        resourceId: id,
+      }).catch(() => undefined);
+      return {
+        templateId: id,
+        templateVersionId: created.id,
+        version: created.versionNumber,
+        fileId,
+        officeDocumentId: officeDocument.id,
+        revision: exported.revision,
+        extension,
+        mimeType,
+        size: bytes.byteLength,
+        versionNote: input.versionNote?.trim() || null,
+      };
+    } catch (error) {
+      await this.storage.deleteStoredObject(storageKey).catch(() => undefined);
+      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+        throw new ConflictException('The template was published concurrently. Reload the latest template and publish again.');
+      }
+      throw error;
+    }
+  }
+
   async updateFromFile(user: AccessTokenPayload, id: string, input: ReturnType<typeof parseTemplateFromFile>) {
     const template = await this.getManagedTemplate(user, id);
     const file = await this.assertSourceFile(user, input.fileId);
@@ -462,9 +554,9 @@ export class TemplatesService {
       try {
         officeDocument = await this.office.initializeFromTemplateFile(user, created.file_id, id, version.id);
       } catch (error) {
-        // Keep the File lifecycle usable even if native parsing fails; the
-        // source snapshot remains intact and can still be downloaded/opened.
-        await this.prisma.auditLog.create({ data: { orgId: user.org_id, actorId: user.sub, action: 'OFFICE_TEMPLATE_INITIALIZATION_FAILED', resourceType: 'FILE', resourceId: created.file_id, metadata: { templateId: id, templateVersionId: version.id, error: error instanceof Error ? error.message : 'unknown' } } }).catch(() => undefined);
+        const reason = error instanceof Error ? error.message : 'Unknown Office initialization error';
+        await this.prisma.auditLog.create({ data: { orgId: user.org_id, actorId: user.sub, action: 'OFFICE_TEMPLATE_INITIALIZATION_FAILED', resourceType: 'FILE', resourceId: created.file_id, metadata: { templateId: id, templateVersionId: version.id, error: reason } } }).catch(() => undefined);
+        throw new ConflictException(`Unable to prepare the template for IMKAN Office editing: ${reason}`);
       }
     }
     return { ...created, office: officeDocument ? { documentId: officeDocument.id, type: officeDocument.type, nativeFormat: officeDocument.nativeFormat, revision: officeDocument.revision } : null };
@@ -695,6 +787,93 @@ export class TemplatesService {
     }));
   }
 
+  async activity(user: AccessTokenPayload, id: string, limit = 50) {
+    const template = await this.prisma.template.findFirst({
+      where: { id, deletedAt: null, OR: [{ orgId: user.org_id }, { orgId: null, library: { type: TemplateLibraryType.PUBLIC } }] },
+      include: { library: true },
+    });
+    if (!template || !this.canUseTemplate(user, template as any)) throw new NotFoundException('Template not found');
+    const take = Math.min(Math.max(Number.isFinite(limit) ? Math.floor(limit) : 50, 1), 200);
+    const rows = await this.prisma.auditLog.findMany({
+      where: { orgId: user.org_id, resourceType: 'TEMPLATE', resourceId: id },
+      orderBy: { createdAt: 'desc' },
+      take,
+      include: { actor: { select: { id: true, name: true, email: true } } },
+    });
+    return rows.map(row => ({
+      id: row.id,
+      action: row.action,
+      createdAt: row.createdAt.toISOString(),
+      actor: row.actor ? { id: row.actor.id, name: row.actor.name, email: row.actor.email } : null,
+      metadata: row.metadata ?? null,
+    }));
+  }
+
+  async compareVersions(user: AccessTokenPayload, id: string, leftId: string, rightId: string) {
+    const template = await this.prisma.template.findFirst({
+      where: { id, deletedAt: null, OR: [{ orgId: user.org_id }, { orgId: null, library: { type: TemplateLibraryType.PUBLIC } }] },
+      include: { library: true },
+    });
+    if (!template || !this.canUseTemplate(user, template as any)) throw new NotFoundException('Template not found');
+    if (!leftId || !rightId || leftId === rightId) throw new BadRequestException('Two different template versions are required');
+    const [left, right] = await Promise.all([
+      this.prisma.templateVersion.findFirst({ where: { id: leftId, templateId: id }, include: { createdBy: { select: { id: true, name: true, email: true } } } }),
+      this.prisma.templateVersion.findFirst({ where: { id: rightId, templateId: id }, include: { createdBy: { select: { id: true, name: true, email: true } } } }),
+    ]);
+    if (!left || !right) throw new NotFoundException('Template version not found');
+    return {
+      templateId: id,
+      templateName: template.name,
+      left: { id: left.id, version: left.versionNumber, size: Number(left.size), mimeType: left.mimeType, extension: left.extension, sha256Hash: left.sha256Hash, createdAt: left.createdAt.toISOString(), createdBy: left.createdBy },
+      right: { id: right.id, version: right.versionNumber, size: Number(right.size), mimeType: right.mimeType, extension: right.extension, sha256Hash: right.sha256Hash, createdAt: right.createdAt.toISOString(), createdBy: right.createdBy },
+      sameContent: left.sha256Hash === right.sha256Hash,
+      changes: {
+        sizeDelta: Number(right.size) - Number(left.size),
+        mimeChanged: left.mimeType !== right.mimeType,
+        extensionChanged: left.extension !== right.extension,
+        hashChanged: left.sha256Hash !== right.sha256Hash,
+      },
+    };
+  }
+
+  async restoreVersion(user: AccessTokenPayload, id: string, versionId: string) {
+    const template = await this.prisma.template.findFirst({
+      where: { id, deletedAt: null, OR: [{ orgId: user.org_id }, { orgId: null, library: { type: TemplateLibraryType.PUBLIC } }] },
+      include: { library: true, versions: { orderBy: { versionNumber: 'desc' }, take: 1 } },
+    });
+    if (!template || !this.canManageLibrary(user, template.library)) throw new ForbiddenException('You cannot manage this template');
+    const source = await this.prisma.templateVersion.findFirst({ where: { id: versionId, templateId: id } });
+    if (!source) throw new NotFoundException('Template version not found');
+    const latest = template.versions[0];
+    const nextNumber = (latest?.versionNumber ?? 0) + 1;
+    const newVersionId = randomUUID();
+    const storageKey = this.storage.buildObjectKey(id, newVersionId);
+    await this.storage.copyStoredObject(source.storageKey, { fileId: id, versionId: newVersionId, ownerOrgId: user.org_id, storageKey, contentType: source.mimeType });
+    try {
+      const created = await this.prisma.$transaction(async tx => {
+        const version = await tx.templateVersion.create({
+          data: { id: newVersionId, templateId: id, versionNumber: nextNumber, storageKey, size: source.size, mimeType: source.mimeType, extension: source.extension, sha256Hash: source.sha256Hash, createdById: user.sub },
+        });
+        await tx.auditLog.create({
+          data: {
+            orgId: user.org_id,
+            actorId: user.sub,
+            action: 'TEMPLATE_VERSION_RESTORED',
+            resourceType: 'TEMPLATE',
+            resourceId: id,
+            metadata: { restoredFromVersionId: source.id, restoredFromVersion: source.versionNumber, newVersionId: version.id, newVersion: version.versionNumber },
+          },
+        });
+        return version;
+      });
+      await this.notifications.createOfficeNotification({ userId: user.sub, orgId: user.org_id, category: 'templateAutomation', title: 'Template version restored', body: `${template.name} restored version ${source.versionNumber} as version ${created.versionNumber}.`, resourceType: 'TEMPLATE', resourceId: id }).catch(() => undefined);
+      return { templateId: id, restoredFromVersionId: source.id, restoredFromVersion: source.versionNumber, templateVersionId: created.id, version: created.versionNumber };
+    } catch (error) {
+      await this.storage.deleteStoredObject(storageKey).catch(() => undefined);
+      throw error;
+    }
+  }
+
   async useVersion(user: AccessTokenPayload, id: string, versionId: string, input: ReturnType<typeof parseTemplateUse>) {
     const template = await this.prisma.template.findFirst({ where: { id, deletedAt: null, OR: [{ orgId: user.org_id }, { orgId: null, library: { type: TemplateLibraryType.PUBLIC } }] }, include: { library: true } });
     if (!template || !this.canUseTemplate(user, template as any)) throw new NotFoundException('Template not found');
@@ -705,8 +884,13 @@ export class TemplatesService {
     const created = await this.files.createFileFromStorageSnapshot(user, { folderId: input.folderId, name: finalName, mimeType: version.mimeType, extension, size: version.size, sha256Hash: version.sha256Hash, sourceStorageKey: version.storageKey });
     let officeDocument: Awaited<ReturnType<OfficeService['initializeFromTemplateFile']>> | null = null;
     if (extension && ['docx', 'xlsx', 'pptx'].includes(extension.toLowerCase())) {
-      try { officeDocument = await this.office.initializeFromTemplateFile(user, created.file_id, id, version.id); }
-      catch (error) { await this.prisma.auditLog.create({ data: { orgId: user.org_id, actorId: user.sub, action: 'OFFICE_TEMPLATE_INITIALIZATION_FAILED', resourceType: 'FILE', resourceId: created.file_id, metadata: { templateId: id, templateVersionId: version.id, error: error instanceof Error ? error.message : 'unknown' } } }).catch(() => undefined); }
+      try {
+        officeDocument = await this.office.initializeFromTemplateFile(user, created.file_id, id, version.id);
+      } catch (error) {
+        const reason = error instanceof Error ? error.message : 'Unknown Office initialization error';
+        await this.prisma.auditLog.create({ data: { orgId: user.org_id, actorId: user.sub, action: 'OFFICE_TEMPLATE_INITIALIZATION_FAILED', resourceType: 'FILE', resourceId: created.file_id, metadata: { templateId: id, templateVersionId: version.id, error: reason } } }).catch(() => undefined);
+        throw new ConflictException(`Unable to prepare the selected template version for IMKAN Office editing: ${reason}`);
+      }
     }
     return { ...created, office: officeDocument ? { documentId: officeDocument.id, type: officeDocument.type, nativeFormat: officeDocument.nativeFormat, revision: officeDocument.revision } : null };
   }
