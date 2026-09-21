@@ -4,14 +4,15 @@ import { cloneWriterDocument } from './commands';
 export function textOfRuns(runs: WriterRun[]) { return runs.map(r => r.text).join(''); }
 export function textOfBlock(block: WriterBlock) { return block.runs?.length ? textOfRuns(block.runs) : ''; }
 
-export function addComment(doc: WriterDocument, blockId: string, text: string): WriterDocument {
+export function addComment(doc: WriterDocument, blockId: string, text: string, author?: {id?: string; name?: string}): WriterDocument {
   const next = cloneWriterDocument(doc); const value=text.trim(); if(!value) return next;
-  next.review.comments.push({ id: crypto.randomUUID(), blockId, text:value.slice(0,4000), createdAt:new Date().toISOString(), resolved:false, replies:[] });
+  const mentions=[...value.matchAll(/@([\w.-]{2,80})/g)].map(m=>m[1]);
+  next.review.comments.push({ id: crypto.randomUUID(), blockId, text:value.slice(0,4000), authorId:author?.id, authorName:author?.name, createdAt:new Date().toISOString(), resolved:false, replies:[], mentions });
   return next;
 }
-export function replyComment(doc: WriterDocument, commentId: string, text: string): WriterDocument {
-  const next=cloneWriterDocument(doc); const c=next.review.comments.find(x=>x.id===commentId); if(!c||!text.trim()) return next;
-  c.replies ??=[]; c.replies.push({id:crypto.randomUUID(),text:text.trim().slice(0,2000),createdAt:new Date().toISOString()}); return next;
+export function replyComment(doc: WriterDocument, commentId: string, text: string, author?: {id?: string; name?: string}): WriterDocument {
+  const next=cloneWriterDocument(doc); const c=next.review.comments.find(x=>x.id===commentId); if(!c||!text.trim()||c.deleted) return next;
+  c.replies ??=[]; c.replies.push({id:crypto.randomUUID(),text:text.trim().slice(0,2000),authorId:author?.id,authorName:author?.name,createdAt:new Date().toISOString()}); return next;
 }
 export function toggleCommentResolved(doc: WriterDocument, commentId: string): WriterDocument { const next=cloneWriterDocument(doc); const c=next.review.comments.find(x=>x.id===commentId); if(c)c.resolved=!c.resolved; return next; }
 export function toggleTrackChanges(doc: WriterDocument): WriterDocument { const next=cloneWriterDocument(doc); next.review.trackChanges=!next.review.trackChanges; return next; }
@@ -31,3 +32,11 @@ export function compareSnapshot(doc: WriterDocument, snapshotId: string) {
   return [...ids].map(blockId=>{const before=snap.blocks.find(x=>x.id===blockId);const after=doc.blocks.find(x=>x.id===blockId);const b=before?textOfBlock(before):'';const a=after?textOfBlock(after):'';return {blockId,before:b,after:a,changed:b!==a};}).filter(x=>x.changed);
 }
 function cloneRuns(runs:WriterRun[]){return JSON.parse(JSON.stringify(runs)) as WriterRun[];}
+
+
+export function deleteComment(doc: WriterDocument, commentId: string): WriterDocument { const next=cloneWriterDocument(doc); const c=next.review.comments.find(x=>x.id===commentId); if(c){c.deleted=true;c.resolved=true;} return next; }
+export function reopenComment(doc: WriterDocument, commentId: string): WriterDocument { const next=cloneWriterDocument(doc); const c=next.review.comments.find(x=>x.id===commentId); if(c&&!c.deleted)c.resolved=false; return next; }
+export function acceptAllChanges(doc: WriterDocument): WriterDocument { const next=cloneWriterDocument(doc); next.review.changes.forEach(c=>{if(c.status==='pending')c.status='accepted';}); return next; }
+export function rejectAllChanges(doc: WriterDocument): WriterDocument { const next=cloneWriterDocument(doc); for(const c of next.review.changes){if(c.status!=='pending')continue;const block=next.blocks.find(b=>b.id===c.blockId);if(block)block.runs=cloneRuns(c.before);c.status='rejected';} return next; }
+export function setReviewDisplayMode(doc: WriterDocument, displayMode: 'simple'|'all'|'original'): WriterDocument { const next=cloneWriterDocument(doc); next.review.displayMode=displayMode; return next; }
+export function setShowFormattingChanges(doc: WriterDocument, value: boolean): WriterDocument { const next=cloneWriterDocument(doc); next.review.showFormattingChanges=value; return next; }

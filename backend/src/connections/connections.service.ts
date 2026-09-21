@@ -79,12 +79,16 @@ export class ConnectionsService {
     const tokenUrl = String(input?.tokenUrl ?? definition.oauthTokenUrl ?? '').trim();
     const revokeUrl = String(input?.revokeUrl ?? definition.oauthRevokeUrl ?? '').trim();
     const enabled = input?.enabled !== false;
+    const requestedScopes = Array.isArray(input?.scopes) ? input.scopes.map((v: unknown) => String(v).trim()).filter(Boolean) : definition.defaultScopes;
+    const allowedScopes = new Set(definition.scopes.map((item) => item.value));
+    const invalidScopes = requestedScopes.filter((value: string) => !allowedScopes.has(value));
+    if (invalidScopes.length) throw new BadRequestException(`Unsupported OAuth scopes: ${invalidScopes.slice(0, 10).join(', ')}`);
     if (!clientId) throw new BadRequestException('Client ID is required');
     if (!clientSecret && !(await this.prisma.connectionProviderConfig.findUnique({ where: { orgId_providerKey: { orgId: user.org_id, providerKey } }, select: { clientSecret: true } }))?.clientSecret && !this.oauthConfigFromEnv(providerKey, definition).clientSecret) throw new BadRequestException('Client Secret is required');
     if (!/^https:\/\//i.test(authUrl) || !/^https:\/\//i.test(tokenUrl)) throw new BadRequestException('OAuth URLs must use HTTPS');
     if (!callbackUrl || !/^https:\/\//i.test(callbackUrl)) throw new BadRequestException('Callback URL must use HTTPS');
     const existing = await this.prisma.connectionProviderConfig.findUnique({ where: { orgId_providerKey: { orgId: user.org_id, providerKey } } });
-    const data: any = { orgId: user.org_id, providerKey, enabled, clientId, tenantId: tenantId || null, callbackUrl, authUrl, tokenUrl, revokeUrl: revokeUrl || null, scopes: (Array.isArray(input?.scopes) ? input.scopes : definition.defaultScopes) as Prisma.InputJsonValue, updatedById: user.sub };
+    const data: any = { orgId: user.org_id, providerKey, enabled, clientId, tenantId: tenantId || null, callbackUrl, authUrl, tokenUrl, revokeUrl: revokeUrl || null, scopes: requestedScopes as Prisma.InputJsonValue, updatedById: user.sub };
     if (clientSecret) data.clientSecret = this.crypto.encrypt(clientSecret);
     const row = existing ? await this.prisma.connectionProviderConfig.update({ where: { id: existing.id }, data }) : await this.prisma.connectionProviderConfig.create({ data: { id: randomUUID(), ...data, createdById: user.sub } });
     await this.audit(user, 'connection.provider_config.updated', row.id, { provider: providerKey, source: 'DATABASE', enabled });
@@ -426,9 +430,13 @@ export class ConnectionsService {
       if (!connection) throw new NotFoundException('OAuth connection not found');
     }
     const state = randomBytes(32).toString('base64url');
-    await this.prisma.connectionOAuthState.create({ data: { id: randomUUID(), stateHash: this.hash(state), orgId: user.org_id, userId: user.sub, provider, connectionId: connection?.id ?? null, folderId, expiresAt: new Date(Date.now() + OAUTH_STATE_TTL_MS) } });
-    const selectedScopes = connection?.scope?.trim() || definition.defaultScopes.join(' ');
+    const codeVerifier = definition.oauthPkce ? randomBytes(48).toString('base64url') : null;
+    const codeChallenge = codeVerifier ? createHash('sha256').update(codeVerifier).digest('base64url') : null;
+    await this.prisma.connectionOAuthState.create({ data: { id: randomUUID(), stateHash: this.hash(state), orgId: user.org_id, userId: user.sub, provider, connectionId: connection?.id ?? null, folderId, ...(codeVerifier ? { codeVerifier: this.crypto.encrypt(codeVerifier) } : {}), expiresAt: new Date(Date.now() + OAUTH_STATE_TTL_MS) } });
+    const configuredScopes = await this.configuredProviderScopes(provider, user.org_id, definition);
+    const selectedScopes = connection?.scope?.trim() || configuredScopes.join(' ');
     const params = new URLSearchParams({ client_id: cfg.clientId, redirect_uri: cfg.callbackUrl, response_type: 'code', state });
+    if (codeChallenge) { params.set('code_challenge', codeChallenge); params.set('code_challenge_method', 'S256'); }
     if (selectedScopes) params.set('scope', selectedScopes);
     if (provider === 'google') { params.set('access_type', 'offline'); params.set('include_granted_scopes', 'true'); params.set('prompt', 'consent'); }
     if (provider === 'dropbox') params.set('token_access_type', 'offline');
@@ -449,6 +457,7 @@ export class ConnectionsService {
     const cfg = await this.oauthConfig(provider, definition, row.orgId);
     if (!cfg.clientId || !cfg.clientSecret) throw new BadRequestException(`${provider} OAuth integration is not configured`);
     const body = new URLSearchParams({ client_id: cfg.clientId, client_secret: cfg.clientSecret, code, redirect_uri: cfg.callbackUrl, grant_type: 'authorization_code' });
+    if (row.codeVerifier) { body.set('code_verifier', this.crypto.decrypt(row.codeVerifier)); }
     const response = await fetch(cfg.tokenUrl, { method: 'POST', headers: { 'content-type': 'application/x-www-form-urlencoded', accept: 'application/json' }, body });
     const payload = await this.readJson(response);
     if (!response.ok || typeof payload.access_token !== 'string') throw new BadRequestException('OAuth authorization failed');
@@ -618,6 +627,15 @@ export class ConnectionsService {
     if (!url) return;
     const response = await fetch(url, { headers: { authorization: `Bearer ${token}` } });
     if (!response.ok) throw new Error(`Provider returned HTTP ${response.status}`);
+  }
+
+  private async configuredProviderScopes(provider: string, orgId: string, definition: ResolvedProviderDefinition) {
+    if (provider.startsWith('custom:') || definition.oauthClientId) return definition.defaultScopes;
+    const row = await this.prisma.connectionProviderConfig.findUnique({ where: { orgId_providerKey: { orgId, providerKey: provider } }, select: { enabled: true, scopes: true } });
+    if (!row || !row.enabled || !Array.isArray(row.scopes)) return definition.defaultScopes;
+    const allowed = new Set(definition.scopes.map((item) => item.value));
+    const scopes = row.scopes.map((v) => String(v)).filter((v) => allowed.has(v));
+    return scopes.length ? scopes : definition.defaultScopes;
   }
 
   private assertOAuthProvider(provider: string, definition: ResolvedProviderDefinition) {

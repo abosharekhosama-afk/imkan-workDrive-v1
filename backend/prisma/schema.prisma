@@ -185,6 +185,11 @@ enum NotificationPriority {
   URGENT
 }
 
+enum OfficeEmailProvider {
+  SENDGRID
+  GMAIL
+}
+
 /// Security/system audit actions. Kept separate from the user-facing file timeline.
 enum AuditAction {
   CREATE
@@ -250,6 +255,7 @@ model Organization {
 
   owner User? @relation("OrganizationOwner", fields: [ownerId], references: [id])
   currentUsers User[] @relation("UserCurrentOrganization")
+  officeSecurityPolicies OfficeSecurityPolicy[]
 
   memberships         OrganizationMembership[] @relation("OrganizationMemberships")
   teamFolders         TeamFolder[]
@@ -263,10 +269,13 @@ model Organization {
   folderShareRecipients FolderShareRecipient[]
   shareRecipients     FileShareRecipient[]
   auditLogs           AuditLog[]
+  officeAuditPolicy   OfficeAuditPolicy?
   favorites           Favorite[]
   accessEvents        AccessEvent[]
   sessions            Session[]
   notifications       Notification[]
+  officeNotificationPreferences OfficeNotificationPreference[]
+  officeEmailSettings           OfficeEmailSettings[]
   comments            Comment[]
   quota               StorageQuota?
   invitations         OrganizationInvitation[]
@@ -281,6 +290,7 @@ model Organization {
   malwareScans        MalwareScan[]
   securityEvents      SecurityEvent[]
   connections         Connection[]
+  externalStorageMounts ExternalStorageMount[]
   connectionCustomServices ConnectionCustomService[]
   connectionProviderConfigs ConnectionProviderConfig[]
   connectionUsages    ConnectionUsage[]
@@ -291,6 +301,7 @@ model Organization {
   officePresences OfficePresence[]
   officeOperations OfficeOperation[]
   officeSessions OfficeSession[]
+  officeBackgroundJobs OfficeBackgroundJob[]
   templateCategories  TemplateCategory[]
   templates           Template[]
 
@@ -332,6 +343,7 @@ model User {
   ownedFiles             File[]                 @relation("FileOwner")
   uploadedVersions       FileVersion[]          @relation("VersionUploader")
   auditLogs              AuditLog[]
+  officeAuditPoliciesUpdated OfficeAuditPolicy[] @relation("OfficeAuditPolicyUpdater")
   favorites              Favorite[]
   accessEvents           AccessEvent[]
   shareRecipients        FileShareRecipient[]
@@ -340,6 +352,8 @@ model User {
   sharesCreated          FileShare[]            @relation("FileShareCreator")
   sessions               Session[]
   notifications          Notification[]
+  officeNotificationPreferences OfficeNotificationPreference[]
+  officeEmailSettingsUpdated   OfficeEmailSettings[] @relation("OfficeEmailSettingsUpdater")
   comments               Comment[]
   resetTokens            PasswordResetToken[]
   invitationsSent        OrganizationInvitation[] @relation("InvitationSender")
@@ -356,6 +370,7 @@ model User {
   membershipsRemoved     OrganizationMembership[] @relation("MembershipRemover")
   dataTransfersInitiated DataTransfer[]         @relation("DataTransferInitiator")
   connections            Connection[] @relation("ConnectionOwner")
+  externalStorageMounts   ExternalStorageMount[] @relation("ExternalStorageMountUser")
   connectionCustomServices ConnectionCustomService[] @relation("ConnectionCustomServiceOwner")
   connectionProviderConfigsCreated ConnectionProviderConfig[] @relation("ConnectionProviderConfigCreatedBy")
   connectionProviderConfigsUpdated ConnectionProviderConfig[] @relation("ConnectionProviderConfigUpdatedBy")
@@ -366,9 +381,13 @@ model User {
   templatesOwned         Template[] @relation("TemplateOwner")
   templateVersionsCreated TemplateVersion[] @relation("TemplateVersionCreator")
   templateBuildersPublished TemplateBuilder[] @relation("TemplateBuilderPublisher")
+  templateAutomationRuns TemplateAutomationRun[] @relation("TemplateAutomationRunCreator")
   officeSessions OfficeSession[]
   officePresences OfficePresence[]
   officeOperations OfficeOperation[]
+  officeDocumentPolicyUpdates OfficeDocumentPolicy[] @relation("OfficeDocumentPolicyUpdater")
+  officeSecurityPolicyUpdates OfficeSecurityPolicy[] @relation("OfficeSecurityPolicyUpdater")
+  officeBackgroundJobs OfficeBackgroundJob[]
 
   @@unique([email])
   @@index([email])
@@ -385,6 +404,7 @@ model User {
   connectionShares       ConnectionShare[] @relation("ConnectionShareUser")
 
   @@map("users")
+
 }
 
 model TeamFolder {
@@ -504,6 +524,47 @@ enum OfficeDocumentType {
   SHOW
 }
 
+
+model OfficeSecurityPolicy {
+  id                String   @id @default(uuid()) @db.Char(36)
+  orgId             String   @unique @map("org_id") @db.Char(36)
+  forceReadOnly     Boolean  @default(false) @map("force_read_only")
+  disableExport     Boolean  @default(false) @map("disable_export")
+  disableCopy       Boolean  @default(false) @map("disable_copy")
+  disableOffline    Boolean  @default(false) @map("disable_offline")
+  requireWatermark  Boolean  @default(false) @map("require_watermark")
+  watermarkText     String?  @map("watermark_text") @db.VarChar(500)
+  updatedById       String?  @map("updated_by_id") @db.Char(36)
+  createdAt         DateTime @default(now()) @map("created_at")
+  updatedAt         DateTime @updatedAt @map("updated_at")
+
+  organization      Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  updatedBy         User? @relation("OfficeSecurityPolicyUpdater", fields: [updatedById], references: [id], onDelete: SetNull)
+
+  @@index([updatedById])
+  @@map("office_security_policies")
+}
+
+model OfficeDocumentPolicy {
+  id              String   @id @default(uuid()) @db.Char(36)
+  documentId      String   @unique @map("document_id") @db.Char(36)
+  allowExport     Boolean  @default(true) @map("allow_export")
+  allowCopy       Boolean  @default(true) @map("allow_copy")
+  allowOffline    Boolean  @default(true) @map("allow_offline")
+  readOnly        Boolean  @default(false)
+  watermarkEnabled Boolean @default(false) @map("watermark_enabled")
+  watermarkText   String?  @map("watermark_text") @db.VarChar(500)
+  updatedById     String?  @map("updated_by_id") @db.Char(36)
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  document        OfficeDocument @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  updatedBy       User? @relation("OfficeDocumentPolicyUpdater", fields: [updatedById], references: [id], onDelete: SetNull)
+
+  @@index([updatedById])
+  @@map("office_document_policies")
+}
+
 enum OfficeSessionStatus {
   ACTIVE
   CLOSED
@@ -526,6 +587,7 @@ model OfficeDocument {
   file         File         @relation(fields: [fileId], references: [id], onDelete: Cascade)
   sessions     OfficeSession[]
   operations   OfficeOperation[]
+  policy       OfficeDocumentPolicy?
 
   @@index([orgId, type])
   @@index([orgId, updatedAt])
@@ -702,6 +764,7 @@ model Template {
   versions     TemplateVersion[]
   variables    TemplateVariable[]
   builder      TemplateBuilder?
+  automationRuns TemplateAutomationRun[]
 
   @@index([orgId, libraryId, status])
   @@index([orgId, ownerId])
@@ -751,6 +814,76 @@ model TemplateVariable {
   @@map("template_variables")
 }
 
+
+enum TemplateAutomationRunStatus {
+  PENDING
+  RUNNING
+  SUCCEEDED
+  FAILED
+}
+
+enum OfficeBackgroundJobStatus {
+  QUEUED
+  RUNNING
+  SUCCEEDED
+  FAILED
+  DEAD_LETTER
+}
+
+model OfficeBackgroundJob {
+  id          String                  @id @default(uuid()) @db.Char(36)
+  orgId       String                  @map("org_id") @db.Char(36)
+  createdById String                  @map("created_by_id") @db.Char(36)
+  type        String                  @db.VarChar(64)
+  status      OfficeBackgroundJobStatus @default(QUEUED)
+  payload     Json
+  result      Json?
+  error       String?                 @db.Text
+  attempts    Int                     @default(0)
+  maxAttempts Int                     @default(3) @map("max_attempts")
+  runAt       DateTime                @default(now()) @map("run_at")
+  lockedAt    DateTime?               @map("locked_at")
+  lockedBy    String?                 @map("locked_by")
+  leaseUntil  DateTime?               @map("lease_until")
+  completedAt DateTime?               @map("completed_at")
+  createdAt   DateTime                @default(now()) @map("created_at")
+  updatedAt   DateTime                @updatedAt @map("updated_at")
+
+  organization Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  createdBy    User         @relation(fields: [createdById], references: [id], onDelete: Cascade)
+
+  @@index([orgId, status, runAt])
+  @@index([status, runAt, createdAt])
+  @@index([createdById, createdAt])
+  @@map("office_background_jobs")
+}
+
+model TemplateAutomationRun {
+  id                String                    @id @default(uuid()) @db.Char(36)
+  templateId        String                    @map("template_id") @db.Char(36)
+  templateVersionId String?                   @map("template_version_id") @db.Char(36)
+  createdById       String                    @map("created_by_id") @db.Char(36)
+  status            TemplateAutomationRunStatus @default(PENDING)
+  name              String
+  values            Json
+  fileId            String?                   @map("file_id") @db.Char(36)
+  pdfFileId         String?                   @map("pdf_file_id") @db.Char(36)
+  error             String?                   @db.Text
+  startedAt         DateTime?                 @map("started_at")
+  completedAt       DateTime?                 @map("completed_at")
+  createdAt         DateTime                  @default(now()) @map("created_at")
+  updatedAt         DateTime                  @updatedAt @map("updated_at")
+
+  template        Template        @relation(fields: [templateId], references: [id], onDelete: Cascade)
+  templateVersion TemplateVersion? @relation(fields: [templateVersionId], references: [id], onDelete: SetNull)
+  createdBy       User            @relation("TemplateAutomationRunCreator", fields: [createdById], references: [id], onDelete: Cascade)
+
+  @@index([templateId, createdAt])
+  @@index([createdById, createdAt])
+  @@index([status, createdAt])
+  @@map("template_automation_runs")
+}
+
 model TemplateVersion {
   id            String   @id @default(uuid()) @db.Char(36)
   templateId    String   @map("template_id") @db.Char(36)
@@ -765,6 +898,7 @@ model TemplateVersion {
 
   template  Template @relation(fields: [templateId], references: [id], onDelete: Cascade)
   createdBy User     @relation("TemplateVersionCreator", fields: [createdById], references: [id])
+  automationRuns TemplateAutomationRun[]
 
   @@unique([templateId, versionNumber])
   @@index([templateId, createdAt])
@@ -1044,6 +1178,8 @@ model Favorite {
   resourceType ResourceType @map("resource_type")
   resourceId   String       @map("resource_id") @db.Char(36)
   createdAt    DateTime     @default(now()) @map("created_at")
+  previousHash String?      @map("previous_hash") @db.Char(64)
+  integrityHash String?     @map("integrity_hash") @db.Char(64)
 
   organization Organization @relation(fields: [orgId], references: [id])
   user         User         @relation(fields: [userId], references: [id])
@@ -1085,8 +1221,26 @@ model AuditLog {
   actor        User?        @relation(fields: [actorId], references: [id])
 
   @@index([orgId, createdAt])
+  @@index([orgId, resourceType, resourceId, createdAt])
   @@index([orgId, actorId, createdAt])
   @@map("audit_logs")
+}
+
+model OfficeAuditPolicy {
+  id              String       @id @default(uuid()) @db.Char(36)
+  orgId           String       @unique @map("org_id") @db.Char(36)
+  retentionDays   Int          @default(365) @map("retention_days")
+  immutableChain  Boolean      @default(true) @map("immutable_chain")
+  exportEnabled   Boolean      @default(true) @map("export_enabled")
+  updatedById     String?      @map("updated_by_id") @db.Char(36)
+  createdAt       DateTime     @default(now()) @map("created_at")
+  updatedAt       DateTime     @updatedAt @map("updated_at")
+
+  organization Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  updatedBy    User?        @relation("OfficeAuditPolicyUpdater", fields: [updatedById], references: [id], onDelete: SetNull)
+
+  @@index([orgId, updatedAt])
+  @@map("office_audit_policies")
 }
 
 model OrganizationInvitation {
@@ -1157,6 +1311,47 @@ model Notification {
 
   @@index([orgId, userId, readAt, createdAt])
   @@map("notifications")
+}
+
+
+model OfficeNotificationPreference {
+  id                String   @id @default(uuid()) @db.Char(36)
+  orgId             String   @map("org_id") @db.Char(36)
+  userId            String   @map("user_id") @db.Char(36)
+  collaboration     Boolean  @default(true)
+  templateAutomation Boolean @default(true)
+  exports           Boolean  @default(true)
+  compliance        Boolean  @default(true)
+  externalStorage   Boolean  @default(true)
+  createdAt         DateTime @default(now()) @map("created_at")
+  updatedAt         DateTime @updatedAt @map("updated_at")
+
+  organization Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([orgId, userId])
+  @@index([orgId, updatedAt])
+  @@map("office_notification_preferences")
+}
+
+model OfficeEmailSettings {
+  id           String             @id @default(uuid()) @db.Char(36)
+  orgId        String             @map("org_id") @db.Char(36)
+  provider     OfficeEmailProvider
+  connectionId String             @map("connection_id") @db.Char(36)
+  fromEmail    String             @map("from_email")
+  fromName     String?            @map("from_name")
+  enabled      Boolean            @default(true)
+  updatedById  String             @map("updated_by_id") @db.Char(36)
+  createdAt    DateTime           @default(now()) @map("created_at")
+  updatedAt    DateTime           @updatedAt @map("updated_at")
+
+  organization Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  updatedBy    User         @relation("OfficeEmailSettingsUpdater", fields: [updatedById], references: [id])
+
+  @@unique([orgId])
+  @@index([orgId, updatedAt])
+  @@map("office_email_settings")
 }
 
 model Comment {
@@ -1443,6 +1638,7 @@ model Connection {
   usages       ConnectionUsage[]
   shares       ConnectionShare[]
   oauthStates  ConnectionOAuthState[]
+  externalStorageMounts ExternalStorageMount[]
 
   @@index([orgId, status, updatedAt])
   @@index([orgId, ownerId, provider])
@@ -1502,6 +1698,7 @@ model ConnectionOAuthState {
   provider   String
   connectionId String?  @map("connection_id") @db.Char(36)
   connection   Connection? @relation(fields: [connectionId], references: [id], onDelete: Cascade)
+  codeVerifier String?  @map("code_verifier") @db.Text
   folderId   String?   @map("folder_id") @db.Char(36)
   expiresAt  DateTime  @map("expires_at")
   usedAt     DateTime? @map("used_at")
@@ -1547,6 +1744,39 @@ model ConnectionUsage {
   @@index([orgId, connectionId, createdAt])
   @@index([orgId, workflowId, createdAt])
   @@map("connection_usages")
+}
+
+enum ExternalStorageStatus {
+  ACTIVE
+  DISCONNECTED
+  ERROR
+}
+
+model ExternalStorageMount {
+  id             String                @id @default(uuid()) @db.Char(36)
+  orgId          String                @map("org_id") @db.Char(36)
+  userId         String                @map("user_id") @db.Char(36)
+  connectionId   String                @map("connection_id") @db.Char(36)
+  provider       String
+  name           String
+  rootPath       String?               @map("root_path") @db.Text
+  readEnabled    Boolean               @default(true) @map("read_enabled")
+  writeEnabled   Boolean               @default(false) @map("write_enabled")
+  status         ExternalStorageStatus @default(ACTIVE)
+  lastTestedAt   DateTime?             @map("last_tested_at")
+  lastTestOk     Boolean?              @map("last_test_ok")
+  lastTestMessage String?              @map("last_test_message") @db.Text
+  createdAt      DateTime              @default(now()) @map("created_at")
+  updatedAt      DateTime              @updatedAt @map("updated_at")
+
+  organization Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  user         User         @relation("ExternalStorageMountUser", fields: [userId], references: [id], onDelete: Cascade)
+  connection   Connection  @relation(fields: [connectionId], references: [id], onDelete: Cascade)
+
+  @@unique([orgId, userId, name])
+  @@index([orgId, userId, provider])
+  @@index([connectionId, status])
+  @@map("external_storage_mounts")
 }
 
 enum CloudImportJobStatus {

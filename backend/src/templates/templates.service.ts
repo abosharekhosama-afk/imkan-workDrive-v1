@@ -29,6 +29,8 @@ import type { parseCategory, parseTemplateCreate, parseTemplateFromFile, parseTe
 import { defaultTemplateBuilderConfig } from './templates.schemas';
 import { PublicTemplateSeedService } from './public-template-seed.service';
 import { OfficeService } from '../office/office.service';
+import { OfficeConversionService } from '../office/office-conversion.service';
+import { NotificationsService } from '../notifications/notifications.service';
 
 @Injectable()
 export class TemplatesService {
@@ -39,6 +41,8 @@ export class TemplatesService {
     private readonly permissions: PermissionService,
     private readonly publicTemplateSeed: PublicTemplateSeedService,
     @Inject(forwardRef(() => OfficeService)) private readonly office: OfficeService,
+    private readonly officeConversion: OfficeConversionService,
+    private readonly notifications: NotificationsService,
   ) {}
 
   private isAdmin(user: AccessTokenPayload) {
@@ -467,13 +471,7 @@ export class TemplatesService {
   }
 
   /** Phase 36: create a concrete Office document from a template and optionally a PDF copy. */
-  async automateFromTemplate(user: AccessTokenPayload, id: string, input: {
-    name: string;
-    folderId?: string | null;
-    values?: Record<string, unknown>;
-    generatePdf?: boolean;
-    pdfFolderId?: string | null;
-  }) {
+  private async getAutomationContext(user: AccessTokenPayload, id: string) {
     const template = await this.prisma.template.findFirst({
       where: { id, deletedAt: null, OR: [{ orgId: user.org_id }, { orgId: null, library: { type: TemplateLibraryType.PUBLIC } }] },
       include: { library: true, versions: { orderBy: { versionNumber: 'desc' }, take: 1 }, variables: { orderBy: [{ position: 'asc' }, { createdAt: 'asc' }] } },
@@ -481,48 +479,189 @@ export class TemplatesService {
     if (!template || !this.canUseTemplate(user, template)) throw new NotFoundException('Template not found');
     const version = template.versions[0];
     if (!version) throw new NotFoundException('Template content not found');
-    const values = input.values ?? {};
+    return { template, version };
+  }
+
+  private validateAutomationValues(template: any, values: Record<string, unknown>) {
+    const normalized: Record<string, unknown> = {};
+    const errors: Array<{ variable: string; message: string }> = [];
     for (const variable of template.variables) {
       const supplied = values[variable.name];
       const value = supplied === undefined || supplied === null || supplied === '' ? variable.defaultValue : supplied;
-      if (variable.required && (value === undefined || value === null || value === '')) throw new BadRequestException(`Required template variable is missing: ${variable.name}`);
-      if (value !== undefined && value !== null && variable.type === 'NUMBER' && !Number.isFinite(Number(value))) throw new BadRequestException(`Invalid number for template variable: ${variable.name}`);
-      if (value !== undefined && value !== null && variable.type === 'CHOICE' && Array.isArray(variable.options) && !variable.options.map(String).includes(String(value))) throw new BadRequestException(`Invalid choice for template variable: ${variable.name}`);
+      normalized[variable.name] = value ?? '';
+      if (variable.required && (value === undefined || value === null || value === '')) {
+        errors.push({ variable: variable.name, message: `Required template variable is missing: ${variable.name}` });
+        continue;
+      }
+      if (value !== undefined && value !== null && value !== '' && variable.type === 'NUMBER' && !Number.isFinite(Number(value))) errors.push({ variable: variable.name, message: `Invalid number for template variable: ${variable.name}` });
+      if (value !== undefined && value !== null && value !== '' && variable.type === 'CHOICE' && Array.isArray(variable.options) && !variable.options.map(String).includes(String(value))) errors.push({ variable: variable.name, message: `Invalid choice for template variable: ${variable.name}` });
+      if (value !== undefined && value !== null && value !== '' && variable.type === 'EMAIL' && !/^\S+@\S+\.\S+$/.test(String(value))) errors.push({ variable: variable.name, message: `Invalid email for template variable: ${variable.name}` });
+      if (value !== undefined && value !== null && value !== '' && variable.type === 'URL') { try { new URL(String(value)); } catch { errors.push({ variable: variable.name, message: `Invalid URL for template variable: ${variable.name}` }); } }
     }
+    return { normalized, errors };
+  }
+
+  async validateAutomation(user: AccessTokenPayload, id: string, values: Record<string, unknown>) {
+    const { template, version } = await this.getAutomationContext(user, id);
+    const result = this.validateAutomationValues(template, values);
+    return { valid: result.errors.length === 0, templateId: id, templateVersionId: version.id, templateVersion: version.versionNumber, values: result.normalized, errors: result.errors, variables: template.variables.map((v: any) => ({ name: v.name, label: v.label, type: v.type, required: v.required, defaultValue: v.defaultValue, options: v.options })) };
+  }
+
+  async certifyTemplate(user: AccessTokenPayload, id: string) {
+    const { template, version } = await this.getAutomationContext(user, id);
+    const extension = (version.extension ?? '').replace(/^\./, '').toLowerCase();
+    const supportedOffice = ['docx', 'xlsx', 'pptx'].includes(extension);
+    const checks: Array<{ key: string; status: 'PASS' | 'WARNING' | 'FAIL'; message: string; details?: Record<string, unknown> }> = [];
+
+    checks.push({
+      key: 'template-create-file',
+      status: version.storageKey ? 'PASS' : 'FAIL',
+      message: version.storageKey ? 'Published template snapshot is available for File creation.' : 'Template version has no storage snapshot.',
+      details: { templateVersionId: version.id, version: version.versionNumber },
+    });
+
+    const variables = template.variables.map((v: any) => ({ name: v.name, type: v.type, required: v.required, defaultValue: v.defaultValue, options: v.options }));
+    const duplicateNames = variables.map(v => v.name).filter((name, index, all) => all.indexOf(name) !== index);
+    checks.push({
+      key: 'variables',
+      status: duplicateNames.length ? 'FAIL' : 'PASS',
+      message: duplicateNames.length ? `Duplicate template variables: ${[...new Set(duplicateNames)].join(', ')}` : `${variables.length} template variables are structurally valid.`,
+      details: { count: variables.length, duplicateNames: [...new Set(duplicateNames)] },
+    });
+
+    let imported: any = null;
+    let exportedBytes = 0;
+    let placeholderCount = 0;
+    if (supportedOffice) {
+      try {
+        const bytes = await this.storage.readStoredObject(version.storageKey);
+        imported = await this.officeConversion.import(bytes, template.name + (version.extension ? `.${extension}` : ''));
+        const normalized = imported.content;
+        const placeholderText = JSON.stringify(normalized);
+        placeholderCount = (placeholderText.match(/{{\s*[^}]+?\s*}}/g) ?? []).length;
+        const sampleValues: Record<string, unknown> = {};
+        for (const variable of template.variables) sampleValues[variable.name] = variable.defaultValue ?? (variable.type === 'NUMBER' ? 1 : variable.type === 'BOOLEAN' ? true : 'Certification Test');
+        const substituted = this.replaceTemplateValues(normalized, template.variables, sampleValues);
+        const exported = await this.officeConversion.export(imported.type, substituted, extension as 'docx' | 'xlsx' | 'pptx');
+        exportedBytes = exported.buffer.byteLength;
+        checks.push({ key: 'variables-substitution', status: 'PASS', message: `Template variables can be substituted in the native ${imported.type} model.`, details: { placeholderCount, sampleVariables: Object.keys(sampleValues).length } });
+        checks.push({ key: 'export', status: exportedBytes > 0 ? 'PASS' : 'FAIL', message: exportedBytes > 0 ? `Native ${extension.toUpperCase()} export completed in certification mode.` : 'Native export returned an empty document.', details: { bytes: exportedBytes, format: extension } });
+      } catch (error) {
+        checks.push({ key: 'variables-substitution', status: 'FAIL', message: error instanceof Error ? error.message : 'Template import/substitution failed.' });
+        checks.push({ key: 'export', status: 'FAIL', message: 'Export certification could not complete because template import failed.' });
+      }
+    } else {
+      checks.push({ key: 'variables-substitution', status: 'WARNING', message: 'Native Writer/Sheet/Show certification is not applicable to this non-Office template format.' });
+      checks.push({ key: 'export', status: 'WARNING', message: 'Native Office export certification is not applicable to this template format.' });
+    }
+
+    checks.push({ key: 'edit', status: supportedOffice && imported ? 'PASS' : 'WARNING', message: supportedOffice && imported ? 'Native Office content can be loaded into the editable model.' : 'Live editor certification requires an Office-compatible template.' });
+    checks.push({ key: 'save', status: 'WARNING', message: 'Live persistence is intentionally not mutated by certification; execute through Create File → Edit → Save in the application test environment.' });
+    checks.push({ key: 'version', status: version.versionNumber > 0 ? 'PASS' : 'FAIL', message: version.versionNumber > 0 ? `Template version ${version.versionNumber} is available.` : 'No valid template version is available.', details: { version: version.versionNumber } });
+
+    const officeType = imported?.type ?? null;
+    for (const type of ['WRITER', 'SHEET', 'SHOW'] as const) {
+      const applicable = type === officeType;
+      checks.push({ key: type.toLowerCase(), status: applicable ? 'PASS' : supportedOffice ? 'WARNING' : 'WARNING', message: applicable ? `${type} native model certification passed.` : `${type} certification is not applicable to this template's native type.` });
+    }
+
+    const failed = checks.filter(c => c.status === 'FAIL').length;
+    const warnings = checks.filter(c => c.status === 'WARNING').length;
+    const status = failed ? 'FAILED' : warnings ? 'CERTIFIED_WITH_WARNINGS' : 'CERTIFIED';
+    await this.prisma.auditLog.create({ data: { orgId: user.org_id, actorId: user.sub, action: 'TEMPLATE_CERTIFIED', resourceType: 'TEMPLATE', resourceId: template.id, metadata: { templateVersionId: version.id, status, failed, warnings, checks: checks.map(c => ({ key: c.key, status: c.status })) } } });
+    return { status, templateId: template.id, templateVersionId: version.id, templateVersion: version.versionNumber, templateType: template.type, extension, nativeOfficeType: officeType, placeholderCount, checks, generatedAt: new Date().toISOString() };
+  }
+
+  async enqueueAutomation(user: AccessTokenPayload, id: string, input: {
+    name: string;
+    folderId?: string | null;
+    values?: Record<string, unknown>;
+    generatePdf?: boolean;
+    pdfFolderId?: string | null;
+  }) {
+    const { template } = await this.getAutomationContext(user, id);
+    const values = input.values ?? {};
+    const validation = this.validateAutomationValues(template, values);
+    if (validation.errors.length) throw new BadRequestException(validation.errors[0].message);
+    const payload = {
+      templateId: id,
+      name: input.name.trim() || `${template.name} generated`,
+      folderId: input.folderId ?? null,
+      values: validation.normalized,
+      generatePdf: input.generatePdf === true,
+      pdfFolderId: input.pdfFolderId ?? null,
+    };
+    const job = await this.prisma.officeBackgroundJob.create({ data: { orgId: user.org_id, createdById: user.sub, type: 'TEMPLATE_AUTOMATION', payload: payload as Prisma.InputJsonValue } });
+    await this.prisma.auditLog.create({ data: { orgId: user.org_id, actorId: user.sub, action: 'OFFICE_BACKGROUND_JOB_QUEUED', resourceType: 'TEMPLATE', resourceId: id, metadata: { jobId: job.id, type: job.type } } });
+    return { jobId: job.id, status: job.status, type: job.type, queuedAt: job.createdAt.toISOString() };
+  }
+
+  async getAutomationJob(user: AccessTokenPayload, jobId: string) {
+    const job = await this.prisma.officeBackgroundJob.findFirst({ where: { id: jobId, orgId: user.org_id, createdById: user.sub } });
+    if (!job) throw new NotFoundException('Background job not found');
+    return { id: job.id, type: job.type, status: job.status, attempts: job.attempts, maxAttempts: job.maxAttempts, result: job.result, error: job.error, runAt: job.runAt.toISOString(), completedAt: job.completedAt?.toISOString() ?? null, createdAt: job.createdAt.toISOString(), updatedAt: job.updatedAt.toISOString() };
+  }
+
+  async listAutomationRuns(user: AccessTokenPayload, id: string, limit = 20) {
+    const { template } = await this.getAutomationContext(user, id);
+    const take = Math.min(100, Math.max(1, Math.floor(limit || 20)));
+    const rows = await this.prisma.templateAutomationRun.findMany({ where: { templateId: template.id, createdById: user.sub }, orderBy: { createdAt: 'desc' }, take });
+    return rows.map((run) => ({ id: run.id, status: run.status, name: run.name, templateId: run.templateId, templateVersionId: run.templateVersionId, fileId: run.fileId, pdfFileId: run.pdfFileId, error: run.error, startedAt: run.startedAt?.toISOString() ?? null, completedAt: run.completedAt?.toISOString() ?? null, createdAt: run.createdAt.toISOString() }));
+  }
+
+  async automateFromTemplate(user: AccessTokenPayload, id: string, input: {
+    name: string;
+    folderId?: string | null;
+    values?: Record<string, unknown>;
+    generatePdf?: boolean;
+    pdfFolderId?: string | null;
+  }) {
+    const { template, version } = await this.getAutomationContext(user, id);
+    const values = input.values ?? {};
+    const validation = this.validateAutomationValues(template, values);
+    if (validation.errors.length) throw new BadRequestException(validation.errors[0].message);
+    const normalizedValues = validation.normalized;
     const extension = (version.extension ?? '').replace(/^\./, '').toLowerCase();
     const finalName = input.name.trim() || `${template.name} generated`;
-    const created = await this.files.createFileFromStorageSnapshot(user, { folderId: input.folderId ?? null, name: extension && !finalName.toLowerCase().endsWith(`.${extension}`) ? `${finalName}.${extension}` : finalName, mimeType: version.mimeType, extension, size: version.size, sha256Hash: version.sha256Hash, sourceStorageKey: version.storageKey });
-    let officeDocument: any = null;
-    if (['docx','xlsx','pptx'].includes(extension)) {
-      officeDocument = await this.office.initializeFromTemplateFile(user, created.file_id, id, version.id);
-      const substituted = this.replaceTemplateValues(officeDocument.content, template.variables, values);
-      officeDocument = await this.office.save(user, created.file_id, substituted, officeDocument.revision);
+    const run = await this.prisma.templateAutomationRun.create({ data: { id: randomUUID(), templateId: id, templateVersionId: version.id, createdById: user.sub, status: 'PENDING', name: finalName, values: normalizedValues as Prisma.InputJsonValue } });
+    try {
+      await this.prisma.templateAutomationRun.update({ where: { id: run.id }, data: { status: 'RUNNING', startedAt: new Date() } });
+      const created = await this.files.createFileFromStorageSnapshot(user, { folderId: input.folderId ?? null, name: extension && !finalName.toLowerCase().endsWith(`.${extension}`) ? `${finalName}.${extension}` : finalName, mimeType: version.mimeType, extension, size: version.size, sha256Hash: version.sha256Hash, sourceStorageKey: version.storageKey });
+      let officeDocument: any = null;
+      if (['docx','xlsx','pptx'].includes(extension)) {
+        officeDocument = await this.office.initializeFromTemplateFile(user, created.file_id, id, version.id);
+        const substituted = this.replaceTemplateValues(officeDocument.content, template.variables, normalizedValues);
+        officeDocument = await this.office.save(user, created.file_id, substituted, officeDocument.revision);
+      }
+      let pdf: { fileId: string; name: string } | null = null;
+      if (input.generatePdf && officeDocument) {
+        const format = extension as 'docx'|'xlsx'|'pptx';
+        const exported = await this.office.exportFile(user, created.file_id, format);
+        await this.files.uploadNewVersion(user, created.file_id, { originalName: exported.filename, mimeType: exported.mimeType, buffer: Buffer.from(exported.dataBase64, 'base64') });
+        const { execFile } = await import('node:child_process');
+        const { mkdtemp, writeFile, readFile: readTempFile, rm } = await import('node:fs/promises');
+        const { tmpdir } = await import('node:os');
+        const { join: pathJoin } = await import('node:path');
+        const tempDir = await mkdtemp(pathJoin(tmpdir(), 'imkan-template-pdf-'));
+        try {
+          const source = pathJoin(tempDir, exported.filename);
+          await writeFile(source, Buffer.from(exported.dataBase64, 'base64'));
+          await new Promise<void>((resolve, reject) => execFile('libreoffice', ['--headless','--convert-to','pdf','--outdir',tempDir,source], { timeout: 120000 }, (error, _stdout, stderr) => error ? reject(new Error(stderr || error.message)) : resolve()));
+          const pdfPath = pathJoin(tempDir, exported.filename.replace(/\.[^.]+$/, '.pdf'));
+          const pdfBytes = await readTempFile(pdfPath);
+          const pdfName = `${finalName.replace(/\.[^.]+$/, '')}.pdf`;
+          const pdfCreated = await this.files.createFileFromBytes(user, { folderId: input.pdfFolderId ?? input.folderId ?? null, name: pdfName, mimeType: 'application/pdf', extension: 'pdf', bytes: pdfBytes });
+          pdf = { fileId: pdfCreated.file_id, name: pdfCreated.name };
+        } finally { await rm(tempDir, { recursive: true, force: true }).catch(() => undefined); }
+      }
+      await this.prisma.templateAutomationRun.update({ where: { id: run.id }, data: { status: 'SUCCEEDED', fileId: created.file_id, pdfFileId: pdf?.fileId ?? null, completedAt: new Date() } });
+      await this.notifications.createOfficeNotification({ userId: user.sub, orgId: user.org_id, category: 'templateAutomation', title: 'Template automation completed', body: `${finalName} was generated successfully.`, resourceType: 'FILE', resourceId: created.file_id }).catch(() => undefined);
+      await this.prisma.auditLog.create({ data: { orgId: user.org_id, actorId: user.sub, action: 'TEMPLATE_AUTOMATION_GENERATED', resourceType: 'TEMPLATE', resourceId: id, metadata: { runId: run.id, fileId: created.file_id, templateVersionId: version.id, variableCount: template.variables.length, pdfFileId: pdf?.fileId ?? null } } });
+      return { runId: run.id, templateId: id, templateVersionId: version.id, fileId: created.file_id, name: created.name, office: officeDocument ? { documentId: officeDocument.id, revision: officeDocument.revision, type: officeDocument.type } : null, pdf };
+    } catch (error) {
+      await this.prisma.templateAutomationRun.update({ where: { id: run.id }, data: { status: 'FAILED', error: error instanceof Error ? error.message : 'Template automation failed', completedAt: new Date() } }).catch(() => undefined);
+      throw error;
     }
-    let pdf: { fileId: string; name: string } | null = null;
-    if (input.generatePdf && officeDocument) {
-      const format = extension as 'docx'|'xlsx'|'pptx';
-      const exported = await this.office.exportFile(user, created.file_id, format);
-      // Replace the initial template snapshot version with the generated Office bytes so
-      // WorkDrive download/version history and the native OfficeDocument stay aligned.
-      await this.files.uploadNewVersion(user, created.file_id, { originalName: exported.filename, mimeType: exported.mimeType, buffer: Buffer.from(exported.dataBase64, 'base64') });
-      const { execFile } = await import('node:child_process');
-      const { mkdtemp, writeFile, readFile: readTempFile, rm } = await import('node:fs/promises');
-      const { tmpdir } = await import('node:os');
-      const { join: pathJoin } = await import('node:path');
-      const tempDir = await mkdtemp(pathJoin(tmpdir(), 'imkan-template-pdf-'));
-      try {
-        const source = pathJoin(tempDir, exported.filename);
-        await writeFile(source, Buffer.from(exported.dataBase64, 'base64'));
-        await new Promise<void>((resolve, reject) => execFile('libreoffice', ['--headless','--convert-to','pdf','--outdir',tempDir,source], { timeout: 120000 }, (error, _stdout, stderr) => error ? reject(new Error(stderr || error.message)) : resolve()));
-        const pdfPath = pathJoin(tempDir, exported.filename.replace(/\.[^.]+$/, '.pdf'));
-        const pdfBytes = await readTempFile(pdfPath);
-        const pdfName = `${finalName.replace(/\.[^.]+$/, '')}.pdf`;
-        const pdfCreated = await this.files.createFileFromBytes(user, { folderId: input.pdfFolderId ?? input.folderId ?? null, name: pdfName, mimeType: 'application/pdf', extension: 'pdf', bytes: pdfBytes });
-        pdf = { fileId: pdfCreated.file_id, name: pdfCreated.name };
-      } finally { await rm(tempDir, { recursive: true, force: true }).catch(() => undefined); }
-    }
-    await this.prisma.auditLog.create({ data: { orgId: user.org_id, actorId: user.sub, action: 'TEMPLATE_AUTOMATION_GENERATED', resourceType: 'TEMPLATE', resourceId: id, metadata: { fileId: created.file_id, templateVersionId: version.id, variableCount: template.variables.length, pdfFileId: pdf?.fileId ?? null } } });
-    return { templateId: id, templateVersionId: version.id, fileId: created.file_id, name: created.name, office: officeDocument ? { documentId: officeDocument.id, revision: officeDocument.revision, type: officeDocument.type } : null, pdf };
   }
 
   private replaceTemplateValues(content: unknown, variables: Array<{ name: string; defaultValue: string | null; type: string }>, values: Record<string, unknown>) {

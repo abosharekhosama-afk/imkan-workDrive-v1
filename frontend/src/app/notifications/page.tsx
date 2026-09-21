@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useLocale } from "../../components/locale-provider";
-import { listNotifications, markAllNotificationsRead, markNotificationRead, type NotificationRecord } from "../../lib/api/notifications";
+import { getOfficeNotificationPreferences, listNotifications, markAllNotificationsRead, markNotificationRead, updateOfficeNotificationPreferences, type NotificationRecord, type OfficeNotificationPreferences } from "../../lib/api/notifications";
 import { formatDateLocalized } from "../../lib/localized";
 import { Icons } from "../../components/layout/icons";
 
@@ -12,6 +12,8 @@ export default function NotificationsPage() {
   const [items, setItems] = useState<NotificationRecord[]>([]);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
+  const [prefs, setPrefs] = useState<OfficeNotificationPreferences | null>(null);
+  const [prefsBusy, setPrefsBusy] = useState(false);
 
   const load = async () => {
     try {
@@ -24,7 +26,12 @@ export default function NotificationsPage() {
     }
   };
 
-  useEffect(() => { void load(); }, [label]);
+  useEffect(() => { void load(); getOfficeNotificationPreferences().then(setPrefs).catch(() => undefined); }, [label]);
+
+  const togglePref = async (key: keyof Pick<OfficeNotificationPreferences, "collaboration"|"templateAutomation"|"exports"|"compliance"|"externalStorage">) => {
+    if (!prefs) return; const next = !prefs[key]; setPrefs({ ...prefs, [key]: next }); setPrefsBusy(true);
+    try { setPrefs(await updateOfficeNotificationPreferences({ [key]: next })); } catch { setPrefs(prefs); } finally { setPrefsBusy(false); }
+  };
 
   const read = async (id: string) => {
     await markNotificationRead(id);
@@ -57,6 +64,28 @@ export default function NotificationsPage() {
         </div>
 
         {error ? <div className="wd-card mb-4 border-red-100 bg-red-50 p-4 text-[11px] text-red-600">{error}</div> : null}
+
+        {prefs ? (
+          <section className="wd-card mb-4 p-5">
+            <div className="mb-4 flex items-center justify-between gap-3">
+              <div><h2 className="text-[13px] font-semibold text-slate-800">{ar ? "إشعارات IMKAN Office" : "IMKAN Office notifications"}</h2><p className="mt-1 text-[10px] text-slate-400">{ar ? "تحكم في أنواع تنبيهات Office والقوالب التي تريد استقبالها." : "Choose which Office and Template alerts you receive."}</p></div>
+              {prefsBusy ? <span className="text-[10px] text-slate-400">{label("common.loading")}</span> : null}
+            </div>
+            <div className="grid gap-2 sm:grid-cols-2">
+              {[
+                ["collaboration", ar ? "التعاون والمزامنة" : "Collaboration & sync"],
+                ["templateAutomation", ar ? "أتمتة القوالب" : "Template automation"],
+                ["exports", ar ? "تصدير Office" : "Office exports"],
+                ["compliance", ar ? "الأمان والامتثال" : "Security & compliance"],
+                ["externalStorage", ar ? "التخزين الخارجي" : "External storage"],
+              ].map(([key,title]) => { const k=key as keyof Pick<OfficeNotificationPreferences, "collaboration"|"templateAutomation"|"exports"|"compliance"|"externalStorage">; return (
+                <button key={key} type="button" disabled={prefsBusy} onClick={() => void togglePref(k)} className="flex min-h-[42px] items-center justify-between rounded-md border border-slate-100 px-3 text-start hover:bg-slate-50">
+                  <span className="text-[11px] font-medium text-slate-700">{title}</span><span className={`h-5 w-9 rounded-full p-0.5 transition ${prefs[k] ? "bg-[#1B66EA]" : "bg-slate-200"}`}><span className={`block h-4 w-4 rounded-full bg-white shadow-sm transition ${prefs[k] ? "translate-x-4" : "translate-x-0"}`} /></span>
+                </button>
+              ); })}
+            </div>
+          </section>
+        ) : null}
 
         <section className="wd-card overflow-hidden">
           <div className="flex items-center justify-between border-b border-slate-100 px-5 py-4">

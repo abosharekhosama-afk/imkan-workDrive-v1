@@ -35,7 +35,7 @@ export function ShareModal({
   resourceId: string;
   onClose: () => void;
 }) {
-  const { label } = useLocale();
+  const { label, locale } = useLocale();
   const [activeTab, setActiveTab] = useState<ShareTab>("link");
   const [password, setPassword] = useState("");
   const [expiryKind, setExpiryKind] = useState<ExpiryKind>("never");
@@ -44,6 +44,7 @@ export function ShareModal({
   const [recipientUserIds, setRecipientUserIds] = useState<string[]>([]);
   const [members, setMembers] = useState<OrgMember[]>([]);
   const [memberQuery, setMemberQuery] = useState("");
+  const [emailRecipients, setEmailRecipients] = useState("");
   const [permission, setPermission] = useState<SharePermission>("VIEW");
   const [linkUrl, setLinkUrl] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -106,6 +107,7 @@ export function ShareModal({
           canDownload,
           recipientUserIds: recipients,
           permission,
+          emailRecipients: emailRecipients.split(/[;,\s]+/).map((v) => v.trim()).filter(Boolean),
         }),
       );
       setLinkUrl(normalizePublicAppUrl(result.link_url));
@@ -270,6 +272,17 @@ export function ShareModal({
                 ) : null}
                 {downloadField}
                 {permissionField}
+                <div className="wd-field">
+                  <label>{locale === "ar" ? "إرسال الرابط بالبريد الإلكتروني (اختياري)" : "Email the share link (optional)"}</label>
+                  <input
+                    type="text"
+                    value={emailRecipients}
+                    onChange={(event) => setEmailRecipients(event.target.value)}
+                    className="wd-input"
+                    placeholder={locale === "ar" ? "email@example.com, another@example.com" : "email@example.com, another@example.com"}
+                  />
+                  <small className="text-slate-500">{locale === "ar" ? "افصل عدة عناوين بفاصلة أو مسافة." : "Separate multiple addresses with commas or spaces."}</small>
+                </div>
               </>
             ) : (
               <>

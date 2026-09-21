@@ -9,6 +9,7 @@ import { dynamicValueCatalog, evaluateCondition, walkDynamicValues, resolveDynam
 import { CustomFunctionExecutor } from './custom-function.executor';
 import { ConnectionsService } from '../connections/connections.service';
 import { TemplatesService } from '../templates/templates.service';
+import { OfficeEmailService } from '../office-email/office-email.service';
 
 export type WorkflowFileEvent = {
   eventType?: string; fileId: string; resourceId?: string; name: string; mimeType?: string | null; fileType?: string | null; size?: string;
@@ -27,7 +28,7 @@ type RunResult = { actions?: unknown[]; fieldValues?: Record<string, unknown>; c
 @Injectable()
 export class WorkflowEngineService implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(WorkflowEngineService.name); private timer?: NodeJS.Timeout; private processing = false; private readonly workerId = `workdrive-workflow-${randomUUID()}`;
-  constructor(private readonly prisma: PrismaService, private readonly shares: SharesService, private readonly functionExecutor: CustomFunctionExecutor, private readonly permissions: PermissionService, private readonly connections: ConnectionsService, @Inject(forwardRef(() => TemplatesService)) private readonly templates: TemplatesService) {}
+  constructor(private readonly prisma: PrismaService, private readonly shares: SharesService, private readonly functionExecutor: CustomFunctionExecutor, private readonly permissions: PermissionService, private readonly connections: ConnectionsService, private readonly email: OfficeEmailService, @Inject(forwardRef(() => TemplatesService)) private readonly templates: TemplatesService) {}
   onModuleInit() { this.timer = setInterval(() => void this.drain(), 1500); void this.drain(); }
   onModuleDestroy() { if (this.timer) clearInterval(this.timer); }
   private async recordAudit(orgId: string, actorId: string | null, action: string, resourceType: string, resourceId: string, metadata?: Record<string, unknown>) {
@@ -448,6 +449,24 @@ export class WorkflowEngineService implements OnModuleInit, OnModuleDestroy {
           await this.prisma.workflowRun.update({ where: { id: runId }, data: { result: { ...previous, fieldValues: { ...fv, [outputFieldId]: result.body } } as unknown as Prisma.InputJsonValue } });
         }
         return { action: 'http_request', connectionId, method, statusCode: result.status, responseMode, outputFieldId: outputFieldId || null, body: result.body };
+      }
+      case 'send_email': {
+        const toRaw = config.to ?? config.recipients ?? [];
+        const recipients = Array.isArray(toRaw) ? toRaw.map(String) : String(toRaw).split(',').map((v) => v.trim()).filter(Boolean);
+        const subject = await this.renderWorkflowText(String(config.subject ?? 'IMKAN Office workflow'), user, event, workflowId, runId);
+        const body = await this.renderWorkflowText(String(config.body ?? ''), user, event, workflowId, runId);
+        if (!recipients.length) throw new Error('send_email requires at least one recipient');
+        let attachmentFileId = typeof config.attachmentFileId === 'string' ? config.attachmentFileId.trim() : '';
+        const attachmentFieldId = typeof config.attachmentFieldId === 'string' ? config.attachmentFieldId.trim() : '';
+        if (!attachmentFileId && attachmentFieldId) {
+          const current = await this.prisma.workflowRun.findUnique({ where: { id: runId }, select: { result: true } });
+          const currentResult = current?.result && typeof current.result === 'object' ? current.result as Record<string, unknown> : {};
+          const currentFields = currentResult.fieldValues && typeof currentResult.fieldValues === 'object' ? currentResult.fieldValues as Record<string, unknown> : {};
+          attachmentFileId = typeof currentFields[attachmentFieldId] === 'string' ? String(currentFields[attachmentFieldId]) : '';
+        }
+        const attachments = attachmentFileId ? [await this.email.loadAttachment(user, attachmentFileId)] : undefined;
+        const result = await this.email.send(user, { to: recipients, subject, text: body, attachments });
+        return { action: 'send_email', recipients: recipients.length, attachmentFileId: attachmentFileId || null, ...result };
       }
       case 'create_document_from_template': {
         const templateId = typeof config.templateId === 'string' ? config.templateId.trim() : '';

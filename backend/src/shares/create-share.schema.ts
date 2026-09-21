@@ -16,6 +16,7 @@ export type CreateShareInput = {
   canDownload: boolean;
   recipientUserIds: string[];
   permission: SharePermissionInput;
+  emailRecipients?: string[];
 };
 
 const UUID_RE =
@@ -78,6 +79,8 @@ export function parseCreateShare(body: unknown): CreateShareInput {
   ) {
     throw new BadRequestException('Invalid permission');
   }
+  const emailRecipients = record.email_recipients === undefined ? [] : record.email_recipients;
+  if (!Array.isArray(emailRecipients) || emailRecipients.length > 50 || emailRecipients.some((v) => typeof v !== 'string' || !/^\S+@\S+\.\S+$/.test(v.trim()))) throw new BadRequestException('Invalid email_recipients');
   const canDownload =
     record.can_download === undefined ? true : record.can_download === true;
   if (
@@ -94,5 +97,6 @@ export function parseCreateShare(body: unknown): CreateShareInput {
     canDownload,
     recipientUserIds: recipientUserIds as string[],
     permission: permission as SharePermissionInput,
+    emailRecipients: [...new Set((emailRecipients as string[]).map((v) => v.trim().toLowerCase()))],
   };
 }

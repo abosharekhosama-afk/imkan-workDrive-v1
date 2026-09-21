@@ -22,10 +22,12 @@ import { OrganizationModule } from './organization/organization.module';
 import { FolderPermissionsModule } from './folder-permissions/folder-permissions.module';
 import { WorkflowsModule } from './workflows/workflows.module';
 import { CloudImportModule } from './cloud-import/cloud-import.module';
+import { ExternalStorageModule } from './external-storage.module';
 import { GroupsModule } from './groups/groups.module';
 import { ConnectionsModule } from './connections/connections.module';
 import { TemplatesModule } from './templates/templates.module';
 import { OfficeModule } from './office/office.module';
+import { OfficeEmailModule } from './office-email/office-email.module';
 
 @Module({
   imports: [
@@ -49,10 +51,12 @@ import { OfficeModule } from './office/office.module';
     FolderPermissionsModule,
     WorkflowsModule,
     CloudImportModule,
+    ExternalStorageModule,
     GroupsModule,
     ConnectionsModule,
     TemplatesModule,
     OfficeModule,
+    OfficeEmailModule,
   ],
   controllers: [AppController],
   providers: [AppService],

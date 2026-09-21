@@ -46,6 +46,7 @@ export default function NewOfficeDocumentPage() {
           <div className="mt-6 text-xs font-medium text-[var(--wd-primary)]">{busy === card.type ? (ar ? "جارٍ الإنشاء…" : "Creating…") : (ar ? "إنشاء →" : "Create →")}</div>
         </button>)}
       </div>
+      <div className="mt-6 flex flex-wrap gap-2"><button onClick={() => router.push("/office/admin")} className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-xs font-medium text-slate-700 hover:bg-slate-50">{ar ? "مركز إدارة Office" : "Office Admin Center"}</button></div>
       <div className="mt-8 rounded-xl border border-slate-200 bg-white px-4 py-3 text-xs text-slate-500">{ar ? "هذه هي أول طبقة من IMKAN Office Native. الاستيراد من DOCX/XLSX/PPTX والتعاون اللحظي سيأتيان في المراحل التالية." : "This is the first native IMKAN Office foundation. DOCX/XLSX/PPTX import and real-time collaboration are scheduled for later phases."}</div>
     </div>
   </main>;

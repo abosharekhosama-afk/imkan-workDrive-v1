@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useLocale } from "../locale-provider";
-import { listNotifications, markAllNotificationsRead, markNotificationRead, type NotificationRecord } from "../../lib/api/notifications";
+import { listNotifications, markAllNotificationsRead, markNotificationRead, subscribeToNotifications, type NotificationRecord } from "../../lib/api/notifications";
 import { formatDateLocalized } from "../../lib/localized";
 import { Icons } from "./icons";
 
@@ -22,6 +22,15 @@ export function NotificationPanel({ open, onClose }: { open: boolean; onClose: (
       .catch(() => { if (!cancelled) setNotes([]); })
       .finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
+  }, [open]);
+
+  useEffect(() => {
+    if (!open) return;
+    const unsubscribe = subscribeToNotifications((notification) => {
+      setNotes((prev) => [notification, ...prev.filter((n) => n.id !== notification.id)].slice(0, 100));
+    }, () => { /* polling remains the fallback */ });
+    const timer = window.setInterval(() => { listNotifications().then(setNotes).catch(() => undefined); }, 30000);
+    return () => { unsubscribe(); window.clearInterval(timer); };
   }, [open]);
 
   useEffect(() => {

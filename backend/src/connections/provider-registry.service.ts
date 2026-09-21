@@ -23,6 +23,7 @@ export type ConnectionProviderDefinition = {
   oauthAuthUrl?: string;
   oauthTokenUrl?: string;
   oauthRevokeUrl?: string;
+  oauthPkce?: boolean;
   probeUrl?: string;
   credentialHeader?: string;
   credentialPrefix?: string;
@@ -33,7 +34,7 @@ const scope = (value: string, label: string, description: string, group?: string
 
 const DEFINITIONS: ConnectionProviderDefinition[] = [
   {
-    key: 'google', name: 'Google', category: 'Cloud', authTypes: ['OAUTH2'], oauth: true, capabilities: ['oauth', 'revoke', 'probe'],
+    key: 'google', name: 'Google', category: 'Cloud', authTypes: ['OAUTH2'], oauth: true, capabilities: ['oauth', 'revoke', 'probe'], oauthPkce: true,
     oauthEnvPrefix: 'GOOGLE', oauthAuthUrl: 'https://accounts.google.com/o/oauth2/v2/auth', oauthTokenUrl: 'https://oauth2.googleapis.com/token', oauthRevokeUrl: 'https://oauth2.googleapis.com/revoke', probeUrl: 'https://www.googleapis.com/drive/v3/about?fields=user(emailAddress)',
     scopes: [
       scope('openid', 'Sign-in identity', 'Associate the connection with the Google account.', 'Identity'),
@@ -57,7 +58,7 @@ const DEFINITIONS: ConnectionProviderDefinition[] = [
     ], defaultScopes: ['openid', 'email', 'profile', 'https://www.googleapis.com/auth/drive.file'],
   },
   {
-    key: 'microsoft', name: 'Microsoft 365', category: 'Cloud', authTypes: ['OAUTH2'], oauth: true, capabilities: ['oauth', 'probe'],
+    key: 'microsoft', name: 'Microsoft 365', category: 'Cloud', authTypes: ['OAUTH2'], oauth: true, capabilities: ['oauth', 'probe'], oauthPkce: true,
     oauthEnvPrefix: 'MICROSOFT', oauthAuthUrl: 'https://login.microsoftonline.com/common/oauth2/v2.0/authorize', oauthTokenUrl: 'https://login.microsoftonline.com/common/oauth2/v2.0/token', probeUrl: 'https://graph.microsoft.com/v1.0/me?$select=id',
     scopes: [
       scope('openid', 'OpenID identity', 'Sign the user in and return an ID token.', 'Identity'),
@@ -80,7 +81,7 @@ const DEFINITIONS: ConnectionProviderDefinition[] = [
     ], defaultScopes: ['openid', 'profile', 'email', 'offline_access', 'User.Read', 'Files.Read'],
   },
   {
-    key: 'dropbox', name: 'Dropbox', category: 'Cloud', authTypes: ['OAUTH2'], oauth: true, capabilities: ['oauth', 'revoke', 'probe'],
+    key: 'dropbox', name: 'Dropbox', category: 'Cloud', authTypes: ['OAUTH2'], oauth: true, capabilities: ['oauth', 'revoke', 'probe'], oauthPkce: true,
     oauthEnvPrefix: 'DROPBOX', oauthAuthUrl: 'https://www.dropbox.com/oauth2/authorize', oauthTokenUrl: 'https://api.dropboxapi.com/oauth2/token', oauthRevokeUrl: 'https://api.dropboxapi.com/2/auth/token/revoke', probeUrl: 'https://api.dropboxapi.com/2/users/get_current_account',
     scopes: [
       scope('account_info.read', 'Account — Read', 'Read basic Dropbox account information.', 'Identity'),
@@ -112,7 +113,7 @@ const DEFINITIONS: ConnectionProviderDefinition[] = [
     ], defaultScopes: ['read:user', 'user:email'],
   },
   {
-    key: 'slack', name: 'Slack', category: 'Collaboration', authTypes: ['OAUTH2'], oauth: true, capabilities: ['oauth', 'probe'],
+    key: 'slack', name: 'Slack', category: 'Collaboration', authTypes: ['OAUTH2'], oauth: true, capabilities: ['oauth', 'probe'], oauthPkce: true,
     oauthEnvPrefix: 'SLACK', oauthAuthUrl: 'https://slack.com/oauth/v2/authorize', oauthTokenUrl: 'https://slack.com/api/oauth.v2.access', probeUrl: 'https://slack.com/api/auth.test',
     scopes: [
       scope('chat:write', 'Messages — Send', 'Send messages as the connected Slack app.', 'Messages'),
@@ -129,37 +130,37 @@ const DEFINITIONS: ConnectionProviderDefinition[] = [
     ], defaultScopes: ['chat:write', 'channels:read', 'users:read'],
   },
   {
-    key: 'asana', name: 'Asana', category: 'Productivity', authTypes: ['OAUTH2'], oauth: true, capabilities: ['oauth', 'probe'],
+    key: 'asana', name: 'Asana', category: 'Productivity', authTypes: ['OAUTH2'], oauth: true, capabilities: ['oauth', 'probe'], oauthPkce: true,
     oauthEnvPrefix: 'ASANA', oauthAuthUrl: 'https://app.asana.com/-/oauth_authorize', oauthTokenUrl: 'https://app.asana.com/-/oauth_token', probeUrl: 'https://app.asana.com/api/1.0/users/me',
     scopes: [scope('projects:read', 'Projects — Read', 'View basic project information.', 'Projects'), scope('projects:write', 'Projects — Write', 'Create and modify projects.', 'Projects'), scope('tasks:read', 'Tasks — Read', 'View task information.', 'Tasks'), scope('tasks:write', 'Tasks — Write', 'Create or modify tasks.', 'Tasks'), scope('tasks:delete', 'Tasks — Delete', 'Delete tasks.', 'Tasks', 'SENSITIVE'), scope('users:read', 'Users — Read', 'Read user information such as email and profile picture.', 'Users')], defaultScopes: ['projects:read', 'tasks:read'],
   },
   {
-    key: 'notion', name: 'Notion', category: 'Productivity', authTypes: ['OAUTH2'], oauth: true, capabilities: ['oauth', 'probe'],
+    key: 'notion', name: 'Notion', category: 'Productivity', authTypes: ['OAUTH2'], oauth: true, capabilities: ['oauth', 'probe'], oauthPkce: true,
     oauthEnvPrefix: 'NOTION', oauthAuthUrl: 'https://api.notion.com/v1/oauth/authorize', oauthTokenUrl: 'https://api.notion.com/v1/oauth/token', probeUrl: 'https://api.notion.com/v1/users/me',
     scopes: [], defaultScopes: [],
   },
   {
-    key: 'hubspot', name: 'HubSpot', category: 'CRM', authTypes: ['OAUTH2'], oauth: true, capabilities: ['oauth', 'probe'],
+    key: 'hubspot', name: 'HubSpot', category: 'CRM', authTypes: ['OAUTH2'], oauth: true, capabilities: ['oauth', 'probe'], oauthPkce: true,
     oauthEnvPrefix: 'HUBSPOT', oauthAuthUrl: 'https://app.hubspot.com/oauth/authorize', oauthTokenUrl: 'https://api.hubapi.com/oauth/v1/token', probeUrl: 'https://api.hubapi.com/oauth/v1/access-tokens',
     scopes: [scope('crm.objects.contacts.read', 'Contacts — Read', 'Read CRM contact records.', 'CRM Objects'), scope('crm.objects.contacts.write', 'Contacts — Write', 'Create and update CRM contact records.', 'CRM Objects'), scope('crm.objects.companies.read', 'Companies — Read', 'Read CRM company records.', 'CRM Objects'), scope('crm.objects.companies.write', 'Companies — Write', 'Create and update CRM company records.', 'CRM Objects'), scope('crm.objects.deals.read', 'Deals — Read', 'Read CRM deal records.', 'CRM Objects'), scope('crm.objects.deals.write', 'Deals — Write', 'Create and update CRM deal records.', 'CRM Objects'), scope('tickets', 'Tickets — Read/Write', 'Access HubSpot ticket data.', 'Tickets')], defaultScopes: ['crm.objects.contacts.read'],
   },
   {
-    key: 'salesforce', name: 'Salesforce', category: 'CRM', authTypes: ['OAUTH2'], oauth: true, capabilities: ['oauth', 'probe'],
+    key: 'salesforce', name: 'Salesforce', category: 'CRM', authTypes: ['OAUTH2'], oauth: true, capabilities: ['oauth', 'probe'], oauthPkce: true,
     oauthEnvPrefix: 'SALESFORCE', oauthAuthUrl: 'https://login.salesforce.com/services/oauth2/authorize', oauthTokenUrl: 'https://login.salesforce.com/services/oauth2/token', probeUrl: 'https://login.salesforce.com/services/oauth2/userinfo',
     scopes: [scope('api', 'API', 'Access Salesforce APIs.'), scope('refresh_token offline_access', 'Refresh token', 'Keep the connection active for automation.')], defaultScopes: ['api', 'refresh_token offline_access'],
   },
   {
-    key: 'zoom', name: 'Zoom', category: 'Collaboration', authTypes: ['OAUTH2'], oauth: true, capabilities: ['oauth', 'probe'],
+    key: 'zoom', name: 'Zoom', category: 'Collaboration', authTypes: ['OAUTH2'], oauth: true, capabilities: ['oauth', 'probe'], oauthPkce: true,
     oauthEnvPrefix: 'ZOOM', oauthAuthUrl: 'https://zoom.us/oauth/authorize', oauthTokenUrl: 'https://zoom.us/oauth/token', probeUrl: 'https://api.zoom.us/v2/users/me',
     scopes: [scope('user:read', 'User — Read', 'Read the connected Zoom user.', 'Users'), scope('meeting:read', 'Meetings — Read', 'Read meeting information.', 'Meetings'), scope('meeting:write', 'Meetings — Write', 'Create and update meetings.', 'Meetings'), scope('meeting:read:admin', 'Meetings — Admin Read', 'Read meetings across the account where the app is authorized.', 'Meetings', 'SENSITIVE'), scope('meeting:write:admin', 'Meetings — Admin Write', 'Create and update meetings across the account where authorized.', 'Meetings', 'SENSITIVE'), scope('user:read:admin', 'Users — Admin Read', 'Read users across the account where authorized.', 'Users', 'SENSITIVE')], defaultScopes: ['user:read', 'meeting:read'],
   },
   {
-    key: 'discord', name: 'Discord', category: 'Collaboration', authTypes: ['OAUTH2'], oauth: true, capabilities: ['oauth'],
+    key: 'discord', name: 'Discord', category: 'Collaboration', authTypes: ['OAUTH2'], oauth: true, capabilities: ['oauth'], oauthPkce: true,
     oauthEnvPrefix: 'DISCORD', oauthAuthUrl: 'https://discord.com/oauth2/authorize', oauthTokenUrl: 'https://discord.com/api/oauth2/token', probeUrl: 'https://discord.com/api/users/@me',
     scopes: [scope('identify', 'Identity', 'Read the connected Discord user.', 'Identity'), scope('email', 'Email', 'Read the connected Discord email.', 'Identity'), scope('guilds', 'Servers — Read', 'Read servers the user belongs to.', 'Servers'), scope('guilds.members.read', 'Server members — Read', 'Read server member lists where authorized.', 'Servers'), scope('connections', 'Connections', 'Read the connected Discord accounts.', 'Identity')], defaultScopes: ['identify'],
   },
   {
-    key: 'mailchimp', name: 'Mailchimp', category: 'Marketing', authTypes: ['OAUTH2'], oauth: true, capabilities: ['oauth'],
+    key: 'mailchimp', name: 'Mailchimp', category: 'Marketing', authTypes: ['OAUTH2'], oauth: true, capabilities: ['oauth'], oauthPkce: true,
     oauthEnvPrefix: 'MAILCHIMP', oauthAuthUrl: 'https://login.mailchimp.com/oauth2/authorize', oauthTokenUrl: 'https://login.mailchimp.com/oauth2/token',
     scopes: [], defaultScopes: [],
   },

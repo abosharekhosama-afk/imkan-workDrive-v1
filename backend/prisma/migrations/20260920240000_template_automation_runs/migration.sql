@@ -1,0 +1,23 @@
+CREATE TABLE `template_automation_runs` (
+  `id` CHAR(36) NOT NULL,
+  `template_id` CHAR(36) NOT NULL,
+  `template_version_id` CHAR(36) NULL,
+  `created_by_id` CHAR(36) NOT NULL,
+  `status` ENUM('PENDING','RUNNING','SUCCEEDED','FAILED') NOT NULL DEFAULT 'PENDING',
+  `name` VARCHAR(191) NOT NULL,
+  `values` JSON NOT NULL,
+  `file_id` CHAR(36) NULL,
+  `pdf_file_id` CHAR(36) NULL,
+  `error` TEXT NULL,
+  `started_at` DATETIME(3) NULL,
+  `completed_at` DATETIME(3) NULL,
+  `created_at` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+  `updated_at` DATETIME(3) NOT NULL,
+  PRIMARY KEY (`id`),
+  INDEX `template_automation_runs_template_id_created_at_idx` (`template_id`,`created_at`),
+  INDEX `template_automation_runs_created_by_id_created_at_idx` (`created_by_id`,`created_at`),
+  INDEX `template_automation_runs_status_created_at_idx` (`status`,`created_at`),
+  CONSTRAINT `template_automation_runs_template_id_fkey` FOREIGN KEY (`template_id`) REFERENCES `templates` (`id`) ON DELETE CASCADE ON UPDATE CASCADE,
+  CONSTRAINT `template_automation_runs_template_version_id_fkey` FOREIGN KEY (`template_version_id`) REFERENCES `template_versions` (`id`) ON DELETE SET NULL ON UPDATE CASCADE,
+  CONSTRAINT `template_automation_runs_created_by_id_fkey` FOREIGN KEY (`created_by_id`) REFERENCES `users` (`id`) ON DELETE CASCADE ON UPDATE CASCADE
+) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;

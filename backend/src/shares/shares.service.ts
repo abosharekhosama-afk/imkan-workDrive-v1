@@ -28,6 +28,7 @@ import {
 import { PrismaService } from '../prisma/prisma.service';
 import { STORAGE_SERVICE, type StorageService } from '../storage/storage.types';
 import type { CreateShareInput } from './create-share.schema';
+import { OfficeEmailService } from '../office-email/office-email.service';
 
 export type CreateShareResponse = {
   link_url: string;
@@ -56,6 +57,7 @@ export class SharesService {
     private readonly permissions: PermissionService,
     private readonly config: ConfigService,
     @Inject(STORAGE_SERVICE) private readonly storage: StorageService,
+    private readonly email: OfficeEmailService,
   ) {}
 
   async createShare(user: AccessTokenPayload, input: CreateShareInput): Promise<CreateShareResponse> {
@@ -94,7 +96,20 @@ export class SharesService {
       await tx.auditLog.create({ data: { orgId: user.org_id, actorId: user.sub, action: 'SHARE_CREATED', resourceType: input.resourceType, resourceId: input.resourceId } });
     });
     const base = this.config.get<string>('PUBLIC_APP_URL') ?? '';
-    return { link_url: `${base}/share/public?token=${encodeURIComponent(linkToken)}` };
+    const linkUrl = `${base}/share/public?token=${encodeURIComponent(linkToken)}`;
+    let emailed = 0;
+    if (input.emailRecipients?.length) {
+      await this.email.send(user, {
+        to: input.emailRecipients,
+        subject: 'A file has been shared with you on IMKAN WorkDrive',
+        text: `A file has been shared with you on IMKAN WorkDrive.
+
+Open the shared resource: ${linkUrl}` ,
+        html: `<p>A file has been shared with you on <strong>IMKAN WorkDrive</strong>.</p><p><a href="${linkUrl}">Open the shared resource</a></p>`,
+      });
+      emailed = input.emailRecipients.length;
+    }
+    return { link_url: linkUrl, emailed };
   }
 
   async listSharedWithMe(user: AccessTokenPayload) {

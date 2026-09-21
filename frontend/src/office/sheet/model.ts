@@ -6,14 +6,18 @@ export type SheetCell = { value: CellValue; formula?: string; format?: CellForma
 export type NamedRange = { name:string; reference:string; scopeSheetId?:string };
 export type SheetTable = { id:string; name:string; start:string; end:string; hasHeader:boolean; style?:'plain'|'banded' };
 export type PivotTable = { id:string; name:string; sourceRange:string; rowField?:string; columnField?:string; valueField?:string; aggregation?:'sum'|'count'|'average' };
-export type SheetChart = { id:string; type:'column'|'bar'|'line'|'area'|'pie'|'doughnut'; title:string; rangeStart:string; rangeEnd:string; position:{row:number;col:number}; width:number;height:number;legend:boolean;showLabels:boolean;series?:string[] };
+export type ChartType = 'column'|'bar'|'line'|'area'|'pie'|'doughnut'|'scatter'|'combo';
+export type ChartStackMode = 'none'|'stacked'|'percent';
+export type ChartAxis = { min?:number; max?:number; tick?:number; title?:string; labels?:boolean; grid?:boolean };
+export type ChartTrendline = { enabled:boolean; type:'linear'; seriesIndex?:number };
+export type SheetChart = { id:string; type:ChartType; title:string; rangeStart:string; rangeEnd:string; position:{row:number;col:number}; width:number;height:number;legend:boolean;showLabels:boolean;series?:string[]; seriesTypes?:('column'|'line'|'bar')[]; stackMode?:ChartStackMode; theme?:string; colors?:string[]; xAxis?:ChartAxis; yAxis?:ChartAxis; trendline?:ChartTrendline; showMarkers?:boolean; showValues?:boolean };
 export type Sheet = { id:string; name:string; cells:Record<string,SheetCell>; tables?:SheetTable[]; pivotTables?:PivotTable[]; rowHeights?:Record<number,number>; columnWidths?:Record<string,number>; frozenRows?:number; frozenColumns?:number; filters?:Record<string,string>|null; sort?:{column:string;direction:'asc'|'desc'}|null; merges?:{start:string;end:string}[]; charts?:SheetChart[] };
-export type Workbook = { schema:6; type:'SHEET'; title:string; activeSheet:string; sheets:Sheet[]; namedRanges?:NamedRange[]; };
+export type Workbook = { schema:7; type:'SHEET'; title:string; activeSheet:string; sheets:Sheet[]; namedRanges?:NamedRange[]; };
 export const colName=(n:number)=>{let s='';for(let x=n+1;x>0;x=Math.floor((x-1)/26))s=String.fromCharCode(65+(x-1)%26)+s;return s};
 export const colIndex=(s:string)=>{let n=0;for(const c of s.toUpperCase())n=n*26+c.charCodeAt(0)-64;return n-1};
 export const cellKey=(r:number,c:number)=>`${colName(c)}${r+1}`;
 export const parseKey=(key:string)=>{const m=/^\$?([A-Z]+)\$?(\d+)$/i.exec(key);return m?{row:Number(m[2])-1,col:colIndex(m[1])}:null};
-export function defaultWorkbook():Workbook{const cells:Record<string,SheetCell>={A1:{value:'Welcome to IMKAN Sheet',format:{bold:true}},A3:{value:'Try =SUM(A1:A5), =IF(A1>0,"Yes","No")'}};return{schema:6,type:'SHEET',title:'Untitled spreadsheet',activeSheet:'sheet-1',sheets:[{id:'sheet-1',name:'Sheet1',cells}]};}
+export function defaultWorkbook():Workbook{const cells:Record<string,SheetCell>={A1:{value:'Welcome to IMKAN Sheet',format:{bold:true}},A3:{value:'Try =SUM(A1:A5), =IF(A1>0,"Yes","No")'}};return{schema:7,type:'SHEET',title:'Untitled spreadsheet',activeSheet:'sheet-1',sheets:[{id:'sheet-1',name:'Sheet1',cells}]};}
 export const cloneWorkbook=(w:Workbook):Workbook=>JSON.parse(JSON.stringify(w));
 export const activeSheet=(w:Workbook)=>w.sheets.find(s=>s.id===w.activeSheet)??w.sheets[0];
 export function setCell(w:Workbook,sheetId:string,key:string,cell:SheetCell|null){const n=cloneWorkbook(w),s=n.sheets.find(x=>x.id===sheetId);if(!s)return w;if(cell===null)delete s.cells[key];else s.cells[key]=cell;return n;}
@@ -41,7 +45,7 @@ function criterionMatch(value:any,criterion:any):boolean {
   switch(m[1]){case '=':return a===b;case '<>':return a!==b;case '<':return a<b;case '>':return a>b;case '<=':return a<=b;default:return a>=b;}
 }
 export function evalFormula(formula:string,sheet:Sheet,stack=new Set<string>(),workbook?:Workbook):any{
-  const w=workbook??({schema:6,type:'SHEET',title:'',activeSheet:sheet.id,sheets:[sheet]} as Workbook); let f=formula.trim(); if(!f.startsWith('=')) return formula; f=f.slice(1).trim();
+  const w=workbook??({schema:7,type:'SHEET',title:'',activeSheet:sheet.id,sheets:[sheet]} as Workbook); let f=formula.trim(); if(!f.startsWith('=')) return formula; f=f.slice(1).trim();
   const fn=f.match(/^([A-Z][A-Z0-9_]*)\((.*)\)$/i);
   if(fn){ const name=fn[1].toUpperCase(),args=splitArgs(fn[2]);
     if(name==='IF'){if(args.length<2)throw Error('IF');return scalar(args[0],w,sheet,stack)?scalar(args[1],w,sheet,stack):(args[2]?scalar(args[2],w,sheet,stack):false)}

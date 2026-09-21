@@ -5,7 +5,7 @@ import {
   forwardRef,
   NotFoundException,
 } from '@nestjs/common';
-import { OfficeDocumentType, OfficeSessionStatus, FileStatus, Prisma } from '@prisma/client';
+import { OfficeDocumentType, OfficeSessionStatus, FileStatus, Prisma, OrgRole } from '@prisma/client';
 import type { AccessTokenPayload } from '../auth/jwt.types';
 import { PrismaService } from '../prisma/prisma.service';
 import { PermissionService } from '../permissions/permission.service';
@@ -13,7 +13,10 @@ import { FilesService } from '../files/files.service';
 import type { OfficeDocumentState, OfficeEngine, OfficeType } from './core/office-engine.interface';
 import { OfficeConversionService, type OfficeImportResult } from './office-conversion.service';
 import { publishOfficeRealtimeEvent } from './office-realtime';
+import { NotificationsService } from '../notifications/notifications.service';
+import { WorkflowEngineService } from '../workflows/workflow-engine.service';
 import { Inject } from '@nestjs/common';
+import { createHash } from 'crypto';
 import { STORAGE_SERVICE, type StorageService } from '../storage/storage.types';
 
 
@@ -80,18 +83,59 @@ function normalizeSheetCell(value: unknown) {
     validation: f.validation && typeof f.validation === 'object' ? { type: ['list','number','text'].includes(String((f.validation as any).type)) ? String((f.validation as any).type) : 'text', values: Array.isArray((f.validation as any).values) ? (f.validation as any).values.slice(0,50).map((x:any)=>String(x).slice(0,200)) : undefined, min: Number.isFinite(Number((f.validation as any).min)) ? Number((f.validation as any).min) : undefined, max: Number.isFinite(Number((f.validation as any).max)) ? Number((f.validation as any).max) : undefined } : undefined,
   };
 }
+function normalizeSheetChart(value: unknown) {
+  const c = value && typeof value === 'object' ? value as Record<string, any> : {};
+  const axis = (raw: any) => raw && typeof raw === 'object' ? {
+    min: Number.isFinite(Number(raw.min)) ? Number(raw.min) : undefined,
+    max: Number.isFinite(Number(raw.max)) ? Number(raw.max) : undefined,
+    tick: Number.isFinite(Number(raw.tick)) ? Number(raw.tick) : undefined,
+    title: typeof raw.title === 'string' ? raw.title.slice(0,100) : '',
+    labels: raw.labels !== false,
+    grid: raw.grid !== false,
+  } : undefined;
+  return {
+    id: typeof c.id === 'string' ? c.id.slice(0,100) : crypto.randomUUID(),
+    type: ['column','bar','line','area','pie','doughnut','scatter','combo'].includes(String(c.type)) ? String(c.type) : 'column',
+    title: typeof c.title === 'string' ? c.title.slice(0,255) : 'Chart',
+    rangeStart: typeof c.rangeStart === 'string' ? c.rangeStart.toUpperCase().slice(0,20) : 'A1',
+    rangeEnd: typeof c.rangeEnd === 'string' ? c.rangeEnd.toUpperCase().slice(0,20) : 'B5',
+    position: { row: Math.max(0,Math.min(1000,Number(c.position?.row)||1)), col: Math.max(0,Math.min(1000,Number(c.position?.col)||7)) },
+    width: clampNumber(c.width,360,900,560), height: clampNumber(c.height,220,600,330),
+    legend: c.legend !== false, showLabels: Boolean(c.showLabels), showMarkers: c.showMarkers !== false, showValues: Boolean(c.showValues),
+    series: Array.isArray(c.series) ? c.series.slice(0,20).map((x:any)=>String(x).slice(0,100)) : undefined,
+    seriesTypes: Array.isArray(c.seriesTypes) ? c.seriesTypes.slice(0,20).filter((x:any)=>['column','line','bar'].includes(String(x))).map((x:any)=>String(x)) : undefined,
+    stackMode: ['none','stacked','percent'].includes(String(c.stackMode)) ? String(c.stackMode) : 'none',
+    theme: ['office','mono','ocean','nature','sunset'].includes(String(c.theme)) ? String(c.theme) : 'office',
+    colors: Array.isArray(c.colors) ? c.colors.slice(0,12).filter((x:any)=>typeof x==='string' && /^#[0-9a-f]{6}$/i.test(x)) : undefined,
+    xAxis: axis(c.xAxis), yAxis: axis(c.yAxis),
+    trendline: c.trendline && typeof c.trendline === 'object' ? { enabled:Boolean(c.trendline.enabled), type:'linear', seriesIndex:Math.max(0,Math.min(19,Number(c.trendline.seriesIndex)||0)) } : { enabled:false, type:'linear', seriesIndex:0 },
+  };
+}
+
 function normalizeSheet(value: unknown) {
   const v = value && typeof value === 'object' ? value as Record<string, unknown> : {};
-  const sheets = Array.isArray(v.sheets) ? v.sheets.slice(0, 100).map((x:any, i:number) => {
+  const sheets = Array.isArray(v.sheets) ? v.sheets.slice(0,100).map((x:any,i:number) => {
     const cells: Record<string, unknown> = {};
-    if (x?.cells && typeof x.cells === 'object') for (const [key, cell] of Object.entries(x.cells as Record<string, unknown>).slice(0, 10000)) {
-      if (/^[A-Z]{1,4}\d{1,7}$/i.test(key)) cells[key.toUpperCase()] = normalizeSheetCell(cell);
-    }
-    return { id: typeof x?.id === 'string' ? x.id.slice(0,100) : crypto.randomUUID(), name: typeof x?.name === 'string' ? x.name.slice(0,80) : `Sheet${i+1}`, cells, tables: Array.isArray(x?.tables) ? x.tables.slice(0,100).filter((t:any)=>/^[A-Z]{1,4}\d{1,7}$/.test(String(t?.start))&&/^[A-Z]{1,4}\d{1,7}$/.test(String(t?.end))).map((t:any)=>({id:typeof t?.id==='string'?t.id.slice(0,100):crypto.randomUUID(),name:typeof t?.name==='string'?t.name.slice(0,80):'Table',start:String(t.start).toUpperCase(),end:String(t.end).toUpperCase(),hasHeader:t?.hasHeader!==false,style:t?.style==='plain'?'plain':'banded'})) : [], pivotTables: Array.isArray(x?.pivotTables) ? x.pivotTables.slice(0,50).map((t:any)=>({id:typeof t?.id==='string'?t.id.slice(0,100):crypto.randomUUID(),name:typeof t?.name==='string'?t.name.slice(0,80):'Pivot',sourceRange:typeof t?.sourceRange==='string'?t.sourceRange.slice(0,200):'A1:B10',rowField:typeof t?.rowField==='string'?t.rowField.slice(0,80):undefined,columnField:typeof t?.columnField==='string'?t.columnField.slice(0,80):undefined,valueField:typeof t?.valueField==='string'?t.valueField.slice(0,80):undefined,aggregation:['sum','count','average'].includes(String(t?.aggregation))?String(t.aggregation):'sum'})) : [], frozenRows: Number.isFinite(Number(x?.frozenRows)) ? Math.max(0, Math.min(10, Number(x.frozenRows))) : 0, frozenColumns: Number.isFinite(Number(x?.frozenColumns)) ? Math.max(0, Math.min(10, Number(x.frozenColumns))) : 0, columnWidths: x?.columnWidths && typeof x.columnWidths==='object' ? Object.fromEntries(Object.entries(x.columnWidths as Record<string,unknown>).slice(0,100).filter(([k,v])=>/^[A-Z]{1,4}$/.test(k)&&Number.isFinite(Number(v))).map(([k,v])=>[k,Math.max(60,Math.min(420,Number(v)))])) : {}, rowHeights: x?.rowHeights && typeof x.rowHeights==='object' ? Object.fromEntries(Object.entries(x.rowHeights as Record<string,unknown>).slice(0,1000).filter(([k,v])=>/^\d+$/.test(k)&&Number.isFinite(Number(v))).map(([k,v])=>[k,Math.max(22,Math.min(100,Number(v)))])) : {}, filters: x?.filters && typeof x.filters==='object' ? Object.fromEntries(Object.entries(x.filters as Record<string,unknown>).slice(0,100).filter(([k,v])=>/^[A-Z]{1,4}$/.test(k)&&typeof v==='string').map(([k,v])=>[k,String(v).slice(0,200)])) : null, sort: x?.sort && typeof x.sort==='object' && /^[A-Z]{1,4}$/.test(String(x.sort.column)) ? {column:String(x.sort.column),direction:x.sort.direction==='desc'?'desc':'asc'} : null, merges: Array.isArray(x?.merges) ? x.merges.slice(0,200).filter((m:any)=>/^[A-Z]{1,4}\d{1,7}$/.test(String(m?.start))&&/^[A-Z]{1,4}\d{1,7}$/.test(String(m?.end))).map((m:any)=>({start:String(m.start).toUpperCase(),end:String(m.end).toUpperCase()})) : [], charts: Array.isArray(x?.charts) ? x.charts.slice(0,50).map((c:any)=>({id:typeof c?.id==='string'?c.id.slice(0,100):crypto.randomUUID(),type:['column','bar','line','area','pie','doughnut'].includes(String(c?.type))?String(c.type):'column',title:typeof c?.title==='string'?c.title.slice(0,255):'Chart',rangeStart:typeof c?.rangeStart==='string'?c.rangeStart.toUpperCase().slice(0,20):'A1',rangeEnd:typeof c?.rangeEnd==='string'?c.rangeEnd.toUpperCase().slice(0,20):'B5',position:{row:Math.max(0,Math.min(1000,Number(c?.position?.row)||1)),col:Math.max(0,Math.min(1000,Number(c?.position?.col)||7))},width:clampNumber(c?.width,360,900,520),height:clampNumber(c?.height,220,600,300),legend:c?.legend!==false,showLabels:Boolean(c?.showLabels),series:Array.isArray(c?.series)?c.series.slice(0,20).map((x:any)=>String(x).slice(0,100)):undefined})) : [] };
+    if (x?.cells && typeof x.cells === 'object') for (const [key,cell] of Object.entries(x.cells as Record<string,unknown>).slice(0,10000)) if (/^[A-Z]{1,4}\d{1,7}$/i.test(key)) cells[key.toUpperCase()] = normalizeSheetCell(cell);
+    return {
+      id: typeof x?.id === 'string' ? x.id.slice(0,100) : crypto.randomUUID(),
+      name: typeof x?.name === 'string' ? x.name.slice(0,80) : `Sheet${i+1}`,
+      cells,
+      tables: Array.isArray(x?.tables) ? x.tables.slice(0,100).filter((t:any)=>/^[A-Z]{1,4}\d{1,7}$/.test(String(t?.start))&&/^[A-Z]{1,4}\d{1,7}$/.test(String(t?.end))).map((t:any)=>({id:typeof t?.id==='string'?t.id.slice(0,100):crypto.randomUUID(),name:typeof t?.name==='string'?t.name.slice(0,80):'Table',start:String(t.start).toUpperCase(),end:String(t.end).toUpperCase(),hasHeader:t?.hasHeader!==false,style:t?.style==='plain'?'plain':'banded'})) : [],
+      pivotTables: Array.isArray(x?.pivotTables) ? x.pivotTables.slice(0,50).map((t:any)=>({id:typeof t?.id==='string'?t.id.slice(0,100):crypto.randomUUID(),name:typeof t?.name==='string'?t.name.slice(0,80):'Pivot',sourceRange:typeof t?.sourceRange==='string'?t.sourceRange.slice(0,200):'A1:B10',rowField:typeof t?.rowField==='string'?t.rowField.slice(0,80):undefined,columnField:typeof t?.columnField==='string'?t.columnField.slice(0,80):undefined,valueField:typeof t?.valueField==='string'?t.valueField.slice(0,80):undefined,aggregation:['sum','count','average'].includes(String(t?.aggregation))?String(t.aggregation):'sum'})) : [],
+      frozenRows: Number.isFinite(Number(x?.frozenRows)) ? Math.max(0,Math.min(10,Number(x.frozenRows))) : 0,
+      frozenColumns: Number.isFinite(Number(x?.frozenColumns)) ? Math.max(0,Math.min(10,Number(x.frozenColumns))) : 0,
+      columnWidths: x?.columnWidths&&typeof x.columnWidths==='object' ? Object.fromEntries(Object.entries(x.columnWidths as Record<string,unknown>).slice(0,100).filter(([k,val])=>/^[A-Z]{1,4}$/.test(k)&&Number.isFinite(Number(val))).map(([k,val])=>[k,Math.max(60,Math.min(420,Number(val)))])) : {},
+      rowHeights: x?.rowHeights&&typeof x.rowHeights==='object' ? Object.fromEntries(Object.entries(x.rowHeights as Record<string,unknown>).slice(0,1000).filter(([k,val])=>/^\d+$/.test(k)&&Number.isFinite(Number(val))).map(([k,val])=>[k,Math.max(22,Math.min(100,Number(val)))])) : {},
+      filters: x?.filters&&typeof x.filters==='object' ? Object.fromEntries(Object.entries(x.filters as Record<string,unknown>).slice(0,100).filter(([k,val])=>/^[A-Z]{1,4}$/.test(k)&&typeof val==='string').map(([k,val])=>[k,String(val).slice(0,200)])) : null,
+      sort: x?.sort&&typeof x.sort==='object'&&/^[A-Z]{1,4}$/.test(String(x.sort.column)) ? {column:String(x.sort.column),direction:x.sort.direction==='desc'?'desc':'asc'} : null,
+      merges: Array.isArray(x?.merges) ? x.merges.slice(0,200).filter((m:any)=>/^[A-Z]{1,4}\d{1,7}$/.test(String(m?.start))&&/^[A-Z]{1,4}\d{1,7}$/.test(String(m?.end))).map((m:any)=>({start:String(m.start).toUpperCase(),end:String(m.end).toUpperCase()})) : [],
+      charts: Array.isArray(x?.charts) ? x.charts.slice(0,50).map(normalizeSheetChart) : [],
+    };
   }) : [];
-  const safeSheets = sheets.length ? sheets : [{ id: 'sheet-1', name: 'Sheet1', cells: {} }];
-  const active = typeof v.activeSheet === 'string' && safeSheets.some((x:any) => x.id === v.activeSheet) ? v.activeSheet : safeSheets[0].id;
-  return { schema: 6, type: 'SHEET', title: typeof v.title === 'string' ? v.title.slice(0,255) : 'Untitled spreadsheet', activeSheet: active, sheets: safeSheets, namedRanges: Array.isArray(v.namedRanges) ? v.namedRanges.slice(0,500).map((n:any)=>({name:typeof n?.name==='string'?n.name.slice(0,80):'Range',reference:typeof n?.reference==='string'?n.reference.slice(0,200):'A1',scopeSheetId:typeof n?.scopeSheetId==='string'?n.scopeSheetId.slice(0,100):undefined})) : [], _ooxmlPreservation: normalizeOoxmlPreservation(v._ooxmlPreservation), _ooxmlBridge: normalizeOoxmlBridge(v._ooxmlBridge) };
+  const safeSheets = sheets.length ? sheets : [{id:'sheet-1',name:'Sheet1',cells:{}}];
+  const active = typeof v.activeSheet === 'string' && safeSheets.some((x:any)=>x.id===v.activeSheet) ? v.activeSheet : safeSheets[0].id;
+  return {schema:7,type:'SHEET',title:typeof v.title==='string'?v.title.slice(0,255):'Untitled spreadsheet',activeSheet:active,sheets:safeSheets,namedRanges:Array.isArray(v.namedRanges)?v.namedRanges.slice(0,500).map((n:any)=>({name:typeof n?.name==='string'?n.name.slice(0,80):'Range',reference:typeof n?.reference==='string'?n.reference.slice(0,200):'A1',scopeSheetId:typeof n?.scopeSheetId==='string'?n.scopeSheetId.slice(0,100):undefined})):[],_ooxmlPreservation:normalizeOoxmlPreservation(v._ooxmlPreservation),_ooxmlBridge:normalizeOoxmlBridge(v._ooxmlBridge)};
 }
 
 function normalizeWriterPage(value: unknown) {
@@ -160,7 +204,7 @@ function defaultContent(type: OfficeType) {
     return { schema: 5, type, title: 'Untitled document', language: 'mixed', page: normalizeWriterPage(undefined), blocks: [{ id: 'p1', type: 'paragraph', align: 'start', lineSpacing: 1.5, spaceAfter: 8, runs: [{ text: '' }] }], review: { trackChanges: false, comments: [], changes: [], snapshots: [] } };
   }
   if (type === 'SHEET') {
-    return { schema: 6, type, title: 'Untitled spreadsheet', activeSheet: 'sheet-1', sheets: [{ id: 'sheet-1', name: 'Sheet1', cells: {} }] };
+    return { schema: 7, type, title: 'Untitled spreadsheet', activeSheet: 'sheet-1', sheets: [{ id: 'sheet-1', name: 'Sheet1', cells: {} }] };
   }
   return { schema: 3, type, title: 'Untitled presentation', aspectRatio: '16:9', activeSlide: 'slide-1', theme: { fontFamily: 'Arial', accent: '#2563eb' }, slides: [{ id: 'slide-1', layout: 'title-content', background: '#ffffff', elements: [{ id: 'title', type: 'text', x: 8, y: 12, width: 84, height: 18, text: 'Presentation title', fontSize: 32, bold: true, align: 'center', color: '#111827' }, { id: 'content', type: 'text', x: 12, y: 40, width: 76, height: 28, text: 'Add your content here', fontSize: 20, align: 'center', color: '#475569' }] }] };
 }
@@ -172,8 +216,255 @@ export class OfficeService implements OfficeEngine {
     private readonly permissions: PermissionService,
     @Inject(forwardRef(() => FilesService)) private readonly files: FilesService,
     private readonly conversion: OfficeConversionService,
+    private readonly notifications: NotificationsService,
+    private readonly workflowEngine: WorkflowEngineService,
     @Inject(STORAGE_SERVICE) private readonly storage: StorageService,
   ) {}
+
+  async requestApproval(user: AccessTokenPayload, fileId: string, body: { workflowId: string; participantRules?: unknown; fieldValues?: Record<string, unknown>; comment?: string }) {
+    const document = await this.prisma.officeDocument.findFirst({ where: { fileId, orgId: user.org_id }, select: { id: true, type: true } });
+    if (!document) throw new NotFoundException('Office document not found');
+    const result = await this.workflowEngine.startManual(user, body.workflowId, {
+      fileId, resourceId: fileId, resourceType: 'FILE', eventType: 'manual', userId: user.sub,
+      startInput: { participantRules: Array.isArray(body.participantRules) ? body.participantRules : undefined, fieldValues: body.fieldValues ?? {}, comment: typeof body.comment === 'string' ? body.comment : '' },
+    });
+    await this.auditOfficeEvent(user, 'OFFICE_APPROVAL_REQUESTED', fileId, { workflowId: body.workflowId, type: document.type, runId: result?.id ?? null }, 'OFFICE_DOCUMENT');
+    return { ...result, fileId, officeType: document.type };
+  }
+
+  async getApprovalStatus(user: AccessTokenPayload, fileId: string) {
+    const document = await this.prisma.officeDocument.findFirst({ where: { fileId, orgId: user.org_id }, select: { id: true, type: true } });
+    if (!document) throw new NotFoundException('Office document not found');
+    const tasks = await this.prisma.workflowTask.findMany({ where: { orgId: user.org_id }, include: { workflow: { select: { id: true, name: true } }, state: { select: { id: true, name: true } }, participants: { include: { user: { select: { id: true, name: true, email: true } } } }, run: { select: { id: true, status: true, createdAt: true, currentStateId: true, trigger: true, result: true } } }, orderBy: { createdAt: 'desc' }, take: 200 });
+    const relevant = tasks.filter((task) => { const trigger = task.run?.trigger; return !!trigger && typeof trigger === 'object' && !Array.isArray(trigger) && String((trigger as Record<string, unknown>).fileId ?? (trigger as Record<string, unknown>).resourceId ?? '') === fileId; });
+    return { fileId, officeType: document.type, current: relevant.find((t) => t.status === 'PENDING') ?? null, history: relevant.slice(0, 50) };
+  }
+
+  private async getOfficePolicy(user: AccessTokenPayload, fileId: string) {
+    const document = await this.prisma.officeDocument.findFirst({ where: { fileId, orgId: user.org_id }, select: { id: true } });
+    if (!document) throw new NotFoundException('Office document not found');
+    const [existingDocumentPolicy, existingOrgPolicy] = await Promise.all([
+      this.prisma.officeDocumentPolicy.findUnique({ where: { documentId: document.id } }),
+      this.prisma.officeSecurityPolicy.findUnique({ where: { orgId: user.org_id } }),
+    ]);
+    // Reads are the hot path for Office. Avoid issuing a write/upsert on every open/save/export.
+    // The fallback upsert only runs for legacy documents/orgs that have no policy row yet.
+    const [documentPolicy, orgPolicy] = await Promise.all([
+      existingDocumentPolicy ?? this.prisma.officeDocumentPolicy.upsert({ where: { documentId: document.id }, create: { documentId: document.id }, update: {} }),
+      existingOrgPolicy ?? this.prisma.officeSecurityPolicy.upsert({ where: { orgId: user.org_id }, create: { orgId: user.org_id }, update: {} }),
+    ]);
+    return {
+      ...documentPolicy,
+      allowExport: documentPolicy.allowExport && !orgPolicy.disableExport,
+      allowCopy: documentPolicy.allowCopy && !orgPolicy.disableCopy,
+      allowOffline: documentPolicy.allowOffline && !orgPolicy.disableOffline,
+      readOnly: documentPolicy.readOnly || orgPolicy.forceReadOnly,
+      watermarkEnabled: documentPolicy.watermarkEnabled || orgPolicy.requireWatermark,
+      watermarkText: documentPolicy.watermarkText || orgPolicy.watermarkText,
+      organizationPolicy: { id: orgPolicy.id, forceReadOnly: orgPolicy.forceReadOnly, disableExport: orgPolicy.disableExport, disableCopy: orgPolicy.disableCopy, disableOffline: orgPolicy.disableOffline, requireWatermark: orgPolicy.requireWatermark, watermarkText: orgPolicy.watermarkText },
+    };
+  }
+
+  private async getRawOfficePolicy(user: AccessTokenPayload, fileId: string) {
+    const document = await this.prisma.officeDocument.findFirst({ where: { fileId, orgId: user.org_id }, select: { id: true } });
+    if (!document) throw new NotFoundException('Office document not found');
+    const existing = await this.prisma.officeDocumentPolicy.findUnique({ where: { documentId: document.id } });
+    return existing ?? this.prisma.officeDocumentPolicy.upsert({ where: { documentId: document.id }, create: { documentId: document.id }, update: {} });
+  }
+
+  private assertOfficeAdmin(user: AccessTokenPayload) {
+    if (user.role !== OrgRole.ADMIN && user.role !== OrgRole.SUPER_ADMIN) throw new ForbiddenException('Office administrator access required');
+  }
+
+  async getAdminCenter(user: AccessTokenPayload) {
+    this.assertOfficeAdmin(user);
+    const orgId = user.org_id;
+    const since = new Date(Date.now() - 24 * 60 * 60 * 1000);
+    const [
+      documents, activeSessions, activePresence, operations24h,
+      templates, templateVariables,
+      backgroundJobs, automationRuns,
+      securityPolicy, auditPolicy,
+      recentDocuments,
+    ] = await Promise.all([
+      this.prisma.officeDocument.groupBy({ by: ['type'], where: { orgId }, _count: { _all: true } }),
+      this.prisma.officeSession.count({ where: { orgId, status: OfficeSessionStatus.ACTIVE } }),
+      this.prisma.officePresence.count({ where: { orgId, status: 'ACTIVE' } }),
+      this.prisma.officeOperation.count({ where: { orgId, createdAt: { gte: since } } }),
+      this.prisma.template.count({ where: { orgId, deletedAt: null, status: 'ACTIVE' } }),
+      this.prisma.templateVariable.count({ where: { template: { orgId, deletedAt: null, status: 'ACTIVE' } } }),
+      this.prisma.officeBackgroundJob.groupBy({ by: ['status'], where: { orgId }, _count: { _all: true } }),
+      this.prisma.templateAutomationRun.groupBy({ by: ['status'], where: { template: { orgId } }, _count: { _all: true } }),
+      this.prisma.officeSecurityPolicy.findUnique({ where: { orgId } }),
+      this.prisma.officeAuditPolicy.findUnique({ where: { orgId } }),
+      this.prisma.officeDocument.findMany({ where: { orgId }, orderBy: { updatedAt: 'desc' }, take: 8, select: { id: true, fileId: true, type: true, revision: true, updatedAt: true, file: { select: { name: true } } } }),
+    ]);
+
+    const byStatus = (rows: Array<{ status: string; _count: { _all: number } }>) => Object.fromEntries(rows.map(row => [row.status, row._count._all]));
+    return {
+      generatedAt: new Date().toISOString(),
+      documents: { total: documents.reduce((sum, row) => sum + row._count._all, 0), byType: Object.fromEntries(documents.map(row => [row.type, row._count._all])) },
+      collaboration: { activeSessions, activePresence, operations24h },
+      templates: { active: templates, variables: templateVariables },
+      backgroundJobs: byStatus(backgroundJobs),
+      automationRuns: byStatus(automationRuns),
+      policies: {
+        security: securityPolicy ? { forceReadOnly: securityPolicy.forceReadOnly, disableExport: securityPolicy.disableExport, disableCopy: securityPolicy.disableCopy, disableOffline: securityPolicy.disableOffline, requireWatermark: securityPolicy.requireWatermark, watermarkText: securityPolicy.watermarkText } : null,
+        audit: auditPolicy ? { retentionDays: auditPolicy.retentionDays, immutableChain: auditPolicy.immutableChain, exportEnabled: auditPolicy.exportEnabled } : null,
+      },
+      recentDocuments: recentDocuments.map(row => ({ id: row.id, fileId: row.fileId, name: row.file.name, type: row.type, revision: row.revision, updatedAt: row.updatedAt.toISOString() })),
+    };
+  }
+
+  async getSecurityPolicy(user: AccessTokenPayload) {
+    this.assertOfficeAdmin(user);
+    const policy = await this.prisma.officeSecurityPolicy.upsert({ where: { orgId: user.org_id }, create: { orgId: user.org_id }, update: {} });
+    return { ...policy, createdAt: policy.createdAt.toISOString(), updatedAt: policy.updatedAt.toISOString() };
+  }
+
+  async updateSecurityPolicy(user: AccessTokenPayload, input: { forceReadOnly?: boolean; disableExport?: boolean; disableCopy?: boolean; disableOffline?: boolean; requireWatermark?: boolean; watermarkText?: string | null }) {
+    this.assertOfficeAdmin(user);
+    const current = await this.prisma.officeSecurityPolicy.upsert({ where: { orgId: user.org_id }, create: { orgId: user.org_id }, update: {} });
+    const policy = await this.prisma.officeSecurityPolicy.update({ where: { id: current.id }, data: {
+      ...(typeof input.forceReadOnly === 'boolean' ? { forceReadOnly: input.forceReadOnly } : {}),
+      ...(typeof input.disableExport === 'boolean' ? { disableExport: input.disableExport } : {}),
+      ...(typeof input.disableCopy === 'boolean' ? { disableCopy: input.disableCopy } : {}),
+      ...(typeof input.disableOffline === 'boolean' ? { disableOffline: input.disableOffline } : {}),
+      ...(typeof input.requireWatermark === 'boolean' ? { requireWatermark: input.requireWatermark } : {}),
+      ...(input.watermarkText !== undefined ? { watermarkText: input.watermarkText ? String(input.watermarkText).slice(0, 500) : null } : {}),
+      updatedById: user.sub,
+    }});
+    await this.auditOfficeEvent(user, 'OFFICE_SECURITY_POLICY_UPDATED', user.org_id, { resource: 'ORGANIZATION_OFFICE_SECURITY', previous: current, next: policy }, 'OFFICE_SECURITY_POLICY');
+    return { ...policy, createdAt: policy.createdAt.toISOString(), updatedAt: policy.updatedAt.toISOString() };
+  }
+
+  async getPolicy(user: AccessTokenPayload, fileId: string) {
+    await this.getAuthorizedFile(user, fileId, false);
+    const policy = await this.getOfficePolicy(user, fileId);
+    return { ...policy, createdAt: policy.createdAt.toISOString(), updatedAt: policy.updatedAt.toISOString() };
+  }
+
+  private auditCanonical(input: { orgId: string; actorId: string; action: string; resourceType: string; resourceId: string; metadata: Prisma.InputJsonValue; createdAt: string; previousHash: string | null }) {
+    return JSON.stringify({ orgId: input.orgId, actorId: input.actorId, action: input.action, resourceType: input.resourceType, resourceId: input.resourceId, metadata: input.metadata, createdAt: input.createdAt, previousHash: input.previousHash });
+  }
+
+  private async auditOfficeEvent(user: AccessTokenPayload, action: string, fileId: string, metadata: Record<string, unknown> = {}, resourceType = 'OFFICE_DOCUMENT') {
+    try {
+      const policy = await this.prisma.officeAuditPolicy.findUnique({ where: { orgId: user.org_id }, select: { immutableChain: true } });
+      const immutableChain = policy?.immutableChain !== false;
+      const createdAt = new Date();
+      let previousHash: string | null = null;
+      if (immutableChain) {
+        const previous = await this.prisma.auditLog.findFirst({ where: { orgId: user.org_id, resourceType, resourceId: fileId, integrityHash: { not: null } }, orderBy: [{ createdAt: 'desc' }, { id: 'desc' }], select: { integrityHash: true } });
+        previousHash = previous?.integrityHash ?? null;
+      }
+      const fullMetadata = { office: true, fileId, ...metadata } as Prisma.InputJsonValue;
+      const integrityHash = immutableChain ? createHash('sha256').update(this.auditCanonical({ orgId: user.org_id, actorId: user.sub, action, resourceType, resourceId: fileId, metadata: fullMetadata, createdAt: createdAt.toISOString(), previousHash })).digest('hex') : null;
+      await this.prisma.auditLog.create({ data: { orgId: user.org_id, actorId: user.sub, action, resourceType, resourceId: fileId, metadata: fullMetadata, createdAt, previousHash, integrityHash } });
+    } catch { /* audit failures must never break Office editing */ }
+  }
+
+  async getAuditPolicy(user: AccessTokenPayload) {
+    this.assertOfficeAdmin(user);
+    const policy = await this.prisma.officeAuditPolicy.upsert({ where: { orgId: user.org_id }, create: { orgId: user.org_id }, update: {} });
+    return { ...policy, createdAt: policy.createdAt.toISOString(), updatedAt: policy.updatedAt.toISOString() };
+  }
+
+  async updateAuditPolicy(user: AccessTokenPayload, input: { retentionDays?: number; immutableChain?: boolean; exportEnabled?: boolean }) {
+    this.assertOfficeAdmin(user);
+    const current = await this.prisma.officeAuditPolicy.upsert({ where: { orgId: user.org_id }, create: { orgId: user.org_id }, update: {} });
+    const retentionDays = Number.isFinite(Number(input.retentionDays)) ? Math.min(3650, Math.max(30, Math.floor(Number(input.retentionDays)))) : current.retentionDays;
+    const policy = await this.prisma.officeAuditPolicy.update({ where: { id: current.id }, data: { retentionDays, ...(typeof input.immutableChain === 'boolean' ? { immutableChain: input.immutableChain } : {}), ...(typeof input.exportEnabled === 'boolean' ? { exportEnabled: input.exportEnabled } : {}), updatedById: user.sub } });
+    await this.auditOfficeEvent(user, 'OFFICE_AUDIT_POLICY_UPDATED', user.org_id, { previous: current, next: policy }, 'OFFICE_AUDIT_POLICY');
+    return { ...policy, createdAt: policy.createdAt.toISOString(), updatedAt: policy.updatedAt.toISOString() };
+  }
+
+  async listComplianceAudit(user: AccessTokenPayload, input: { limit?: number; action?: string; resourceType?: string; actorId?: string; since?: string; until?: string }) {
+    this.assertOfficeAdmin(user);
+    const policy = await this.prisma.officeAuditPolicy.upsert({ where: { orgId: user.org_id }, create: { orgId: user.org_id }, update: {} });
+    const limit = Math.max(1, Math.min(500, Number(input.limit) || 100));
+    const allowedTypes = ['OFFICE_DOCUMENT', 'TEMPLATE', 'OFFICE_AUDIT_POLICY', 'OFFICE_SECURITY_POLICY'];
+    const resourceType = allowedTypes.includes(String(input.resourceType)) ? String(input.resourceType) : undefined;
+    const where: Prisma.AuditLogWhereInput = { orgId: user.org_id, resourceType: resourceType ? resourceType : { in: allowedTypes } };
+    if (input.action) where.action = String(input.action).slice(0, 120);
+    if (input.actorId) where.actorId = String(input.actorId);
+    if (input.since || input.until) where.createdAt = { ...(input.since && !Number.isNaN(Date.parse(input.since)) ? { gte: new Date(input.since) } : {}), ...(input.until && !Number.isNaN(Date.parse(input.until)) ? { lte: new Date(input.until) } : {}) };
+    const rows = await this.prisma.auditLog.findMany({ where, orderBy: { createdAt: 'desc' }, take: limit, include: { actor: { select: { id: true, name: true, email: true, avatarUrl: true } } } });
+    return { policy: { retentionDays: policy.retentionDays, immutableChain: policy.immutableChain, exportEnabled: policy.exportEnabled }, events: rows.map(row => ({ id: row.id, action: row.action, resourceType: row.resourceType, resourceId: row.resourceId, createdAt: row.createdAt.toISOString(), actor: row.actor, metadata: row.metadata, previousHash: row.previousHash, integrityHash: row.integrityHash })), count: rows.length };
+  }
+
+  async exportComplianceAudit(user: AccessTokenPayload, input: { resourceType?: string; since?: string; until?: string }) {
+    this.assertOfficeAdmin(user);
+    const policy = await this.prisma.officeAuditPolicy.upsert({ where: { orgId: user.org_id }, create: { orgId: user.org_id }, update: {} });
+    if (!policy.exportEnabled) throw new ForbiddenException('Audit export is disabled by Office compliance policy');
+    const allowedTypes = ['OFFICE_DOCUMENT', 'TEMPLATE', 'OFFICE_AUDIT_POLICY', 'OFFICE_SECURITY_POLICY'];
+    const resourceType = allowedTypes.includes(String(input.resourceType)) ? String(input.resourceType) : undefined;
+    const where: Prisma.AuditLogWhereInput = { orgId: user.org_id, resourceType: resourceType ? resourceType : { in: allowedTypes } };
+    if (input.since || input.until) where.createdAt = { ...(input.since && !Number.isNaN(Date.parse(input.since)) ? { gte: new Date(input.since) } : {}), ...(input.until && !Number.isNaN(Date.parse(input.until)) ? { lte: new Date(input.until) } : {}) };
+    const rows = await this.prisma.auditLog.findMany({ where, orderBy: { createdAt: 'asc' }, take: 5000, include: { actor: { select: { id: true, name: true, email: true } } } });
+    await this.auditOfficeEvent(user, 'OFFICE_AUDIT_EXPORTED', user.org_id, { count: rows.length, resourceType: resourceType ?? 'ALL' }, 'OFFICE_AUDIT_POLICY');
+    return { generatedAt: new Date().toISOString(), policy: { retentionDays: policy.retentionDays, immutableChain: policy.immutableChain }, events: rows.map(row => ({ id: row.id, action: row.action, resourceType: row.resourceType, resourceId: row.resourceId, createdAt: row.createdAt.toISOString(), actor: row.actor, metadata: row.metadata, previousHash: row.previousHash, integrityHash: row.integrityHash })) };
+  }
+
+  async verifyAuditIntegrity(user: AccessTokenPayload, input: { resourceType?: string; resourceId?: string; limit?: number }) {
+    this.assertOfficeAdmin(user);
+    const allowedTypes = ['OFFICE_DOCUMENT', 'TEMPLATE', 'OFFICE_AUDIT_POLICY', 'OFFICE_SECURITY_POLICY'];
+    const resourceType = allowedTypes.includes(String(input.resourceType)) ? String(input.resourceType) : undefined;
+    const where: Prisma.AuditLogWhereInput = { orgId: user.org_id, resourceType: resourceType ? resourceType : { in: allowedTypes }, ...(input.resourceId ? { resourceId: input.resourceId } : {}) };
+    const rows = await this.prisma.auditLog.findMany({ where, orderBy: [{ resourceType: 'asc' }, { resourceId: 'asc' }, { createdAt: 'asc' }, { id: 'asc' }], take: Math.min(5000, Math.max(1, Number(input.limit) || 2000)) });
+    const state = new Map<string, string | null>();
+    let checked = 0; let legacy = 0; let invalid = 0;
+    for (const row of rows) {
+      const key = `${row.resourceType}:${row.resourceId}`;
+      if (!row.integrityHash) { legacy++; continue; }
+      const expectedPrevious = state.get(key) ?? null;
+      const metadata = (row.metadata ?? {}) as Prisma.InputJsonValue;
+      const expected = createHash('sha256').update(this.auditCanonical({ orgId: row.orgId, actorId: row.actorId ?? '', action: row.action, resourceType: row.resourceType, resourceId: row.resourceId, metadata, createdAt: row.createdAt.toISOString(), previousHash: row.previousHash ?? null })).digest('hex');
+      if ((row.previousHash ?? null) !== expectedPrevious || row.integrityHash !== expected) invalid++;
+      state.set(key, row.integrityHash); checked++;
+    }
+    return { valid: invalid === 0, checked, invalid, legacyUnhashed: legacy };
+  }
+
+  async listAuditEvents(user: AccessTokenPayload, fileId: string, input?: { limit?: number; action?: string; since?: string; until?: string }) {
+    await this.getAuthorizedFile(user, fileId, false);
+    const limit = Math.max(1, Math.min(100, Number(input?.limit) || 50));
+    const where: Prisma.AuditLogWhereInput = { orgId: user.org_id, resourceType: 'OFFICE_DOCUMENT', resourceId: fileId };
+    if (input?.action) where.action = String(input.action).slice(0, 100);
+    if (input?.since || input?.until) where.createdAt = {
+      ...(input?.since && !Number.isNaN(Date.parse(input.since)) ? { gte: new Date(input.since) } : {}),
+      ...(input?.until && !Number.isNaN(Date.parse(input.until)) ? { lte: new Date(input.until) } : {}),
+    };
+    const rows = await this.prisma.auditLog.findMany({
+      where,
+      orderBy: { createdAt: 'desc' },
+      take: limit,
+      include: { actor: { select: { id: true, name: true, email: true, avatarUrl: true } } },
+    });
+    return rows.map((row) => ({ id: row.id, action: row.action, createdAt: row.createdAt.toISOString(), actor: row.actor, metadata: row.metadata }));
+  }
+
+  async updatePolicy(user: AccessTokenPayload, fileId: string, input: { allowExport?: boolean; allowCopy?: boolean; allowOffline?: boolean; readOnly?: boolean; watermarkEnabled?: boolean; watermarkText?: string | null }) {
+    this.assertOfficeAdmin(user);
+    await this.getAuthorizedFile(user, fileId, true);
+    const current = await this.getRawOfficePolicy(user, fileId);
+    const policy = await this.prisma.officeDocumentPolicy.update({ where: { id: current.id }, data: {
+      ...(typeof input.allowExport === 'boolean' ? { allowExport: input.allowExport } : {}),
+      ...(typeof input.allowCopy === 'boolean' ? { allowCopy: input.allowCopy } : {}),
+      ...(typeof input.allowOffline === 'boolean' ? { allowOffline: input.allowOffline } : {}),
+      ...(typeof input.readOnly === 'boolean' ? { readOnly: input.readOnly } : {}),
+      ...(typeof input.watermarkEnabled === 'boolean' ? { watermarkEnabled: input.watermarkEnabled } : {}),
+      ...(input.watermarkText !== undefined ? { watermarkText: input.watermarkText ? String(input.watermarkText).slice(0, 500) : null } : {}),
+      updatedById: user.sub,
+    }});
+    await this.notifications.createOfficeNotification({ userId: user.sub, orgId: user.org_id, category: 'compliance', title: 'Office policy updated', body: 'The document Office policy was updated.', resourceType: 'FILE', resourceId: fileId }).catch(() => undefined);
+    await this.auditOfficeEvent(user, 'OFFICE_POLICY_UPDATED', fileId, {
+      changes: Object.fromEntries(Object.entries(input).filter(([key]) => key !== 'watermarkText' || input.watermarkText !== undefined)),
+      previous: { allowExport: current.allowExport, allowCopy: current.allowCopy, allowOffline: current.allowOffline, readOnly: current.readOnly, watermarkEnabled: current.watermarkEnabled, watermarkText: current.watermarkText },
+      next: { allowExport: policy.allowExport, allowCopy: policy.allowCopy, allowOffline: policy.allowOffline, readOnly: policy.readOnly, watermarkEnabled: policy.watermarkEnabled, watermarkText: policy.watermarkText },
+    });
+    return { ...policy, createdAt: policy.createdAt.toISOString(), updatedAt: policy.updatedAt.toISOString() };
+  }
 
   private async getAuthorizedFile(user: AccessTokenPayload, fileId: string, write = false) {
     const file = await this.prisma.file.findFirst({
@@ -204,8 +495,12 @@ export class OfficeService implements OfficeEngine {
   }
 
   async exportFile(user: AccessTokenPayload, fileId: string, format: 'docx'|'xlsx'|'pptx') {
+    const policy = await this.getOfficePolicy(user, fileId);
+    if (!policy.allowExport) throw new ForbiddenException('Export is disabled by Office policy');
     const document = await this.open(user, fileId);
     const result = await this.conversion.export(document.type as OfficeType, document.content, format);
+    await this.auditOfficeEvent(user, 'OFFICE_EXPORT', fileId, { format, filename: result.filename, bytes: result.buffer.byteLength });
+    await this.notifications.createOfficeNotification({ userId: user.sub, orgId: user.org_id, category: 'exports', title: 'Office export completed', body: `${result.filename} was exported as ${format.toUpperCase()}.`, resourceType: 'FILE', resourceId: fileId }).catch(() => undefined);
     return { filename: result.filename, mimeType: result.mimeType, dataBase64: result.buffer.toString('base64') };
   }
 
@@ -262,13 +557,55 @@ export class OfficeService implements OfficeEngine {
     return this.toState(document);
   }
 
+  async getWorkDriveContext(user: AccessTokenPayload, fileId: string) {
+    const file = await this.getAuthorizedFile(user, fileId, false);
+    const [full, shares, canWrite] = await Promise.all([
+      this.prisma.file.findFirst({
+      where: { id: fileId, orgId: user.org_id, deletedAt: null, status: FileStatus.ACTIVE },
+      include: {
+        folder: { select: { id: true, name: true, parentId: true, teamFolderId: true } },
+        versions: {
+          orderBy: { versionNumber: 'desc' },
+          take: 20,
+          include: { uploadedBy: { select: { id: true, name: true, email: true, avatarUrl: true } } },
+        },
+        officeDocument: { select: { revision: true, updatedAt: true, nativeFormat: true, type: true } },
+      },
+      }),
+      this.prisma.fileShare.count({
+        where: { fileId, orgId: user.org_id, status: 'ACTIVE', OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }] },
+      }),
+      this.canWriteFile(user, fileId),
+    ]);
+    if (!full) throw new NotFoundException('File not found');
+    const currentVersion = full.versions[0] ?? null;
+    return {
+      file: { id: file.id, name: file.name, originalName: file.originalName, extension: file.extension, mimeType: file.mimeType, size: Number(file.size), updatedAt: file.updatedAt.toISOString(), ownerId: file.ownerId },
+      location: full.folder ? { id: full.folder.id, name: full.folder.name, parentId: full.folder.parentId, teamFolderId: full.folder.teamFolderId } : null,
+      permissions: { canRead: true, canWrite },
+      sharing: { activeShareCount: shares },
+      office: full.officeDocument ? { type: full.officeDocument.type, nativeFormat: full.officeDocument.nativeFormat, revision: full.officeDocument.revision, updatedAt: full.officeDocument.updatedAt.toISOString() } : null,
+      currentVersion: currentVersion ? { id: currentVersion.id, versionNumber: currentVersion.versionNumber, status: currentVersion.status, size: Number(currentVersion.size), mimeType: currentVersion.mimeType, sha256Hash: currentVersion.sha256Hash, createdAt: currentVersion.createdAt.toISOString(), uploadedBy: currentVersion.uploadedBy } : null,
+      versions: full.versions.map(v => ({ id: v.id, versionNumber: v.versionNumber, status: v.status, size: Number(v.size), mimeType: v.mimeType, sha256Hash: v.sha256Hash, createdAt: v.createdAt.toISOString(), uploadedBy: v.uploadedBy })),
+    };
+  }
+
+  private async canWriteFile(user: AccessTokenPayload, fileId: string) {
+    const file = await this.prisma.file.findFirst({ where: { id: fileId, orgId: user.org_id, deletedAt: null, status: FileStatus.ACTIVE }, include: { folder: { select: { teamFolderId: true } } } });
+    if (!file) return false;
+    const resource = { orgId: file.orgId, ownerId: file.ownerId, teamFolderId: file.folder?.teamFolderId ?? null };
+    return this.permissions.canWrite(user, resource);
+  }
+
   async open(user: AccessTokenPayload, fileId: string): Promise<OfficeDocumentState> {
     const file = await this.getAuthorizedFile(user, fileId);
     const document = await this.prisma.officeDocument.findUnique({ where: { fileId } });
     if (!document) {
       throw new NotFoundException('This file is not an IMKAN Office document yet');
     }
-    return this.toState(document);
+    const policy = await this.getOfficePolicy(user, fileId);
+    await this.auditOfficeEvent(user, 'OFFICE_OPENED', fileId, { documentId: document.id, type: document.type, revision: document.revision });
+    return { ...this.toState(document), policy: { allowExport: policy.allowExport, allowCopy: policy.allowCopy, allowOffline: policy.allowOffline, readOnly: policy.readOnly, watermarkEnabled: policy.watermarkEnabled, watermarkText: policy.watermarkText } } as any;
   }
 
   async create(user: AccessTokenPayload, input: { name: string; type: OfficeType; folderId?: string | null }): Promise<OfficeDocumentState> {
@@ -290,6 +627,8 @@ export class OfficeService implements OfficeEngine {
 
   async save(user: AccessTokenPayload, fileId: string, content: unknown, expectedRevision?: number, sessionId?: string): Promise<OfficeDocumentState> {
     await this.getAuthorizedFile(user, fileId, true);
+    const policy = await this.getOfficePolicy(user, fileId);
+    if (policy.readOnly) throw new ForbiddenException('Office document is read-only by policy');
     this.assertContentSize(content);
     content = this.normalizeOfficeContent(content);
     const existing = await this.prisma.officeDocument.findUnique({ where: { fileId } });
@@ -324,6 +663,7 @@ export class OfficeService implements OfficeEngine {
       },
     });
     publishOfficeRealtimeEvent({ fileId, type: 'document-saved', revision: next.revision, operationId: operation.id, userId: user.sub, sessionId });
+    await this.auditOfficeEvent(user, 'OFFICE_SAVED', fileId, { revision: next.revision, baseRevision, sessionId: sessionId || null, operationId: operation.id, mode: 'document-save' });
     return this.toState(next);
   }
 
@@ -332,6 +672,7 @@ export class OfficeService implements OfficeEngine {
     const session = await this.prisma.officeSession.create({
       data: { orgId: user.org_id, fileId, documentId: document.id, userId: user.sub, type: document.type as OfficeDocumentType },
     });
+    await this.auditOfficeEvent(user, 'OFFICE_SESSION_OPENED', fileId, { sessionId: session.id, documentId: document.id, type: document.type });
     return { sessionId: session.id, document };
   }
 
@@ -341,6 +682,7 @@ export class OfficeService implements OfficeEngine {
     await this.prisma.officeSession.update({ where: { id: session.id }, data: { status: OfficeSessionStatus.CLOSED, closedAt: new Date() } });
     await this.prisma.officePresence.updateMany({ where: { sessionId: session.id }, data: { status: 'IDLE', lastSeenAt: new Date() } });
     publishOfficeRealtimeEvent({ fileId: session.fileId, type: 'presence-changed', userId: user.sub, sessionId: session.id, status: 'IDLE' });
+    await this.auditOfficeEvent(user, 'OFFICE_SESSION_CLOSED', session.fileId, { sessionId: session.id });
     return { ok: true };
   }
 
@@ -375,9 +717,142 @@ export class OfficeService implements OfficeEngine {
     return presence;
   }
 
-  async listOperations(user: AccessTokenPayload, fileId: string, sinceRevision?: number) {
+  async applyWriterOperation(user: AccessTokenPayload, fileId: string, input: { opId: string; baseRevision: number; patches: Array<{ op: 'set' | 'delete'; path: string; value?: unknown }>; sessionId?: string }) {
+    await this.getAuthorizedFile(user, fileId, true);
+    const existing = await this.prisma.officeDocument.findUnique({ where: { fileId } });
+    if (!existing || existing.type !== OfficeDocumentType.WRITER) throw new NotFoundException('Writer document not found');
+    return this.applyOfficeOperation(user, fileId, input, 'WRITER');
+  }
+
+  async applyOfficeOperation(user: AccessTokenPayload, fileId: string, input: { opId: string; baseRevision: number; patches: Array<{ op: 'set' | 'delete'; path: string; value?: unknown }>; sessionId?: string; clientId?: string; sequence?: number }, expectedType?: OfficeDocumentType | 'WRITER' | 'SHEET' | 'SHOW') {
+    await this.getAuthorizedFile(user, fileId, true);
+    const policy = await this.getOfficePolicy(user, fileId);
+    if (policy.readOnly) throw new ForbiddenException('Office document is read-only by policy');
+    if (!input?.opId || !Array.isArray(input.patches) || input.patches.length > 200) throw new ConflictException({ message: 'Invalid Office operation', code: 'OFFICE_OPERATION_INVALID' });
+    if (input.sessionId) {
+      const session = await this.prisma.officeSession.findFirst({ where: { id: input.sessionId, orgId: user.org_id, userId: user.sub, fileId, status: OfficeSessionStatus.ACTIVE } });
+      if (!session) throw new ForbiddenException('Invalid Office session');
+    }
+    const previousOperation = await this.prisma.officeOperation.findFirst({ where: { orgId: user.org_id, fileId, payload: { path: ['opId'], equals: input.opId } } });
+    if (previousOperation) return { document: await this.open(user, fileId), operationId: previousOperation.id, opId: input.opId, revision: previousOperation.revision, acknowledged: true };
+
+    // Phase 45 operation-engine identity/order guard. sequence is monotonic per client/session.
+    if (input.clientId && Number.isInteger(input.sequence) && input.sequence >= 0) {
+      const latest = await this.prisma.officeOperation.findFirst({ where: { orgId: user.org_id, fileId, sessionId: input.sessionId || undefined, payload: { path: ['clientId'], equals: input.clientId } }, orderBy: { revision: 'desc' } });
+      const latestSequence = Number((latest?.payload as any)?.sequence);
+      if (latest && Number.isInteger(latestSequence) && input.sequence <= latestSequence) {
+        throw new ConflictException({ message: 'Out-of-order Office operation', code: 'OFFICE_OPERATION_OUT_OF_ORDER', revision: latest.revision, sequence: latestSequence });
+      }
+    }
+
+    const baseRevision = Number(input.baseRevision);
+    if (!Number.isInteger(baseRevision) || baseRevision < 0) throw new ConflictException({ message: 'Invalid Office operation revision', code: 'OFFICE_OPERATION_REVISION' });
+    const allowedPrefixFor = (type: OfficeDocumentType) => type === OfficeDocumentType.WRITER ? ['/','/blocksById/','/blockOrder'] : type === OfficeDocumentType.SHEET ? ['/sheetsById/','/sheetOrder','/activeSheet','/title'] : ['/slidesById/','/slideOrder','/activeSlide','/theme','/title'];
+    const maxAttempts = 4;
+    for (let attempt = 0; attempt < maxAttempts; attempt++) {
+      const existing = await this.prisma.officeDocument.findUnique({ where: { fileId } });
+      if (!existing) throw new NotFoundException('Office document not found');
+      if (expectedType && String(existing.type) !== String(expectedType)) throw new NotFoundException(`${String(expectedType).toLowerCase()} document not found`);
+      if (baseRevision > existing.revision) throw new ConflictException({ message: 'Invalid Office operation revision', code: 'OFFICE_OPERATION_REVISION', revision: existing.revision });
+      const allowedPrefix = allowedPrefixFor(existing.type);
+      const safePatches = input.patches.filter(p => p && (p.op === 'set' || p.op === 'delete') && typeof p.path === 'string' && p.path.length <= 800 && allowedPrefix.some(prefix => p.path === prefix || p.path.startsWith(prefix))).slice(0, 200);
+      if (!safePatches.length) throw new ConflictException({ message: 'Empty Office operation', code: 'OFFICE_OPERATION_EMPTY' });
+
+      // Transform/merge: path-disjoint edits commute, while overlapping edits require explicit conflict resolution.
+      let transformedPatches = safePatches;
+      if (baseRevision < existing.revision) {
+        const concurrent = await this.prisma.officeOperation.findMany({ where: { orgId: user.org_id, fileId, revision: { gt: baseRevision } }, orderBy: { revision: 'asc' }, take: 200 });
+        const touched = safePatches.map(p => p.path);
+        for (const operation of concurrent) {
+          const paths = Array.isArray((operation.payload as any)?.patches) ? (operation.payload as any).patches.map((p: any) => String(p?.path || '')) : [];
+          if (paths.some((path: string) => touched.some(current => this.officePatchPathsOverlap(path, current)))) {
+            throw new ConflictException({ message: 'Office operation overlaps a newer edit', code: 'OFFICE_OPERATION_CONFLICT', revision: existing.revision, opId: input.opId, requiresRebase: true });
+          }
+        }
+      }
+      const nextContent = this.applyOfficeOperationPatches(existing.content as any, transformedPatches);
+      const normalized = this.normalizeOfficeContent(nextContent);
+      this.assertContentSize(normalized);
+      const committed = await this.prisma.$transaction(async (tx) => {
+        const updated = await tx.officeDocument.updateMany({ where: { fileId, revision: existing.revision }, data: { content: normalized as Prisma.InputJsonValue, revision: { increment: 1 } } });
+        if (!updated.count) return null;
+        const next = await tx.officeDocument.findUnique({ where: { fileId } });
+        if (!next) return null;
+        const operation = await tx.officeOperation.create({ data: {
+          orgId: user.org_id, fileId, documentId: existing.id, sessionId: input.sessionId || undefined, userId: user.sub,
+          kind: `${String(existing.type).toLowerCase()}-operation`, baseRevision: existing.revision, revision: next.revision,
+          payload: { opId: input.opId, patches: transformedPatches, revision: next.revision, type: existing.type, clientId: input.clientId || null, sequence: Number.isInteger(input.sequence) ? input.sequence : null, transformedFromRevision: baseRevision, ordering: 'revision', engine: 'path-ot-v1' } as Prisma.InputJsonValue,
+        }});
+        return { next, operation };
+      });
+      if (!committed) continue; // another operation won the revision; retry against the new head.
+      publishOfficeRealtimeEvent({ fileId, type: 'document-saved', revision: committed.next.revision, operationId: committed.operation.id, userId: user.sub, sessionId: input.sessionId });
+      await this.auditOfficeEvent(user, 'OFFICE_OPERATION_APPLIED', fileId, { operationId: committed.operation.id, opId: input.opId, revision: committed.next.revision, baseRevision, patchCount: transformedPatches.length, transformed: baseRevision < existing.revision, sessionId: input.sessionId || null, clientId: input.clientId || null, sequence: Number.isInteger(input.sequence) ? input.sequence : null });
+      return { document: this.toState(committed.next), operationId: committed.operation.id, opId: input.opId, revision: committed.next.revision, acknowledged: true, transformed: baseRevision < existing.revision, transformedFromRevision: baseRevision };
+    }
+    throw new ConflictException({ message: 'Office operation could not be ordered safely; retry against latest revision', code: 'OFFICE_OPERATION_RETRY', revision: (await this.prisma.officeDocument.findUnique({ where: { fileId } }))?.revision });
+  }
+
+  private officePatchPathsOverlap(a: string, b: string) {
+    if (a === b || a.startsWith(`${b}/`) || b.startsWith(`${a}/`)) return true;
+    if ((a.startsWith('/blocksById/') && b === '/blockOrder') || (b.startsWith('/blocksById/') && a === '/blockOrder')) return true;
+    if ((a.startsWith('/sheetsById/') && b === '/sheetOrder') || (b.startsWith('/sheetsById/') && a === '/sheetOrder')) return true;
+    if ((a.startsWith('/slidesById/') && b === '/slideOrder') || (b.startsWith('/slidesById/') && a === '/slideOrder')) return true;
+    return false;
+  }
+
+  private applyOfficeOperationPatches(source: any, patches: Array<{ op: 'set' | 'delete'; path: string; value?: unknown }>) {
+    const out = JSON.parse(JSON.stringify(source ?? {}));
+    for (const patch of patches) {
+      const parts = patch.path.split('/').slice(1).map(x => decodeURIComponent(x));
+      if (!parts.length) continue;
+      if (parts[0] === 'blocksById' && Array.isArray(out.blocks)) { const i=out.blocks.findIndex((b:any)=>String(b?.id)===parts[1]); if (i>=0 && patch.op==='delete') out.blocks.splice(i,1); else if(i>=0 && patch.op==='set') out.blocks[i]=patch.value; else if(i<0 && patch.op==='set') out.blocks.push(patch.value); continue; }
+      if (parts[0] === 'sheetsById' && Array.isArray(out.sheets)) { const i=out.sheets.findIndex((x:any)=>String(x?.id)===parts[1]); if(i>=0 && parts.length===2 && patch.op==='set') out.sheets[i]=patch.value; else if(i>=0 && parts[2]==='cells') { out.sheets[i].cells ||= {}; const key=parts.slice(3).join('/'); if(patch.op==='delete') delete out.sheets[i].cells[key]; else out.sheets[i].cells[key]=patch.value; } continue; }
+      if (parts[0] === 'slidesById' && Array.isArray(out.slides)) { const i=out.slides.findIndex((x:any)=>String(x?.id)===parts[1]); if(i>=0 && parts.length===2 && patch.op==='set') out.slides[i]=patch.value; else if(i>=0 && parts[2]==='elements') { const j=out.slides[i].elements.findIndex((x:any)=>String(x?.id)===parts[3]); if(j>=0 && patch.op==='set') out.slides[i].elements[j]=patch.value; else if(j>=0 && patch.op==='delete') out.slides[i].elements.splice(j,1); } continue; }
+      let target=out; for(let i=0;i<parts.length-1;i++){ const k=parts[i]; if(target[k]===undefined) target[k]={}; target=target[k]; } const key=parts[parts.length-1]; if(patch.op==='delete') delete target[key]; else target[key]=patch.value;
+    }
+    return out;
+  }
+
+  private writerPatchPathsOverlap(a: string, b: string) {
+    return a === b || a.startsWith(`${b}/`) || b.startsWith(`${a}/`) || (a.startsWith('/blocksById/') && b === '/blockOrder') || (b.startsWith('/blocksById/') && a === '/blockOrder');
+  }
+
+  private applyWriterOperationPatches(source: any, patches: Array<{ op: 'set' | 'delete'; path: string; value?: unknown }>) {
+    const next = JSON.parse(JSON.stringify(source || {}));
+    for (const patch of patches) {
+      const blockMatch = patch.path.match(/^\/blocksById\/([^/]+)$/);
+      if (blockMatch) {
+        const id = decodeURIComponent(blockMatch[1]);
+        const blocks = Array.isArray(next.blocks) ? next.blocks : [];
+        const index = blocks.findIndex((block: any) => block?.id === id);
+        if (patch.op === 'delete') { if (index >= 0) blocks.splice(index, 1); }
+        else if (index >= 0) blocks[index] = patch.value;
+        else blocks.push(patch.value);
+        next.blocks = blocks;
+        continue;
+      }
+      if (patch.path === '/blockOrder' && patch.op === 'set' && Array.isArray(patch.value)) {
+        const byId = new Map((next.blocks || []).map((block: any) => [block?.id, block]));
+        next.blocks = (patch.value as string[]).map(id => byId.get(id)).filter(Boolean);
+        continue;
+      }
+      const key = patch.path.replace(/^\//, '');
+      if (!/^[A-Za-z][A-Za-z0-9_-]{0,80}$/.test(key)) throw new ConflictException({ message: 'Unsupported writer operation path', code: 'WRITER_OPERATION_PATH' });
+      if (patch.op === 'delete') delete next[key]; else next[key] = patch.value;
+    }
+    return next;
+  }
+
+  async listOperations(user: AccessTokenPayload, fileId: string, sinceRevision?: number, limit?: number) {
     await this.getAuthorizedFile(user, fileId, false);
-    const ops = await this.prisma.officeOperation.findMany({ where: { orgId: user.org_id, fileId, ...(Number.isFinite(Number(sinceRevision)) ? { revision: { gt: Number(sinceRevision) } } : {}) }, include: { user: { select: { id: true, name: true, email: true, avatarUrl: true } } }, orderBy: { revision: 'asc' }, take: 100 });
+    const take = Math.max(1, Math.min(200, Number(limit) || 100));
+    const ops = await this.prisma.officeOperation.findMany({
+      where: { orgId: user.org_id, fileId, ...(Number.isFinite(Number(sinceRevision)) ? { revision: { gt: Number(sinceRevision) } } : {}) },
+      select: { id: true, fileId: true, documentId: true, sessionId: true, userId: true, kind: true, baseRevision: true, revision: true, payload: true, createdAt: true, user: { select: { id: true, name: true, email: true, avatarUrl: true } } },
+      orderBy: { revision: 'asc' },
+      take,
+    });
     return ops;
   }
 
@@ -409,13 +884,14 @@ export class OfficeService implements OfficeEngine {
           rotation: clampNumber(e?.rotation, -360, 360, 0),
           text: typeof e?.text === 'string' ? e.text.slice(0, 10000) : undefined,
           src: typeof e?.src === 'string' && /^(https?:\/\/|data:audio\/|data:video\/|blob:)/i.test(e.src) ? e.src.slice(0, 4000) : undefined,
+          poster: typeof e?.poster === 'string' && /^(https?:\/\/|data:image\/|blob:)/i.test(e.poster) ? e.poster.slice(0, 4000) : undefined,
           shape: ['rect','circle','roundRect'].includes(String(e?.shape)) ? String(e.shape) : undefined,
           fill, color, fontSize: clampNumber(e?.fontSize, 8, 120, 20), fontFamily,
           bold: Boolean(e?.bold), italic: Boolean(e?.italic), underline: Boolean(e?.underline), strike: Boolean(e?.strike),
           lineHeight: clampNumber(e?.lineHeight, 0.8, 3, 1.2),
           bullet: ['none','bullet','number'].includes(String(e?.bullet)) ? String(e.bullet) : 'none',
           align: ['start','center','end'].includes(String(e?.align)) ? String(e.align) : 'start',
-          border: Boolean(e?.border), rows, mediaAutoplay: Boolean(e?.mediaAutoplay), mediaLoop: Boolean(e?.mediaLoop), mediaMuted: Boolean(e?.mediaMuted), animation: e?.animation && typeof e.animation === 'object' ? { type: ['fade','zoom','slide-in','float'].includes(String(e.animation.type)) ? String(e.animation.type) : 'fade', duration: clampNumber(e.animation.duration, 50, 10000, 500), delay: clampNumber(e.animation.delay, 0, 60000, 0), direction: ['left','right','up','down'].includes(String(e.animation.direction)) ? String(e.animation.direction) : undefined } : undefined, groupId: typeof e?.groupId === 'string' ? e.groupId.slice(0,100) : undefined,
+          border: Boolean(e?.border), rows, mediaAutoplay: Boolean(e?.mediaAutoplay), mediaLoop: Boolean(e?.mediaLoop), mediaMuted: Boolean(e?.mediaMuted), mediaVolume: clampNumber(e?.mediaVolume, 0, 1, e?.type === 'video' ? 1 : 1), mediaTrimStart: clampNumber(e?.mediaTrimStart, 0, 86400, 0), mediaTrimEnd: clampNumber(e?.mediaTrimEnd, 0, 86400, 0), animation: e?.animation && typeof e.animation === 'object' ? { type: ['fade','zoom','slide-in','float','pulse','spin'].includes(String(e.animation.type)) ? String(e.animation.type) : 'fade', duration: clampNumber(e.animation.duration, 50, 10000, 500), delay: clampNumber(e.animation.delay, 0, 60000, 0), direction: ['left','right','up','down'].includes(String(e.animation.direction)) ? String(e.animation.direction) : undefined, phase: ['entrance','emphasis','exit'].includes(String(e.animation.phase)) ? String(e.animation.phase) : 'entrance', order: clampNumber(e.animation.order,1,100,1), trigger: ['with-previous','after-previous','on-click'].includes(String(e.animation.trigger)) ? String(e.animation.trigger) : 'on-click' } : undefined, animations: Array.isArray(e?.animations) ? e.animations.slice(0,20).map((a:any,i:number)=>({ type:['fade','zoom','slide-in','float','pulse','spin'].includes(String(a?.type)) ? String(a.type) : 'fade', duration:clampNumber(a?.duration,50,10000,500), delay:clampNumber(a?.delay,0,60000,0), direction:['left','right','up','down'].includes(String(a?.direction))?String(a.direction):undefined, phase:['entrance','emphasis','exit'].includes(String(a?.phase))?String(a.phase):'entrance', order:clampNumber(a?.order,1,100,i+1), trigger:['with-previous','after-previous','on-click'].includes(String(a?.trigger))?String(a.trigger):'on-click' })) : undefined, groupId: typeof e?.groupId === 'string' ? e.groupId.slice(0,100) : undefined,
         };
       });
       return {
@@ -427,24 +903,28 @@ export class OfficeService implements OfficeEngine {
     }) : [];
     const safeSlides = slides.length ? slides : [{ id: 'slide-1', layout: 'blank', background: '#ffffff', elements: [] }];
     const activeSlide = typeof value.activeSlide === 'string' && safeSlides.some((x:any)=>x.id===value.activeSlide) ? value.activeSlide : safeSlides[0].id;
-    return { schema: 5, type, title: typeof value.title === 'string' ? value.title.slice(0,255) : 'Untitled presentation', _ooxmlPreservation: normalizeOoxmlPreservation(value._ooxmlPreservation), _ooxmlBridge: normalizeOoxmlBridge(value._ooxmlBridge), aspectRatio: value.aspectRatio === '4:3' ? '4:3' : '16:9', activeSlide, theme: { fontFamily: typeof (value.theme as any)?.fontFamily === 'string' ? String((value.theme as any).fontFamily).slice(0,80) : 'Arial', headingFont: typeof (value.theme as any)?.headingFont === 'string' ? String((value.theme as any).headingFont).slice(0,80) : 'Arial', secondary: typeof (value.theme as any)?.secondary === 'string' && /^#[0-9a-f]{6}$/i.test((value.theme as any).secondary) ? (value.theme as any).secondary : '#64748b', background: typeof (value.theme as any)?.background === 'string' && /^#[0-9a-f]{6}$/i.test((value.theme as any).background) ? (value.theme as any).background : '#ffffff', accent: typeof (value.theme as any)?.accent === 'string' && /^#[0-9a-f]{6}$/i.test((value.theme as any).accent) ? (value.theme as any).accent : '#2563eb' }, slides: safeSlides };
+    return { schema: 6, type, title: typeof value.title === 'string' ? value.title.slice(0,255) : 'Untitled presentation', _ooxmlPreservation: normalizeOoxmlPreservation(value._ooxmlPreservation), _ooxmlBridge: normalizeOoxmlBridge(value._ooxmlBridge), aspectRatio: value.aspectRatio === '4:3' ? '4:3' : '16:9', activeSlide, theme: { fontFamily: typeof (value.theme as any)?.fontFamily === 'string' ? String((value.theme as any).fontFamily).slice(0,80) : 'Arial', headingFont: typeof (value.theme as any)?.headingFont === 'string' ? String((value.theme as any).headingFont).slice(0,80) : 'Arial', secondary: typeof (value.theme as any)?.secondary === 'string' && /^#[0-9a-f]{6}$/i.test((value.theme as any).secondary) ? (value.theme as any).secondary : '#64748b', background: typeof (value.theme as any)?.background === 'string' && /^#[0-9a-f]{6}$/i.test((value.theme as any).background) ? (value.theme as any).background : '#ffffff', accent: typeof (value.theme as any)?.accent === 'string' && /^#[0-9a-f]{6}$/i.test((value.theme as any).accent) ? (value.theme as any).accent : '#2563eb' }, slides: safeSlides };
   }
 
   async getCapabilities() {
     return {
-      version: 22,
+      version: 23,
       native: true,
       externalEditor: false,
       applications: {
         writer: { enabled: true, phase: 'core', features: ['rich-text', 'headings', 'lists', 'alignment', 'undo-redo', 'autosave', 'rtl'] },
         sheet: { enabled: true, phase: 'professional', features: ['workbook', 'multi-sheet', 'cell-grid', 'selection', 'formatting', 'number-formats', 'formulas', 'nested-formulas', 'cross-sheet-references', 'absolute-references', 'autosave', 'freeze', 'filters', 'data-validation', 'merge-cells', 'undo-redo', 'charts', 'visualization', 'xlsx-compatibility', 'formula-import-export', 'freeze-panes', 'merge-import-export', 'column-row-sizing'] },
-        show: { enabled: true, phase: 'advanced', features: ['multiple-slides', 'slide-navigator', 'layouts', 'text-elements', 'shapes', 'images', 'lines', 'tables', 'themes', 'aspect-ratio', 'drag-drop', 'multi-select', 'grouping', 'slide-master', 'speaker-notes', 'transitions', 'media', 'audio', 'video', 'element-animations', 'auto-advance', 'presenter-mode', 'undo-redo', 'autosave', 'revision-guard'] },
+        show: { enabled: true, phase: 'completion', features: ['multiple-slides', 'slide-navigator', 'layouts', 'text-elements', 'shapes', 'images', 'lines', 'tables', 'themes', 'aspect-ratio', 'drag-drop', 'multi-select', 'grouping', 'slide-master', 'speaker-notes', 'transitions', 'media', 'audio', 'video', 'video-poster', 'video-trimming', 'media-volume', 'media-fullscreen', 'element-animations', 'animation-timeline', 'animation-entrance', 'animation-emphasis', 'animation-exit', 'animation-order', 'animation-triggers', 'auto-advance', 'presenter-mode', 'undo-redo', 'autosave', 'revision-guard'] },
       },
       features: { autosave: true, revisionGuard: true, sessions: true, collaboration: true, importExport: true,
-        importExportFormats: ['docx','xlsx','pptx','imkan-json'], writerDocxCompatibility: true, writerDocxStyles: true, writerDocxTables: true, writerDocxPageSettings: true, writerDocxHeadersFooters: true, writerRichText: true, writerPageLayout: true, writerTables: true, writerImages: true, writerLinks: true, writerHeadersFooters: true, writerPrint: true, writerComments: true, writerTrackChanges: true, writerCompare: true, sheetCore: true, sheetFormulas: true, sheetFormulaV3: true, sheetCrossSheetRefs: true, sheetDataValidation: true, sheetFilters: true, sheetMerges: true, sheetCharts: true, sheetVisualization: true, sheetUndoRedo: true, sheetFormatting: true, sheetXlsxCompatibility: true, sheetXlsxFormulas: true, sheetXlsxMerges: true, sheetXlsxFreezePanes: true, sheetXlsxDimensions: true, showCore: true, showSlides: true, showMedia: true, showAudio: true, showVideo: true, showAnimations: true, showAutoAdvance: true, showLayouts: true, showElements: true, showThemes: true, showRichText: true, showObjectOrdering: true, showTables: true, showPresenterPreview: true, showUndoRedo: true, showPptxCompatibility: true, showPptxSlides: true, showPptxText: true, showPptxShapes: true, showPptxThemes: true, showPptxRoundTrip: true, conversionDiagnostics: true, conversionWarnings: true, roundTripDiagnostics: true, compatibilityCenter: true, roundTripAnalysis: true, conversionCategories: true, conversionMetadata: true, advancedDocxMedia: true, advancedXlsxFormatting: true, advancedXlsxCharts: true, advancedPptxImages: true, advancedPptxTables: true, advancedPptxMediaRelationships: true, deepDocxStyles: true, deepDocxNumbering: true, deepDocxLists: true, deepDocxMediaPreservation: true, deepXlsxStyles: true, deepXlsxCharts: true, deepXlsxValidation: true, deepXlsxConditionalFormatting: true, deepPptxMedia: true, deepPptxTables: true, roundTripQuality: true, nativeOoxmlPreservation: true, ooxmlPreservationGraph: true, relationshipAwarePreservation: true, selectiveOoxmlMerge: true, relationshipConflictResolution: true, nativeMediaBridge: true, nativeChartBridge: true, nativeThemeBridge: true, definedNamesBridge: true, preservedRelationshipRebinding: true, contentTypesMerge: true, rootRelationshipMerge: true, collaborationFoundation: true,
+        importExportFormats: ['docx','xlsx','pptx','imkan-json'], writerDocxCompatibility: true, writerDocxStyles: true, writerDocxTables: true, writerDocxPageSettings: true, writerDocxHeadersFooters: true, writerRichText: true, writerPageLayout: true, writerTables: true, writerImages: true, writerLinks: true, writerHeadersFooters: true, writerPrint: true, writerComments: true, writerTrackChanges: true, writerCompare: true, sheetCore: true, sheetFormulas: true, sheetFormulaV3: true, sheetCrossSheetRefs: true, sheetDataValidation: true, sheetFilters: true, sheetMerges: true, sheetCharts: true, sheetVisualization: true, sheetUndoRedo: true, sheetFormatting: true, sheetXlsxCompatibility: true, sheetXlsxFormulas: true, sheetXlsxMerges: true, sheetXlsxFreezePanes: true, sheetXlsxDimensions: true, showCore: true, showSlides: true, showMedia: true, showAudio: true, showVideo: true, showVideoPoster: true, showVideoTrimming: true, showMediaVolume: true, showMediaFullscreen: true, showAnimations: true, showAnimationTimeline: true, showAnimationEntrance: true, showAnimationEmphasis: true, showAnimationExit: true, showAnimationTriggers: true, showAnimationOrder: true, showAutoAdvance: true, showLayouts: true, showElements: true, showThemes: true, showRichText: true, showObjectOrdering: true, showTables: true, showPresenterPreview: true, showUndoRedo: true, showPptxCompatibility: true, showPptxSlides: true, showPptxText: true, showPptxShapes: true, showPptxThemes: true, showPptxRoundTrip: true, conversionDiagnostics: true, conversionWarnings: true, roundTripDiagnostics: true, compatibilityCenter: true, roundTripAnalysis: true, conversionCategories: true, conversionMetadata: true, advancedDocxMedia: true, advancedXlsxFormatting: true, advancedXlsxCharts: true, advancedPptxImages: true, advancedPptxTables: true, advancedPptxMediaRelationships: true, deepDocxStyles: true, deepDocxNumbering: true, deepDocxLists: true, deepDocxMediaPreservation: true, deepXlsxStyles: true, deepXlsxCharts: true, deepXlsxValidation: true, deepXlsxConditionalFormatting: true, deepPptxMedia: true, deepPptxTables: true, roundTripQuality: true, nativeOoxmlPreservation: true, ooxmlPreservationGraph: true, relationshipAwarePreservation: true, selectiveOoxmlMerge: true, relationshipConflictResolution: true, nativeMediaBridge: true, nativeChartBridge: true, nativeThemeBridge: true, definedNamesBridge: true, preservedRelationshipRebinding: true, contentTypesMerge: true, rootRelationshipMerge: true, collaborationFoundation: true,
       realTimeOperations: true,
+      collaborativeOperationsV2: true,
+      operationAcknowledgement: true,
+      operationConflictDetection: true,
+      reconnectRecovery: true,
       serverSentEventsTransport: true,
-      operationOrdering: true, officePresence: true, officeOperationLog: true, collaborationPolling: true },
+      operationOrdering: true, operationTransformMerge: true, operationSequenceGuard: true, lostUpdateProtection: true, duplicateOperationProtection: true, outOfOrderProtection: true, officePresence: true, officeOperationLog: true, collaborationPolling: true },
     };
   }
 

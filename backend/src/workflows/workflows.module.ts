@@ -6,5 +6,6 @@ import { SharesModule } from '../shares/shares.module';
 import { CustomFunctionExecutor } from './custom-function.executor';
 import { ConnectionsModule } from '../connections/connections.module';
 import { TemplatesModule } from '../templates/templates.module';
-@Module({ imports: [SharesModule, ConnectionsModule, forwardRef(() => TemplatesModule)], controllers: [WorkflowsController], providers: [WorkflowsService, WorkflowEngineService, CustomFunctionExecutor], exports: [WorkflowEngineService] })
+import { OfficeEmailModule } from '../office-email/office-email.module';
+@Module({ imports: [SharesModule, ConnectionsModule, OfficeEmailModule, forwardRef(() => TemplatesModule)], controllers: [WorkflowsController], providers: [WorkflowsService, WorkflowEngineService, CustomFunctionExecutor], exports: [WorkflowEngineService] })
 export class WorkflowsModule {}

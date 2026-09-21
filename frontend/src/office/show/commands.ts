@@ -24,6 +24,9 @@ export function addMaster(d:ShowDocument,name='Master'){const n=cloneShow(d);n.m
 export function assignMaster(d:ShowDocument,masterId:string){const n=cloneShow(d),s=activeSlide(n);if(s&&n.masters.some(m=>m.id===masterId))s.master=masterId;return n}
 
 export function setElementAnimation(d:ShowDocument,id:string,animation:ShowElement['animation']){const n=cloneShow(d),s=activeSlide(n),e=s?.elements.find(x=>x.id===id);if(e)e.animation=animation;return n}
+export function setElementAnimations(d:ShowDocument,id:string,animations:NonNullable<ShowElement['animations']>){const n=cloneShow(d),s=activeSlide(n),e=s?.elements.find(x=>x.id===id);if(e){e.animations=animations.map((a,i)=>({...a,order:a.order??i+1,phase:a.phase??'entrance',trigger:a.trigger??'on-click'}));e.animation=e.animations[0]??e.animation;}return n}
+export function addElementAnimation(d:ShowDocument,id:string,animation:ShowElement['animation']){const n=cloneShow(d),s=activeSlide(n),e=s?.elements.find(x=>x.id===id);if(!e||!animation)return n;const list=[...(e.animations||[]),{...animation,order:(e.animations?.length||0)+1}];e.animations=list;e.animation=list[0];return n}
+export function removeElementAnimation(d:ShowDocument,id:string,index:number){const n=cloneShow(d),s=activeSlide(n),e=s?.elements.find(x=>x.id===id);if(!e)return n;const list=(e.animations||[]).filter((_,i)=>i!==index);e.animations=list;e.animation=list[0];return n}
 export function clearElementAnimation(d:ShowDocument,id:string){return setElementAnimation(d,id,undefined)}
 export function setMediaSource(d:ShowDocument,id:string,src:string,patch:Partial<ShowElement>={}){const n=cloneShow(d),s=activeSlide(n),e=s?.elements.find(x=>x.id===id);if(e)Object.assign(e,{src, ...patch});return n}
 export function setSlideAutoAdvance(d:ShowDocument,ms:number|undefined){const n=cloneShow(d),s=activeSlide(n);if(s)s.autoAdvanceMs=ms===undefined?undefined:Math.max(0,Math.min(600000,Math.round(ms)));return n}

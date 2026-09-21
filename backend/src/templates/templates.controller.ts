@@ -94,6 +94,37 @@ export class TemplatesController {
   @Delete(':id/permanent')
   purge(@CurrentUser() user: AccessTokenPayload, @Param('id', new ParseUUIDPipe({ version: '4' })) id: string) { return this.templates.purge(user, id); }
 
+  @Post(':id/automation/validate')
+  validateAutomation(@CurrentUser() user: AccessTokenPayload, @Param('id', new ParseUUIDPipe({ version: '4' })) id: string, @Body() body: unknown) {
+    const b = (body ?? {}) as Record<string, unknown>;
+    const values = b.values && typeof b.values === 'object' && !Array.isArray(b.values) ? b.values as Record<string, unknown> : {};
+    return this.templates.validateAutomation(user, id, values);
+  }
+
+  @Post(':id/certify')
+  certify(@CurrentUser() user: AccessTokenPayload, @Param('id', new ParseUUIDPipe({ version: '4' })) id: string) {
+    return this.templates.certifyTemplate(user, id);
+  }
+
+  @Get('automation/jobs/:jobId')
+  automationJob(@CurrentUser() user: AccessTokenPayload, @Param('jobId', new ParseUUIDPipe({ version: '4' })) jobId: string) {
+    return this.templates.getAutomationJob(user, jobId);
+  }
+
+  @Post(':id/automation/queue')
+  queueAutomation(@CurrentUser() user: AccessTokenPayload, @Param('id', new ParseUUIDPipe({ version: '4' })) id: string, @Body() body: unknown) {
+    const b = (body ?? {}) as Record<string, unknown>;
+    const name = typeof b.name === 'string' && b.name.trim() ? b.name.trim() : 'Generated document';
+    const values = b.values && typeof b.values === 'object' && !Array.isArray(b.values) ? b.values as Record<string, unknown> : {};
+    return this.templates.enqueueAutomation(user, id, { name, folderId: typeof b.folderId === 'string' ? b.folderId : null, values, generatePdf: b.generatePdf === true, pdfFolderId: typeof b.pdfFolderId === 'string' ? b.pdfFolderId : null });
+  }
+
+  @Get(':id/automation/runs')
+  automationRuns(@CurrentUser() user: AccessTokenPayload, @Param('id', new ParseUUIDPipe({ version: '4' })) id: string, @Query('limit') limit?: string) {
+    const parsed = Number(limit);
+    return this.templates.listAutomationRuns(user, id, Number.isFinite(parsed) ? parsed : 20);
+  }
+
   @Post(':id/automation/run')
   automate(@CurrentUser() user: AccessTokenPayload, @Param('id', new ParseUUIDPipe({ version: '4' })) id: string, @Body() body: unknown) {
     const b = (body ?? {}) as Record<string, unknown>;

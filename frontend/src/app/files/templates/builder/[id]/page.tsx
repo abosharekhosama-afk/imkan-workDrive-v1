@@ -77,6 +77,7 @@ export default function TemplateBuilderPage() {
     <header className="sticky top-0 z-30 border-b border-slate-200 bg-white/95 backdrop-blur">
       <div className="mx-auto flex max-w-[1500px] items-center gap-3 px-4 py-3">
         <button type="button" onClick={() => router.push("/files/templates")} className="rounded-lg border border-slate-200 px-3 py-2 text-xs">← {text(ar,"Templates","القوالب")}</button>
+        <button type="button" onClick={() => router.push(`/files/templates/studio/${templateId}`)} className="rounded-lg border border-slate-200 px-3 py-2 text-xs">{text(ar,"Studio","الاستوديو")}</button>
         <div className="min-w-0 flex-1"><div className="truncate text-sm font-semibold">{template?.name}</div><div className="text-[10px] text-slate-500">{text(ar,"Template Builder","منشئ القالب")} · {state?.publishedAt ? text(ar,"Published","منشور") : text(ar,"Draft","مسودة")}</div></div>
         {error && <span className="hidden max-w-[300px] truncate rounded-lg bg-red-50 px-3 py-2 text-[10px] text-red-600 md:block">{error}</span>}
         {message && <span className="hidden rounded-lg bg-emerald-50 px-3 py-2 text-[10px] text-emerald-700 md:block">{message}</span>}

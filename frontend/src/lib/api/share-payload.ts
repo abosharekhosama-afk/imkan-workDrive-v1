@@ -6,6 +6,7 @@ export type CreateShareBody = {
   can_download: boolean;
   recipient_user_ids?: string[];
   permission?: "VIEW" | "COMMENT" | "EDIT";
+  email_recipients?: string[];
 };
 
 export function buildCreateShareBody(input: {
@@ -16,6 +17,7 @@ export function buildCreateShareBody(input: {
   canDownload: boolean;
   recipientUserIds?: string[];
   permission?: "VIEW" | "COMMENT" | "EDIT";
+  emailRecipients?: string[];
 }): CreateShareBody {
   const body: CreateShareBody = {
     resource_type: input.resourceType,
@@ -23,6 +25,7 @@ export function buildCreateShareBody(input: {
     can_download: input.canDownload,
     ...(input.recipientUserIds?.length ? { recipient_user_ids: input.recipientUserIds } : {}),
     ...(input.permission ? { permission: input.permission } : {}),
+    ...(input.emailRecipients?.length ? { email_recipients: input.emailRecipients } : {}),
   };
   if (input.expiresAt) {
     body.expires_at = input.expiresAt;

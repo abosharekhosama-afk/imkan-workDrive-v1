@@ -51,6 +51,54 @@ export class OfficeController {
     return this.office.exportFile(user, fileId, body.format);
   }
 
+  @Post('files/:fileId/approval')
+  requestApproval(@CurrentUser() user: AccessTokenPayload, @Param('fileId') fileId: string, @Body() body: { workflowId: string; participantRules?: unknown; fieldValues?: Record<string, unknown>; comment?: string }) { return this.office.requestApproval(user, fileId, body); }
+
+  @Get('files/:fileId/approval')
+  approvalStatus(@CurrentUser() user: AccessTokenPayload, @Param('fileId') fileId: string) { return this.office.getApprovalStatus(user, fileId); }
+
+  @Get('files/:fileId/workdrive-context')
+  workDriveContext(@CurrentUser() user: AccessTokenPayload, @Param('fileId') fileId: string) { return this.office.getWorkDriveContext(user, fileId); }
+
+  @Get('compliance/audit-policy')
+  auditPolicy(@CurrentUser() user: AccessTokenPayload) { return this.office.getAuditPolicy(user); }
+
+  @Patch('compliance/audit-policy')
+  updateAuditPolicy(@CurrentUser() user: AccessTokenPayload, @Body() body: { retentionDays?: number; immutableChain?: boolean; exportEnabled?: boolean }) { return this.office.updateAuditPolicy(user, body); }
+
+  @Get('compliance/audit')
+  complianceAudit(@CurrentUser() user: AccessTokenPayload, @Query('limit') limit?: string, @Query('action') action?: string, @Query('resourceType') resourceType?: string, @Query('actorId') actorId?: string, @Query('since') since?: string, @Query('until') until?: string) {
+    return this.office.listComplianceAudit(user, { limit: limit ? Number(limit) : undefined, action, resourceType, actorId, since, until });
+  }
+
+  @Get('compliance/audit/export')
+  exportComplianceAudit(@CurrentUser() user: AccessTokenPayload, @Query('resourceType') resourceType?: string, @Query('since') since?: string, @Query('until') until?: string) { return this.office.exportComplianceAudit(user, { resourceType, since, until }); }
+
+  @Get('compliance/audit/verify')
+  verifyAudit(@CurrentUser() user: AccessTokenPayload, @Query('resourceType') resourceType?: string, @Query('resourceId') resourceId?: string, @Query('limit') limit?: string) {
+    return this.office.verifyAuditIntegrity(user, { resourceType, resourceId, limit: limit ? Number(limit) : undefined });
+  }
+
+  @Get('admin-center')
+  adminCenter(@CurrentUser() user: AccessTokenPayload) { return this.office.getAdminCenter(user); }
+
+  @Get('security-policy')
+  securityPolicy(@CurrentUser() user: AccessTokenPayload) { return this.office.getSecurityPolicy(user); }
+
+  @Patch('security-policy')
+  updateSecurityPolicy(@CurrentUser() user: AccessTokenPayload, @Body() body: { forceReadOnly?: boolean; disableExport?: boolean; disableCopy?: boolean; disableOffline?: boolean; requireWatermark?: boolean; watermarkText?: string | null }) { return this.office.updateSecurityPolicy(user, body); }
+
+  @Get('files/:fileId/policy')
+  policy(@CurrentUser() user: AccessTokenPayload, @Param('fileId') fileId: string) { return this.office.getPolicy(user, fileId); }
+
+  @Patch('files/:fileId/policy')
+  updatePolicy(@CurrentUser() user: AccessTokenPayload, @Param('fileId') fileId: string, @Body() body: { allowExport?: boolean; allowCopy?: boolean; allowOffline?: boolean; readOnly?: boolean; watermarkEnabled?: boolean; watermarkText?: string | null }) { return this.office.updatePolicy(user, fileId, body); }
+
+  @Get('files/:fileId/audit')
+  audit(@CurrentUser() user: AccessTokenPayload, @Param('fileId') fileId: string, @Query('limit') limit?: string, @Query('action') action?: string, @Query('since') since?: string, @Query('until') until?: string) {
+    return this.office.listAuditEvents(user, fileId, { limit: limit ? Number(limit) : undefined, action, since, until });
+  }
+
   @Get('files/:fileId')
   open(@CurrentUser() user: AccessTokenPayload, @Param('fileId') fileId: string) { return this.office.open(user, fileId); }
 
@@ -77,8 +125,13 @@ export class OfficeController {
   @Post('sessions/:sessionId/presence')
   heartbeat(@CurrentUser() user: AccessTokenPayload, @Param('sessionId') sessionId: string, @Body() body: { cursor?: unknown; selection?: unknown; status?: 'ACTIVE'|'IDLE' }) { return this.office.heartbeatPresence(user, sessionId, body); }
 
+  @Post('files/:fileId/operations')
+  officeOperation(@CurrentUser() user: AccessTokenPayload, @Param('fileId') fileId: string, @Body() body: { opId: string; baseRevision: number; patches: Array<{ op: 'set' | 'delete'; path: string; value?: unknown }>; sessionId?: string; clientId?: string; sequence?: number }) {
+    return this.office.applyOfficeOperation(user, fileId, body);
+  }
+
   @Get('files/:fileId/operations')
-  operations(@CurrentUser() user: AccessTokenPayload, @Param('fileId') fileId: string, @Query('sinceRevision') sinceRevision?: string) { return this.office.listOperations(user, fileId, sinceRevision ? Number(sinceRevision) : undefined); }
+  operations(@CurrentUser() user: AccessTokenPayload, @Param('fileId') fileId: string, @Query('sinceRevision') sinceRevision?: string, @Query('limit') limit?: string) { return this.office.listOperations(user, fileId, sinceRevision ? Number(sinceRevision) : undefined, limit ? Number(limit) : undefined); }
 
   @Delete('sessions/:sessionId')
   close(@CurrentUser() user: AccessTokenPayload, @Param('sessionId') sessionId: string) { return this.office.closeSession(user, sessionId); }
