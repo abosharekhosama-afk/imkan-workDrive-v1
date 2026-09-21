@@ -13,6 +13,6 @@ import { WorkflowsModule } from '../workflows/workflows.module';
   imports: [forwardRef(() => FilesModule), PermissionsModule, StorageModule, NotificationsModule, forwardRef(() => WorkflowsModule)],
   controllers: [OfficeController],
   providers: [OfficeService, OfficeConversionService, OfficeCollaborationService],
-  exports: [OfficeService],
+  exports: [OfficeService, OfficeConversionService],
 })
 export class OfficeModule {}

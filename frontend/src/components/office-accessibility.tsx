@@ -9,7 +9,7 @@ export function OfficeAccessibility({ar=false,status='',targetId='office-main'}:
   <a href={`#${targetId}`} className="sr-only focus:not-sr-only focus:fixed focus:left-2 focus:top-2 focus:z-[100] focus:rounded focus:bg-white focus:px-3 focus:py-2 focus:text-xs focus:shadow-lg" dir={ar?'rtl':'ltr'}>{ar?'تخطي إلى محتوى المحرر':'Skip to editor'}</a>
   <div aria-live="polite" aria-atomic="true" className="sr-only">{status}</div>
   <div className="sr-only" data-office-reduced-motion={reduced?'true':'false'} aria-hidden="true" />
-  <style jsx global>{`
+  <style>{`
     [data-office-reduced-motion="true"] *,
     [data-office-reduced-motion="true"] *::before,
     [data-office-reduced-motion="true"] *::after {
