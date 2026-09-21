@@ -217,7 +217,7 @@ export class OfficeService implements OfficeEngine {
     @Inject(forwardRef(() => FilesService)) private readonly files: FilesService,
     private readonly conversion: OfficeConversionService,
     private readonly notifications: NotificationsService,
-    private readonly workflowEngine: WorkflowEngineService,
+    @Inject(forwardRef(() => WorkflowEngineService)) private readonly workflowEngine: WorkflowEngineService,
     @Inject(STORAGE_SERVICE) private readonly storage: StorageService,
   ) {}
 

@@ -10,7 +10,7 @@ import { NotificationsModule } from '../notifications/notifications.module';
 import { WorkflowsModule } from '../workflows/workflows.module';
 
 @Module({
-  imports: [forwardRef(() => FilesModule), PermissionsModule, StorageModule, NotificationsModule, WorkflowsModule],
+  imports: [forwardRef(() => FilesModule), PermissionsModule, StorageModule, NotificationsModule, forwardRef(() => WorkflowsModule)],
   controllers: [OfficeController],
   providers: [OfficeService, OfficeConversionService, OfficeCollaborationService],
   exports: [OfficeService],
