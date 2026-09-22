@@ -217,7 +217,7 @@ export class TemplatesService {
   async saveBuilder(user: AccessTokenPayload, id: string, input: ReturnType<typeof parseTemplateBuilder>) {
     const template = await this.getManagedTemplate(user, id);
     const builder = await this.prisma.templateBuilder.upsert({ where: { templateId: id }, create: { id: randomUUID(), templateId: id, draft: input as Prisma.InputJsonValue }, update: { draft: input as Prisma.InputJsonValue } });
-    await this.prisma.auditLog.create({ data: { orgId: user.org_id, actorId: user.sub, action: 'TEMPLATE_BUILDER_UPDATED', resourceType: null, resourceId: id, metadata: { fields: input.fields.length, sections: input.sections.length, tables: input.tables.length, images: input.images.length, rules: input.rules.length } } });
+    await this.prisma.auditLog.create({ data: { orgId: user.org_id, actorId: user.sub, action: 'TEMPLATE_BUILDER_UPDATED', resourceType: 'TEMPLATE', resourceId: id, metadata: { fields: input.fields.length, sections: input.sections.length, tables: input.tables.length, images: input.images.length, rules: input.rules.length } } });
     return { id: builder.id, templateId: id, draft: builder.draft, published: builder.published, publishedAt: builder.publishedAt?.toISOString() ?? null, canEdit: true, canPublish: true };
   }
 
@@ -226,7 +226,7 @@ export class TemplatesService {
     const existing = await this.prisma.templateBuilder.findUnique({ where: { templateId: id } });
     const draft = (existing?.draft ?? defaultTemplateBuilderConfig()) as Prisma.InputJsonValue;
     const builder = await this.prisma.templateBuilder.upsert({ where: { templateId: id }, create: { id: randomUUID(), templateId: id, draft, published: draft, publishedAt: new Date(), publishedById: user.sub }, update: { published: draft, publishedAt: new Date(), publishedById: user.sub } });
-    await this.prisma.auditLog.create({ data: { orgId: user.org_id, actorId: user.sub, action: 'TEMPLATE_BUILDER_PUBLISHED', resourceType: null, resourceId: id, metadata: { templateVersion: template.versions[0]?.versionNumber ?? 0 } } });
+    await this.prisma.auditLog.create({ data: { orgId: user.org_id, actorId: user.sub, action: 'TEMPLATE_BUILDER_PUBLISHED', resourceType: 'TEMPLATE', resourceId: id, metadata: { templateVersion: template.versions[0]?.versionNumber ?? 0 } } });
     const publishedBy = await this.prisma.user.findUnique({ where: { id: user.sub }, select: { id: true, name: true, email: true } });
     return { id: builder.id, templateId: id, draft: builder.draft, published: builder.published, publishedAt: builder.publishedAt?.toISOString() ?? null, publishedBy, canEdit: true, canPublish: true };
   }
@@ -234,7 +234,7 @@ export class TemplatesService {
   async unpublishBuilder(user: AccessTokenPayload, id: string) {
     await this.getManagedTemplate(user, id);
     const builder = await this.prisma.templateBuilder.upsert({ where: { templateId: id }, create: { id: randomUUID(), templateId: id, draft: defaultTemplateBuilderConfig() as Prisma.InputJsonValue }, update: { published: Prisma.JsonNull, publishedAt: null, publishedById: null } });
-    await this.prisma.auditLog.create({ data: { orgId: user.org_id, actorId: user.sub, action: 'TEMPLATE_BUILDER_UNPUBLISHED', resourceType: null, resourceId: id, metadata: {} } });
+    await this.prisma.auditLog.create({ data: { orgId: user.org_id, actorId: user.sub, action: 'TEMPLATE_BUILDER_UNPUBLISHED', resourceType: 'TEMPLATE', resourceId: id, metadata: {} } });
     return { id: builder.id, templateId: id, draft: builder.draft, published: null, publishedAt: null, publishedBy: null, canEdit: true, canPublish: true };
   }
 
@@ -296,7 +296,7 @@ export class TemplatesService {
     const template = await this.getManagedTemplate(user, id);
     const category = input.categoryId !== undefined ? await this.assertCategory(user, input.categoryId, template.libraryId) : null;
     await this.prisma.template.update({ where: { id }, data: { ...(input.name !== undefined ? { name: input.name } : {}), ...(input.description !== undefined ? { description: input.description || null } : {}), ...(input.categoryId !== undefined ? { categoryId: category?.id ?? null } : {}) } });
-    await this.prisma.auditLog.create({ data: { orgId: user.org_id, actorId: user.sub, action: 'TEMPLATE_UPDATED', resourceType: null, resourceId: id, metadata: input } });
+    await this.prisma.auditLog.create({ data: { orgId: user.org_id, actorId: user.sub, action: 'TEMPLATE_UPDATED', resourceType: 'TEMPLATE', resourceId: id, metadata: input } });
     return this.get(user, id);
   }
 
@@ -347,7 +347,7 @@ export class TemplatesService {
             orgId: user.org_id,
             actorId: user.sub,
             action: 'TEMPLATE_CONTENT_PUBLISHED',
-            resourceType: null,
+            resourceType: 'TEMPLATE',
             resourceId: id,
             metadata: {
               fileId,
@@ -368,7 +368,7 @@ export class TemplatesService {
         category: 'templateAutomation',
         title: 'Template content published',
         body: `${template.name} version ${created.versionNumber} is now available.`,
-        resourceType: null,
+        resourceType: 'TEMPLATE',
         resourceId: id,
       }).catch(() => undefined);
       return {
@@ -400,7 +400,7 @@ export class TemplatesService {
     const snapshot = await this.snapshotFileVersion(user, id, nextVersion, file, file.versions[0]);
     try {
       await this.prisma.template.update({ where: { id }, data: { name: input.name, description: input.description ?? template.description, categoryId: input.categoryId === null ? null : (category?.id ?? template.categoryId) } });
-      await this.prisma.auditLog.create({ data: { orgId: user.org_id, actorId: user.sub, action: 'TEMPLATE_VERSION_CREATED', resourceType: null, resourceId: id, metadata: { sourceFileId: file.id, versionNumber: nextVersion } } });
+      await this.prisma.auditLog.create({ data: { orgId: user.org_id, actorId: user.sub, action: 'TEMPLATE_VERSION_CREATED', resourceType: 'TEMPLATE', resourceId: id, metadata: { sourceFileId: file.id, versionNumber: nextVersion } } });
     } catch (error) {
       await this.prisma.templateVersion.delete({ where: { id: snapshot.versionId } }).catch(() => undefined);
       await this.storage.deleteStoredObject(snapshot.snapshotKey).catch(() => undefined);
@@ -436,7 +436,7 @@ export class TemplatesService {
         if (source.variables.length) {
           await tx.templateVariable.createMany({ data: source.variables.map((v) => ({ id: randomUUID(), templateId, name: v.name, label: v.label, type: v.type, defaultValue: v.defaultValue, required: v.required, description: v.description, options: v.options as any, format: v.format, position: v.position })) });
         }
-        await tx.auditLog.create({ data: { orgId: user.org_id, actorId: user.sub, action: 'TEMPLATE_DUPLICATED', resourceType: null, resourceId: templateId, metadata: { sourceTemplateId: id } } });
+        await tx.auditLog.create({ data: { orgId: user.org_id, actorId: user.sub, action: 'TEMPLATE_DUPLICATED', resourceType: 'TEMPLATE', resourceId: templateId, metadata: { sourceTemplateId: id } } });
       });
     } catch (error) {
       await this.storage.deleteStoredObject(snapshotKey).catch(() => undefined);
@@ -452,7 +452,7 @@ export class TemplatesService {
   async remove(user: AccessTokenPayload, id: string) {
     await this.getManagedTemplate(user, id);
     await this.prisma.template.update({ where: { id }, data: { status: TemplateStatus.TRASHED, deletedAt: new Date() } });
-    await this.prisma.auditLog.create({ data: { orgId: user.org_id, actorId: user.sub, action: 'TEMPLATE_DELETED', resourceType: null, resourceId: id } });
+    await this.prisma.auditLog.create({ data: { orgId: user.org_id, actorId: user.sub, action: 'TEMPLATE_DELETED', resourceType: 'TEMPLATE', resourceId: id } });
     return { success: true };
   }
 
@@ -532,7 +532,7 @@ export class TemplatesService {
     try {
       await this.prisma.$transaction(async tx => {
         const template = await tx.template.create({ data: { id: templateId, orgId: user.org_id, libraryId: library.id, categoryId: category?.id ?? null, ownerId: input.library === TemplateLibraryType.PERSONAL ? user.sub : null, name: input.name, description: input.description ?? null, type } });
-        await tx.auditLog.create({ data: { orgId: user.org_id, actorId: user.sub, action: 'TEMPLATE_CREATED_FROM_FILE', resourceType: null, resourceId: template.id, metadata: { sourceFileId: file.id, library: input.library } } });
+        await tx.auditLog.create({ data: { orgId: user.org_id, actorId: user.sub, action: 'TEMPLATE_CREATED_FROM_FILE', resourceType: 'TEMPLATE', resourceId: template.id, metadata: { sourceFileId: file.id, library: input.library } } });
       });
     } catch (error) {
       await this.storage.deleteStoredObject(snapshotKey).catch(() => undefined);
@@ -660,7 +660,7 @@ export class TemplatesService {
     const failed = checks.filter(c => c.status === 'FAIL').length;
     const warnings = checks.filter(c => c.status === 'WARNING').length;
     const status = failed ? 'FAILED' : warnings ? 'CERTIFIED_WITH_WARNINGS' : 'CERTIFIED';
-    await this.prisma.auditLog.create({ data: { orgId: user.org_id, actorId: user.sub, action: 'TEMPLATE_CERTIFIED', resourceType: null, resourceId: template.id, metadata: { templateVersionId: version.id, status, failed, warnings, checks: checks.map(c => ({ key: c.key, status: c.status })) } } });
+    await this.prisma.auditLog.create({ data: { orgId: user.org_id, actorId: user.sub, action: 'TEMPLATE_CERTIFIED', resourceType: 'TEMPLATE', resourceId: template.id, metadata: { templateVersionId: version.id, status, failed, warnings, checks: checks.map(c => ({ key: c.key, status: c.status })) } } });
     return { status, templateId: template.id, templateVersionId: version.id, templateVersion: version.versionNumber, templateType: template.type, extension, nativeOfficeType: officeType, placeholderCount, checks, generatedAt: new Date().toISOString() };
   }
 
@@ -684,7 +684,7 @@ export class TemplatesService {
       pdfFolderId: input.pdfFolderId ?? null,
     };
     const job = await this.prisma.officeBackgroundJob.create({ data: { orgId: user.org_id, createdById: user.sub, type: 'TEMPLATE_AUTOMATION', payload: payload as Prisma.InputJsonValue } });
-    await this.prisma.auditLog.create({ data: { orgId: user.org_id, actorId: user.sub, action: 'OFFICE_BACKGROUND_JOB_QUEUED', resourceType: null, resourceId: id, metadata: { jobId: job.id, type: job.type } } });
+    await this.prisma.auditLog.create({ data: { orgId: user.org_id, actorId: user.sub, action: 'OFFICE_BACKGROUND_JOB_QUEUED', resourceType: 'TEMPLATE', resourceId: id, metadata: { jobId: job.id, type: job.type } } });
     return { jobId: job.id, status: job.status, type: job.type, queuedAt: job.createdAt.toISOString() };
   }
 
@@ -748,7 +748,7 @@ export class TemplatesService {
       }
       await this.prisma.templateAutomationRun.update({ where: { id: run.id }, data: { status: 'SUCCEEDED', fileId: created.file_id, pdfFileId: pdf?.fileId ?? null, completedAt: new Date() } });
       await this.notifications.createOfficeNotification({ userId: user.sub, orgId: user.org_id, category: 'templateAutomation', title: 'Template automation completed', body: `${finalName} was generated successfully.`, resourceType: 'FILE', resourceId: created.file_id }).catch(() => undefined);
-      await this.prisma.auditLog.create({ data: { orgId: user.org_id, actorId: user.sub, action: 'TEMPLATE_AUTOMATION_GENERATED', resourceType: null, resourceId: id, metadata: { runId: run.id, fileId: created.file_id, templateVersionId: version.id, variableCount: template.variables.length, pdfFileId: pdf?.fileId ?? null } } });
+      await this.prisma.auditLog.create({ data: { orgId: user.org_id, actorId: user.sub, action: 'TEMPLATE_AUTOMATION_GENERATED', resourceType: 'TEMPLATE', resourceId: id, metadata: { runId: run.id, fileId: created.file_id, templateVersionId: version.id, variableCount: template.variables.length, pdfFileId: pdf?.fileId ?? null } } });
       return { runId: run.id, templateId: id, templateVersionId: version.id, fileId: created.file_id, name: created.name, office: officeDocument ? { documentId: officeDocument.id, revision: officeDocument.revision, type: officeDocument.type } : null, pdf };
     } catch (error) {
       await this.prisma.templateAutomationRun.update({ where: { id: run.id }, data: { status: 'FAILED', error: error instanceof Error ? error.message : 'Template automation failed', completedAt: new Date() } }).catch(() => undefined);
@@ -795,16 +795,23 @@ export class TemplatesService {
     if (!template || !this.canUseTemplate(user, template as any)) throw new NotFoundException('Template not found');
     const take = Math.min(Math.max(Number.isFinite(limit) ? Math.floor(limit) : 50, 1), 200);
     const rows = await this.prisma.auditLog.findMany({
-      where: { orgId: user.org_id, resourceType: null, resourceId: id },
+      where: { orgId: user.org_id, resourceType: 'TEMPLATE', resourceId: id },
       orderBy: { createdAt: 'desc' },
       take,
-      include: { actor: { select: { id: true, name: true, email: true } } },
     });
+    const actorIds = [...new Set(rows.map(row => row.actorId).filter((value): value is string => Boolean(value)))];
+    const actors = actorIds.length
+      ? await this.prisma.user.findMany({
+          where: { id: { in: actorIds } },
+          select: { id: true, name: true, email: true },
+        })
+      : [];
+    const actorById = new Map(actors.map(actor => [actor.id, actor]));
     return rows.map(row => ({
       id: row.id,
       action: row.action,
       createdAt: row.createdAt.toISOString(),
-      actor: row.actor ? { id: row.actor.id, name: row.actor.name, email: row.actor.email } : null,
+      actor: row.actorId ? (actorById.get(row.actorId) ?? null) : null,
       metadata: row.metadata ?? null,
     }));
   }
@@ -859,7 +866,7 @@ export class TemplatesService {
             orgId: user.org_id,
             actorId: user.sub,
             action: 'TEMPLATE_VERSION_RESTORED',
-            resourceType: null,
+            resourceType: 'TEMPLATE',
             resourceId: id,
             metadata: { restoredFromVersionId: source.id, restoredFromVersion: source.versionNumber, newVersionId: version.id, newVersion: version.versionNumber },
           },
@@ -942,7 +949,7 @@ export class TemplatesService {
     }
     await this.prisma.template.update({ where: { id }, data: { status: TemplateStatus.ACTIVE, deletedAt: null } });
     await this.prisma.auditLog.create({
-      data: { orgId: user.org_id, actorId: user.sub, action: 'TEMPLATE_RESTORED', resourceType: null, resourceId: id },
+      data: { orgId: user.org_id, actorId: user.sub, action: 'TEMPLATE_RESTORED', resourceType: 'TEMPLATE', resourceId: id },
     });
     return { success: true };
   }
@@ -965,7 +972,7 @@ export class TemplatesService {
     await this.prisma.template.delete({ where: { id } });
     await Promise.all(keys.map(key => this.storage.deleteStoredObject(key).catch(() => undefined)));
     await this.prisma.auditLog.create({
-      data: { orgId: user.org_id, actorId: user.sub, action: 'TEMPLATE_PERMANENTLY_DELETED', resourceType: null, resourceId: id },
+      data: { orgId: user.org_id, actorId: user.sub, action: 'TEMPLATE_PERMANENTLY_DELETED', resourceType: 'TEMPLATE', resourceId: id },
     });
     return { success: true };
   }
