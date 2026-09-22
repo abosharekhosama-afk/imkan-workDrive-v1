@@ -320,14 +320,14 @@ model Organization {
   officeDocumentVersions OfficeDocumentVersion[] @relation("OfficeDocumentVersionOrganization")
   officePresences OfficePresence[]
   officeOperations OfficeOperation[]
-  officeSessions OfficeSession[]
+  officeSessions OfficeSession[] @relation("OrganizationOfficeSessions")
   officeBackgroundJobs OfficeBackgroundJob[]
   templateCategories  TemplateCategory[]
   templates           Template[]
   dataTemplates       FileDataTemplate[]
 
   workflows Workflow[]
-  workflowRuns WorkflowRun[]
+  workflowRuns WorkflowRun[] @relation("OrganizationWorkflowRuns")
   workflowJobs WorkflowJob[]
   workflowTasks WorkflowTask[]
   workflowDataTemplates WorkflowDataTemplate[]
@@ -608,10 +608,10 @@ model OfficeDocumentVersion {
   createdById  String   @map("created_by_id") @db.Char(36)
   createdAt    DateTime @default(now()) @map("created_at")
 
-  organization Organization  @relation("OfficeDocumentVersionOrganization", fields: [orgId], references: [id], onDelete: Cascade, map: "office_document_versions_org_id_fkey")
+  organization Organization  @relation("OfficeDocumentVersionOrganization", fields: [orgId], references: [id], onDelete: Cascade)
   document     OfficeDocument @relation(fields: [documentId], references: [id], onDelete: Cascade)
-  file         File           @relation("OfficeDocumentVersionFile", fields: [fileId], references: [id], onDelete: Cascade, map: "office_document_versions_file_id_fkey")
-  createdBy    User           @relation("OfficeDocumentVersionCreator", fields: [createdById], references: [id], onDelete: Cascade, map: "office_document_versions_created_by_id_fkey")
+  file         File           @relation("OfficeDocumentVersionFile", fields: [fileId], references: [id], onDelete: Cascade)
+  createdBy    User           @relation("OfficeDocumentVersionCreator", fields: [createdById], references: [id], onDelete: Cascade)
 
   @@unique([documentId, versionNumber])
   @@index([orgId, fileId, createdAt])
@@ -664,7 +664,7 @@ model OfficeSession {
   lastActivityAt DateTime            @updatedAt @map("last_activity_at")
   closedAt       DateTime?           @map("closed_at")
 
-  organization Organization  @relation("OfficeDocumentVersionOrganization", fields: [orgId], references: [id], onDelete: Cascade, map: "office_document_versions_org_id_fkey")
+  organization Organization  @relation("OrganizationOfficeSessions", fields: [orgId], references: [id], onDelete: Cascade)
   file         File          @relation(fields: [fileId], references: [id], onDelete: Cascade)
   document     OfficeDocument @relation(fields: [documentId], references: [id], onDelete: Cascade)
   user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -2194,7 +2194,7 @@ model WorkflowRun {
   startedAt      DateTime @default(now()) @map("started_at")
   finishedAt     DateTime? @map("finished_at")
 
-  organization Organization  @relation("OfficeDocumentVersionOrganization", fields: [orgId], references: [id], onDelete: Cascade, map: "office_document_versions_org_id_fkey")
+  organization Organization  @relation("OrganizationWorkflowRuns", fields: [orgId], references: [id], onDelete: Cascade)
   workflow     Workflow      @relation(fields: [workflowId], references: [id], onDelete: Cascade)
   version      WorkflowVersion? @relation(fields: [versionId], references: [id], onDelete: SetNull)
   createdBy    User?         @relation(fields: [createdById], references: [id], onDelete: SetNull)
