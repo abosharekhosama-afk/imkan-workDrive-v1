@@ -635,6 +635,44 @@ export class OfficeService implements OfficeEngine {
     const file = await this.getAuthorizedFile(user, fileId);
     let document = await this.prisma.officeDocument.findUnique({ where: { fileId } });
 
+    // A template working copy may already have an OfficeDocument row from a
+    // partial/older initialization. Validate it against the actual file format
+    // and normalize its payload before the React editor receives it. This is
+    // intentionally also applied to existing documents, not only newly-created
+    // ones, so stale PUBLIC-template working copies can repair themselves.
+    const fileExtension = (file.extension ?? '').replace(/^\./, '').toLowerCase();
+    const expectedTypeByExtension: Record<string, OfficeDocumentType> = {
+      docx: OfficeDocumentType.WRITER,
+      xlsx: OfficeDocumentType.SHEET,
+      pptx: OfficeDocumentType.SHOW,
+    };
+    const expectedExistingType = expectedTypeByExtension[fileExtension];
+    if (document && expectedExistingType && document.type !== expectedExistingType) {
+      // Repair a stale working-copy row from the authoritative WorkDrive bytes
+      // instead of trying to insert a second OfficeDocument for the same file.
+      const version = await this.prisma.fileVersion.findFirst({
+        where: { fileId, orgId: user.org_id, status: 'ACTIVE' },
+        orderBy: { versionNumber: 'desc' },
+        include: { storageObject: true },
+      });
+      if (!version?.storageObject?.storageKey) throw new NotFoundException('No active Office file version is available');
+      const bytes = await this.storage.readStoredObject(version.storageObject.storageKey);
+      const imported = await this.conversion.import(bytes, file.name);
+      const repaired = this.normalizeOfficeContent(imported.content);
+      document = await this.prisma.officeDocument.update({
+        where: { fileId },
+        data: { type: imported.type as OfficeDocumentType, nativeFormat: TYPE_TO_FORMAT[imported.type], content: repaired as Prisma.InputJsonValue },
+      });
+    } else if (document) {
+      const normalized = this.normalizeOfficeContent(document.content);
+      if (JSON.stringify(normalized) !== JSON.stringify(document.content)) {
+        document = await this.prisma.officeDocument.update({
+          where: { fileId },
+          data: { content: normalized as Prisma.InputJsonValue },
+        });
+      }
+    }
+
     // Files created/imported before Office initialization (and template working
     // copies whose initialization was interrupted) must still be openable from
     // the normal Files/Actions -> Edit Content flow. Bootstrap the native model
