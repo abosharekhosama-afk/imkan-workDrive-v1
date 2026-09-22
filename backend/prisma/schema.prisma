@@ -322,6 +322,7 @@ model Organization {
   officeOperations OfficeOperation[]
   officeSessions OfficeSession[]
   officeBackgroundJobs OfficeBackgroundJob[]
+  officeDocumentVersionsCreated OfficeDocumentVersion[] @relation("OfficeDocumentVersionCreator")
   templateCategories  TemplateCategory[]
   templates           Template[]
   dataTemplates       FileDataTemplate[]
@@ -376,7 +377,6 @@ model User {
   notifications          Notification[]
   officeNotificationPreferences OfficeNotificationPreference[]
   officeEmailSettingsUpdated   OfficeEmailSettings[] @relation("OfficeEmailSettingsUpdater")
-  officeDocumentVersions OfficeDocumentVersion[] @relation("OfficeDocumentVersionCreator")
   comments               Comment[]
   resetTokens            PasswordResetToken[]
   invitationsSent        OrganizationInvitation[] @relation("InvitationSender")
@@ -531,7 +531,7 @@ model File {
   shares         FileShare[]
   malwareScans   MalwareScan[]
   officeDocument OfficeDocument?
-  officeDocumentVersions OfficeDocumentVersion[]
+  officeDocumentVersions OfficeDocumentVersion[] @relation("OfficeDocumentVersionCreator")
   officeSessions OfficeSession[]
   officePresences OfficePresence[]
   officeOperations OfficeOperation[]
@@ -607,7 +607,7 @@ model OfficeDocumentVersion {
   createdById  String   @map("created_by_id") @db.Char(36)
   createdAt    DateTime @default(now()) @map("created_at")
 
-  organization Organization  @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  organization Organization  @relation("OfficeDocumentVersionOrganization", fields: [orgId], references: [id], onDelete: Cascade)
   document     OfficeDocument @relation(fields: [documentId], references: [id], onDelete: Cascade)
   file         File           @relation(fields: [fileId], references: [id], onDelete: Cascade)
   createdBy    User           @relation("OfficeDocumentVersionCreator", fields: [createdById], references: [id], onDelete: Cascade)
