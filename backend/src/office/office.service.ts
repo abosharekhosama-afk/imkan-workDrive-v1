@@ -546,7 +546,6 @@ export class OfficeService implements OfficeEngine {
   ): Promise<OfficeDocumentState> {
     const file = await this.getAuthorizedFile(user, fileId, true);
     const existing = await this.prisma.officeDocument.findUnique({ where: { fileId } });
-    if (existing) return this.toState(existing);
 
     const version = await this.prisma.fileVersion.findFirst({
       where: { fileId, orgId: user.org_id },
@@ -566,18 +565,32 @@ export class OfficeService implements OfficeEngine {
       throw new ConflictException(`Template format ${extension.toUpperCase()} was imported as ${String(imported.type)} instead of ${expectedType}`);
     }
     const content = this.normalizeOfficeContent(imported.content);
-    const document = await this.prisma.officeDocument.create({
-      data: {
-        orgId: user.org_id,
-        fileId,
-        type: imported.type as OfficeDocumentType,
-        nativeFormat: TYPE_TO_FORMAT[imported.type],
-        content: content as Prisma.InputJsonValue,
-        sourceTemplateId,
-        sourceTemplateVersionId,
-      },
-    });
-    await this.prisma.officeDocumentVersion.create({ data: { orgId: user.org_id, documentId: document.id, fileId, versionNumber: 1, revision: document.revision, type: document.type, content: content as Prisma.InputJsonValue, contentHash: computeOfficeContentHash(content), label: 'Template initialization', createdById: user.sub } });
+    const document = existing
+      ? await this.prisma.officeDocument.update({
+          where: { id: existing.id },
+          data: {
+            type: imported.type as OfficeDocumentType,
+            nativeFormat: TYPE_TO_FORMAT[imported.type],
+            content: content as Prisma.InputJsonValue,
+            sourceTemplateId,
+            sourceTemplateVersionId,
+          },
+        })
+      : await this.prisma.officeDocument.create({
+          data: {
+            orgId: user.org_id,
+            fileId,
+            type: imported.type as OfficeDocumentType,
+            nativeFormat: TYPE_TO_FORMAT[imported.type],
+            content: content as Prisma.InputJsonValue,
+            sourceTemplateId,
+            sourceTemplateVersionId,
+          },
+        });
+    const versionNumber = existing
+      ? ((await this.prisma.officeDocumentVersion.findFirst({ where: { documentId: document.id }, orderBy: { versionNumber: 'desc' }, select: { versionNumber: true } }))?.versionNumber ?? 0) + 1
+      : 1;
+    await this.prisma.officeDocumentVersion.create({ data: { orgId: user.org_id, documentId: document.id, fileId, versionNumber, revision: document.revision, type: document.type, content: content as Prisma.InputJsonValue, contentHash: computeOfficeContentHash(content), label: existing ? 'Template re-initialization' : 'Template initialization', createdById: user.sub } });
     await this.prisma.auditLog.create({
       data: {
         orgId: user.org_id,
@@ -634,44 +647,6 @@ export class OfficeService implements OfficeEngine {
   async open(user: AccessTokenPayload, fileId: string): Promise<OfficeDocumentState> {
     const file = await this.getAuthorizedFile(user, fileId);
     let document = await this.prisma.officeDocument.findUnique({ where: { fileId } });
-
-    // A template working copy may already have an OfficeDocument row from a
-    // partial/older initialization. Validate it against the actual file format
-    // and normalize its payload before the React editor receives it. This is
-    // intentionally also applied to existing documents, not only newly-created
-    // ones, so stale PUBLIC-template working copies can repair themselves.
-    const fileExtension = (file.extension ?? '').replace(/^\./, '').toLowerCase();
-    const expectedTypeByExtension: Record<string, OfficeDocumentType> = {
-      docx: OfficeDocumentType.WRITER,
-      xlsx: OfficeDocumentType.SHEET,
-      pptx: OfficeDocumentType.SHOW,
-    };
-    const expectedExistingType = expectedTypeByExtension[fileExtension];
-    if (document && expectedExistingType && document.type !== expectedExistingType) {
-      // Repair a stale working-copy row from the authoritative WorkDrive bytes
-      // instead of trying to insert a second OfficeDocument for the same file.
-      const version = await this.prisma.fileVersion.findFirst({
-        where: { fileId, orgId: user.org_id, status: 'ACTIVE' },
-        orderBy: { versionNumber: 'desc' },
-        include: { storageObject: true },
-      });
-      if (!version?.storageObject?.storageKey) throw new NotFoundException('No active Office file version is available');
-      const bytes = await this.storage.readStoredObject(version.storageObject.storageKey);
-      const imported = await this.conversion.import(bytes, file.name);
-      const repaired = this.normalizeOfficeContent(imported.content);
-      document = await this.prisma.officeDocument.update({
-        where: { fileId },
-        data: { type: imported.type as OfficeDocumentType, nativeFormat: TYPE_TO_FORMAT[imported.type], content: repaired as Prisma.InputJsonValue },
-      });
-    } else if (document) {
-      const normalized = this.normalizeOfficeContent(document.content);
-      if (JSON.stringify(normalized) !== JSON.stringify(document.content)) {
-        document = await this.prisma.officeDocument.update({
-          where: { fileId },
-          data: { content: normalized as Prisma.InputJsonValue },
-        });
-      }
-    }
 
     // Files created/imported before Office initialization (and template working
     // copies whose initialization was interrupted) must still be openable from
