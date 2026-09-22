@@ -322,7 +322,6 @@ model Organization {
   officeOperations OfficeOperation[]
   officeSessions OfficeSession[]
   officeBackgroundJobs OfficeBackgroundJob[]
-  officeDocumentVersionsCreated OfficeDocumentVersion[] @relation("OfficeDocumentVersionCreator")
   templateCategories  TemplateCategory[]
   templates           Template[]
   dataTemplates       FileDataTemplate[]
@@ -411,6 +410,8 @@ model User {
   officeDocumentPolicyUpdates OfficeDocumentPolicy[] @relation("OfficeDocumentPolicyUpdater")
   officeSecurityPolicyUpdates OfficeSecurityPolicy[] @relation("OfficeSecurityPolicyUpdater")
   officeBackgroundJobs OfficeBackgroundJob[]
+  officeDocumentVersionsCreated OfficeDocumentVersion[] @relation("OfficeDocumentVersionCreator")
+
 
   @@unique([email])
   @@index([email])
@@ -531,7 +532,7 @@ model File {
   shares         FileShare[]
   malwareScans   MalwareScan[]
   officeDocument OfficeDocument?
-  officeDocumentVersions OfficeDocumentVersion[] @relation("OfficeDocumentVersionCreator")
+  officeDocumentVersions OfficeDocumentVersion[] @relation("OfficeDocumentVersionFile")
   officeSessions OfficeSession[]
   officePresences OfficePresence[]
   officeOperations OfficeOperation[]
@@ -607,10 +608,10 @@ model OfficeDocumentVersion {
   createdById  String   @map("created_by_id") @db.Char(36)
   createdAt    DateTime @default(now()) @map("created_at")
 
-  organization Organization  @relation("OfficeDocumentVersionOrganization", fields: [orgId], references: [id], onDelete: Cascade)
+  organization Organization  @relation("OfficeDocumentVersionOrganization", fields: [orgId], references: [id], onDelete: Cascade, map: "office_document_versions_org_id_fkey")
   document     OfficeDocument @relation(fields: [documentId], references: [id], onDelete: Cascade)
-  file         File           @relation(fields: [fileId], references: [id], onDelete: Cascade)
-  createdBy    User           @relation("OfficeDocumentVersionCreator", fields: [createdById], references: [id], onDelete: Cascade)
+  file         File           @relation("OfficeDocumentVersionFile", fields: [fileId], references: [id], onDelete: Cascade, map: "office_document_versions_file_id_fkey")
+  createdBy    User           @relation("OfficeDocumentVersionCreator", fields: [createdById], references: [id], onDelete: Cascade, map: "office_document_versions_created_by_id_fkey")
 
   @@unique([documentId, versionNumber])
   @@index([orgId, fileId, createdAt])
@@ -663,7 +664,7 @@ model OfficeSession {
   lastActivityAt DateTime            @updatedAt @map("last_activity_at")
   closedAt       DateTime?           @map("closed_at")
 
-  organization Organization  @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  organization Organization  @relation("OfficeDocumentVersionOrganization", fields: [orgId], references: [id], onDelete: Cascade, map: "office_document_versions_org_id_fkey")
   file         File          @relation(fields: [fileId], references: [id], onDelete: Cascade)
   document     OfficeDocument @relation(fields: [documentId], references: [id], onDelete: Cascade)
   user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -2193,7 +2194,7 @@ model WorkflowRun {
   startedAt      DateTime @default(now()) @map("started_at")
   finishedAt     DateTime? @map("finished_at")
 
-  organization Organization  @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  organization Organization  @relation("OfficeDocumentVersionOrganization", fields: [orgId], references: [id], onDelete: Cascade, map: "office_document_versions_org_id_fkey")
   workflow     Workflow      @relation(fields: [workflowId], references: [id], onDelete: Cascade)
   version      WorkflowVersion? @relation(fields: [versionId], references: [id], onDelete: SetNull)
   createdBy    User?         @relation(fields: [createdById], references: [id], onDelete: SetNull)
