@@ -1040,7 +1040,36 @@ export class ConnectionsService {
     };
   }
 
-  private frontendUrl() { return (this.config.get<string>('FRONTEND_URL') ?? 'http://localhost:3000').replace(/\/$/, ''); }
+  /**
+   * Browser origin to which an OAuth callback is redirected.
+   *
+   * Connections OAuth is a backend callback, but the IMKAN login session lives
+   * on the Next.js origin.  Redirecting to the Render origin therefore loses
+   * the browser's IMKAN token/localStorage and AuthGate sends the user back to
+   * /auth/login.  FRONTEND_URL must always be the deployed frontend origin,
+   * never PUBLIC_API_URL.
+   */
+  private frontendUrl() {
+    const configured = this.config.get<string>('FRONTEND_URL')?.trim();
+    const fallback = process.env.NODE_ENV === 'production'
+      ? 'https://imkan-work-drive-v1.vercel.app'
+      : 'http://localhost:3000';
+    const apiUrl = this.config.get<string>('PUBLIC_API_URL')?.trim();
+    let value = configured || fallback;
+
+    // A common deployment mistake is setting FRONTEND_URL to the Render API.
+    // OAuth callbacks must never redirect there: the IMKAN browser session is
+    // owned by the Vercel origin.  Recover safely to the production frontend.
+    try {
+      if (configured && apiUrl && new URL(configured).origin === new URL(apiUrl).origin) {
+        value = fallback;
+      }
+    } catch {
+      value = fallback;
+    }
+
+    return value.replace(/\/$/, '');
+  }
   private hash(value: string) { return createHash('sha256').update(value).digest('hex'); }
   private normalizeOAuthReturnPath(value: string | null | undefined) {
     const raw = String(value ?? '').trim();
