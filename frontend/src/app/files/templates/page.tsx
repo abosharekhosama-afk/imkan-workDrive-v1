@@ -193,8 +193,8 @@ export default function TemplatesPage() {
         const result = await createTemplateFromBlank({ name: createTemplateName.trim(), description: createTemplateDescription.trim() || undefined, type: createType, library, categoryId: createTemplateCategoryId || null });
         setCreateTemplateOpen(false);
         cacheRef.current.clear();
-        const officeRoute = result.template.type === 'SPREADSHEET' ? 'sheet' : result.template.type === 'PRESENTATION' ? 'show' : 'writer';
-        router.push(`/office/${officeRoute}/${result.file_id}?templateId=${encodeURIComponent(result.template.id)}`);
+        const officeType = result.template.type === "SPREADSHEET" ? "sheet" : result.template.type === "PRESENTATION" ? "show" : "writer";
+        router.push(`/office/${officeType}/${result.file_id}?templateId=${encodeURIComponent(result.template.id)}`);
       }
     } catch (e) {
       setError(e instanceof Error ? e.message : text(ar, "Unable to create template.", "تعذر إنشاء القالب."));
