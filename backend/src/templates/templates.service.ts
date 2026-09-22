@@ -368,7 +368,7 @@ export class TemplatesService {
         category: 'templateAutomation',
         title: 'Template content published',
         body: `${template.name} version ${created.versionNumber} is now available.`,
-        resourceType: 'TEMPLATE',
+        resourceType: null,
         resourceId: id,
       }).catch(() => undefined);
       return {
@@ -872,7 +872,7 @@ export class TemplatesService {
         });
         return version;
       });
-      await this.notifications.createOfficeNotification({ userId: user.sub, orgId: user.org_id, category: 'templateAutomation', title: 'Template version restored', body: `${template.name} restored version ${source.versionNumber} as version ${created.versionNumber}.`, resourceType: 'TEMPLATE', resourceId: id }).catch(() => undefined);
+      await this.notifications.createOfficeNotification({ userId: user.sub, orgId: user.org_id, category: 'templateAutomation', title: 'Template version restored', body: `${template.name} restored version ${source.versionNumber} as version ${created.versionNumber}.`, resourceType: null, resourceId: id }).catch(() => undefined);
       return { templateId: id, restoredFromVersionId: source.id, restoredFromVersion: source.versionNumber, templateVersionId: created.id, version: created.versionNumber };
     } catch (error) {
       await this.storage.deleteStoredObject(storageKey).catch(() => undefined);
