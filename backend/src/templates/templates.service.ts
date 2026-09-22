@@ -368,7 +368,7 @@ export class TemplatesService {
         category: 'templateAutomation',
         title: 'Template content published',
         body: `${template.name} version ${created.versionNumber} is now available.`,
-        resourceType: 'TEMPLATE',
+        resourceType: null,
         resourceId: id,
       }).catch(() => undefined);
       return {
@@ -798,20 +798,13 @@ export class TemplatesService {
       where: { orgId: user.org_id, resourceType: 'TEMPLATE', resourceId: id },
       orderBy: { createdAt: 'desc' },
       take,
+      include: { actor: { select: { id: true, name: true, email: true } } },
     });
-    const actorIds = [...new Set(rows.map(row => row.actorId).filter((value): value is string => Boolean(value)))];
-    const actors = actorIds.length
-      ? await this.prisma.user.findMany({
-          where: { id: { in: actorIds } },
-          select: { id: true, name: true, email: true },
-        })
-      : [];
-    const actorById = new Map(actors.map(actor => [actor.id, actor]));
     return rows.map(row => ({
       id: row.id,
       action: row.action,
       createdAt: row.createdAt.toISOString(),
-      actor: row.actorId ? (actorById.get(row.actorId) ?? null) : null,
+      actor: row.actor ? { id: row.actor.id, name: row.actor.name, email: row.actor.email } : null,
       metadata: row.metadata ?? null,
     }));
   }
