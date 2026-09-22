@@ -532,16 +532,21 @@ export class TemplatesService {
     if (library.type === TemplateLibraryType.PUBLIC) throw new ForbiddenException('Public templates are managed by WorkDrive and cannot be created or categorized');
     const category = await this.assertCategory(user, input.categoryId, library.id);
     const templateId = randomUUID();
-    const source = await this.snapshotFileVersion(user, templateId, 1, file, version);
-    const versionId = source.versionId;
-    const snapshotKey = source.snapshotKey;
+    // The template row must exist before its TemplateVersion snapshot is inserted.
+    // The previous order attempted to create the version first, which violates the
+    // TemplateVersion -> Template foreign key and surfaced as a 500 from from-file
+    // and from-blank creation.
+    await this.prisma.template.create({ data: { id: templateId, orgId: user.org_id, libraryId: library.id, categoryId: category?.id ?? null, ownerId: input.library === TemplateLibraryType.PERSONAL ? user.sub : null, name: input.name, description: input.description ?? null, type } });
+    let snapshot: Awaited<ReturnType<TemplatesService['snapshotFileVersion']>> | null = null;
     try {
-      await this.prisma.$transaction(async tx => {
-        const template = await tx.template.create({ data: { id: templateId, orgId: user.org_id, libraryId: library.id, categoryId: category?.id ?? null, ownerId: input.library === TemplateLibraryType.PERSONAL ? user.sub : null, name: input.name, description: input.description ?? null, type } });
-        await tx.auditLog.create({ data: { orgId: user.org_id, actorId: user.sub, action: 'TEMPLATE_CREATED_FROM_FILE', resourceType: 'TEMPLATE', resourceId: template.id, metadata: { sourceFileId: file.id, library: input.library } } });
-      });
+      snapshot = await this.snapshotFileVersion(user, templateId, 1, file, version);
+      await this.prisma.auditLog.create({ data: { orgId: user.org_id, actorId: user.sub, action: 'TEMPLATE_CREATED_FROM_FILE', resourceType: 'TEMPLATE', resourceId: templateId, metadata: { sourceFileId: file.id, library: input.library } } });
     } catch (error) {
-      await this.storage.deleteStoredObject(snapshotKey).catch(() => undefined);
+      if (snapshot) {
+        await this.prisma.templateVersion.delete({ where: { id: snapshot.versionId } }).catch(() => undefined);
+        await this.storage.deleteStoredObject(snapshot.snapshotKey).catch(() => undefined);
+      }
+      await this.prisma.template.delete({ where: { id: templateId } }).catch(() => undefined);
       throw error;
     }
     return this.get(user, templateId);
