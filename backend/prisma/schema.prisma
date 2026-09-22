@@ -317,7 +317,7 @@ model Organization {
   dataTransfers       DataTransfer[]
   templateLibraries   TemplateLibrary[]
   officeDocuments OfficeDocument[]
-  officeDocumentVersions OfficeDocumentVersion[] @relation("OfficeDocumentVersionCreator")
+  officeDocumentVersions OfficeDocumentVersion[] @relation("OfficeDocumentVersionOrganization")
   officePresences OfficePresence[]
   officeOperations OfficeOperation[]
   officeSessions OfficeSession[]
@@ -376,6 +376,7 @@ model User {
   notifications          Notification[]
   officeNotificationPreferences OfficeNotificationPreference[]
   officeEmailSettingsUpdated   OfficeEmailSettings[] @relation("OfficeEmailSettingsUpdater")
+  officeDocumentVersions OfficeDocumentVersion[] @relation("OfficeDocumentVersionCreator")
   comments               Comment[]
   resetTokens            PasswordResetToken[]
   invitationsSent        OrganizationInvitation[] @relation("InvitationSender")
