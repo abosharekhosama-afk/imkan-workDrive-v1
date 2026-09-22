@@ -368,7 +368,7 @@ export class TemplatesService {
         category: 'templateAutomation',
         title: 'Template content published',
         body: `${template.name} version ${created.versionNumber} is now available.`,
-        resourceType: null,
+        resourceType: 'TEMPLATE',
         resourceId: id,
       }).catch(() => undefined);
       return {
@@ -473,10 +473,16 @@ export class TemplatesService {
     // Render can also start the app from either the backend directory or the
     // repository root, so try the known layouts instead of returning a raw ENOENT 500.
     const assetCandidates = [
+      // Nest production output: dist/src/templates/blank-assets when sourceRoot
+      // is `src`, and dist/templates/blank-assets for alternate build layouts.
       join(__dirname, 'blank-assets', definition.file),
+      join(process.cwd(), 'dist', 'src', 'templates', 'blank-assets', definition.file),
       join(process.cwd(), 'dist', 'templates', 'blank-assets', definition.file),
+      // Development / monorepo layouts.
       join(process.cwd(), 'src', 'templates', 'blank-assets', definition.file),
       join(process.cwd(), 'backend', 'src', 'templates', 'blank-assets', definition.file),
+      join(process.cwd(), 'backend', 'dist', 'src', 'templates', 'blank-assets', definition.file),
+      join(process.cwd(), 'backend', 'dist', 'templates', 'blank-assets', definition.file),
     ];
     let bytes: Buffer | null = null;
     for (const assetPath of assetCandidates) {
@@ -866,7 +872,7 @@ export class TemplatesService {
         });
         return version;
       });
-      await this.notifications.createOfficeNotification({ userId: user.sub, orgId: user.org_id, category: 'templateAutomation', title: 'Template version restored', body: `${template.name} restored version ${source.versionNumber} as version ${created.versionNumber}.`, resourceType: null, resourceId: id }).catch(() => undefined);
+      await this.notifications.createOfficeNotification({ userId: user.sub, orgId: user.org_id, category: 'templateAutomation', title: 'Template version restored', body: `${template.name} restored version ${source.versionNumber} as version ${created.versionNumber}.`, resourceType: 'TEMPLATE', resourceId: id }).catch(() => undefined);
       return { templateId: id, restoredFromVersionId: source.id, restoredFromVersion: source.versionNumber, templateVersionId: created.id, version: created.versionNumber };
     } catch (error) {
       await this.storage.deleteStoredObject(storageKey).catch(() => undefined);
