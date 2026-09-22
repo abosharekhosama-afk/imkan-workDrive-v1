@@ -6,7 +6,7 @@ import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/commo
  const targets=new Set<string>(); if(file?.ownerId && file.ownerId!==u.sub) targets.add(file.ownerId); if(parentId){ const parent=await this.prisma.comment.findFirst({where:{id:parentId,orgId:u.org_id},select:{userId:true}}); if(parent?.userId && parent.userId!==u.sub) targets.add(parent.userId); }
  const tokens=[...body.matchAll(/@([A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,})/g)].map(m=>m[1].toLowerCase());
  await this.prisma.fileActivity.create({data:{orgId:u.org_id,fileId,userId:u.sub,action:'COMMENT',metadata:{commentId:c.id,parentId:parentId||null,mentions:tokens}}});
- const mentioned= tokens.length ? await this.prisma.user.findMany({where:{email:{in:tokens},memberships:{some:{orgId:u.org_id}}},select:{id:true,email:true}}) : [];
+ const mentioned= tokens.length ? await this.prisma.user.findMany({where:{email:{in:tokens},memberships:{some:{organizationId:u.org_id}}},select:{id:true,email:true}}) : [];
  mentioned.forEach(x=>{if(x.id!==u.sub) targets.add(x.id);});
  const mentionedIds=new Set(mentioned.map(x=>x.id));
  await Promise.all([...targets].map(userId=>this.notifications.createOfficeNotification({userId,orgId:u.org_id,category:'collaboration',type:mentionedIds.has(userId)?'MENTION':'COMMENT',title:mentionedIds.has(userId)?'You were mentioned in a file comment':'New file comment',body:`${c.user?.name||c.user?.email||'A collaborator'} commented on ${file?.name||'a file'}${mentionedIds.has(userId)?' and mentioned you':''}.`,resourceType:'FILE',resourceId:fileId,priority:mentionedIds.has(userId)?'HIGH':'NORMAL'})));

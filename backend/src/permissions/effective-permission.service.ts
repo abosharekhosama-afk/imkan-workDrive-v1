@@ -79,7 +79,7 @@ export class EffectivePermissionService {
     user: AccessTokenPayload,
     folderId: string,
   ): Promise<EffectivePermissionResult> {
-    const folder = await this.prisma.folder.findFirst({
+    const folder: { id: string; parentId: string | null; orgId: string } | null = await this.prisma.folder.findFirst({
       where: { id: folderId, orgId: user.org_id },
       select: {
         id: true,
@@ -313,7 +313,7 @@ export class EffectivePermissionService {
     const chain: Array<{ id: string; parentId: string | null }> = [];
     let current: string | null = folderId;
     for (let i = 0; i < 100 && current; i += 1) {
-      const folder = await this.prisma.folder.findFirst({
+      const folder: { id: string; parentId: string | null; orgId: string } | null = await this.prisma.folder.findFirst({
         where: { id: current, orgId },
         select: { id: true, parentId: true, orgId: true },
       });

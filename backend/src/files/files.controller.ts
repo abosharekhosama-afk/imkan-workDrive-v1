@@ -33,7 +33,7 @@ export class FilesController {
   constructor(
     private readonly files: FilesService,
     private readonly recent: RecentService,
-    private readonly dlp: DlpService,
+    private readonly dlpService: DlpService,
   ) {}
 
   /**
@@ -110,9 +110,9 @@ export class FilesController {
   }
 
 
-  @Get(':id/dlp') dlp(@CurrentUser() user: AccessTokenPayload, @Param('id', new ParseUUIDPipe({ version: '4' })) id: string) { return this.dlp.evaluate(user, id); }
-  @Post(':id/dlp/labels/:labelId') addDlpLabel(@CurrentUser() user: AccessTokenPayload, @Param('id', new ParseUUIDPipe({ version: '4' })) id: string, @Param('labelId', new ParseUUIDPipe({ version: '4' })) labelId: string) { return this.dlp.associateLabel(user, id, labelId); }
-  @Delete(':id/dlp/labels/:labelId') removeDlpLabel(@CurrentUser() user: AccessTokenPayload, @Param('id', new ParseUUIDPipe({ version: '4' })) id: string, @Param('labelId', new ParseUUIDPipe({ version: '4' })) labelId: string) { return this.dlp.removeLabel(user, id, labelId); }
+  @Get(':id/dlp') dlp(@CurrentUser() user: AccessTokenPayload, @Param('id', new ParseUUIDPipe({ version: '4' })) id: string) { return this.dlpService.evaluate(user, id); }
+  @Post(':id/dlp/labels/:labelId') addDlpLabel(@CurrentUser() user: AccessTokenPayload, @Param('id', new ParseUUIDPipe({ version: '4' })) id: string, @Param('labelId', new ParseUUIDPipe({ version: '4' })) labelId: string) { return this.dlpService.associateLabel(user, id, labelId); }
+  @Delete(':id/dlp/labels/:labelId') removeDlpLabel(@CurrentUser() user: AccessTokenPayload, @Param('id', new ParseUUIDPipe({ version: '4' })) id: string, @Param('labelId', new ParseUUIDPipe({ version: '4' })) labelId: string) { return this.dlpService.removeLabel(user, id, labelId); }
 
   @Get(':id/details')
   getDetails(

@@ -22,6 +22,7 @@ import {
   UploadStatus,
   UploadSessionStatus,
   ResourceType,
+  StorageObjectStatus,
 } from '@prisma/client';
 import type { AccessTokenPayload } from '../auth/jwt.types';
 import {
@@ -1577,11 +1578,132 @@ export class FilesService {
     return { deleted: results };
   }
 
-  private async requireMutableFile(
+  private storageLocation(): { bucket: string; region: string | null } {
+    const bucket = this.config.get<string>('S3_BUCKET') ?? 'imkan-workdrive-dev';
+    const region = this.config.get<string>('S3_REGION') ?? this.config.get<string>('AWS_REGION') ?? null;
+    return { bucket, region };
+  }
+
+  private async assertCanUploadToFolder(user: AccessTokenPayload, folder: { id: string; orgId: string; ownerId: string; teamFolderId?: string | null }) {
+    if (folder.orgId !== user.org_id) throw new NotFoundException('Folder not found');
+    if (!(await this.effective.canWrite(user, ResourceType.FOLDER, folder.id))) {
+      throw new ForbiddenException('Not allowed to upload to this folder');
+    }
+  }
+
+  private async canReadFile(user: AccessTokenPayload, file: { id: string; orgId: string; ownerId: string; folder?: { teamFolderId?: string | null } | null }): Promise<boolean> {
+    if (file.orgId !== user.org_id) return false;
+    return this.effective.canRead(user, ResourceType.FILE, file.id);
+  }
+
+  private async resolveVersionStorageObject(version: { storageObjectId: string; orgId: string }) {
+    return this.prisma.storageObject.findFirst({
+      where: { id: version.storageObjectId, orgId: version.orgId, status: StorageObjectStatus.ACTIVE },
+      select: { id: true, storageKey: true, bucket: true, region: true, size: true, checksum: true },
+    });
+  }
+
+  private async recordDownloadActivity(user: AccessTokenPayload, fileId: string, versionNumber: number) {
+    await Promise.all([
+      this.prisma.fileActivity.create({ data: { orgId: user.org_id, fileId, userId: user.sub, action: AuditAction.DOWNLOAD, metadata: { versionNumber } } }),
+      this.prisma.auditLog.create({ data: { orgId: user.org_id, actorId: user.sub, action: 'FILE_DOWNLOADED', resourceType: 'FILE', resourceId: fileId, metadata: { versionNumber } } }).catch(() => undefined),
+    ]);
+  }
+
+  private async recordActivity(orgId: string, fileId: string, userId: string, action: AuditAction, metadata: Record<string, unknown> = {}) {
+    await this.prisma.fileActivity.create({ data: { orgId, fileId, userId, action, metadata: metadata as any } });
+  }
+
+  private async purgeFileVersionObjects(user: AccessTokenPayload, fileId: string, versions: Array<{ storageObjectId: string }>) {
+    const ids = [...new Set(versions.map((v) => v.storageObjectId))];
+    if (!ids.length) return;
+    const objects = await this.prisma.storageObject.findMany({ where: { id: { in: ids }, orgId: user.org_id, fileId }, select: { id: true, storageKey: true } });
+    for (const object of objects) await this.storage.deleteStoredObject(object.storageKey).catch(() => undefined);
+    await this.prisma.storageObject.updateMany({ where: { id: { in: objects.map((o) => o.id) }, orgId: user.org_id }, data: { status: StorageObjectStatus.DELETED } });
+  }
+
+  async listTrash(user: AccessTokenPayload) {
+    const entries = await this.prisma.trashEntry.findMany({
+      where: { orgId: user.org_id, restoredAt: null, fileId: { not: null } },
+      orderBy: { deletedAt: 'desc' },
+      include: { file: { select: { id: true, name: true, originalName: true, size: true, mimeType: true, extension: true, deletedAt: true, updatedAt: true } } },
+    });
+    return entries.map((entry) => ({ ...entry, file: entry.file ? { ...entry.file, size: Number(entry.file.size) } : null }));
+  }
+
+  async streamFile(user: AccessTokenPayload, id: string, response: Response, range?: string) {
+    const file = await this.prisma.file.findFirst({ where: { id, orgId: user.org_id, deletedAt: null }, include: { versions: { where: { uploadStatus: UploadStatus.COMPLETE, status: { in: [VersionStatus.ACTIVE, VersionStatus.RESTORED] } }, orderBy: { versionNumber: 'desc' }, take: 1 }, folder: { select: { teamFolderId: true } } } });
+    if (!file || !file.versions[0] || !(await this.canReadFile(user, file))) throw new NotFoundException('File not found');
+    const version = file.versions[0];
+    const object = await this.resolveVersionStorageObject(version);
+    if (!object) throw new NotFoundException('File content not found');
+    const localPath = this.storage.resolveObjectPath?.(object.storageKey);
+    if (!localPath) {
+      const signed = await this.storage.createDownloadUrl({ fileId: file.id, versionId: version.id, storageKey: object.storageKey, ownerOrgId: user.org_id, contentType: version.mimeType, disposition: 'inline', fileName: file.name });
+      return response.redirect(302, signed.url);
+    }
+    const size = Number(version.size);
+    response.setHeader('Content-Type', version.mimeType);
+    response.setHeader('Accept-Ranges', 'bytes');
+    response.setHeader('Content-Disposition', contentDispositionInline(file.name));
+    if (range) {
+      const match = /^bytes=(\d*)-(\d*)$/.exec(range);
+      if (match) {
+        const start = match[1] ? Number(match[1]) : Math.max(0, size - Number(match[2]) - 1);
+        const end = match[2] ? Number(match[2]) : size - 1;
+        if (start >= 0 && end >= start && end < size) {
+          response.status(206).setHeader('Content-Range', `bytes ${start}-${end}/${size}`).setHeader('Content-Length', end - start + 1);
+          return createReadStream(localPath, { start, end }).pipe(response);
+        }
+      }
+    }
+    response.setHeader('Content-Length', size);
+    return createReadStream(localPath).pipe(response);
+  }
+
+  async restore(user: AccessTokenPayload, id: string) {
+    const file = await this.prisma.file.findFirst({ where: { id, orgId: user.org_id, deletedAt: { not: null } }, include: { folder: { select: { teamFolderId: true } } } });
+    if (!file) throw new NotFoundException('File not found');
+    if (!(await this.effective.canWrite(user, ResourceType.FILE, id))) throw new ForbiddenException('Not allowed to restore this file');
+    const restored = await this.prisma.$transaction(async (tx) => {
+      const updated = await tx.file.update({ where: { id }, data: { deletedAt: null, status: FileStatus.ACTIVE } });
+      await tx.trashEntry.updateMany({ where: { orgId: user.org_id, fileId: id, restoredAt: null }, data: { restoredAt: new Date(), restoredById: user.sub } });
+      await tx.fileActivity.create({ data: { orgId: user.org_id, fileId: id, userId: user.sub, action: AuditAction.RESTORE, metadata: {} } });
+      await tx.auditLog.create({ data: { orgId: user.org_id, actorId: user.sub, action: 'FILE_RESTORED', resourceType: 'FILE', resourceId: id } });
+      return updated;
+    });
+    return { id: restored.id, restored: true };
+  }
+
+  async rename(user: AccessTokenPayload, id: string, name: string) {
+    const cleanName = name.trim();
+    if (!cleanName || cleanName.length > 255 || /[\x00-\x1F\x7F]/.test(cleanName)) throw new BadRequestException('Invalid file name');
+    const file = await this.requireMutableFile(user, await this.prisma.file.findFirst({ where: { id, orgId: user.org_id, deletedAt: null }, include: { folder: { select: { teamFolderId: true } } } }), 'Not allowed to rename this file');
+    const duplicate = await this.prisma.file.findFirst({ where: { orgId: user.org_id, folderId: (await this.prisma.file.findUnique({ where: { id }, select: { folderId: true } }))?.folderId ?? null, name: cleanName, deletedAt: null, id: { not: id } }, select: { id: true } });
+    if (duplicate) throw new ConflictException('A file with this name already exists in the destination folder');
+    const updated = await this.prisma.file.update({ where: { id: file.id }, data: { name: cleanName } });
+    await this.recordActivity(user.org_id, id, user.sub, AuditAction.UPDATE, { previousName: file['name'] ?? undefined, newName: cleanName });
+    return updated;
+  }
+
+  async trash(user: AccessTokenPayload, id: string) {
+    const file = await this.requireMutableFile(user, await this.prisma.file.findFirst({ where: { id, orgId: user.org_id, deletedAt: null }, include: { folder: { select: { teamFolderId: true } } } }), 'Not allowed to delete this file');
+    const now = new Date();
+    const expiresAt = new Date(now.getTime() + TRASH_RETENTION_DAYS * 24 * 60 * 60 * 1000);
+    await this.prisma.$transaction(async (tx) => {
+      await tx.file.update({ where: { id }, data: { deletedAt: now, status: FileStatus.TRASHED } });
+      await tx.trashEntry.create({ data: { id: randomUUID(), orgId: user.org_id, fileId: id, deletedById: user.sub, reason: TrashReason.USER_DELETED, deletedAt: now, expiresAt } });
+      await tx.fileActivity.create({ data: { orgId: user.org_id, fileId: id, userId: user.sub, action: AuditAction.DELETE, metadata: { trash: true } } });
+      await tx.auditLog.create({ data: { orgId: user.org_id, actorId: user.sub, action: 'FILE_TRASHED', resourceType: 'FILE', resourceId: id } });
+    });
+    return { id, trashed: true, expiresAt: expiresAt.toISOString() };
+  }
+
+  private async requireMutableFile<T extends { id: string; orgId: string; ownerId: string; folder?: { teamFolderId?: string | null } | null }>(
     user: AccessTokenPayload,
-    file: { id: string; orgId: string; ownerId: string; folder?: { teamFolderId?: string | null } | null } | null,
+    file: T | null,
     deniedMessage: string,
-  ) {
+  ): Promise<T> {
     if (!file || file.orgId !== user.org_id) throw new NotFoundException('File not found');
     if (!(await this.effective.canRead(user, ResourceType.FILE, file.id))) {
       throw new NotFoundException('File not found');

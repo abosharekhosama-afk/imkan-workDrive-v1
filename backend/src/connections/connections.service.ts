@@ -1096,7 +1096,7 @@ export class ConnectionsService {
     if (!addresses.length || addresses.some((entry) => this.isPrivateFunctionIp(entry.address))) throw new BadRequestException('HTTP_REQUEST hostname resolves to a private or local network target');
   }
 
-  private isPrivateFunctionIp(host: string) {
+  private isPrivateFunctionIp(host: string): boolean {
     if (host.includes(':')) {
       const h = host.toLowerCase();
       if (h.startsWith('::ffff:')) return this.isPrivateFunctionIp(h.slice(7));
