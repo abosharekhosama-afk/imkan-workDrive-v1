@@ -25,7 +25,7 @@ export type WriterComment = {
   authorName?: string;
   createdAt: string;
   resolved?: boolean;
-  replies?: { id: string; text: string; authorId?: string; authorName?: string; createdAt: string }[];
+  replies?: { id: string; text: string; authorId?: string; authorName?: string; createdAt: string; resolved?: boolean }[];
   mentions?: string[];
   deleted?: boolean;
 };
@@ -58,20 +58,26 @@ export type WriterReview = {
   showFormattingChanges?: boolean;
   displayMode?: 'simple' | 'all' | 'original';
 };
-export type WriterBlockType = 'paragraph' | 'heading1' | 'heading2' | 'heading3' | 'list-item' | 'table' | 'image' | 'page-break' | 'equation' | 'symbol' | 'bibliography' | 'index';
+export type WriterBlockType = 'paragraph' | 'title' | 'subtitle' | 'heading1' | 'heading2' | 'heading3' | 'list-item' | 'table' | 'image' | 'page-break' | 'equation' | 'symbol' | 'bibliography' | 'index' | 'toc';
 
 export type WriterBookmark = { id: string; name: string; blockId: string };
 export type WriterFootnote = { id: string; marker: string; text: string; blockId: string };
+export type WriterEndnote = { id: string; marker: string; text: string; blockId: string };
 export type WriterSectionBreak = 'next-page' | 'continuous' | 'even-page' | 'odd-page';
 export type WriterSection = { id: string; startBlockId?: string; breakType?: WriterSectionBreak; columns: number; columnGapMm: number; differentFirstPage?: boolean; differentOddEven?: boolean; header?: string; footer?: string; firstHeader?: string; firstFooter?: string; oddHeader?: string; oddFooter?: string; evenHeader?: string; evenFooter?: string; pageNumberStart?: number; pageNumberFormat?: 'decimal' | 'roman-lower' | 'roman-upper' | 'letter-upper' | 'letter-lower' };
-export type WriterCitation = { id: string; source: string; author?: string; year?: string; title?: string; url?: string };
+export type WriterCitationStyle = 'numeric' | 'apa' | 'mla' | 'chicago';
+export type WriterCitationSource = { id: string; type: 'book' | 'article' | 'web' | 'report' | 'thesis' | 'other'; author?: string; year?: string; title?: string; containerTitle?: string; publisher?: string; edition?: string; url?: string; doi?: string; isbn?: string; accessedAt?: string; };
+export type WriterCitation = { id: string; source: string; author?: string; year?: string; title?: string; url?: string; blockId?: string; sourceId?: string; };
 export type WriterCaption = { id: string; blockId: string; label: string; text: string; number: number };
-export type WriterCrossReference = { id: string; name: string; targetId: string; display: 'label' | 'number' | 'text' };
+export type WriterCrossReference = { id: string; name: string; targetId: string; sourceBlockId?: string; display: 'label' | 'number' | 'text' };
 export type WriterIndexEntry = { id: string; term: string; blockId: string; subentry?: string };
+
+export type WriterBlockDirection = 'auto' | 'ltr' | 'rtl';
 
 export type WriterBlock = {
   id: string;
   type: WriterBlockType;
+  direction?: WriterBlockDirection;
   align: 'start' | 'center' | 'end' | 'justify';
   ordered?: boolean;
   runs: WriterRun[];
@@ -116,8 +122,11 @@ export type WriterDocument = {
   review: WriterReview;
   bookmarks: WriterBookmark[];
   footnotes: WriterFootnote[];
+  endnotes: WriterEndnote[];
   sections: WriterSection[];
   citations: WriterCitation[];
+  citationSources: WriterCitationSource[];
+  citationStyle: WriterCitationStyle;
   captions: WriterCaption[];
   crossReferences: WriterCrossReference[];
   indexEntries: WriterIndexEntry[];
@@ -132,9 +141,9 @@ export const emptyWriterDocument = (): WriterDocument => ({
   schema: 7, type: 'WRITER', title: 'Untitled document', language: 'mixed', page: defaultWriterPage(),
   blocks: [{ id: crypto.randomUUID(), type: 'paragraph', align: 'start', runs: [{ text: '' }] }],
   sections: [{ id: crypto.randomUUID(), columns: 1, columnGapMm: 8 }],
-  citations: [], captions: [], crossReferences: [], indexEntries: [],
+  citations: [], citationSources: [], citationStyle: 'numeric', captions: [], crossReferences: [], indexEntries: [],
   review: { comments: [], changes: [], snapshots: [], trackChanges: false, showFormattingChanges: true, displayMode: 'all' },
-  bookmarks: [], footnotes: [],
+  bookmarks: [], footnotes: [], endnotes: [],
 });
 
 export function normalizeWriterDocument(value: any): WriterDocument {
@@ -177,20 +186,24 @@ export function normalizeWriterDocument(value: any): WriterDocument {
     page, blocks: blocks.length ? blocks : emptyWriterDocument().blocks, review,
     sections: Array.isArray(source.sections) && source.sections.length ? source.sections.slice(0,100).map(normalizeSection) : [{id:crypto.randomUUID(),columns:1,columnGapMm:8,breakType:'next-page'}],
     citations: Array.isArray(source.citations) ? source.citations.slice(0,1000).map(normalizeCitation) : [],
+    citationSources: Array.isArray(source.citationSources) ? source.citationSources.slice(0,1000).map(normalizeCitationSource) : [],
+    citationStyle: ['numeric','apa','mla','chicago'].includes(source.citationStyle) ? source.citationStyle : 'numeric',
     captions: Array.isArray(source.captions) ? source.captions.slice(0,1000).map(normalizeCaption) : [],
     crossReferences: Array.isArray(source.crossReferences) ? source.crossReferences.slice(0,1000).map(normalizeCrossReference) : [],
     indexEntries: Array.isArray(source.indexEntries) ? source.indexEntries.slice(0,1000).map(normalizeIndexEntry) : [],
     bookmarks: Array.isArray(source.bookmarks) ? source.bookmarks.slice(0,500).map((x:any)=>({id:typeof x?.id==='string'?x.id:crypto.randomUUID(),name:typeof x?.name==='string'?x.name.slice(0,120):'Bookmark',blockId:typeof x?.blockId==='string'?x.blockId:''})) : [],
     footnotes: Array.isArray(source.footnotes) ? source.footnotes.slice(0,500).map((x:any)=>({id:typeof x?.id==='string'?x.id:crypto.randomUUID(),marker:typeof x?.marker==='string'?x.marker.slice(0,20):'*',text:typeof x?.text==='string'?x.text.slice(0,4000):'',blockId:typeof x?.blockId==='string'?x.blockId:''})) : [],
+    endnotes: Array.isArray(source.endnotes) ? source.endnotes.slice(0,500).map((x:any)=>({id:typeof x?.id==='string'?x.id:crypto.randomUUID(),marker:typeof x?.marker==='string'?x.marker.slice(0,20):'*',text:typeof x?.text==='string'?x.text.slice(0,4000):'',blockId:typeof x?.blockId==='string'?x.blockId:''})) : [],
   };
 }
 
 
 
 function normalizeSection(value:any): WriterSection { return { id: typeof value?.id==='string'?value.id:crypto.randomUUID(), startBlockId:typeof value?.startBlockId==='string'?value.startBlockId:undefined, breakType:['next-page','continuous','even-page','odd-page'].includes(value?.breakType)?value.breakType:'next-page', columns:clampNumber(value?.columns,1,4,1), columnGapMm:clampNumber(value?.columnGapMm,4,40,8), differentFirstPage:Boolean(value?.differentFirstPage), differentOddEven:Boolean(value?.differentOddEven), header:typeof value?.header==='string'?value.header.slice(0,500):'', footer:typeof value?.footer==='string'?value.footer.slice(0,500):'', firstHeader:typeof value?.firstHeader==='string'?value.firstHeader.slice(0,500):'', firstFooter:typeof value?.firstFooter==='string'?value.firstFooter.slice(0,500):'', oddHeader:typeof value?.oddHeader==='string'?value.oddHeader.slice(0,500):'', oddFooter:typeof value?.oddFooter==='string'?value.oddFooter.slice(0,500):'', evenHeader:typeof value?.evenHeader==='string'?value.evenHeader.slice(0,500):'', evenFooter:typeof value?.evenFooter==='string'?value.evenFooter.slice(0,500):'', pageNumberStart:clampNumber(value?.pageNumberStart,1,99999,1), pageNumberFormat:['decimal','roman-lower','roman-upper','letter-upper','letter-lower'].includes(value?.pageNumberFormat)?value.pageNumberFormat:'decimal' }; }
-function normalizeCitation(value:any): WriterCitation { return {id:typeof value?.id==='string'?value.id:crypto.randomUUID(),source:typeof value?.source==='string'?value.source.slice(0,500):'',author:typeof value?.author==='string'?value.author.slice(0,200):undefined,year:typeof value?.year==='string'?value.year.slice(0,20):undefined,title:typeof value?.title==='string'?value.title.slice(0,500):undefined,url:typeof value?.url==='string'?value.url.slice(0,2000):undefined}; }
+function normalizeCitation(value:any): WriterCitation { return {id:typeof value?.id==='string'?value.id:crypto.randomUUID(),source:typeof value?.source==='string'?value.source.slice(0,500):'',author:typeof value?.author==='string'?value.author.slice(0,200):undefined,year:typeof value?.year==='string'?value.year.slice(0,20):undefined,title:typeof value?.title==='string'?value.title.slice(0,500):undefined,url:typeof value?.url==='string'?value.url.slice(0,2000):undefined,blockId:typeof value?.blockId==='string'?value.blockId.slice(0,120):undefined,sourceId:typeof value?.sourceId==='string'?value.sourceId.slice(0,120):undefined}; }
+function normalizeCitationSource(value:any): WriterCitationSource { const type=['book','article','web','report','thesis','other'].includes(value?.type)?value.type:'other'; return {id:typeof value?.id==='string'?value.id:crypto.randomUUID(),type,author:typeof value?.author==='string'?value.author.slice(0,500):undefined,year:typeof value?.year==='string'?value.year.slice(0,20):undefined,title:typeof value?.title==='string'?value.title.slice(0,1000):undefined,containerTitle:typeof value?.containerTitle==='string'?value.containerTitle.slice(0,1000):undefined,publisher:typeof value?.publisher==='string'?value.publisher.slice(0,500):undefined,edition:typeof value?.edition==='string'?value.edition.slice(0,100):undefined,url:typeof value?.url==='string'?value.url.slice(0,2000):undefined,doi:typeof value?.doi==='string'?value.doi.slice(0,200):undefined,isbn:typeof value?.isbn==='string'?value.isbn.slice(0,50):undefined,accessedAt:typeof value?.accessedAt==='string'?value.accessedAt.slice(0,40):undefined}; }
 function normalizeCaption(value:any): WriterCaption { return {id:typeof value?.id==='string'?value.id:crypto.randomUUID(),blockId:typeof value?.blockId==='string'?value.blockId:'',label:typeof value?.label==='string'?value.label.slice(0,80):'Figure',text:typeof value?.text==='string'?value.text.slice(0,500):'',number:clampNumber(value?.number,1,99999,1)}; }
-function normalizeCrossReference(value:any): WriterCrossReference { return {id:typeof value?.id==='string'?value.id:crypto.randomUUID(),name:typeof value?.name==='string'?value.name.slice(0,120):'Reference',targetId:typeof value?.targetId==='string'?value.targetId:'',display:['label','number','text'].includes(value?.display)?value.display:'label'}; }
+function normalizeCrossReference(value:any): WriterCrossReference { return {id:typeof value?.id==='string'?value.id:crypto.randomUUID(),name:typeof value?.name==='string'?value.name.slice(0,120):'Reference',targetId:typeof value?.targetId==='string'?value.targetId:'',sourceBlockId:typeof value?.sourceBlockId==='string'?value.sourceBlockId:'',display:['label','number','text'].includes(value?.display)?value.display:'label'}; }
 function normalizeIndexEntry(value:any): WriterIndexEntry { return {id:typeof value?.id==='string'?value.id:crypto.randomUUID(),term:typeof value?.term==='string'?value.term.slice(0,200):'',blockId:typeof value?.blockId==='string'?value.blockId:'',subentry:typeof value?.subentry==='string'?value.subentry.slice(0,200):undefined}; }
 
 function normalizeComment(value: any): WriterComment {
@@ -202,7 +215,7 @@ function normalizeComment(value: any): WriterComment {
     authorName: typeof value?.authorName === 'string' ? value.authorName.slice(0, 120) : undefined,
     createdAt: typeof value?.createdAt === 'string' ? value.createdAt : new Date().toISOString(),
     resolved: Boolean(value?.resolved),
-    replies: Array.isArray(value?.replies) ? value.replies.slice(-50).map((reply: any) => ({ id: typeof reply?.id === 'string' ? reply.id : crypto.randomUUID(), text: typeof reply?.text === 'string' ? reply.text.slice(0, 2000) : '', authorId: typeof reply?.authorId === 'string' ? reply.authorId.slice(0, 100) : undefined, authorName: typeof reply?.authorName === 'string' ? reply.authorName.slice(0, 120) : undefined, createdAt: typeof reply?.createdAt === 'string' ? reply.createdAt : new Date().toISOString() })) : [],
+    replies: Array.isArray(value?.replies) ? value.replies.slice(-50).map((reply: any) => ({ id: typeof reply?.id === 'string' ? reply.id : crypto.randomUUID(), text: typeof reply?.text === 'string' ? reply.text.slice(0, 2000) : '', authorId: typeof reply?.authorId === 'string' ? reply.authorId.slice(0, 100) : undefined, authorName: typeof reply?.authorName === 'string' ? reply.authorName.slice(0, 120) : undefined, createdAt: typeof reply?.createdAt === 'string' ? reply.createdAt : new Date().toISOString(), resolved: Boolean(reply?.resolved) })) : [],
   };
 }
 
@@ -221,12 +234,12 @@ function clampNumber(value: any, min: number, max: number, fallback: number): nu
 }
 
 function normalizeBlock(block: any): WriterBlock {
-  const allowed = ['paragraph', 'heading1', 'heading2', 'heading3', 'list-item', 'table', 'image', 'page-break'];
+  const allowed = ['paragraph', 'title', 'subtitle', 'heading1', 'heading2', 'heading3', 'list-item', 'table', 'image', 'page-break'];
   const type = allowed.includes(block?.type) ? block.type : 'paragraph';
   const runs = Array.isArray(block?.runs) && block.runs.length ? block.runs.map(normalizeRun) : [{ text: '' }];
   const out: WriterBlock = {
     id: typeof block?.id === 'string' ? block.id : crypto.randomUUID(),
-    type, align: ['start', 'center', 'end', 'justify'].includes(block?.align) ? block.align : 'start',
+    type, direction: ['auto','ltr','rtl'].includes(block?.direction) ? block.direction : 'auto', align: ['start', 'center', 'end', 'justify'].includes(block?.align) ? block.align : 'start',
     ordered: Boolean(block?.ordered), runs,
     lineSpacing: clampNumber(block?.lineSpacing, 1, 3, 1.5),
     spaceBefore: clampNumber(block?.spaceBefore, 0, 100, 0),

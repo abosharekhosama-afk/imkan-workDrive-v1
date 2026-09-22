@@ -67,7 +67,6 @@ enum TeamFolderRole {
 enum ResourceType {
   FILE
   FOLDER
-  TEMPLATE
 }
 
 /// Lifecycle state of a logical file.
@@ -222,6 +221,19 @@ enum TrashReason {
   ADMIN_DELETED
 }
 
+enum UploadStatus {
+  PENDING
+  COMPLETE
+  ABORTED
+}
+
+enum UploadSessionStatus {
+  PENDING
+  COMPLETE
+  ABORTED
+  EXPIRED
+}
+
 enum VersionStatus {
   ACTIVE
   RESTORED
@@ -255,6 +267,7 @@ model Organization {
   createdAt DateTime @default(now()) @map("created_at")
 
   owner User? @relation("OrganizationOwner", fields: [ownerId], references: [id])
+  uploadSessions UploadSession[]
   currentUsers User[] @relation("UserCurrentOrganization")
   officeSecurityPolicies OfficeSecurityPolicy[]
 
@@ -287,6 +300,9 @@ model Organization {
   groupMembers        GroupMember[]
   folderPermissions   FolderPermission[]
   securityPolicy      SecurityPolicy?
+  dlpLabels           DlpClassificationLabel[]
+  dlpPolicies         DlpPolicy[]
+  dlpFileLabels       FileDlpLabel[]
   retentionPolicy     RetentionPolicy?
   malwareScans        MalwareScan[]
   securityEvents      SecurityEvent[]
@@ -295,16 +311,20 @@ model Organization {
   connectionCustomServices ConnectionCustomService[]
   connectionProviderConfigs ConnectionProviderConfig[]
   connectionUsages    ConnectionUsage[]
+  connectionHealthChecks ConnectionHealthCheck[]
+  connectionHealthAlerts ConnectionHealthAlert[]
   devices             UserDevice[]
   dataTransfers       DataTransfer[]
   templateLibraries   TemplateLibrary[]
   officeDocuments OfficeDocument[]
+  officeDocumentVersions OfficeDocumentVersion[] @relation("OfficeDocumentVersionCreator")
   officePresences OfficePresence[]
   officeOperations OfficeOperation[]
   officeSessions OfficeSession[]
   officeBackgroundJobs OfficeBackgroundJob[]
   templateCategories  TemplateCategory[]
   templates           Template[]
+  dataTemplates       FileDataTemplate[]
 
   workflows Workflow[]
   workflowRuns WorkflowRun[]
@@ -338,6 +358,7 @@ model User {
   currentOrganization Organization? @relation("UserCurrentOrganization", fields: [currentOrganizationId], references: [id], onDelete: SetNull)
 
   memberships          OrganizationMembership[] @relation("UserMemberships")
+  uploadSessions       UploadSession[]
   ownedOrganizations     Organization[]         @relation("OrganizationOwner")
   teamFolderMembers      TeamFolderMember[]
   ownedFolders           Folder[]               @relation("FolderOwner")
@@ -459,6 +480,8 @@ model Folder {
   personalFolderOf OrganizationMembership? @relation("PersonalFolderOwner")
   files        File[]
   trashEntries TrashEntry[]
+  dataTemplateId String? @map("data_template_id") @db.Char(36)
+  dataTemplate FileDataTemplate? @relation(fields: [dataTemplateId], references: [id], onDelete: SetNull)
   permissions  FolderPermission[]
   shares       FolderShare[]
 
@@ -496,15 +519,18 @@ model File {
   folder         Folder?         @relation(fields: [folderId], references: [id], onDelete: Cascade)
   owner          User            @relation("FileOwner", fields: [ownerId], references: [id])
   versions       FileVersion[]
+  uploadSessions UploadSession[]
   comments       Comment[]
   metadata       FileMetadata?
   storageObjects StorageObject[]
   activities     FileActivity[]
   tags           FileTag[]
+  dlpLabels      FileDlpLabel[]
   trashEntries   TrashEntry[]
   shares         FileShare[]
   malwareScans   MalwareScan[]
   officeDocument OfficeDocument?
+  officeDocumentVersions OfficeDocumentVersion[]
   officeSessions OfficeSession[]
   officePresences OfficePresence[]
   officeOperations OfficeOperation[]
@@ -566,6 +592,32 @@ model OfficeDocumentPolicy {
   @@map("office_document_policies")
 }
 
+model OfficeDocumentVersion {
+  id           String   @id @default(uuid()) @db.Char(36)
+  orgId        String   @map("org_id") @db.Char(36)
+  documentId   String   @map("document_id") @db.Char(36)
+  fileId       String   @map("file_id") @db.Char(36)
+  versionNumber Int     @map("version_number")
+  revision     Int
+  type         OfficeDocumentType
+  content      Json
+  contentHash  String   @map("content_hash") @db.Char(64)
+  label        String?  @db.VarChar(255)
+  createdById  String   @map("created_by_id") @db.Char(36)
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  organization Organization  @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  document     OfficeDocument @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  file         File           @relation(fields: [fileId], references: [id], onDelete: Cascade)
+  createdBy    User           @relation("OfficeDocumentVersionCreator", fields: [createdById], references: [id], onDelete: Cascade)
+
+  @@unique([documentId, versionNumber])
+  @@index([orgId, fileId, createdAt])
+  @@index([documentId, revision])
+  @@index([createdById, createdAt])
+  @@map("office_document_versions")
+}
+
 enum OfficeSessionStatus {
   ACTIVE
   CLOSED
@@ -588,6 +640,7 @@ model OfficeDocument {
   file         File         @relation(fields: [fileId], references: [id], onDelete: Cascade)
   sessions     OfficeSession[]
   operations   OfficeOperation[]
+  versions     OfficeDocumentVersion[]
   policy       OfficeDocumentPolicy?
 
   @@index([orgId, type])
@@ -918,12 +971,39 @@ model FileMetadata {
   language    String?
   title       String?
   description String?  @db.Text
+  customFields Json? @map("custom_fields")
+  contentText String? @map("content_text") @db.LongText
+  ocrText     String? @map("ocr_text") @db.LongText
   createdAt   DateTime @default(now()) @map("created_at")
   updatedAt   DateTime @updatedAt @map("updated_at")
 
   file File @relation(fields: [fileId], references: [id], onDelete: Cascade)
+  dataTemplate FileDataTemplate? @relation(fields: [dataTemplateId], references: [id], onDelete: SetNull)
+  dataTemplateId String? @map("data_template_id") @db.Char(36)
 
+  @@index([dataTemplateId])
   @@map("file_metadata")
+}
+
+
+/// Organization-scoped data template for file metadata/custom fields.
+model FileDataTemplate {
+  id            String   @id @default(uuid()) @db.Char(36)
+  orgId         String   @map("org_id") @db.Char(36)
+  name          String
+  description   String?  @db.Text
+  schema        Json
+  requiredFields Json? @map("required_fields")
+  active        Boolean  @default(true)
+  createdById   String   @map("created_by_id") @db.Char(36)
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+  organization  Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  folders       Folder[]
+  metadata      FileMetadata[]
+  @@unique([orgId, name])
+  @@index([orgId, active])
+  @@map("file_data_templates")
 }
 
 /// Physical object stored in object storage (S3/MinIO/local disk).
@@ -962,20 +1042,68 @@ model FileVersion {
   sha256Hash      String        @map("sha256_hash") @db.Char(64)
   uploadedById    String        @map("uploaded_by") @db.Char(36)
   status          VersionStatus @default(ACTIVE)
+  uploadStatus    UploadStatus  @default(COMPLETE) @map("upload_status")
   createdAt       DateTime      @default(now()) @map("created_at")
 
   organization  Organization  @relation(fields: [orgId], references: [id])
   file          File          @relation(fields: [fileId], references: [id], onDelete: Cascade)
   uploadedBy    User          @relation("VersionUploader", fields: [uploadedById], references: [id])
   storageObject StorageObject @relation(fields: [storageObjectId], references: [id])
+  uploadSession UploadSession?
 
   @@unique([fileId, versionNumber])
   @@index([orgId, sha256Hash])
   @@index([orgId, status])
+  @@index([fileId, uploadStatus])
   @@map("file_versions")
 }
 
 /// Authoritative record of every deletion and restoration (recycle bin).
+model UploadSession {
+  id            String              @id @default(uuid()) @db.Char(36)
+  orgId         String              @map("org_id") @db.Char(36)
+  fileId        String              @map("file_id") @db.Char(36)
+  versionId     String              @unique @map("version_id") @db.Char(36)
+  storageUploadId String            @map("storage_upload_id")
+  objectKey     String              @map("object_key")
+  expectedSize  BigInt              @map("expected_size")
+  expectedSha256 String             @map("expected_sha256") @db.Char(64)
+  partSize      Int                 @map("part_size")
+  totalParts    Int                 @map("total_parts")
+  status        UploadSessionStatus @default(PENDING)
+  expiresAt     DateTime            @map("expires_at")
+  createdById   String              @map("created_by") @db.Char(36)
+  createdAt     DateTime            @default(now()) @map("created_at")
+  completedAt   DateTime?            @map("completed_at")
+  storageCompletedAt DateTime?       @map("storage_completed_at")
+
+  organization Organization @relation(fields: [orgId], references: [id])
+  file         File         @relation(fields: [fileId], references: [id], onDelete: Cascade)
+  version      FileVersion  @relation(fields: [versionId], references: [id], onDelete: Cascade)
+  createdBy    User         @relation(fields: [createdById], references: [id])
+  parts        UploadPart[]
+
+  @@index([orgId, status, expiresAt])
+  @@index([fileId, status])
+  @@map("upload_sessions")
+}
+
+model UploadPart {
+  id          String   @id @default(uuid()) @db.Char(36)
+  sessionId   String   @map("session_id") @db.Char(36)
+  partNumber  Int      @map("part_number")
+  size        Int
+  checksum    String   @db.Char(64)
+  etag        String?
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  session UploadSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@unique([sessionId, partNumber])
+  @@index([sessionId, partNumber])
+  @@map("upload_parts")
+}
+
 model TrashEntry {
   id           String      @id @default(uuid()) @db.Char(36)
   orgId        String      @map("org_id") @db.Char(36)
@@ -1074,8 +1202,9 @@ model FileShareRecipient {
   id        String   @id @default(uuid()) @db.Char(36)
   orgId     String   @map("org_id") @db.Char(36)
   shareId   String   @map("share_id") @db.Char(36)
-  userId    String   @map("user_id") @db.Char(36)
-  createdAt DateTime @default(now()) @map("created_at")
+  userId     String         @map("user_id") @db.Char(36)
+  permission SharePermission @default(VIEW)
+  createdAt  DateTime       @default(now()) @map("created_at")
 
   organization Organization @relation(fields: [orgId], references: [id])
   share        FileShare    @relation(fields: [shareId], references: [id], onDelete: Cascade)
@@ -1112,11 +1241,12 @@ model FolderShare {
 }
 
 model FolderShareRecipient {
-  id        String      @id @default(uuid()) @db.Char(36)
-  orgId     String      @map("org_id") @db.Char(36)
-  shareId   String      @map("share_id") @db.Char(36)
-  userId    String      @map("user_id") @db.Char(36)
-  createdAt DateTime    @default(now()) @map("created_at")
+  id         String         @id @default(uuid()) @db.Char(36)
+  orgId      String         @map("org_id") @db.Char(36)
+  shareId    String         @map("share_id") @db.Char(36)
+  userId     String         @map("user_id") @db.Char(36)
+  permission SharePermission @default(VIEW)
+  createdAt  DateTime       @default(now()) @map("created_at")
 
   organization Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
   share        FolderShare @relation(fields: [shareId], references: [id], onDelete: Cascade)
@@ -1274,6 +1404,9 @@ model Session {
   revokedAt    DateTime?    @map("revoked_at")
   createdAt    DateTime     @default(now()) @map("created_at")
   lastSeenAt   DateTime     @default(now()) @map("last_seen_at")
+  ipAddress    String?      @map("ip_address")
+  userAgent    String?      @map("user_agent")
+  deviceId     String?      @map("device_id") @db.Char(36)
   organization Organization @relation(fields: [orgId], references: [id])
   user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
 
@@ -1444,6 +1577,80 @@ model FolderPermission {
   @@map("folder_permissions")
 }
 
+
+enum DlpAction {
+  BLOCK_EXTERNAL_SHARE
+  BLOCK_DOWNLOAD
+  BLOCK_COPY
+  BLOCK_PRINT
+  WARN_EXTERNAL_SHARE
+  WATERMARK
+}
+
+enum DlpScopeType {
+  ALL
+  SELECTED_FOLDERS
+  EXCLUDED_FOLDERS
+}
+
+model DlpClassificationLabel {
+  id          String       @id @default(uuid()) @db.Char(36)
+  orgId       String       @map("org_id") @db.Char(36)
+  name        String
+  description String?      @db.VarChar(500)
+  color       String?      @db.VarChar(7)
+  actions     Json          @default("[]")
+  manualOnly  Boolean      @default(true) @map("manual_only")
+  createdAt   DateTime     @default(now()) @map("created_at")
+  updatedAt   DateTime     @updatedAt @map("updated_at")
+  organization Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  policies    DlpPolicy[]
+  files       FileDlpLabel[]
+  @@unique([orgId, name])
+  @@index([orgId, createdAt])
+  @@map("dlp_classification_labels")
+}
+
+model DlpPolicy {
+  id            String        @id @default(uuid()) @db.Char(36)
+  orgId         String        @map("org_id") @db.Char(36)
+  name          String
+  description   String?       @db.VarChar(500)
+  enabled       Boolean       @default(true)
+  scopeType     DlpScopeType  @default(ALL) @map("scope_type")
+  folderIds     Json          @default("[]") @map("folder_ids")
+  keywords      Json          @default("[]")
+  extensions    Json          @default("[]")
+  caseSensitive Boolean       @default(false) @map("case_sensitive")
+  labelId       String        @map("label_id") @db.Char(36)
+  createdAt     DateTime      @default(now()) @map("created_at")
+  updatedAt     DateTime      @updatedAt @map("updated_at")
+  organization  Organization  @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  label         DlpClassificationLabel @relation(fields: [labelId], references: [id], onDelete: Cascade)
+  fileLabels    FileDlpLabel[]
+  @@index([orgId, enabled])
+  @@index([orgId, labelId])
+  @@map("dlp_policies")
+}
+
+model FileDlpLabel {
+  id        String   @id @default(uuid()) @db.Char(36)
+  orgId     String   @map("org_id") @db.Char(36)
+  fileId    String   @map("file_id") @db.Char(36)
+  labelId   String   @map("label_id") @db.Char(36)
+  policyId  String?  @map("policy_id") @db.Char(36)
+  source    String   @default("MANUAL") @db.VarChar(20)
+  createdAt DateTime @default(now()) @map("created_at")
+  organization Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  file      File @relation(fields: [fileId], references: [id], onDelete: Cascade)
+  label     DlpClassificationLabel @relation(fields: [labelId], references: [id], onDelete: Cascade)
+  policy    DlpPolicy? @relation(fields: [policyId], references: [id], onDelete: SetNull)
+  @@unique([fileId, labelId])
+  @@index([orgId, fileId])
+  @@index([orgId, labelId])
+  @@map("file_dlp_labels")
+}
+
 model SecurityPolicy {
   id                   String       @id @default(uuid()) @db.Char(36)
   orgId                String       @unique @map("org_id") @db.Char(36)
@@ -1543,7 +1750,14 @@ enum ConnectionShareRole {
   MANAGE
 }
 
+enum ConnectionType {
+  USER
+  SYSTEM
+  ADMIN
+}
+
 enum ConnectionStatus {
+  PENDING_AUTH
   ACTIVE
   REAUTH_REQUIRED
   DISABLED
@@ -1617,6 +1831,8 @@ model Connection {
   orgId        String               @map("org_id") @db.Char(36)
   ownerId      String               @map("owner_id") @db.Char(36)
   name         String
+  linkName     String               @map("link_name") @db.VarChar(191)
+  connectionType ConnectionType     @default(USER) @map("connection_type")
   provider     String
   authType     ConnectionAuthType   @map("auth_type")
   visibility   ConnectionVisibility @default(PRIVATE)
@@ -1637,12 +1853,16 @@ model Connection {
   secret       ConnectionSecret?
   secretVersions ConnectionSecretVersion[]
   usages       ConnectionUsage[]
+  healthChecks ConnectionHealthCheck[]
+  healthAlerts ConnectionHealthAlert[]
   shares       ConnectionShare[]
   oauthStates  ConnectionOAuthState[]
   externalStorageMounts ExternalStorageMount[]
 
   @@index([orgId, status, updatedAt])
+  @@unique([orgId, linkName])
   @@index([orgId, ownerId, provider])
+  @@index([orgId, connectionType, status])
   @@map("connections")
 }
 
@@ -1701,6 +1921,7 @@ model ConnectionOAuthState {
   connection   Connection? @relation(fields: [connectionId], references: [id], onDelete: Cascade)
   codeVerifier String?  @map("code_verifier") @db.Text
   folderId   String?   @map("folder_id") @db.Char(36)
+  returnPath  String?   @map("return_path") @db.VarChar(2000)
   expiresAt  DateTime  @map("expires_at")
   usedAt     DateTime? @map("used_at")
   createdAt  DateTime  @default(now()) @map("created_at")
@@ -1726,6 +1947,46 @@ model ConnectionShare {
   @@map("connection_shares")
 }
 
+model ConnectionHealthCheck {
+  id           String    @id @default(uuid()) @db.Char(36)
+  orgId        String    @map("org_id") @db.Char(36)
+  connectionId String    @map("connection_id") @db.Char(36)
+  status       String    @db.VarChar(40)
+  errorCode    String?   @map("error_code") @db.VarChar(80)
+  message      String?   @db.Text
+  latencyMs    Int?      @map("latency_ms")
+  source       String    @default("MANUAL") @db.VarChar(40)
+  checkedAt    DateTime  @default(now()) @map("checked_at")
+
+  organization Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  connection   Connection   @relation(fields: [connectionId], references: [id], onDelete: Cascade)
+
+  @@index([orgId, connectionId, checkedAt])
+  @@index([orgId, status, checkedAt])
+  @@map("connection_health_checks")
+}
+
+model ConnectionHealthAlert {
+  id           String    @id @default(uuid()) @db.Char(36)
+  orgId        String    @map("org_id") @db.Char(36)
+  connectionId String    @map("connection_id") @db.Char(36)
+  severity     String    @db.VarChar(20)
+  status       String    @default("OPEN") @db.VarChar(20)
+  errorCode    String?   @map("error_code") @db.VarChar(80)
+  message      String?   @db.Text
+  failureCount Int       @default(1) @map("failure_count")
+  openedAt     DateTime  @default(now()) @map("opened_at")
+  lastSeenAt   DateTime  @default(now()) @map("last_seen_at")
+  resolvedAt   DateTime? @map("resolved_at")
+
+  organization Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  connection   Connection   @relation(fields: [connectionId], references: [id], onDelete: Cascade)
+
+  @@index([orgId, connectionId, status, lastSeenAt])
+  @@index([orgId, status, lastSeenAt])
+  @@map("connection_health_alerts")
+}
+
 model ConnectionUsage {
   id           String    @id @default(uuid()) @db.Char(36)
   orgId        String    @map("org_id") @db.Char(36)
@@ -1735,6 +1996,9 @@ model ConnectionUsage {
   runId        String?   @map("run_id") @db.Char(36)
   actionType   String?   @map("action_type") @db.VarChar(100)
   status       String    @db.VarChar(40)
+  errorCode    String?   @map("error_code") @db.VarChar(80)
+  httpStatus   Int?      @map("http_status")
+  attempts     Int       @default(1)
   durationMs   Int?      @map("duration_ms")
   createdAt    DateTime  @default(now()) @map("created_at")
 
@@ -1744,6 +2008,7 @@ model ConnectionUsage {
 
   @@index([orgId, connectionId, createdAt])
   @@index([orgId, workflowId, createdAt])
+  @@index([orgId, connectionId, status, createdAt])
   @@map("connection_usages")
 }
 

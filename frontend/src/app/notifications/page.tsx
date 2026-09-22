@@ -5,9 +5,11 @@ import { useLocale } from "../../components/locale-provider";
 import { getOfficeNotificationPreferences, listNotifications, markAllNotificationsRead, markNotificationRead, updateOfficeNotificationPreferences, type NotificationRecord, type OfficeNotificationPreferences } from "../../lib/api/notifications";
 import { formatDateLocalized } from "../../lib/localized";
 import { Icons } from "../../components/layout/icons";
+import { useRouter } from "next/navigation";
 
 export default function NotificationsPage() {
   const { label, locale } = useLocale();
+  const router = useRouter();
   const ar = locale === "ar";
   const [items, setItems] = useState<NotificationRecord[]>([]);
   const [error, setError] = useState("");
@@ -109,7 +111,7 @@ export default function NotificationsPage() {
           ) : (
             <div>
               {items.map((n) => (
-                <article key={n.id} className={`flex items-start gap-3 border-b border-slate-100 px-5 py-4 last:border-b-0 ${n.readAt ? "bg-white" : "bg-[#F7F9FF]"}`}>
+                <article key={n.id} className={`flex items-start gap-3 border-b border-slate-100 px-5 py-4 last:border-b-0 ${n.readAt ? "bg-white" : "bg-[#F7F9FF]"} ${n.resourceType === "FILE" && n.resourceId ? "cursor-pointer" : ""}`} onClick={() => { if (n.resourceType === "FILE" && n.resourceId) router.push(`/files?openFileId=${n.resourceId}`); }}>
                   <span className={`mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-full ${n.readAt ? "bg-slate-100 text-slate-400" : "bg-[#EEF4FF] text-[#1B66EA]"}`}>
                     <Icons.bell size={16} />
                   </span>

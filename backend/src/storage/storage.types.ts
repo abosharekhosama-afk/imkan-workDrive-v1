@@ -15,6 +15,8 @@ export type StorageObjectRequest = {
   /** Server-side resource owner. Never taken from client orgId. */
   ownerOrgId: string;
   contentType?: string;
+  /** Expected SHA-256 for integrity verification of presigned uploads. */
+  checksum?: string;
   /**
    * Explicit physical storage key override. When a restored version re-points
    * at a historical version's bytes, the physical key (tenant_{orgId}/files/{f}/{v})
@@ -37,6 +39,12 @@ export interface StorageService {
   createUploadUrl(request: StorageObjectRequest): Promise<SignedUrlResult>;
   createDownloadUrl(request: StorageObjectRequest): Promise<SignedUrlResult>;
   assertObjectExists(request: StorageObjectRequest): Promise<void>;
+  /** Returns physical size and an authoritative SHA-256 when available. */
+  inspectObject(request: StorageObjectRequest): Promise<{ size: number; checksum: string | null }>;
+  createMultipartUpload(request: StorageObjectRequest): Promise<{ uploadId: string; objectKey: string }>;
+  uploadMultipartPart(request: StorageObjectRequest, uploadId: string, partNumber: number, bytes: Buffer, checksum: string): Promise<{ etag: string; size: number; checksum: string }>;
+  completeMultipartUpload(request: StorageObjectRequest, uploadId: string, parts: Array<{ partNumber: number; etag: string }>): Promise<void>;
+  abortMultipartUpload(request: StorageObjectRequest, uploadId: string): Promise<void>;
   /**
    * Verifies that the physical object behind an existing tenant storage key is
    * present (Render/S3/local disk). Used as the storage-integrity gate before a

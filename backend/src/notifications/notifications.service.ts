@@ -10,9 +10,10 @@ export type OfficeNotificationInput = {
   category: OfficeNotificationCategory;
   title: string;
   body?: string | null;
-  resourceType?: 'FILE' | 'FOLDER' | 'TEMPLATE' | null;
+  resourceType?: 'FILE' | 'FOLDER' | null;
   resourceId?: string | null;
   priority?: 'LOW' | 'NORMAL' | 'HIGH' | 'URGENT';
+  type?: 'SHARE'|'COMMENT'|'MENTION'|'INVITATION'|'FILE_UPLOADED'|'FILE_UPDATED'|'FILE_DELETED'|'FILE_RESTORED'|'VERSION_CREATED'|'VERSION_RESTORED'|'ACCESS_REQUEST'|'SYSTEM';
 };
 
 const streams = new Subject<{ userId: string; notification: any }>();
@@ -52,7 +53,7 @@ export class NotificationsService {
     const preferences = await this.prisma.officeNotificationPreference.findUnique({ where: { orgId_userId: { orgId: input.orgId, userId: input.userId } } });
     if (preferences && preferences[input.category] === false) return null;
     const row = await this.prisma.notification.create({ data: {
-      orgId: input.orgId, userId: input.userId, type: 'SYSTEM', title: input.title, body: input.body ?? null,
+      orgId: input.orgId, userId: input.userId, type: input.type ?? 'SYSTEM', title: input.title, body: input.body ?? null,
       priority: input.priority ?? 'NORMAL', resourceType: input.resourceType ?? null, resourceId: input.resourceId ?? null,
     }});
     streams.next({ userId: input.userId, notification: row });

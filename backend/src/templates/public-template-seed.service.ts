@@ -65,6 +65,20 @@ export class PublicTemplateSeedService implements OnModuleInit {
     const manifest = JSON.parse(await readFile(join(assetRoot, 'catalog-manifest.json'), 'utf8')) as CatalogItem[];
     let created = 0;
 
+    // Public templates use the catalog's curated categories too. Categories are
+    // created in the public library once and then reused by every seeded item.
+    const categoryIds = new Map<string, string>();
+    const categories = [...new Set(manifest.map((item) => item.category?.trim()).filter(Boolean))] as string[];
+    for (const name of categories) {
+      const category = await this.prisma.templateCategory.upsert({
+        where: { libraryId_name: { libraryId: library.id, name } },
+        create: { orgId: null, libraryId: library.id, name },
+        update: {},
+        select: { id: true },
+      });
+      categoryIds.set(name, category.id);
+    }
+
     const typeMap: Record<string, TemplateType> = {
       DOCUMENT: TemplateType.DOCUMENT,
       SPREADSHEET: TemplateType.SPREADSHEET,
@@ -89,7 +103,13 @@ export class PublicTemplateSeedService implements OnModuleInit {
         continue;
       }
       const existing = await this.prisma.template.findFirst({ where: { libraryId: library.id, name: item.name, status: { not: TemplateStatus.TRASHED } }, include: { versions: { orderBy: { versionNumber: 'desc' }, take: 1 } } });
-      if (existing?.versions[0]) continue;
+      const categoryId = categoryIds.get(item.category?.trim() || '') ?? null;
+      if (existing?.versions[0]) {
+        if (existing.categoryId !== categoryId) {
+          await this.prisma.template.update({ where: { id: existing.id }, data: { categoryId } });
+        }
+        continue;
+      }
       const templateId = existing?.id ?? randomUUID();
       const versionId = randomUUID();
       const bytes = await readFile(join(assetRoot, item.file));
@@ -98,8 +118,8 @@ export class PublicTemplateSeedService implements OnModuleInit {
       await this.storage.storeObject({ fileId: templateId, versionId, ownerOrgId: creator.id, storageKey, contentType: item.mime, publicAccess: true }, bytes);
       await this.prisma.$transaction(async (tx) => {
         const template = existing
-          ? await tx.template.update({ where: { id: templateId }, data: { status: TemplateStatus.ACTIVE, deletedAt: null, description: item.description, type: normalizedType, ownerId: null, orgId: null } })
-          : await tx.template.create({ data: { id: templateId, orgId: null, libraryId: library!.id, ownerId: null, name: item.name, description: item.description, type: normalizedType, status: TemplateStatus.ACTIVE } });
+          ? await tx.template.update({ where: { id: templateId }, data: { status: TemplateStatus.ACTIVE, deletedAt: null, description: item.description, type: normalizedType, categoryId, ownerId: null, orgId: null } })
+          : await tx.template.create({ data: { id: templateId, orgId: null, libraryId: library!.id, categoryId, ownerId: null, name: item.name, description: item.description, type: normalizedType, status: TemplateStatus.ACTIVE } });
         await tx.templateVersion.create({ data: { id: versionId, templateId: template.id, versionNumber: 1, storageKey, size: BigInt(bytes.length), mimeType: item.mime, extension: item.extension, sha256Hash, createdById: creator.id } });
       });
       created += 1;

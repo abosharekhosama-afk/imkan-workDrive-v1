@@ -58,6 +58,7 @@ export function FileBrowser({
   const searchParams = useSearchParams();
   const router = useRouter();
   const routeQuery = searchParams.get("query")?.trim() ?? "";
+  const openFileId = searchParams.get("openFileId");
   const [folders, setFolders] = useState<FolderRecord[]>([]);
   const [files, setFiles] = useState<FileRecord[]>([]);
   const [folderName, setFolderName] = useState<string | undefined>();
@@ -222,7 +223,21 @@ export function FileBrowser({
       const favorites = await listFavorites();
       setFavoriteIds(new Set(favorites.map((favorite) => favorite.resourceId)));
       if (routeQuery) {
-        const result = await searchNames(routeQuery);
+        const searchTypeMap: Record<string, string> = {
+          documents: 'DOCUMENT',
+          sheets: 'SPREADSHEET',
+          slides: 'PRESENTATION',
+          media: 'IMAGE',
+          audio: 'AUDIO',
+          archives: 'ARCHIVE',
+        };
+        const result = await searchNames(routeQuery, filter === 'folders' ? 'folders' : filter === 'all' ? 'all' : 'files', {
+          type: searchTypeMap[advancedFilter.type] ?? (advancedFilter.type === 'all' ? undefined : advancedFilter.type),
+          owner: advancedFilter.owner || undefined,
+          dateField: advancedFilter.dateField,
+          dateFrom: advancedFilter.dateFrom || undefined,
+          dateTo: advancedFilter.dateTo || undefined,
+        });
         setFolderName(undefined);
         setTeamFolderId(null);
         applyContents(result);
@@ -301,6 +316,20 @@ export function FileBrowser({
     setSearchActive(Boolean(routeQuery));
     void load();
   }, [load, routeQuery]);
+
+  useEffect(() => {
+    if (!openFileId) return;
+    let cancelled = false;
+    void (async () => {
+      try {
+        const detail = await getFileDetails(openFileId);
+        if (cancelled || !detail) return;
+        await onPreview("FILE", detail.id, detail.name, detail.mimeType ?? undefined, Number(detail.size ?? 0));
+        router.replace("/files", { scroll: false });
+      } catch { /* resource may no longer be accessible */ }
+    })();
+    return () => { cancelled = true; };
+  }, [openFileId, router]);
 
   // Legacy quick-create / inline-search forms were purged (Zoho parity):
   // creation flows through the + New toolbar menu and header search.

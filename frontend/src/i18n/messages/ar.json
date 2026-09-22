@@ -469,6 +469,7 @@
   "shared.noSharedItems": "لا توجد عناصر مشاركة.",
   "shared.owner": "المالك",
   "shared.permission": "الصلاحية",
+  "shared.perRecipient": "حسب المستخدم",
   "shared.publicLink": "رابط عام",
   "shared.recipients": "المستلمون",
   "shared.resource": "المورد",

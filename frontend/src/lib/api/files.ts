@@ -19,6 +19,48 @@ export function requestUpload(input: {
   });
 }
 
+export type ResumableUploadStartResponse = {
+  session_id: string;
+  file_id: string;
+  version_id: string;
+  part_size: number;
+  total_parts: number;
+  expires_at: string;
+};
+
+export type ResumableUploadState = {
+  session_id: string;
+  file_id: string;
+  version_id: string;
+  status: string;
+  part_size: number;
+  total_parts: number;
+  expected_size: string;
+  expected_sha256: string;
+  expires_at: string;
+  received_parts: Array<{ part_number: number; size: number; checksum: string; etag: string | null }>;
+};
+
+export function startResumableUpload(input: { name: string; folder_id: string | null; size: number; mime_type: string; sha256: string; part_size?: number }) {
+  return apiRequest<ResumableUploadStartResponse>("/files/upload-sessions", { method: "POST", body: JSON.stringify(input) });
+}
+
+export function getResumableUpload(sessionId: string) {
+  return apiRequest<ResumableUploadState>(`/files/upload-sessions/${sessionId}`);
+}
+
+export function completeResumableUpload(sessionId: string) {
+  return apiRequest<{ status: string }>(`/files/upload-sessions/${sessionId}/complete`, { method: "POST" });
+}
+
+export function abortResumableUpload(sessionId: string) {
+  return apiRequest<{ aborted: boolean }>(`/files/upload-sessions/${sessionId}`, { method: "DELETE" });
+}
+
+export function cleanupExpiredResumableUploads() {
+  return apiRequest<{ cleaned: number }>("/files/upload-sessions/cleanup-expired", { method: "POST" });
+}
+
 export function completeUpload(upload_id: string): Promise<{ status: string }> {
   return apiRequest("/files/upload-complete", {
     method: "POST",
@@ -69,3 +111,6 @@ export type FileDetailsResponse = {
 
 export function getFileDetails(id: string) { return apiRequest<FileDetailsResponse>(`/files/${id}/details`); }
 
+
+export type FileDlpDecision={fileId:string;labels:Array<{id:string;name:string;color?:string|null;actions:string[];source:string}>;blocked:{download:boolean;copy:boolean;print:boolean;externalShare:boolean};warning:boolean;watermark:{enabled:boolean;text:string|null}};
+export const getFileDlp=(id:string)=>apiRequest<FileDlpDecision>(`/files/${id}/dlp`);

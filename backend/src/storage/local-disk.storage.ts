@@ -1,4 +1,6 @@
-import { access, copyFile, mkdir, readFile, unlink, writeFile } from 'node:fs/promises';
+import { access, appendFile, copyFile, mkdir, readFile, stat, unlink, writeFile, rm, rename } from 'node:fs/promises';
+import { createHash, randomUUID } from 'node:crypto';
+import { createReadStream } from 'node:fs';
 import { dirname, resolve, sep } from 'node:path';
 import {
   BadRequestException,
@@ -71,6 +73,96 @@ export class LocalDiskStorageAdapter implements StorageService {
       objectKey,
       expiresInSeconds,
     };
+  }
+
+  async createMultipartUpload(request: StorageObjectRequest): Promise<{ uploadId: string; objectKey: string }> {
+    const orgId = this.authorize(request);
+    const objectKey = request.storageKey ?? buildTenantObjectKey(orgId, request.fileId, request.versionId);
+    const uploadId = randomUUID();
+    await mkdir(this.multipartDir(uploadId), { recursive: true });
+    await writeFile(this.multipartManifestPath(uploadId), JSON.stringify({ objectKey, ownerOrgId: orgId, fileId: request.fileId, versionId: request.versionId, contentType: request.contentType, checksum: request.checksum ?? null }));
+    return { uploadId, objectKey };
+  }
+
+  async uploadMultipartPart(request: StorageObjectRequest, uploadId: string, partNumber: number, bytes: Buffer, checksum: string): Promise<{ etag: string; size: number; checksum: string }> {
+    const orgId = this.authorize(request);
+    if (!Number.isInteger(partNumber) || partNumber < 1) throw new BadRequestException('Invalid part number');
+    const manifest = await this.readMultipartManifest(uploadId);
+    if (manifest.ownerOrgId !== orgId || manifest.fileId !== request.fileId || manifest.versionId !== request.versionId) throw new ForbiddenException('Multipart upload does not belong to this organization');
+    const actual = createHash('sha256').update(bytes).digest('hex');
+    if (actual !== checksum.toLowerCase()) throw new BadRequestException('Multipart part checksum mismatch');
+    await writeFile(resolve(this.multipartDir(uploadId), `part_${partNumber}`), bytes);
+    return { etag: actual, size: bytes.length, checksum: actual };
+  }
+
+  async completeMultipartUpload(request: StorageObjectRequest, uploadId: string, parts: Array<{ partNumber: number; etag: string }>): Promise<void> {
+    const orgId = this.authorize(request);
+    const manifest = await this.readMultipartManifest(uploadId);
+    if (manifest.ownerOrgId !== orgId || manifest.fileId !== request.fileId || manifest.versionId !== request.versionId) throw new ForbiddenException('Multipart upload does not belong to this organization');
+    const ordered = [...parts].sort((a,b) => a.partNumber - b.partNumber);
+    if (!ordered.length) throw new BadRequestException('Multipart upload has no parts');
+    for (let i = 0; i < ordered.length; i += 1) {
+      if (!Number.isInteger(ordered[i].partNumber) || ordered[i].partNumber !== i + 1 || !ordered[i].etag) {
+        throw new BadRequestException('Multipart parts must be contiguous and ordered from part 1');
+      }
+    }
+    const finalPath = this.resolveObjectPath(manifest.objectKey);
+    await mkdir(dirname(finalPath), { recursive: true });
+    // Build the object in a sibling temporary file. Never truncate/replace the
+    // destination until every part has been read and integrity-checked. This
+    // keeps a failed completion from leaving a partial physical object.
+    const tempPath = `${finalPath}.multipart-${uploadId}.tmp`;
+    try {
+      await writeFile(tempPath, Buffer.alloc(0));
+      for (const part of ordered) {
+        const partPath = resolve(this.multipartDir(uploadId), `part_${part.partNumber}`);
+        let bytes: Buffer;
+        try {
+          bytes = await readFile(partPath);
+        } catch {
+          throw new BadRequestException(`Multipart part ${part.partNumber} is missing`);
+        }
+        const checksum = createHash('sha256').update(bytes).digest('hex');
+        if (checksum !== part.etag.replace(/^"|"$/g, '').toLowerCase()) {
+          throw new BadRequestException(`Multipart part ${part.partNumber} checksum mismatch`);
+        }
+        await appendFile(tempPath, bytes);
+      }
+      await rename(tempPath, finalPath);
+    } finally {
+      await rm(tempPath, { force: true }).catch(() => undefined);
+    }
+    await rm(this.multipartDir(uploadId), { recursive: true, force: true });
+  }
+
+  async abortMultipartUpload(request: StorageObjectRequest, uploadId: string): Promise<void> {
+    const orgId = this.authorize(request);
+    const manifest = await this.readMultipartManifest(uploadId);
+    if (manifest.ownerOrgId !== orgId) throw new ForbiddenException('Multipart upload does not belong to this organization');
+    await rm(this.multipartDir(uploadId), { recursive: true, force: true });
+  }
+
+  async inspectObject(
+    request: StorageObjectRequest,
+  ): Promise<{ size: number; checksum: string | null }> {
+    const orgId = this.authorize(request);
+    const objectKey = request.publicAccess
+      ? (request.storageKey ?? buildPublicTemplateObjectKey(request.fileId, request.versionId))
+      : (request.storageKey ?? buildTenantObjectKey(orgId, request.fileId, request.versionId));
+    const path = this.resolveObjectPath(objectKey);
+    try {
+      const info = await stat(path);
+      const hash = createHash('sha256');
+      await new Promise<void>((resolvePromise, reject) => {
+        const stream = createReadStream(path);
+        stream.on('data', (chunk) => hash.update(chunk));
+        stream.on('end', () => resolvePromise());
+        stream.on('error', reject);
+      });
+      return { size: info.size, checksum: hash.digest('hex') };
+    } catch {
+      throw new NotFoundException('Uploaded object was not found');
+    }
   }
 
   async assertObjectExists(request: StorageObjectRequest): Promise<void> {
@@ -194,6 +286,26 @@ export class LocalDiskStorageAdapter implements StorageService {
     return this.resolveObjectPath(payload.objectKey);
   }
 
+  private multipartDir(uploadId: string): string {
+    const root = resolve(this.localRoot());
+    const safe = uploadId.replace(/[^a-zA-Z0-9_-]/g, '');
+    if (!safe) throw new BadRequestException('Invalid multipart upload id');
+    return resolve(root, '_multipart', safe);
+  }
+
+  private multipartManifestPath(uploadId: string): string {
+    return resolve(this.multipartDir(uploadId), 'manifest.json');
+  }
+
+  private async readMultipartManifest(uploadId: string): Promise<{ objectKey: string; ownerOrgId: string; fileId: string; versionId: string }> {
+    try {
+      const raw = await readFile(this.multipartManifestPath(uploadId), 'utf8');
+      return JSON.parse(raw);
+    } catch {
+      throw new NotFoundException('Multipart upload session not found');
+    }
+  }
+
   resolveObjectPath(objectKey: string): string {
     const root = resolve(this.localRoot());
     const target = isPublicTemplateObjectKey(objectKey)
@@ -215,6 +327,12 @@ export class LocalDiskStorageAdapter implements StorageService {
       throw new ForbiddenException(
         'Resource does not belong to this organization',
       );
+    }
+    if (request.storageKey) {
+      const parsed = parseTenantObjectKey(request.storageKey);
+      if (parsed.orgId !== orgId) {
+        throw new ForbiddenException('Storage key does not belong to this organization');
+      }
     }
     return orgId;
   }

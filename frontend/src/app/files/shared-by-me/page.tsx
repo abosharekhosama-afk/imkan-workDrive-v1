@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useLocale } from "../../../components/locale-provider";
-import { listSharedByMe, type SharedItem } from "../../../lib/api/shared";
+import { listSharedByMe, updateShareRecipientPermission, type SharedItem } from "../../../lib/api/shared";
 
 function statusBadge(status?: string): { className: string; text: string } {
   switch (status) {
@@ -20,6 +20,7 @@ export default function SharedByMePage() {
   const [rows, setRows] = useState<SharedItem[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [updating, setUpdating] = useState<string | null>(null);
 
   useEffect(() => {
     let active = true;
@@ -101,18 +102,50 @@ export default function SharedByMePage() {
                     <td>
                       {r.recipients && r.recipients.length > 0 ? (
                         <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
-                          {r.recipients.map((recipient) => (
-                            <span key={recipient.userId} className="wd-badge wd-badge-gray">
-                              {recipient.user?.name || recipient.user?.email || recipient.userId.slice(0, 8)}
-                            </span>
-                          ))}
+                          {r.recipients.map((recipient) => {
+                            const key = `${r.id}:${recipient.userId}`;
+                            return (
+                              <div key={recipient.userId} className="flex items-center gap-1">
+                                <span className="wd-badge wd-badge-gray">
+                                  {recipient.user?.name || recipient.user?.email || recipient.userId.slice(0, 8)}
+                                </span>
+                                <select
+                                  aria-label={`${recipient.user?.name || recipient.user?.email || recipient.userId} permission`}
+                                  value={recipient.permission ?? r.permission ?? "VIEW"}
+                                  disabled={updating === key}
+                                  className="wd-input !w-auto !min-w-20 !py-1 text-xs"
+                                  onChange={async (event) => {
+                                    const next = event.target.value;
+                                    setUpdating(key);
+                                    try {
+                                      await updateShareRecipientPermission(r.id, recipient.userId, next);
+                                      setRows((current) => current.map((item) => item.id !== r.id ? item : ({
+                                        ...item,
+                                        recipients: item.recipients?.map((entry) => entry.userId === recipient.userId ? { ...entry, permission: next } : entry),
+                                      })));
+                                    } catch {
+                                      setError(label("error.generic"));
+                                    } finally {
+                                      setUpdating(null);
+                                    }
+                                  }}
+                                >
+                                  <option value="VIEW">VIEW</option>
+                                  <option value="COMMENT">COMMENT</option>
+                                  <option value="EDIT">EDIT</option>
+                                  <option value="ORGANIZE">ORGANIZE</option>
+                                  <option value="FULL_ACCESS">FULL_ACCESS</option>
+                                </select>
+                              </div>
+                            );
+                          })}
                         </div>
                       ) : (
                         <span className="wd-badge wd-badge-blue">{label("shared.publicLink")}</span>
                       )}
                     </td>
                     <td>
-                      <span className="wd-badge wd-badge-gray">{r.permission ?? "—"}</span>
+                      <span className="wd-badge wd-badge-gray">{r.recipients?.length ? label("shared.perRecipient") : (r.permission ?? "—")}</span>
                     </td>
                     <td>
                       <span className={badge.className}>{label(badge.text as Parameters<typeof label>[0])}</span>

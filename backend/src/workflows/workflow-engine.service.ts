@@ -6,6 +6,7 @@ import { PermissionService } from '../permissions/permission.service';
 import { SharesService } from '../shares/shares.service';
 import type { AccessTokenPayload } from '../auth/jwt.types';
 import { dynamicValueCatalog, evaluateCondition, walkDynamicValues, resolveDynamicValue } from './workflow-runtime';
+import { addWorkflowBusinessMinutes } from './workflow-calendar';
 import { CustomFunctionExecutor } from './custom-function.executor';
 import { ConnectionsService } from '../connections/connections.service';
 import { TemplatesService } from '../templates/templates.service';
@@ -301,7 +302,7 @@ export class WorkflowEngineService implements OnModuleInit, OnModuleDestroy {
       for (let i = 0; i < actions.length; i++) {
         const action = this.resolveAction(actions[i], event, fields, { workflowId, runId, user: { id: user.sub, email: (user as AccessTokenPayload & { email?: string }).email, name: (user as AccessTokenPayload & { name?: string }).name } }); if (continuation && action.type === 'request_approval') { results.push({ phase: phaseName, output: { action: 'request_approval', skipped: true, reason: 'approval already satisfied by the selected task transition' } }); continue; } if (calendarConfig && action.config) action.config.calendarConfig = calendarConfig; const step = await this.prisma.workflowStepRun.create({ data: { orgId: user.org_id, runId, stepKind: `TRANSITION:${transition.name}:${phaseName}:${action.type}`, stepPosition: existingResults.length + results.length, status: 'RUNNING', input: action as unknown as Prisma.InputJsonValue } });
         try { const output = await this.executeAction(user, event, action, workflowId, runId, step.id); results.push({ phase: phaseName, output }); await this.prisma.workflowStepRun.update({ where: { id: step.id }, data: { status: 'SUCCEEDED', output: output as unknown as Prisma.InputJsonValue, finishedAt: new Date() } }); await this.recordAudit(user.org_id, user.sub, 'WORKFLOW_ACTION_EXECUTED', 'WORKFLOW_RUN', runId, { workflowId, transitionId: transition.id, phase: phaseName, action: action.type }); if ((output as { waiting?: boolean } | null)?.waiting) return { results, waiting: true, pendingTransitionIds: [] as string[], continuation }; }
-        catch (error) { const message = error instanceof Error ? error.message : String(error); await this.prisma.workflowStepRun.update({ where: { id: step.id }, data: { status: 'FAILED', error: message, finishedAt: new Date() } }); throw error; }
+        catch (error) { const message = error instanceof Error ? error.message : String(error); const connectionFailure = error && typeof error === 'object' && 'connectionFailure' in error ? (error as any).connectionFailure : null; const stepError = connectionFailure ? JSON.stringify({ message, ...connectionFailure }) : message; await this.prisma.workflowStepRun.update({ where: { id: step.id }, data: { status: 'FAILED', error: stepError, finishedAt: new Date() } }); throw error; }
       }
     }
     return { results, waiting: false, pendingTransitionIds: [] as string[], continuation };
@@ -313,11 +314,7 @@ export class WorkflowEngineService implements OnModuleInit, OnModuleDestroy {
   }
 
   private addBusinessMinutes(start: Date, minutes: number, config?: Record<string, unknown>) {
-    const days = Array.isArray(config?.workingDays) ? config!.workingDays.map(Number) : [1,2,3,4,5];
-    const startHour = Number(String(config?.workStart ?? '09:00').split(':')[0]); const endHour = Number(String(config?.workEnd ?? '17:00').split(':')[0]);
-    const holidays = new Set(Array.isArray(config?.holidays) ? config!.holidays.map(String) : []);
-    let d = new Date(start); let remaining = Math.max(0, minutes);
-    while (remaining > 0) { const day=d.getDay(); const iso=d.toISOString().slice(0,10); const usable=days.includes(day === 0 ? 7 : day) && !holidays.has(iso); if (usable) { const dayEnd=new Date(d); dayEnd.setHours(endHour,0,0,0); const dayStart=new Date(d); dayStart.setHours(startHour,0,0,0); if(d<dayStart)d=dayStart; if(d<dayEnd){ const available=Math.min(remaining, Math.floor((dayEnd.getTime()-d.getTime())/60000)); d=new Date(d.getTime()+available*60000); remaining-=available; if(remaining<=0)break; } } d.setDate(d.getDate()+1); d.setHours(startHour,0,0,0); } return d;
+    return addWorkflowBusinessMinutes(start, minutes, config);
   }
 
   private resolveAction(action: WorkflowAction, event: WorkflowFileEvent, fields: Record<string, unknown>, context?: { workflowId?: string; workflowName?: string; runId?: string; user?: { id?: string; email?: string; name?: string } }): WorkflowAction {
@@ -440,8 +437,10 @@ export class WorkflowEngineService implements OnModuleInit, OnModuleDestroy {
         const maxResponseBytes = Number.isFinite(configuredMax) ? Math.min(20000, Math.max(256, Math.floor(configuredMax))) : 20000;
         const retries = Number.isFinite(Number(config.retries)) ? Math.min(3, Math.max(0, Math.floor(Number(config.retries)))) : 0;
         const idempotencyKey = typeof config.idempotencyKey === 'string' && config.idempotencyKey.trim() ? await this.renderWorkflowText(config.idempotencyKey, user, event, workflowId, runId) : `workflow:${runId}:${workflowId}:${stepId ?? connectionId}`;
-        const result = await this.connections.executeWorkflowRest(user, connectionId, method, resolvedPath, body, headers, { responseMode, jsonPath: typeof config.jsonPath === 'string' ? config.jsonPath : undefined, maxResponseBytes, retries, idempotencyKey, workflowId, runId });
-        if (!result.ok) throw new Error(`HTTP ${result.status}: ${typeof result.body === 'string' ? result.body.slice(0,500) : 'request failed'}`);
+        let result: any;
+        try { result = await this.connections.executeWorkflowRest(user, connectionId, method, resolvedPath, body, headers, { responseMode, jsonPath: typeof config.jsonPath === 'string' ? config.jsonPath : undefined, maxResponseBytes, retries, idempotencyKey, workflowId, runId }); }
+        catch (error) { const enriched = error instanceof Error ? error : new Error(String(error)); (enriched as any).connectionFailure = { type: 'CONNECTION', connectionId, method, status: (error as any)?.status ?? null, code: (error as any)?.response?.code ?? (error as any)?.code ?? null, workflowId, runId }; throw enriched; }
+        if (!result.ok) { const error = new Error(`HTTP ${result.status}: ${typeof result.body === 'string' ? result.body.slice(0,500) : 'request failed'}`); (error as any).connectionFailure = { type: 'CONNECTION', connectionId, method, status: result.status, code: `HTTP_${result.status}`, workflowId, runId }; throw error; }
         if (outputFieldId) {
           const run = await this.prisma.workflowRun.findUnique({ where: { id: runId }, select: { result: true } });
           const previous = run?.result && typeof run.result === 'object' ? run.result as Record<string, unknown> : {};

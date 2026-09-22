@@ -141,3 +141,18 @@ export function submitOfficeOperation(fileId: string, input: { opId: string; bas
 export function submitWriterOperation(fileId: string, input: { opId: string; baseRevision: number; patches: any[]; sessionId?: string; clientId?: string; sequence?: number }) {
   return submitOfficeOperation(fileId, input);
 }
+
+export type OfficeDocumentVersion = {
+  id: string;
+  versionNumber: number;
+  revision: number;
+  type: OfficeType;
+  contentHash: string;
+  label?: string | null;
+  createdAt: string;
+  createdBy: { id: string; name?: string | null; email: string; avatarUrl?: string | null };
+};
+export function listOfficeDocumentVersions(fileId: string) { return apiRequest<OfficeDocumentVersion[]>(`/office/files/${fileId}/versions`); }
+export function restoreOfficeDocumentVersion(fileId: string, versionId: string, expectedRevision?: number) {
+  return apiRequest<OfficeDocument>(`/office/files/${fileId}/versions/${versionId}/restore`, { method: 'POST', body: JSON.stringify({ expectedRevision }) });
+}

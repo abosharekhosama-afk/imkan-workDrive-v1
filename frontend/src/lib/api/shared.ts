@@ -2,6 +2,7 @@ import { apiRequest } from "./client";
 
 export type SharedRecipient = {
   userId: string;
+  permission?: string;
   user?: { id: string; name: string | null; email: string };
 };
 
@@ -31,4 +32,12 @@ export function listSharedWithMe(): Promise<SharedItem[]> {
 
 export function listSharedByMe(): Promise<SharedItem[]> {
   return apiRequest<SharedItem[]>("/shares/by-me");
+}
+
+
+export function updateShareRecipientPermission(shareId: string, userId: string, permission: string): Promise<{ shareId: string; userId: string; permission: string }> {
+  return apiRequest(`/shares/${encodeURIComponent(shareId)}/recipients/${encodeURIComponent(userId)}`, {
+    method: "PATCH",
+    body: JSON.stringify({ permission }),
+  });
 }

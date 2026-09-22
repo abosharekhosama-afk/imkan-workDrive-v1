@@ -1,11 +1,22 @@
-import { Body, Controller, Get, Param, Patch, Post, Query } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Patch, Post, Query } from '@nestjs/common';
 import { CurrentUser } from '../auth/current-user.decorator';
 import type { AccessTokenPayload } from '../auth/jwt.types';
 import { EnterpriseService } from './enterprise.service';
+import { DlpService } from '../dlp/dlp.service';
 
 @Controller('admin/enterprise')
 export class EnterpriseController {
-  constructor(private readonly service: EnterpriseService) {}
+  constructor(private readonly service: EnterpriseService, private readonly dlp: DlpService) {}
+  @Get('security-center') securityCenter(@CurrentUser() u: AccessTokenPayload) { return this.service.securityCenter(u); }
+  @Delete('sessions/:sessionId') revokeUserSession(@CurrentUser() u: AccessTokenPayload, @Param('sessionId') id: string) { return this.service.revokeUserSession(u, id); }
+
+  @Get('dlp/labels') dlpLabels(@CurrentUser() u: AccessTokenPayload) { return this.dlp.listLabels(u); }
+  @Post('dlp/labels') createDlpLabel(@CurrentUser() u: AccessTokenPayload, @Body() b: any) { return this.dlp.createLabel(u, b); }
+  @Delete('dlp/labels/:id') deleteDlpLabel(@CurrentUser() u: AccessTokenPayload, @Param('id') id: string) { return this.dlp.deleteLabel(u, id); }
+  @Get('dlp/policies') dlpPolicies(@CurrentUser() u: AccessTokenPayload) { return this.dlp.listPolicies(u); }
+  @Post('dlp/policies') createDlpPolicy(@CurrentUser() u: AccessTokenPayload, @Body() b: any) { return this.dlp.createPolicy(u, b); }
+  @Patch('dlp/policies/:id') updateDlpPolicy(@CurrentUser() u: AccessTokenPayload, @Param('id') id: string, @Body() b: any) { return this.dlp.updatePolicy(u, id, b); }
+  @Delete('dlp/policies/:id') deleteDlpPolicy(@CurrentUser() u: AccessTokenPayload, @Param('id') id: string) { return this.dlp.deletePolicy(u, id); }
   @Get('dashboard') dashboard(@CurrentUser() u: AccessTokenPayload) { return this.service.dashboard(u); }
   @Get('groups') groups(@CurrentUser() u: AccessTokenPayload) { return this.service.groups(u); }
   @Post('groups') createGroup(@CurrentUser() u: AccessTokenPayload, @Body() b: { name: string; description?: string }) { return this.service.createGroup(u, b.name, b.description); }

@@ -21,14 +21,13 @@ import {
   hashSecret,
   verifySecret,
 } from '../crypto/secret-hash';
-import {
-  PermissionService,
-  type AccessibleResource,
-} from '../permissions/permission.service';
+import type { AccessibleResource } from '../permissions/permission.service';
+import { EffectivePermissionService } from '../permissions/effective-permission.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { STORAGE_SERVICE, type StorageService } from '../storage/storage.types';
 import type { CreateShareInput } from './create-share.schema';
 import { OfficeEmailService } from '../office-email/office-email.service';
+import { DlpService } from '../dlp/dlp.service';
 
 export type CreateShareResponse = {
   link_url: string;
@@ -55,18 +54,21 @@ const SHARE_PERMISSIONS: SharePermission[] = [
 export class SharesService {
   constructor(
     private readonly prisma: PrismaService,
-    private readonly permissions: PermissionService,
+    private readonly effective: EffectivePermissionService,
     private readonly config: ConfigService,
     @Inject(STORAGE_SERVICE) private readonly storage: StorageService,
     private readonly email: OfficeEmailService,
+    private readonly dlp: DlpService,
   ) {}
 
   async createShare(user: AccessTokenPayload, input: CreateShareInput): Promise<CreateShareResponse> {
     const resource = await this.loadOwnedResource(input.resourceType, input.resourceId);
     if (!resource || resource.orgId !== user.org_id) throw new NotFoundException('Resource not found');
-    const access = await this.withTeamFolderRole(user, resource);
-    if (!this.permissions.canRead(user, access)) throw new NotFoundException('Resource not found');
-    if (!this.permissions.canShare(user, access)) throw new ForbiddenException('Not allowed to share this resource');
+    const access = await this.effective.resolve(user, input.resourceType, input.resourceId);
+    if (!access.allowed) throw new NotFoundException('Resource not found');
+    if (!await this.effective.canShare(user, input.resourceType, input.resourceId)) throw new ForbiddenException('Not allowed to share this resource');
+    if (input.resourceType === ResourceType.FILE) await this.dlp.assertAllowed(user, input.resourceId, 'EXTERNAL_SHARE');
+    else await this.dlp.assertFolderExternalShare(user, input.resourceId);
 
     if (resource.teamFolderId) {
       const teamFolder = await this.prisma.teamFolder.findFirst({ where: { id: resource.teamFolderId, orgId: user.org_id }, select: { allowExternalSharing: true } });
@@ -89,12 +91,13 @@ export class SharesService {
 
     await this.prisma.$transaction(async (tx) => {
       if (input.resourceType === ResourceType.FILE) {
-        await tx.fileShare.create({ data: { orgId: user.org_id, fileId: input.resourceId, createdById: user.sub, permission: input.permission as SharePermission, status: ShareStatus.ACTIVE, linkToken, passwordHash, expiresAt: input.expiresAt ?? null, canDownload: input.canDownload, recipients: recipients.length ? { create: recipients.map(r => ({ orgId: user.org_id, userId: r.userId })) } : undefined } });
+        await tx.fileShare.create({ data: { orgId: user.org_id, fileId: input.resourceId, createdById: user.sub, permission: input.permission as SharePermission, status: ShareStatus.ACTIVE, linkToken, passwordHash, expiresAt: input.expiresAt ?? null, canDownload: input.canDownload, recipients: recipients.length ? { create: recipients.map(r => ({ orgId: user.org_id, userId: r.userId, permission: input.permission as SharePermission })) } : undefined } });
         await tx.fileActivity.create({ data: { orgId: user.org_id, fileId: input.resourceId, userId: user.sub, action: AuditAction.SHARE, metadata: { recipientCount: recipients.length, permission: input.permission, publicLink: recipients.length === 0 } } });
       } else {
-        await tx.folderShare.create({ data: { orgId: user.org_id, folderId: input.resourceId, createdById: user.sub, permission: input.permission as SharePermission, status: ShareStatus.ACTIVE, linkToken, passwordHash, expiresAt: input.expiresAt ?? null, canDownload: input.canDownload, recipients: recipients.length ? { create: recipients.map(r => ({ orgId: user.org_id, userId: r.userId })) } : undefined } });
+        await tx.folderShare.create({ data: { orgId: user.org_id, folderId: input.resourceId, createdById: user.sub, permission: input.permission as SharePermission, status: ShareStatus.ACTIVE, linkToken, passwordHash, expiresAt: input.expiresAt ?? null, canDownload: input.canDownload, recipients: recipients.length ? { create: recipients.map(r => ({ orgId: user.org_id, userId: r.userId, permission: input.permission as SharePermission })) } : undefined } });
       }
       await tx.auditLog.create({ data: { orgId: user.org_id, actorId: user.sub, action: 'SHARE_CREATED', resourceType: input.resourceType, resourceId: input.resourceId } });
+      await tx.accessEvent.create({ data: { orgId: user.org_id, userId: user.sub, resourceType: input.resourceType, resourceId: input.resourceId, action: 'SHARE' } });
     });
     const base = this.config.get<string>('PUBLIC_APP_URL') ?? '';
     const linkUrl = `${base}/share/public?token=${encodeURIComponent(linkToken)}`;
@@ -117,7 +120,7 @@ Open the shared resource: ${linkUrl}` ,
     const folderRows = await this.prisma.folderShareRecipient.findMany({ where: { orgId: user.org_id, userId: user.sub }, include: { share: { include: { folder: { include: { owner: { select: { id: true, name: true, email: true } } } } } } } });
     const folderResults = folderRows.flatMap((row: any) => {
       const share = row.share; const folder = share.folder; if (!folder || share.status !== ShareStatus.ACTIVE || this.isInactive(share.expiresAt)) return [];
-      return [{ id: share.id, resourceType: ResourceType.FOLDER, resourceId: folder.id, name: folder.name, owner: folder.owner, permission: share.permission, canDownload: share.canDownload, createdAt: folder.updatedAt, updatedAt: folder.updatedAt, expiresAt: share.expiresAt }];
+      return [{ id: share.id, resourceType: ResourceType.FOLDER, resourceId: folder.id, name: folder.name, owner: folder.owner, permission: row.permission ?? share.permission, canDownload: share.canDownload, createdAt: folder.updatedAt, updatedAt: folder.updatedAt, expiresAt: share.expiresAt }];
     });
     const rows = await this.prisma.fileShareRecipient.findMany({
       where: { orgId: user.org_id, userId: user.sub },
@@ -162,7 +165,7 @@ Open the shared resource: ${linkUrl}` ,
         resourceId: share.fileId,
         name: resource.name,
         owner: resource.owner,
-        permission: share.permission,
+        permission: row.permission ?? share.permission,
         canDownload: share.canDownload,
         createdAt: resource.createdAt,
         updatedAt: resource.updatedAt,
@@ -203,6 +206,7 @@ Open the shared resource: ${linkUrl}` ,
         permission: row.permission,
         recipients: row.recipients.map((recipient) => ({
           userId: recipient.userId,
+          permission: recipient.permission,
           user: recipient.user,
         })),
         expiresAt: row.expiresAt,
@@ -213,7 +217,7 @@ Open the shared resource: ${linkUrl}` ,
     const folderRows = await this.prisma.folderShare.findMany({ where: { orgId: user.org_id, createdById: user.sub }, include: { folder: { select: { id: true, name: true } }, recipients: { include: { user: { select: { id: true, name: true, email: true } } } } } });
     for (const row of folderRows) {
       if (!row.recipients.length && !row.linkToken) continue;
-      result.push({ id: row.id, resourceType: ResourceType.FOLDER, resourceId: row.folderId, linkUrl: `${this.config.get<string>('PUBLIC_APP_URL') ?? ''}/share/public?token=${encodeURIComponent(row.linkToken)}`, name: row.folder?.name ?? null, status: row.status, permission: row.permission, recipients: row.recipients.map((r: any) => ({ userId: r.userId, user: r.user })), expiresAt: row.expiresAt, revokedAt: row.revokedAt });
+      result.push({ id: row.id, resourceType: ResourceType.FOLDER, resourceId: row.folderId, linkUrl: `${this.config.get<string>('PUBLIC_APP_URL') ?? ''}/share/public?token=${encodeURIComponent(row.linkToken)}`, name: row.folder?.name ?? null, status: row.status, permission: row.permission, recipients: row.recipients.map((r: any) => ({ userId: r.userId, permission: r.permission, user: r.user })), expiresAt: row.expiresAt, revokedAt: row.revokedAt });
     }
     return result;
   }
@@ -223,11 +227,12 @@ Open the shared resource: ${linkUrl}` ,
     const folderShare = await this.prisma.folderShare.findFirst({ where: { id: shareId, orgId: user.org_id } });
     if (folderShare) {
       const folder = await this.prisma.folder.findFirst({ where: { id: folderShare.folderId, orgId: user.org_id } });
-      if (!folder || !this.permissions.canShare(user, await this.toFolderResource(user, folder))) throw new ForbiddenException('Not allowed to manage this share');
+      if (!folder || !(await this.effective.canShare(user, ResourceType.FOLDER, folder.id))) throw new ForbiddenException('Not allowed to manage this share');
       const recipient = await this.prisma.folderShareRecipient.findFirst({ where: { shareId, userId, orgId: user.org_id } });
       if (!recipient) throw new NotFoundException('Recipient access not found');
-      await this.prisma.folderShare.update({ where: { id: shareId }, data: { permission: permission as SharePermission } });
+      await this.prisma.folderShareRecipient.update({ where: { id: recipient.id }, data: { permission: permission as SharePermission } });
       await this.prisma.auditLog.create({ data: { orgId: user.org_id, actorId: user.sub, action: 'SHARE_PERMISSION_CHANGED', resourceType: ResourceType.FOLDER, resourceId: folderShare.folderId } });
+      await this.prisma.accessEvent.create({ data: { orgId: user.org_id, userId: user.sub, resourceType: ResourceType.FOLDER, resourceId: folderShare.folderId, action: 'SHARE' } });
       return { shareId, userId, permission };
     }
 
@@ -248,9 +253,7 @@ Open the shared resource: ${linkUrl}` ,
 
     if (!resource) throw new NotFoundException('Resource not found');
 
-    const access = await this.withTeamFolderRole(user, resource);
-
-    if (!this.permissions.canShare(user, access)) {
+    if (!(await this.effective.canShare(user, ResourceType.FILE, share.fileId))) {
       throw new ForbiddenException('Not allowed to manage this share');
     }
 
@@ -261,8 +264,8 @@ Open the shared resource: ${linkUrl}` ,
     if (!recipient) throw new NotFoundException('Recipient access not found');
 
     await this.prisma.$transaction([
-      this.prisma.fileShare.update({
-        where: { id: share.id },
+      this.prisma.fileShareRecipient.update({
+        where: { id: recipient.id },
         data: { permission: permission as SharePermission },
       }),
       this.prisma.fileActivity.create({
@@ -283,6 +286,9 @@ Open the shared resource: ${linkUrl}` ,
           resourceId: share.fileId,
         },
       }),
+      this.prisma.accessEvent.create({
+        data: { orgId: user.org_id, userId: user.sub, resourceType: ResourceType.FILE, resourceId: share.fileId, action: 'SHARE' },
+      }),
     ]);
 
     return { shareId, userId, permission };
@@ -292,10 +298,11 @@ Open the shared resource: ${linkUrl}` ,
     const folderShare = await this.prisma.folderShare.findFirst({ where: { id: shareId, orgId: user.org_id } });
     if (folderShare) {
       const folder = await this.prisma.folder.findFirst({ where: { id: folderShare.folderId, orgId: user.org_id } });
-      if (!folder || !this.permissions.canShare(user, await this.toFolderResource(user, folder))) throw new ForbiddenException('Not allowed to manage this share');
+      if (!folder || !(await this.effective.canShare(user, ResourceType.FOLDER, folder.id))) throw new ForbiddenException('Not allowed to manage this share');
       const result = await this.prisma.folderShareRecipient.deleteMany({ where: { shareId, userId, orgId: user.org_id } });
       if (!result.count) throw new NotFoundException('Recipient access not found');
       await this.prisma.auditLog.create({ data: { orgId: user.org_id, actorId: user.sub, action: 'SHARE_ACCESS_REMOVED', resourceType: ResourceType.FOLDER, resourceId: folderShare.folderId } });
+      await this.prisma.accessEvent.create({ data: { orgId: user.org_id, userId: user.sub, resourceType: ResourceType.FOLDER, resourceId: folderShare.folderId, action: 'SHARE' } });
       return { shareId, userId, removed: true };
     }
 
@@ -312,9 +319,7 @@ Open the shared resource: ${linkUrl}` ,
 
     if (!resource) throw new NotFoundException('Resource not found');
 
-    const access = await this.withTeamFolderRole(user, resource);
-
-    if (!this.permissions.canShare(user, access)) {
+    if (!(await this.effective.canShare(user, ResourceType.FILE, share.fileId))) {
       throw new ForbiddenException('Not allowed to manage this share');
     }
 
@@ -346,6 +351,7 @@ Open the shared resource: ${linkUrl}` ,
           resourceId: share.fileId,
         },
       });
+      await tx.accessEvent.create({ data: { orgId: user.org_id, userId: user.sub, resourceType: ResourceType.FILE, resourceId: share.fileId, action: 'SHARE' } });
     });
 
     return { shareId, userId, removed: true };
@@ -356,9 +362,10 @@ Open the shared resource: ${linkUrl}` ,
     if (folderShare) {
       if (folderShare.status === ShareStatus.REVOKED) return { id: shareId, revoked: true };
       const folder = await this.prisma.folder.findFirst({ where: { id: folderShare.folderId, orgId: user.org_id } });
-      if (!folder || !this.permissions.canShare(user, await this.toFolderResource(user, folder))) throw new ForbiddenException('Not allowed to revoke this share');
+      if (!folder || !(await this.effective.canShare(user, ResourceType.FOLDER, folder.id))) throw new ForbiddenException('Not allowed to revoke this share');
       await this.prisma.folderShare.update({ where: { id: shareId }, data: { status: ShareStatus.REVOKED, revokedAt: new Date() } });
       await this.prisma.auditLog.create({ data: { orgId: user.org_id, actorId: user.sub, action: 'SHARE_REVOKED', resourceType: ResourceType.FOLDER, resourceId: folderShare.folderId } });
+      await this.prisma.accessEvent.create({ data: { orgId: user.org_id, userId: user.sub, resourceType: ResourceType.FOLDER, resourceId: folderShare.folderId, action: 'SHARE' } });
       return { id: shareId, revoked: true };
     }
 
@@ -379,9 +386,7 @@ Open the shared resource: ${linkUrl}` ,
 
     if (!resource) throw new NotFoundException('Resource not found');
 
-    const access = await this.withTeamFolderRole(user, resource);
-
-    if (!this.permissions.canShare(user, access)) {
+    if (!(await this.effective.canShare(user, ResourceType.FILE, share.fileId))) {
       throw new ForbiddenException('Not allowed to revoke this share');
     }
 
@@ -408,6 +413,9 @@ Open the shared resource: ${linkUrl}` ,
           resourceId: share.fileId,
         },
       }),
+      this.prisma.accessEvent.create({
+        data: { orgId: user.org_id, userId: user.sub, resourceType: ResourceType.FILE, resourceId: share.fileId, action: 'SHARE' },
+      }),
     ]);
 
     return { id: shareId, revoked: true };
@@ -420,7 +428,12 @@ Open the shared resource: ${linkUrl}` ,
     if (!share || share.status !== ShareStatus.ACTIVE) throw new NotFoundException('Share not found');
     if (this.isInactive(share.expiresAt)) { if (fileShare) await this.prisma.fileShare.updateMany({ where: { id: share.id, status: ShareStatus.ACTIVE }, data: { status: ShareStatus.EXPIRED } }); else await this.prisma.folderShare.updateMany({ where: { id: share.id, status: ShareStatus.ACTIVE }, data: { status: ShareStatus.EXPIRED } }); throw new NotFoundException('Share not found'); }
     if (share.passwordHash && (!password || !(await verifySecret(password, share.passwordHash)))) throw new UnauthorizedException('Invalid share password');
-    if (fileShare) return { resource_type: ResourceType.FILE, resource_id: share.fileId, can_download: share.canDownload, expires_at: share.expiresAt?.toISOString() ?? null, download_url: await this.publicDownloadUrl(share) };
+    if (fileShare) {
+      await this.prisma.auditLog.create({ data: { orgId: share.orgId, actorId: null, action: 'PUBLIC_SHARE_ACCESSED', resourceType: ResourceType.FILE, resourceId: share.fileId, metadata: { shareId: share.id } } });
+      const blocked = await this.dlp.isOrgActionBlocked(share.orgId, share.fileId, 'DOWNLOAD');
+      return { resource_type: ResourceType.FILE, resource_id: share.fileId, can_download: share.canDownload && !blocked, expires_at: share.expiresAt?.toISOString() ?? null, download_url: blocked ? null : await this.publicDownloadUrl(share) };
+    }
+    await this.prisma.auditLog.create({ data: { orgId: share.orgId, actorId: null, action: 'PUBLIC_SHARE_ACCESSED', resourceType: ResourceType.FOLDER, resourceId: share.folderId, metadata: { shareId: share.id } } });
     const items = await this.publicFolderItems(share);
     return { resource_type: ResourceType.FOLDER, resource_id: share.folderId, can_download: share.canDownload, expires_at: share.expiresAt?.toISOString() ?? null, download_url: null, items };
   }
@@ -439,7 +452,7 @@ Open the shared resource: ${linkUrl}` ,
       }
       for (const file of files) {
         const version = file.versions[0]; let download_url: string | null = null;
-        if (share.canDownload && version) {
+        if (share.canDownload && version && !(await this.dlp.isOrgActionBlocked(share.orgId, file.id, 'DOWNLOAD'))) {
           const signed = await runWithTenant({ orgId: share.orgId, userId: file.ownerId }, () => this.storage.createDownloadUrl({ fileId: file.id, versionId: version.id, ownerOrgId: share.orgId, contentType: version.mimeType, fileName: file.name }));
           download_url = signed.url;
         }
@@ -450,17 +463,12 @@ Open the shared resource: ${linkUrl}` ,
     return result.slice(0, 500);
   }
 
-  private async toFolderResource(user: AccessTokenPayload, folder: { orgId: string; ownerId: string; teamFolderId?: string | null }): Promise<AccessibleResource> {
-    if (!folder.teamFolderId) return { orgId: folder.orgId, ownerId: folder.ownerId, teamFolderId: null };
-    return { orgId: folder.orgId, ownerId: folder.teamFolderId, teamFolderId: folder.teamFolderId, teamFolderRole: (await this.prisma.teamFolderMember.findFirst({ where: { teamFolderId: folder.teamFolderId, userId: user.sub }, select: { role: true } }))?.role ?? null };
-  }
-
   private async publicDownloadUrl(share: {
     orgId: string;
     fileId: string;
     canDownload: boolean;
   }): Promise<string | null> {
-    if (!share.canDownload) {
+    if (!share.canDownload || await this.dlp.isOrgActionBlocked(share.orgId, share.fileId, 'DOWNLOAD')) {
       return null;
     }
 
@@ -488,24 +496,6 @@ Open the shared resource: ${linkUrl}` ,
     );
 
     return signed.url;
-  }
-
-  private async withTeamFolderRole(
-    user: AccessTokenPayload,
-    resource: AccessibleResource,
-  ): Promise<AccessibleResource> {
-    if (!resource.teamFolderId) {
-      return resource;
-    }
-
-    const membership = await this.prisma.teamFolderMember.findFirst({
-      where: { teamFolderId: resource.teamFolderId, userId: user.sub },
-    });
-
-    return {
-      ...resource,
-      teamFolderRole: membership?.role ?? null,
-    };
   }
 
   private isInactive(expiresAt: Date | null): boolean {

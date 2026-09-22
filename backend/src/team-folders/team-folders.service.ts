@@ -39,7 +39,7 @@ export type TeamFolderListItem = {
 };
 
 type ReadableTeamFolder = {
-  folder: { id: string; orgId: string; name: string; isPublicToOrg?: boolean; allowExternalSharing?: boolean; allowViewerDownloads?: boolean };
+  folder: { id: string; orgId: string; name: string; isPublicToOrg?: boolean; allowExternalSharing?: boolean; allowViewerDownloads?: boolean; archivedAt?: Date | null };
   role: TeamFolderRole | null;
   resource: AccessibleResource;
 };
@@ -171,6 +171,7 @@ export class TeamFoldersService {
 
   async updateSettings(user: AccessTokenPayload, id: string, input: UpdateTeamFolderSettingsInput) {
     const { folder, role, resource } = await this.requireReadableTeamFolder(user, id);
+    this.assertNotArchived(folder);
     if (!this.permissions.canManageTeamFolder(user, resource)) {
       throw new ForbiddenException('Not allowed to manage Team Folder settings');
     }
@@ -196,6 +197,7 @@ export class TeamFoldersService {
       user,
       id,
     );
+    this.assertNotArchived(folder);
     if (!this.permissions.canManageTeamFolder(user, resource)) {
       throw new ForbiddenException('Not allowed to rename this Team Folder');
     }
@@ -215,8 +217,31 @@ export class TeamFoldersService {
     return this.toTeamFolderResponse(updated, role, user);
   }
 
+  async archive(user: AccessTokenPayload, id: string) {
+    const { folder, resource } = await this.requireReadableTeamFolder(user, id);
+    if (!this.permissions.canManageTeamFolder(user, resource)) {
+      throw new ForbiddenException('Not allowed to archive this Team Folder');
+    }
+    if (folder.archivedAt) return this.toTeamFolderResponse(folder, await this.resolveCallerRole(user, id), user);
+    const updated = await this.prisma.teamFolder.update({ where: { id: folder.id }, data: { archivedAt: new Date() } });
+    await this.prisma.auditLog.create({ data: { orgId: user.org_id, actorId: user.sub, action: 'TEAM_FOLDER_ARCHIVED', resourceType: 'TEAM_FOLDER', resourceId: folder.id } });
+    return this.toTeamFolderResponse(updated, await this.resolveCallerRole(user, id), user);
+  }
+
+  async restore(user: AccessTokenPayload, id: string) {
+    const { folder, resource } = await this.requireReadableTeamFolder(user, id);
+    if (!this.permissions.canManageTeamFolder(user, resource)) {
+      throw new ForbiddenException('Not allowed to restore this Team Folder');
+    }
+    if (!folder.archivedAt) return this.toTeamFolderResponse(folder, await this.resolveCallerRole(user, id), user);
+    const updated = await this.prisma.teamFolder.update({ where: { id: folder.id }, data: { archivedAt: null } });
+    await this.prisma.auditLog.create({ data: { orgId: user.org_id, actorId: user.sub, action: 'TEAM_FOLDER_RESTORED', resourceType: 'TEAM_FOLDER', resourceId: folder.id } });
+    return this.toTeamFolderResponse(updated, await this.resolveCallerRole(user, id), user);
+  }
+
   async remove(user: AccessTokenPayload, id: string) {
     const { folder, resource } = await this.requireReadableTeamFolder(user, id);
+    this.assertNotArchived(folder);
     if (!this.permissions.canManageTeamFolder(user, resource)) {
       throw new ForbiddenException('Not allowed to delete this Team Folder');
     }
@@ -335,6 +360,7 @@ export class TeamFoldersService {
     this.logger.log(`Team Folder member assignment started ${logContext}`);
     try {
       const { folder, resource } = await this.requireReadableTeamFolder(user, id);
+      this.assertNotArchived(folder);
       this.assertCanManageMembers(user, resource);
       this.assertCanAssignRole(user, resource, input.role);
       const target = await this.requireSameOrgUser(
@@ -410,6 +436,7 @@ export class TeamFoldersService {
     input: UpdateTeamFolderMemberInput,
   ) {
     const { folder, resource } = await this.requireReadableTeamFolder(user, id);
+    this.assertNotArchived(folder);
     this.assertCanManageMembers(user, resource);
     const membership = await this.requireMembership(folder.id, userId);
     this.assertCanChangeExistingRole(user, resource, membership.role);
@@ -458,6 +485,7 @@ export class TeamFoldersService {
 
   async removeMember(user: AccessTokenPayload, id: string, userId: string) {
     const { folder, resource } = await this.requireReadableTeamFolder(user, id);
+    this.assertNotArchived(folder);
     this.assertCanManageMembers(user, resource);
     const membership = await this.requireMembership(folder.id, userId);
     this.assertCanChangeExistingRole(user, resource, membership.role);
@@ -649,6 +677,7 @@ export class TeamFoldersService {
       isPublicToOrg?: boolean;
       allowExternalSharing?: boolean;
       allowViewerDownloads?: boolean;
+      archivedAt?: Date | null;
     },
     role: TeamFolderRole | null,
     user: AccessTokenPayload,
@@ -664,7 +693,12 @@ export class TeamFoldersService {
       isPublicToOrg: folder.isPublicToOrg ?? false,
       allowExternalSharing: folder.allowExternalSharing ?? true,
       allowViewerDownloads: folder.allowViewerDownloads ?? true,
+      archivedAt: folder.archivedAt ?? null,
     };
+  }
+
+  private assertNotArchived(folder: { archivedAt?: Date | null }) {
+    if (folder.archivedAt) throw new ForbiddenException('Team Folder is archived and read-only');
   }
 
   private async resolveCallerRole(

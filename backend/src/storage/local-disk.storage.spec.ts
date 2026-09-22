@@ -99,4 +99,66 @@ describe('LocalDiskStorageAdapter', () => {
       NotFoundException,
     );
   });
+  it('supports resumable multipart upload with retry-safe part replacement and final integrity inspection', async () => {
+    const first = Buffer.from('part-one-');
+    const second = Buffer.from('part-two');
+    const { createHash } = await import('node:crypto');
+    const full = Buffer.concat([first, second]);
+    const sha = createHash('sha256').update(full).digest('hex');
+    const upload = await runWithTenant({ orgId: ORG_A, userId: USER_ID }, () =>
+      storage.createMultipartUpload({ ...ownedByA, checksum: sha }),
+    );
+    const p1 = await runWithTenant({ orgId: ORG_A, userId: USER_ID }, () =>
+      storage.uploadMultipartPart({ ...ownedByA, checksum: sha }, upload.uploadId, 1, first, createHash('sha256').update(first).digest('hex')),
+    );
+    const p2 = await runWithTenant({ orgId: ORG_A, userId: USER_ID }, () =>
+      storage.uploadMultipartPart({ ...ownedByA, checksum: sha }, upload.uploadId, 2, second, createHash('sha256').update(second).digest('hex')),
+    );
+    await runWithTenant({ orgId: ORG_A, userId: USER_ID }, () =>
+      storage.completeMultipartUpload({ ...ownedByA, checksum: sha }, upload.uploadId, [p1, p2]),
+    );
+    await expect(
+      runWithTenant({ orgId: ORG_A, userId: USER_ID }, () => storage.inspectObject({ ...ownedByA, checksum: sha })),
+    ).resolves.toEqual({ size: full.length, checksum: sha });
+  });
+
+  it('does not leave a partial destination object when multipart completion fails', async () => {
+    const first = Buffer.from('first-part');
+    const sha = (await import('node:crypto')).createHash('sha256').update(first).digest('hex');
+    const upload = await runWithTenant({ orgId: ORG_A, userId: USER_ID }, () =>
+      storage.createMultipartUpload({ ...ownedByA, checksum: sha }),
+    );
+    const part = await runWithTenant({ orgId: ORG_A, userId: USER_ID }, () =>
+      storage.uploadMultipartPart({ ...ownedByA, checksum: sha }, upload.uploadId, 1, first, sha),
+    );
+    await expect(
+      runWithTenant({ orgId: ORG_A, userId: USER_ID }, () =>
+        storage.completeMultipartUpload({ ...ownedByA, checksum: sha }, upload.uploadId, [part, { partNumber: 2, etag: 'missing' }]),
+      ),
+    ).rejects.toThrow('missing');
+    await expect(
+      runWithTenant({ orgId: ORG_A, userId: USER_ID }, () => storage.inspectObject({ ...ownedByA, checksum: sha })),
+    ).rejects.toBeInstanceOf(NotFoundException);
+  });
+
+  it('rejects non-contiguous multipart completion manifests', async () => {
+    const upload = await runWithTenant({ orgId: ORG_A, userId: USER_ID }, () =>
+      storage.createMultipartUpload(ownedByA),
+    );
+    await expect(
+      runWithTenant({ orgId: ORG_A, userId: USER_ID }, () =>
+        storage.completeMultipartUpload(ownedByA, upload.uploadId, [{ partNumber: 2, etag: 'etag' }]),
+      ),
+    ).rejects.toThrow('contiguous');
+  });
+
+  it('rejects a tenant-A request carrying a tenant-B storage key', async () => {
+    const foreignKey = `tenant_${ORG_B}/files/${FILE_ID}/${VERSION_ID}`;
+    await expect(
+      runWithTenant({ orgId: ORG_A, userId: USER_ID }, () =>
+        storage.createDownloadUrl({ ...ownedByA, storageKey: foreignKey }),
+      ),
+    ).rejects.toBeInstanceOf(ForbiddenException);
+  });
+
 });

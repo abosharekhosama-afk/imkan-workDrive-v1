@@ -1,28 +1,137 @@
-import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
-import { randomUUID } from 'node:crypto';
+import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import { FolderAccessLevel, MembershipStatus, OrgRole } from '@prisma/client';
 import type { AccessTokenPayload } from '../auth/jwt.types';
+import { EffectivePermissionService } from '../permissions/effective-permission.service';
 import { PrismaService } from '../prisma/prisma.service';
-import { OrgRole } from '@prisma/client';
+
+const ACCESS_LEVELS = new Set(Object.values(FolderAccessLevel));
 
 @Injectable()
 export class FolderPermissionsService {
-  constructor(private readonly prisma: PrismaService) {}
-  private assertAdmin(user: AccessTokenPayload){ if(user.role!==OrgRole.ADMIN && user.role!==OrgRole.SUPER_ADMIN) throw new ForbiddenException('Organization admin access required'); }
-  async list(user: AccessTokenPayload, folderId: string){
-    this.assertAdmin(user);
-    const folder=await this.prisma.folder.findFirst({where:{id:folderId,orgId:user.org_id}}); if(!folder) throw new NotFoundException('Folder not found');
-    return this.prisma.$queryRawUnsafe<any[]>(`SELECT fp.id,fp.user_id AS userId,fp.group_id AS groupId,fp.access,fp.hidden,fp.created_at AS createdAt, u.name AS userName,u.email AS userEmail,g.name AS groupName FROM folder_permissions fp LEFT JOIN users u ON u.id=fp.user_id LEFT JOIN groups g ON g.id=fp.group_id WHERE fp.org_id=? AND fp.folder_id=? ORDER BY fp.created_at DESC`,user.org_id,folderId);
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly effective: EffectivePermissionService,
+  ) {}
+
+  private async requireManage(user: AccessTokenPayload, folderId: string) {
+    const folder = await this.prisma.folder.findFirst({
+      where: { id: folderId, orgId: user.org_id },
+      select: { id: true, ownerId: true, orgId: true },
+    });
+    if (!folder) throw new NotFoundException('Folder not found');
+
+    const access = await this.effective.resolveFolder(user, folder.id);
+    if (access.level !== 'FULL_ACCESS' && access.level !== 'ORGANIZE') {
+      throw new ForbiddenException('Not allowed to manage folder permissions');
+    }
+    return folder;
   }
-  async upsert(user: AccessTokenPayload, folderId:string, body:{userId?:string;groupId?:string;access:string;hidden?:boolean}){
-    this.assertAdmin(user);
-    const folder=await this.prisma.folder.findFirst({where:{id:folderId,orgId:user.org_id}}); if(!folder) throw new NotFoundException('Folder not found');
-    if((body.userId && body.groupId)||(!body.userId&&!body.groupId)) throw new ForbiddenException('Provide exactly one subject');
-    if(!['NONE','VIEW','COMMENT','EDIT','ORGANIZE'].includes(body.access)) throw new ForbiddenException('Invalid access');
-    const id=randomUUID();
-    await this.prisma.$executeRawUnsafe(`DELETE FROM folder_permissions WHERE org_id=? AND folder_id=? AND ((user_id IS NOT NULL AND user_id=?) OR (group_id IS NOT NULL AND group_id=?))`,user.org_id,folderId,body.userId??'',body.groupId??'');
-    await this.prisma.$executeRawUnsafe(`INSERT INTO folder_permissions (id,org_id,folder_id,user_id,group_id,access,hidden,updated_at) VALUES (?,?,?,?,?,?,?,CURRENT_TIMESTAMP(3))`,id,user.org_id,folderId,body.userId??null,body.groupId??null,body.access,body.hidden??false);
-    await this.prisma.auditLog.create({data:{orgId:user.org_id,actorId:user.sub,action:'FOLDER_PERMISSION_CHANGED',resourceType:'FOLDER',resourceId:folderId,metadata:{userId:body.userId,groupId:body.groupId,access:body.access,hidden:body.hidden??false}}});
-    return {id,folderId,...body};
+
+  async list(user: AccessTokenPayload, folderId: string) {
+    await this.requireManage(user, folderId);
+    const rows = await this.prisma.folderPermission.findMany({
+      where: { orgId: user.org_id, folderId },
+      orderBy: { createdAt: 'desc' },
+      include: {
+        user: { select: { id: true, name: true, email: true } },
+        group: { select: { id: true, name: true } },
+      },
+    });
+    const effective = await this.effective.resolveFolder(user, folderId);
+    return {
+      folderId,
+      effectiveAccess: effective.level,
+      permissions: rows.map((row) => ({
+        id: row.id,
+        userId: row.userId,
+        groupId: row.groupId,
+        access: row.access,
+        hidden: row.hidden,
+        createdAt: row.createdAt,
+        updatedAt: row.updatedAt,
+        user: row.user,
+        group: row.group,
+      })),
+    };
   }
-  async remove(user: AccessTokenPayload, permissionId:string){ this.assertAdmin(user); const result=await this.prisma.$executeRawUnsafe(`DELETE FROM folder_permissions WHERE id=? AND org_id=?`,permissionId,user.org_id); if(!result) throw new NotFoundException('Permission not found'); return {id:permissionId,deleted:true}; }
+
+  async upsert(
+    user: AccessTokenPayload,
+    folderId: string,
+    body: { userId?: string; groupId?: string; access: string; hidden?: boolean },
+  ) {
+    await this.requireManage(user, folderId);
+    if ((body.userId && body.groupId) || (!body.userId && !body.groupId)) {
+      throw new BadRequestException('Provide exactly one subject');
+    }
+    if (!ACCESS_LEVELS.has(body.access as FolderAccessLevel)) {
+      throw new BadRequestException('Invalid access');
+    }
+
+    if (body.userId) {
+      const membership = await this.prisma.organizationMembership.findFirst({
+        where: { userId: body.userId, organizationId: user.org_id, status: MembershipStatus.ACTIVE },
+        select: { userId: true },
+      });
+      if (!membership) throw new NotFoundException('User is not an active organization member');
+    }
+
+    if (body.groupId) {
+      const group = await this.prisma.group.findFirst({
+        where: { id: body.groupId, orgId: user.org_id },
+        select: { id: true },
+      });
+      if (!group) throw new NotFoundException('Group not found');
+    }
+
+    const where = body.userId
+      ? { folderId, userId: body.userId }
+      : { folderId, groupId: body.groupId };
+    const existing = await this.prisma.folderPermission.findFirst({ where: where as any, select: { id: true } });
+    const data = {
+      orgId: user.org_id,
+      folderId,
+      userId: body.userId ?? null,
+      groupId: body.groupId ?? null,
+      access: body.access as FolderAccessLevel,
+      hidden: body.hidden ?? false,
+    };
+
+    const result = existing
+      ? await this.prisma.folderPermission.update({ where: { id: existing.id }, data: { access: data.access, hidden: data.hidden } })
+      : await this.prisma.folderPermission.create({ data });
+
+    await this.prisma.auditLog.create({
+      data: {
+        orgId: user.org_id,
+        actorId: user.sub,
+        action: 'FOLDER_PERMISSION_CHANGED',
+        resourceType: 'FOLDER',
+        resourceId: folderId,
+        metadata: { userId: body.userId, groupId: body.groupId, access: body.access, hidden: body.hidden ?? false },
+      },
+    });
+    return result;
+  }
+
+  async remove(user: AccessTokenPayload, permissionId: string) {
+    const permission = await this.prisma.folderPermission.findFirst({
+      where: { id: permissionId, orgId: user.org_id },
+      select: { id: true, folderId: true },
+    });
+    if (!permission) throw new NotFoundException('Permission not found');
+    await this.requireManage(user, permission.folderId);
+    await this.prisma.folderPermission.delete({ where: { id: permission.id } });
+    await this.prisma.auditLog.create({
+      data: {
+        orgId: user.org_id,
+        actorId: user.sub,
+        action: 'FOLDER_PERMISSION_REMOVED',
+        resourceType: 'FOLDER',
+        resourceId: permission.folderId,
+        metadata: { permissionId },
+      },
+    });
+    return { id: permissionId, deleted: true };
+  }
 }

@@ -17,3 +17,17 @@ export function getRetentionPolicy() { return apiRequest<any>('/admin/enterprise
 export function updateRetentionPolicy(body: any) { return apiRequest<any>('/admin/enterprise/retention-policy', { method: 'PATCH', body: JSON.stringify(body) }); }
 export function getEnterpriseAudit(limit = 100) { return apiRequest<any[]>(`/admin/enterprise/audit?limit=${limit}`); }
 export function getExternalShares() { return apiRequest<any[]>('/admin/enterprise/external-shares'); }
+
+export type SecurityCenter={activeSessions:number;revokedSessions:number;activeDevices:number;events:any[]};
+export const getSecurityCenter=()=>apiRequest<SecurityCenter>('/admin/enterprise/security-center');
+export const revokeAdminSession=(id:string)=>apiRequest<{ok:boolean}>(`/admin/enterprise/sessions/${id}`,{method:'DELETE'});
+
+export type DlpLabel = { id:string; name:string; description?:string|null; color?:string|null; actions:string[]; manualOnly:boolean; _count?:{files:number} };
+export type DlpPolicy = { id:string; name:string; description?:string|null; enabled:boolean; scopeType:string; folderIds:string[]; keywords:string[]; extensions:string[]; caseSensitive:boolean; labelId:string; label?:DlpLabel };
+export const getDlpLabels=()=>apiRequest<DlpLabel[]>('/admin/enterprise/dlp/labels');
+export const createDlpLabel=(body:any)=>apiRequest<DlpLabel>('/admin/enterprise/dlp/labels',{method:'POST',body:JSON.stringify(body)});
+export const deleteDlpLabel=(id:string)=>apiRequest<{ok:boolean}>(`/admin/enterprise/dlp/labels/${id}`,{method:'DELETE'});
+export const getDlpPolicies=()=>apiRequest<DlpPolicy[]>('/admin/enterprise/dlp/policies');
+export const createDlpPolicy=(body:any)=>apiRequest<DlpPolicy>('/admin/enterprise/dlp/policies',{method:'POST',body:JSON.stringify(body)});
+export const updateDlpPolicy=(id:string,body:any)=>apiRequest<DlpPolicy>(`/admin/enterprise/dlp/policies/${id}`,{method:'PATCH',body:JSON.stringify(body)});
+export const deleteDlpPolicy=(id:string)=>apiRequest<{ok:boolean}>(`/admin/enterprise/dlp/policies/${id}`,{method:'DELETE'});

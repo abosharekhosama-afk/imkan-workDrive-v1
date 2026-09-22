@@ -16,14 +16,17 @@ import { publishOfficeRealtimeEvent } from './office-realtime';
 import { NotificationsService } from '../notifications/notifications.service';
 import { WorkflowEngineService } from '../workflows/workflow-engine.service';
 import { Inject } from '@nestjs/common';
-import { createHash } from 'crypto';
+import { createHash, randomUUID } from 'crypto';
+import { computeOfficeContentHash } from './office-versioning';
 import { STORAGE_SERVICE, type StorageService } from '../storage/storage.types';
+import { DlpService } from '../dlp/dlp.service';
 
 
 function clampNumber(value: unknown, min: number, max: number, fallback: number) {
   const n = Number(value);
   return Number.isFinite(n) ? Math.min(max, Math.max(min, n)) : fallback;
 }
+
 
 function normalizeOoxmlPreservation(value: unknown) {
   const v = value && typeof value === 'object' ? value as Record<string, any> : null;
@@ -219,6 +222,7 @@ export class OfficeService implements OfficeEngine {
     private readonly notifications: NotificationsService,
     @Inject(forwardRef(() => WorkflowEngineService)) private readonly workflowEngine: WorkflowEngineService,
     @Inject(STORAGE_SERVICE) private readonly storage: StorageService,
+    private readonly dlp: DlpService,
   ) {}
 
   async requestApproval(user: AccessTokenPayload, fileId: string, body: { workflowId: string; participantRules?: unknown; fieldValues?: Record<string, unknown>; comment?: string }) {
@@ -491,6 +495,7 @@ export class OfficeService implements OfficeEngine {
     const bytes = Buffer.from(JSON.stringify(content), 'utf8');
     const file = await this.files.createFileFromBytes(user, { folderId, name: `${result.title}.imkan`, mimeType: MIME_BY_TYPE[type], extension: 'imkan', bytes });
     const document = await this.prisma.officeDocument.create({ data: { orgId: user.org_id, fileId: file.file_id, type: type as OfficeDocumentType, nativeFormat: TYPE_TO_FORMAT[type], content: content as Prisma.InputJsonValue } });
+    await this.prisma.officeDocumentVersion.create({ data: { orgId: user.org_id, documentId: document.id, fileId: file.file_id, versionNumber: 1, revision: document.revision, type: document.type, content: content as Prisma.InputJsonValue, contentHash: computeOfficeContentHash(content), label: `Imported ${result.sourceFormat.toUpperCase()}`, createdById: user.sub } });
     return { ...this.toState(document), importedFrom: result.sourceFormat };
   }
 
@@ -519,6 +524,7 @@ export class OfficeService implements OfficeEngine {
   async exportFile(user: AccessTokenPayload, fileId: string, format: 'docx'|'xlsx'|'pptx') {
     const policy = await this.getOfficePolicy(user, fileId);
     if (!policy.allowExport) throw new ForbiddenException('Export is disabled by Office policy');
+    await this.dlp.assertAllowed(user, fileId, 'DOWNLOAD');
     const document = await this.open(user, fileId);
     const result = await this.conversion.export(document.type as OfficeType, document.content, format);
     await this.auditOfficeEvent(user, 'OFFICE_EXPORT', fileId, { format, filename: result.filename, bytes: result.buffer.byteLength });
@@ -566,6 +572,7 @@ export class OfficeService implements OfficeEngine {
         sourceTemplateVersionId,
       },
     });
+    await this.prisma.officeDocumentVersion.create({ data: { orgId: user.org_id, documentId: document.id, fileId, versionNumber: 1, revision: document.revision, type: document.type, content: content as Prisma.InputJsonValue, contentHash: computeOfficeContentHash(content), label: 'Template initialization', createdById: user.sub } });
     await this.prisma.auditLog.create({
       data: {
         orgId: user.org_id,
@@ -644,7 +651,49 @@ export class OfficeService implements OfficeEngine {
     const document = await this.prisma.officeDocument.create({
       data: { orgId: user.org_id, fileId: file.file_id, type: type as OfficeDocumentType, nativeFormat: TYPE_TO_FORMAT[type], content: content as Prisma.InputJsonValue },
     });
+    await this.prisma.officeDocumentVersion.create({
+      data: { orgId: user.org_id, documentId: document.id, fileId: file.file_id, versionNumber: 1, revision: document.revision, type: document.type, content: content as Prisma.InputJsonValue, contentHash: computeOfficeContentHash(content), label: 'Initial version', createdById: user.sub },
+    });
     return this.toState(document);
+  }
+
+  /**
+   * Materializes the native IMKAN Office snapshot as a real WorkDrive FileVersion.
+   * The OfficeDocument/OfficeDocumentVersion records remain the semantic editor
+   * history, while FileVersion becomes the authoritative WorkDrive byte history.
+   */
+  private async materializeNativeFileVersion(user: AccessTokenPayload, fileId: string, type: OfficeDocumentType, content: unknown) {
+    const bytes = Buffer.from(JSON.stringify(content), 'utf8');
+    const contentHash = computeOfficeContentHash(content);
+    const versionId = randomUUID();
+    const storageKey = this.storage.buildObjectKey(fileId, versionId);
+    const existing = await this.prisma.storageObject.findFirst({
+      where: { orgId: user.org_id, fileId, status: 'ACTIVE' },
+      orderBy: { createdAt: 'desc' },
+      select: { bucket: true, region: true },
+    });
+    if (!existing) throw new NotFoundException('WorkDrive storage object not found for Office file');
+    await this.storage.storeObject({
+      fileId,
+      versionId,
+      ownerOrgId: user.org_id,
+      storageKey,
+      contentType: MIME_BY_TYPE[this.normalizeType(type as unknown as OfficeType)],
+    }, bytes);
+    try {
+      return await this.prisma.$transaction(async (tx) => {
+        const latest = await tx.fileVersion.findFirst({ where: { orgId: user.org_id, fileId }, orderBy: { versionNumber: 'desc' }, select: { versionNumber: true } });
+        const versionNumber = (latest?.versionNumber ?? 0) + 1;
+        const storageObjectId = randomUUID();
+        await tx.storageObject.create({ data: { id: storageObjectId, orgId: user.org_id, fileId, storageKey, bucket: existing.bucket, region: existing.region, size: bytes.length, checksum: contentHash } });
+        const fileVersion = await tx.fileVersion.create({ data: { id: versionId, orgId: user.org_id, fileId, versionNumber, storageObjectId, size: bytes.length, mimeType: MIME_BY_TYPE[this.normalizeType(type as unknown as OfficeType)], extension: 'imkan', sha256Hash: contentHash, uploadedById: user.sub, status: 'ACTIVE', uploadStatus: 'COMPLETE' } });
+        await tx.file.update({ where: { id: fileId }, data: { size: bytes.length, sha256Hash: contentHash, storageKey, storageObjectId, mimeType: MIME_BY_TYPE[this.normalizeType(type as unknown as OfficeType)], extension: 'imkan' } });
+        return fileVersion;
+      });
+    } catch (error) {
+      await this.storage.deleteStoredObject(storageKey).catch(() => undefined);
+      throw error;
+    }
   }
 
   async save(user: AccessTokenPayload, fileId: string, content: unknown, expectedRevision?: number, sessionId?: string): Promise<OfficeDocumentState> {
@@ -673,20 +722,84 @@ export class OfficeService implements OfficeEngine {
       if (!session) throw new ForbiddenException('Invalid Office session');
     }
     const baseRevision = existing.revision;
-    const next = await this.prisma.officeDocument.update({
-      where: { fileId },
-      data: { content: content as Prisma.InputJsonValue, revision: { increment: 1 } },
+    const contentHash = computeOfficeContentHash(content);
+    const txResult = await this.prisma.$transaction(async (tx) => {
+      const next = await tx.officeDocument.update({
+        where: { fileId },
+        data: { content: content as Prisma.InputJsonValue, revision: { increment: 1 } },
+      });
+      const previous = await tx.officeDocumentVersion.findFirst({ where: { documentId: existing.id }, orderBy: { versionNumber: 'desc' }, select: { versionNumber: true } });
+      if (!previous) {
+        await tx.officeDocumentVersion.create({ data: { orgId: user.org_id, documentId: existing.id, fileId, versionNumber: 1, revision: existing.revision, type: existing.type, content: existing.content as Prisma.InputJsonValue, contentHash: computeOfficeContentHash(existing.content), label: 'Imported legacy baseline', createdById: user.sub } });
+      }
+      const versionNumber = (previous?.versionNumber ?? 1) + 1;
+      const version = await tx.officeDocumentVersion.create({ data: { orgId: user.org_id, documentId: existing.id, fileId, versionNumber, revision: next.revision, type: next.type, content: content as Prisma.InputJsonValue, contentHash, label: `Revision ${next.revision}`, createdById: user.sub } });
+      const operation = await tx.officeOperation.create({
+        data: { orgId: user.org_id, fileId, documentId: existing.id, sessionId: sessionId || undefined, userId: user.sub, kind: 'document-save', baseRevision, revision: next.revision, payload: { revision: next.revision, versionId: version.id, versionNumber, contentHash, type: existing.type, savedAt: new Date().toISOString() } as Prisma.InputJsonValue },
+      });
+      return { next, operation, version };
     });
-    const operation = await this.prisma.officeOperation.create({
-      data: {
-        orgId: user.org_id, fileId, documentId: existing.id, sessionId: sessionId || undefined, userId: user.sub,
-        kind: 'document-save', baseRevision, revision: next.revision,
-        payload: { revision: next.revision, type: existing.type, savedAt: new Date().toISOString() } as Prisma.InputJsonValue,
-      },
-    });
+    const next = txResult.next;
+    const operation = txResult.operation;
+    const nativeFileVersion = await this.materializeNativeFileVersion(user, fileId, existing.type, content);
+    await this.prisma.officeOperation.update({ where: { id: operation.id }, data: { payload: { ...(operation.payload as any), nativeFileVersionId: nativeFileVersion.id, workDriveVersionNumber: nativeFileVersion.versionNumber } as Prisma.InputJsonValue } });
     publishOfficeRealtimeEvent({ fileId, type: 'document-saved', revision: next.revision, operationId: operation.id, userId: user.sub, sessionId });
     await this.auditOfficeEvent(user, 'OFFICE_SAVED', fileId, { revision: next.revision, baseRevision, sessionId: sessionId || null, operationId: operation.id, mode: 'document-save' });
     return this.toState(next);
+  }
+
+  async listVersions(user: AccessTokenPayload, fileId: string) {
+    await this.getAuthorizedFile(user, fileId, false);
+    const [officeVersions, workDriveVersions] = await Promise.all([
+      this.prisma.officeDocumentVersion.findMany({
+        where: { orgId: user.org_id, fileId },
+        orderBy: { versionNumber: 'desc' },
+        take: 100,
+        select: { id: true, versionNumber: true, revision: true, type: true, contentHash: true, label: true, createdAt: true, createdBy: { select: { id: true, name: true, email: true, avatarUrl: true } } },
+      }),
+      this.prisma.fileVersion.findMany({
+        where: { orgId: user.org_id, fileId, status: 'ACTIVE' },
+        orderBy: { versionNumber: 'desc' },
+        take: 100,
+        select: { id: true, versionNumber: true, size: true, mimeType: true, extension: true, sha256Hash: true, createdAt: true, uploadedBy: { select: { id: true, name: true, email: true, avatarUrl: true } } },
+      }),
+    ]);
+    const byHash = new Map(workDriveVersions.map(v => [v.sha256Hash, v]));
+    return officeVersions.map(v => {
+      const native = byHash.get(v.contentHash);
+      return {
+        ...v,
+        workDriveVersionId: native?.id ?? null,
+        workDriveVersionNumber: native?.versionNumber ?? null,
+        workDriveSize: native ? Number(native.size) : null,
+        workDriveCreatedAt: native?.createdAt?.toISOString() ?? null,
+      };
+    });
+  }
+
+  async restoreVersion(user: AccessTokenPayload, fileId: string, versionId: string, expectedRevision?: number) {
+    await this.getAuthorizedFile(user, fileId, true);
+    const policy = await this.getOfficePolicy(user, fileId);
+    if (policy.readOnly) throw new ForbiddenException('Office document is read-only by policy');
+    const existing = await this.prisma.officeDocument.findUnique({ where: { fileId } });
+    if (!existing) throw new NotFoundException('Office document not found');
+    if (expectedRevision !== undefined && expectedRevision !== existing.revision) throw new ConflictException({ message: 'The document changed while you were editing it', code: 'OFFICE_REVISION_CONFLICT', revision: existing.revision });
+    const source = await this.prisma.officeDocumentVersion.findFirst({ where: { id: versionId, orgId: user.org_id, fileId, documentId: existing.id } });
+    if (!source) throw new NotFoundException('Office version not found');
+    const content = this.normalizeOfficeContent(source.content);
+    const contentHash = computeOfficeContentHash(content);
+    const result = await this.prisma.$transaction(async (tx) => {
+      const next = await tx.officeDocument.update({ where: { fileId }, data: { content: content as Prisma.InputJsonValue, revision: { increment: 1 } } });
+      const latest = await tx.officeDocumentVersion.findFirst({ where: { documentId: existing.id }, orderBy: { versionNumber: 'desc' }, select: { versionNumber: true } });
+      const version = await tx.officeDocumentVersion.create({ data: { orgId: user.org_id, documentId: existing.id, fileId, versionNumber: (latest?.versionNumber ?? existing.revision) + 1, revision: next.revision, type: next.type, content: content as Prisma.InputJsonValue, contentHash, label: `Restored from v${source.versionNumber}`, createdById: user.sub } });
+      const operation = await tx.officeOperation.create({ data: { orgId: user.org_id, fileId, documentId: existing.id, userId: user.sub, kind: 'version-restore', baseRevision: existing.revision, revision: next.revision, payload: { sourceVersionId: source.id, sourceVersionNumber: source.versionNumber, versionId: version.id, contentHash } as Prisma.InputJsonValue } });
+      return { next, version, operation };
+    });
+    const nativeFileVersion = await this.materializeNativeFileVersion(user, fileId, existing.type, content);
+    await this.prisma.officeOperation.update({ where: { id: result.operation.id }, data: { payload: { ...(result.operation.payload as any), nativeFileVersionId: nativeFileVersion.id, workDriveVersionNumber: nativeFileVersion.versionNumber } as Prisma.InputJsonValue } });
+    await this.auditOfficeEvent(user, 'OFFICE_VERSION_RESTORED', fileId, { sourceVersionId: source.id, sourceVersionNumber: source.versionNumber, revision: result.next.revision, versionId: result.version.id, nativeFileVersionId: nativeFileVersion.id, workDriveVersionNumber: nativeFileVersion.versionNumber });
+    publishOfficeRealtimeEvent({ fileId, type: 'document-saved', revision: result.next.revision, operationId: result.operation.id, userId: user.sub });
+    return this.toState(result.next);
   }
 
   async openSession(user: AccessTokenPayload, fileId: string) {
@@ -802,16 +915,37 @@ export class OfficeService implements OfficeEngine {
         if (!updated.count) return null;
         const next = await tx.officeDocument.findUnique({ where: { fileId } });
         if (!next) return null;
+        const previousVersion = await tx.officeDocumentVersion.findFirst({
+          where: { documentId: existing.id },
+          orderBy: { versionNumber: 'desc' },
+          select: { versionNumber: true },
+        });
+        const contentHash = computeOfficeContentHash(normalized);
+        const versionNumber = (previousVersion?.versionNumber ?? existing.revision) + 1;
+        const version = await tx.officeDocumentVersion.create({
+          data: {
+            orgId: user.org_id,
+            documentId: existing.id,
+            fileId,
+            versionNumber,
+            revision: next.revision,
+            type: next.type,
+            content: normalized as Prisma.InputJsonValue,
+            contentHash,
+            label: `Operation revision ${next.revision}`,
+            createdById: user.sub,
+          },
+        });
         const operation = await tx.officeOperation.create({ data: {
           orgId: user.org_id, fileId, documentId: existing.id, sessionId: input.sessionId || undefined, userId: user.sub,
           kind: `${String(existing.type).toLowerCase()}-operation`, baseRevision: existing.revision, revision: next.revision,
-          payload: { opId: input.opId, patches: transformedPatches, revision: next.revision, type: existing.type, clientId: input.clientId || null, sequence: Number.isInteger(input.sequence) ? input.sequence : null, transformedFromRevision: baseRevision, ordering: 'revision', engine: 'path-ot-v1' } as Prisma.InputJsonValue,
+          payload: { opId: input.opId, patches: transformedPatches, revision: next.revision, versionId: version.id, versionNumber, contentHash, type: existing.type, clientId: input.clientId || null, sequence: Number.isInteger(input.sequence) ? input.sequence : null, transformedFromRevision: baseRevision, ordering: 'revision', engine: 'path-ot-v1' } as Prisma.InputJsonValue,
         }});
-        return { next, operation };
+        return { next, operation, version };
       });
       if (!committed) continue; // another operation won the revision; retry against the new head.
       publishOfficeRealtimeEvent({ fileId, type: 'document-saved', revision: committed.next.revision, operationId: committed.operation.id, userId: user.sub, sessionId: input.sessionId });
-      await this.auditOfficeEvent(user, 'OFFICE_OPERATION_APPLIED', fileId, { operationId: committed.operation.id, opId: input.opId, revision: committed.next.revision, baseRevision, patchCount: transformedPatches.length, transformed: baseRevision < existing.revision, sessionId: input.sessionId || null, clientId: input.clientId || null, sequence: Number.isInteger(input.sequence) ? input.sequence : null });
+      await this.auditOfficeEvent(user, 'OFFICE_OPERATION_APPLIED', fileId, { operationId: committed.operation.id, opId: input.opId, revision: committed.next.revision, versionId: committed.version.id, versionNumber: committed.version.versionNumber, contentHash: committed.version.contentHash, baseRevision, patchCount: transformedPatches.length, transformed: baseRevision < existing.revision, sessionId: input.sessionId || null, clientId: input.clientId || null, sequence: Number.isInteger(input.sequence) ? input.sequence : null });
       return { document: this.toState(committed.next), operationId: committed.operation.id, opId: input.opId, revision: committed.next.revision, acknowledged: true, transformed: baseRevision < existing.revision, transformedFromRevision: baseRevision };
     }
     throw new ConflictException({ message: 'Office operation could not be ordered safely; retry against latest revision', code: 'OFFICE_OPERATION_RETRY', revision: (await this.prisma.officeDocument.findUnique({ where: { fileId } }))?.revision });
@@ -941,7 +1075,7 @@ export class OfficeService implements OfficeEngine {
         show: { enabled: true, phase: 'completion', features: ['multiple-slides', 'slide-navigator', 'layouts', 'text-elements', 'shapes', 'images', 'lines', 'tables', 'themes', 'aspect-ratio', 'drag-drop', 'multi-select', 'grouping', 'slide-master', 'speaker-notes', 'transitions', 'media', 'audio', 'video', 'video-poster', 'video-trimming', 'media-volume', 'media-fullscreen', 'element-animations', 'animation-timeline', 'animation-entrance', 'animation-emphasis', 'animation-exit', 'animation-order', 'animation-triggers', 'auto-advance', 'presenter-mode', 'undo-redo', 'autosave', 'revision-guard'] },
       },
       features: { autosave: true, revisionGuard: true, sessions: true, collaboration: true, importExport: true,
-        importExportFormats: ['docx','xlsx','pptx','imkan-json'], writerDocxCompatibility: true, writerDocxStyles: true, writerDocxTables: true, writerDocxPageSettings: true, writerDocxHeadersFooters: true, writerRichText: true, writerPageLayout: true, writerTables: true, writerImages: true, writerLinks: true, writerHeadersFooters: true, writerPrint: true, writerComments: true, writerTrackChanges: true, writerCompare: true, sheetCore: true, sheetFormulas: true, sheetFormulaV3: true, sheetCrossSheetRefs: true, sheetDataValidation: true, sheetFilters: true, sheetMerges: true, sheetCharts: true, sheetVisualization: true, sheetUndoRedo: true, sheetFormatting: true, sheetXlsxCompatibility: true, sheetXlsxFormulas: true, sheetXlsxMerges: true, sheetXlsxFreezePanes: true, sheetXlsxDimensions: true, showCore: true, showSlides: true, showMedia: true, showAudio: true, showVideo: true, showVideoPoster: true, showVideoTrimming: true, showMediaVolume: true, showMediaFullscreen: true, showAnimations: true, showAnimationTimeline: true, showAnimationEntrance: true, showAnimationEmphasis: true, showAnimationExit: true, showAnimationTriggers: true, showAnimationOrder: true, showAutoAdvance: true, showLayouts: true, showElements: true, showThemes: true, showRichText: true, showObjectOrdering: true, showTables: true, showPresenterPreview: true, showUndoRedo: true, showPptxCompatibility: true, showPptxSlides: true, showPptxText: true, showPptxShapes: true, showPptxThemes: true, showPptxRoundTrip: true, conversionDiagnostics: true, conversionWarnings: true, roundTripDiagnostics: true, compatibilityCenter: true, roundTripAnalysis: true, conversionCategories: true, conversionMetadata: true, advancedDocxMedia: true, advancedXlsxFormatting: true, advancedXlsxCharts: true, advancedPptxImages: true, advancedPptxTables: true, advancedPptxMediaRelationships: true, deepDocxStyles: true, deepDocxNumbering: true, deepDocxLists: true, deepDocxMediaPreservation: true, deepXlsxStyles: true, deepXlsxCharts: true, deepXlsxValidation: true, deepXlsxConditionalFormatting: true, deepPptxMedia: true, deepPptxTables: true, roundTripQuality: true, nativeOoxmlPreservation: true, ooxmlPreservationGraph: true, relationshipAwarePreservation: true, selectiveOoxmlMerge: true, relationshipConflictResolution: true, nativeMediaBridge: true, nativeChartBridge: true, nativeThemeBridge: true, definedNamesBridge: true, preservedRelationshipRebinding: true, contentTypesMerge: true, rootRelationshipMerge: true, collaborationFoundation: true,
+        importExportFormats: ['docx','xlsx','pptx','imkan-json'], writerDocxCompatibility: true, writerDocxStyles: true, writerDocxTables: true, writerDocxPageSettings: true, writerDocxHeadersFooters: true, writerRichText: true, writerPageLayout: true, writerTables: true, writerImages: true, writerLinks: true, writerHeadersFooters: true, writerPrint: true, writerComments: true, sharedFileComments: true, writerTrackChanges: true, writerCompare: true, sheetCore: true, sheetFormulas: true, sheetFormulaV3: true, sheetCrossSheetRefs: true, sheetDataValidation: true, sheetFilters: true, sheetMerges: true, sheetCharts: true, sheetVisualization: true, sheetUndoRedo: true, sheetFormatting: true, sheetXlsxCompatibility: true, sheetXlsxFormulas: true, sheetXlsxMerges: true, sheetXlsxFreezePanes: true, sheetXlsxDimensions: true, showCore: true, showSlides: true, showMedia: true, showAudio: true, showVideo: true, showVideoPoster: true, showVideoTrimming: true, showMediaVolume: true, showMediaFullscreen: true, showAnimations: true, showAnimationTimeline: true, showAnimationEntrance: true, showAnimationEmphasis: true, showAnimationExit: true, showAnimationTriggers: true, showAnimationOrder: true, showAutoAdvance: true, showLayouts: true, showElements: true, showThemes: true, showRichText: true, showObjectOrdering: true, showTables: true, showPresenterPreview: true, showUndoRedo: true, showPptxCompatibility: true, showPptxSlides: true, showPptxText: true, showPptxShapes: true, showPptxThemes: true, showPptxRoundTrip: true, conversionDiagnostics: true, conversionWarnings: true, roundTripDiagnostics: true, compatibilityCenter: true, roundTripAnalysis: true, conversionCategories: true, conversionMetadata: true, advancedDocxMedia: true, advancedXlsxFormatting: true, advancedXlsxCharts: true, advancedPptxImages: true, advancedPptxTables: true, advancedPptxMediaRelationships: true, deepDocxStyles: true, deepDocxNumbering: true, deepDocxLists: true, deepDocxMediaPreservation: true, deepXlsxStyles: true, deepXlsxCharts: true, deepXlsxValidation: true, deepXlsxConditionalFormatting: true, deepPptxMedia: true, deepPptxTables: true, roundTripQuality: true, nativeOoxmlPreservation: true, ooxmlPreservationGraph: true, relationshipAwarePreservation: true, selectiveOoxmlMerge: true, relationshipConflictResolution: true, nativeMediaBridge: true, nativeChartBridge: true, nativeThemeBridge: true, definedNamesBridge: true, preservedRelationshipRebinding: true, contentTypesMerge: true, rootRelationshipMerge: true, collaborationFoundation: true,
       realTimeOperations: true,
       collaborativeOperationsV2: true,
       operationAcknowledgement: true,

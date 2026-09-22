@@ -1,151 +1,123 @@
 import { Injectable } from '@nestjs/common';
-import { TeamFolderRole } from '@prisma/client';
+import { FileType, TeamFolderRole } from '@prisma/client';
 import type { AccessTokenPayload } from '../auth/jwt.types';
-import {
-  PermissionService,
-  type AccessibleResource,
-} from '../permissions/permission.service';
+import { PermissionService, type AccessibleResource } from '../permissions/permission.service';
 import { PrismaService } from '../prisma/prisma.service';
+
+export type SearchOptions = {
+  type?: string; owner?: string; dateField?: 'created'|'modified'; dateFrom?: string; dateTo?: string;
+  page?: number; limit?: number; tags?: string[]; customField?: string; sort?: 'relevance'|'updated'|'created'|'name';
+};
+
+type Hit = { score: number; matchedBy: string[] };
+
+function scoreText(query: string, values: Array<[string, string | null | undefined, number]>): Hit {
+  const q = query.toLocaleLowerCase(); const tokens = q.split(/\s+/).filter(Boolean); let score = 0; const matchedBy: string[] = [];
+  for (const [label, value, weight] of values) {
+    const text = (value ?? '').toLocaleLowerCase(); if (!text) continue;
+    if (text === q) { score += weight * 2; matchedBy.push(label); continue; }
+    if (text.includes(q)) { score += weight; matchedBy.push(label); }
+    for (const token of tokens) if (token.length > 1 && text.includes(token)) score += weight * 0.2;
+  }
+  return { score, matchedBy };
+}
 
 @Injectable()
 export class SearchService {
-  constructor(
-    private readonly prisma: PrismaService,
-    private readonly permissions: PermissionService,
-  ) {}
+  constructor(private readonly prisma: PrismaService, private readonly permissions: PermissionService) {}
 
-  async search(user: AccessTokenPayload, query: string, filter: 'all' | 'folders' | 'files' | 'recent' = 'all') {
-    // My-Folder isolation (privacy P0): personal folders/files are visible only
-    // to their own owner; org shares and team folders stay searchable. The
-    // narrow Prisma predicates below are defense-in-depth on top of canRead.
+  async search(user: AccessTokenPayload, query: string, filter: 'all'|'folders'|'files'|'recent' = 'all', options: SearchOptions = {}) {
+    const page = Math.max(1, Math.floor(options.page ?? 1));
+    const limit = Math.min(100, Math.max(1, Math.floor(options.limit ?? 25)));
+    const candidateTake = Math.min(500, Math.max(100, page * limit * 4));
+    const tagNames = (options.tags ?? []).map((x) => x.trim().toLocaleLowerCase()).filter(Boolean).slice(0, 20);
+    const tagWhere = tagNames.length ? { tags: { some: { tag: { name: { in: tagNames } } } } } : {};
+    const dateKey = options.dateField === 'created' ? 'createdAt' : 'updatedAt';
+    const dateRange = options.dateFrom || options.dateTo ? { [dateKey]: { ...(options.dateFrom ? { gte: new Date(`${options.dateFrom}T00:00:00.000Z`) } : {}), ...(options.dateTo ? { lte: new Date(`${options.dateTo}T23:59:59.999Z`) } : {}) } } : {};
+    const typeFilter = options.type && options.type !== 'all' && Object.values(FileType).includes(options.type as FileType) ? { fileType: options.type as FileType } : {};
+
     const [folders, files] = await Promise.all([
       this.prisma.folder.findMany({
-        where: {
-          orgId: user.org_id,
-          name: { search: query },
-          OR: [
-            { teamFolderId: { not: null } },
-            { ownerId: user.sub },
-          ],
-        },
-        include: { owner: { select: { id: true, name: true, email: true, avatarUrl: true } } },
-        take: 50,
+        where: { orgId: user.org_id, name: { search: query }, OR: [{ teamFolderId: { not: null } }, { ownerId: user.sub }] },
+        include: { owner: { select: { id: true, name: true, email: true, avatarUrl: true } }, dataTemplate: { select: { id: true, name: true } } },
+        orderBy: { updatedAt: 'desc' }, take: candidateTake,
       }),
       this.prisma.file.findMany({
         where: {
-          orgId: user.org_id,
-          deletedAt: null,
-          name: { search: query },
+          orgId: user.org_id, deletedAt: null, ...typeFilter, ...(options.owner ? { ownerId: options.owner } : {}), ...dateRange, ...tagWhere,
           OR: [
-            { folder: null },
-            { folder: { teamFolderId: { not: null } } },
-            { folder: { ownerId: user.sub } },
+            { name: { search: query } },
+            { originalName: { search: query } },
+            { metadata: { title: { contains: query } } },
+            { metadata: { description: { contains: query } } },
+            { metadata: { contentText: { contains: query } } },
+            { metadata: { ocrText: { contains: query } } },
           ],
+          AND: [{ OR: [{ folder: null }, { folder: { teamFolderId: { not: null } } }, { folder: { ownerId: user.sub } }] }],
         },
         include: {
-          folder: { select: { teamFolderId: true } },
+          folder: { select: { id: true, name: true, teamFolderId: true } },
           owner: { select: { id: true, name: true, email: true, avatarUrl: true } },
+          metadata: { include: { dataTemplate: { select: { id: true, name: true } } } },
+          tags: { include: { tag: { select: { id: true, name: true } } } },
         },
-        take: 50,
+        orderBy: { updatedAt: 'desc' }, take: candidateTake,
       }),
     ]);
-    const visibleFolders: typeof folders = [];
-    for (const folder of folders) {
-      if (await this.canReadFolder(user, folder)) {
-        visibleFolders.push(folder);
-      }
-    }
-    const visibleFiles: Array<Omit<(typeof files)[number], 'folder'>> = [];
-    for (const file of files) {
-      if (await this.canReadFile(user, file)) {
-        const { folder: _folder, ...rest } = file;
-        visibleFiles.push(rest);
-      }
-    }
+
     const recentSince = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
-    const foldersByFilter = filter === 'files'
-      ? []
-      : filter === 'recent'
-        ? visibleFolders.filter((folder) => folder.updatedAt >= recentSince)
-        : visibleFolders;
-    const filesByFilter = filter === 'folders'
-      ? []
-      : filter === 'recent'
-        ? visibleFiles.filter((file) => file.updatedAt >= recentSince)
-        : visibleFiles;
-    return { query, folders: foldersByFilter, files: filesByFilter };
+    const visibleFolders: Array<any> = [];
+    for (const folder of folders) if (await this.canReadFolder(user, folder)) visibleFolders.push(folder);
+    const visibleFiles: Array<any> = [];
+    for (const file of files) if (await this.canReadFile(user, file)) visibleFiles.push(file);
+
+    const folderHits = visibleFolders.map((folder) => ({ item: folder, ...scoreText(query, [['name', folder.name, 10]]), updatedAt: folder.updatedAt, createdAt: folder.updatedAt }))
+      .filter((h) => filter !== 'files' && (filter !== 'recent' || h.updatedAt >= recentSince));
+    const fileHits = visibleFiles.map((file) => {
+      const metadata = file.metadata;
+      const text = scoreText(query, [['name', file.name, 10], ['originalName', file.originalName, 8], ['title', metadata?.title, 7], ['description', metadata?.description, 5], ['content', metadata?.contentText, 4], ['ocr', metadata?.ocrText, 3]]);
+      const tagBoost = tagNames.length && file.tags.some((t: any) => tagNames.includes(t.tag.name.toLocaleLowerCase())) ? 4 : 0;
+      const fieldBoost = this.customFieldMatches(metadata?.customFields, options.customField) ? 6 : 0;
+      return { item: file, score: text.score + tagBoost + fieldBoost, matchedBy: [...text.matchedBy, ...(tagBoost ? ['tag'] : []), ...(fieldBoost ? ['customField'] : [])], updatedAt: file.updatedAt, createdAt: file.createdAt };
+    }).filter((h) => filter !== 'folders' && (filter !== 'recent' || h.updatedAt >= recentSince));
+
+    if (options.customField) {
+      const [key, rawValue] = options.customField.split(':', 2);
+      if (key && rawValue !== undefined) {
+        fileHits.splice(0, fileHits.length, ...fileHits.filter((h) => String((h.item.metadata?.customFields as any)?.[key]) === rawValue));
+      }
+    }
+
+    const sort = options.sort ?? 'relevance';
+    const sorter = (a: any, b: any) => sort === 'name' ? a.item.name.localeCompare(b.item.name) : sort === 'created' ? b.createdAt.getTime() - a.createdAt.getTime() : sort === 'updated' ? b.updatedAt.getTime() - a.updatedAt.getTime() : b.score - a.score || b.updatedAt.getTime() - a.updatedAt.getTime();
+    folderHits.sort(sorter); fileHits.sort(sorter);
+    const folderStart = filter === 'files' ? 0 : (page - 1) * limit;
+    const fileStart = filter === 'folders' ? 0 : (page - 1) * limit;
+    const resultFolders = folderHits.slice(folderStart, folderStart + limit).map(({ item, score, matchedBy }) => ({ ...item, relevanceScore: Number(score.toFixed(3)), matchedBy }));
+    const resultFiles = fileHits.slice(fileStart, fileStart + limit).map(({ item, score, matchedBy }) => ({ ...item, tags: item.tags.map((x: any) => x.tag), relevanceScore: Number(score.toFixed(3)), matchedBy }));
+    return { query, page, limit, total: { folders: folderHits.length, files: fileHits.length }, folders: resultFolders, files: resultFiles };
   }
 
-  private async canReadFolder(
-    user: AccessTokenPayload,
-    folder: { orgId: string; ownerId: string; teamFolderId?: string | null },
-  ): Promise<boolean> {
-    if (folder.orgId !== user.org_id) {
-      return false;
-    }
-    if (!folder.teamFolderId) {
-      return this.permissions.canRead(user, {
-        orgId: folder.orgId,
-        ownerId: folder.ownerId,
-        teamFolderId: null,
-      });
-    }
-    const resource = await this.toTeamFolderResource(
-      user,
-      folder.orgId,
-      folder.teamFolderId,
-    );
-    return this.permissions.canRead(user, resource);
+  private customFieldMatches(value: unknown, expression?: string) {
+    if (!expression) return false; const [key, expected] = expression.split(':', 2); if (!key || expected === undefined || !value || typeof value !== 'object') return false;
+    return String((value as Record<string, unknown>)[key]) === expected;
   }
 
-  private async canReadFile(
-    user: AccessTokenPayload,
-    file: {
-      orgId: string;
-      ownerId: string;
-      folder?: { teamFolderId: string | null } | null;
-    },
-  ): Promise<boolean> {
-    if (file.orgId !== user.org_id) {
-      return false;
-    }
+  private async canReadFolder(user: AccessTokenPayload, folder: { orgId: string; ownerId: string; teamFolderId?: string | null }) {
+    if (folder.orgId !== user.org_id) return false;
+    if (!folder.teamFolderId) return this.permissions.canRead(user, { orgId: folder.orgId, ownerId: folder.ownerId, teamFolderId: null });
+    return this.permissions.canRead(user, await this.toTeamFolderResource(user, folder.orgId, folder.teamFolderId));
+  }
+
+  private async canReadFile(user: AccessTokenPayload, file: { orgId: string; ownerId: string; folder?: { teamFolderId: string | null } | null }) {
+    if (file.orgId !== user.org_id) return false;
     const teamFolderId = file.folder?.teamFolderId ?? null;
-    if (!teamFolderId) {
-      return this.permissions.canRead(user, {
-        orgId: file.orgId,
-        ownerId: file.ownerId,
-        teamFolderId: null,
-      });
-    }
-    const resource = await this.toTeamFolderResource(
-      user,
-      file.orgId,
-      teamFolderId,
-    );
-    return this.permissions.canRead(user, resource);
+    if (!teamFolderId) return this.permissions.canRead(user, { orgId: file.orgId, ownerId: file.ownerId, teamFolderId: null });
+    return this.permissions.canRead(user, await this.toTeamFolderResource(user, file.orgId, teamFolderId));
   }
 
-  private async toTeamFolderResource(
-    user: AccessTokenPayload,
-    orgId: string,
-    teamFolderId: string,
-  ): Promise<AccessibleResource> {
-    const teamFolderRole = await this.resolveCallerRole(user, teamFolderId);
-    return {
-      orgId,
-      ownerId: teamFolderId,
-      teamFolderId,
-      teamFolderRole,
-    };
-  }
-
-  private async resolveCallerRole(
-    user: AccessTokenPayload,
-    teamFolderId: string,
-  ): Promise<TeamFolderRole | null> {
-    const membership = await this.prisma.teamFolderMember.findFirst({
-      where: { teamFolderId, userId: user.sub },
-    });
-    return membership?.role ?? null;
+  private async toTeamFolderResource(user: AccessTokenPayload, orgId: string, teamFolderId: string): Promise<AccessibleResource> {
+    const membership = await this.prisma.teamFolderMember.findFirst({ where: { teamFolderId, userId: user.sub } });
+    return { orgId, ownerId: teamFolderId, teamFolderId, teamFolderRole: membership?.role ?? null };
   }
 }

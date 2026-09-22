@@ -1,0 +1,13 @@
+import {alignElements,distributeElements,snapValue,snapElement} from './geometry';
+import {ShowElement} from './model';
+const text=(id:string,x:number,y:number,width=10,height=10):ShowElement=>({id,type:'text',x,y,width,height,text:id});
+const assert=(ok:boolean,msg:string)=>{if(!ok)throw new Error(msg)};
+const base=[text('a',10,10),text('b',30,30),text('c',50,50)];
+assert(snapValue(12.4,5)===10,'snap value');
+assert(snapElement(text('x',12.4,13.1),5).x===10,'snap element x');
+assert(alignElements(base.map(e=>({...e})),['a','b'],'left').find(e=>e.id==='b')!.x===10,'align left');
+const centered=alignElements(base.map(e=>({...e})),['a','b'],'center');
+assert(centered.find(e=>e.id==='a')!.x===20 && centered.find(e=>e.id==='b')!.x===20,'align center');
+const distributed=distributeElements([text('a',0,10,10),text('b',20,10,10),text('c',60,10,10)],['a','b','c'],'horizontal');
+assert(distributed.find(e=>e.id==='b')!.x===35,'distribute horizontal');
+console.log('SHOW_PHASE18_GEOMETRY_PASS');

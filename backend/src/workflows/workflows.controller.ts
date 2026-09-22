@@ -17,6 +17,10 @@ export class WorkflowsController {
   @Post('templates/:id/versions/:versionId/rollback') rollbackTemplate(@CurrentUser() user: AccessTokenPayload, @Param('id', new ParseUUIDPipe({ version: '4' })) id: string, @Param('versionId', new ParseUUIDPipe({ version: '4' })) versionId: string) { return this.service.rollbackTemplateVersion(user, id, versionId); }
   @Delete('templates/:id') deleteTemplate(@CurrentUser() user: AccessTokenPayload, @Param('id', new ParseUUIDPipe({ version: '4' })) id: string) { return this.service.deleteTemplate(user, id); }
   @Get('functions/:id/versions') functionVersions(@CurrentUser() user: AccessTokenPayload, @Param('id', new ParseUUIDPipe({ version: '4' })) id: string) { return this.service.functionVersions(user, id); }
+  @Post('functions/:id/versions') createFunctionVersion(@CurrentUser() user: AccessTokenPayload, @Param('id', new ParseUUIDPipe({ version: '4' })) id: string, @Body() body: any) { return this.service.createFunctionVersion(user, id, body); }
+  @Get('functions/:id/executions') functionExecutions(@CurrentUser() user: AccessTokenPayload, @Param('id', new ParseUUIDPipe({ version: '4' })) id: string, @Query('limit') limit?: string) { return this.service.functionExecutions(user, id, Number(limit ?? 50)); }
+  @Patch('functions/:id') updateFunction(@CurrentUser() user: AccessTokenPayload, @Param('id', new ParseUUIDPipe({ version: '4' })) id: string, @Body() body: any) { return this.service.updateFunction(user, id, body); }
+  @Delete('functions/:id') deleteFunction(@CurrentUser() user: AccessTokenPayload, @Param('id', new ParseUUIDPipe({ version: '4' })) id: string) { return this.service.deleteFunction(user, id); }
   @Post('functions/:id/versions/:versionId/publish') publishFunctionVersion(@CurrentUser() user: AccessTokenPayload, @Param('id', new ParseUUIDPipe({ version: '4' })) id: string, @Param('versionId', new ParseUUIDPipe({ version: '4' })) versionId: string) { return this.service.publishFunctionVersion(user, id, versionId); }
   @Post('functions/:id/test') testFunction(@CurrentUser() user: AccessTokenPayload, @Param('id', new ParseUUIDPipe({ version: '4' })) id: string, @Body() body: any) { return this.service.testFunction(user, id, body); }
   @Get('functions') functions(@CurrentUser() user: AccessTokenPayload) { return this.service.functions(user); }
@@ -25,6 +29,7 @@ export class WorkflowsController {
   @Get('participants') participants(@CurrentUser() user: AccessTokenPayload) { return this.service.participants(user); }
   @Get('participant-options') participantOptions(@CurrentUser() user: AccessTokenPayload) { return this.service.participantOptions(user); }
   @Get('diagnostics') diagnostics(@CurrentUser() user: AccessTokenPayload) { return this.service.diagnostics(user); }
+  @Get('integration-status') integrationStatus(@CurrentUser() user: AccessTokenPayload) { return this.service.integrationStatus(user); }
   @Get('queue') queue(@CurrentUser() user: AccessTokenPayload, @Query('status') status?: string) { return this.service.queue(user, status); }
   @Get('queue/:id') queueJob(@CurrentUser() user: AccessTokenPayload, @Param('id', new ParseUUIDPipe({ version: '4' })) id: string) { return this.service.queueJob(user, id); }
   @Post('queue/:id/:action') queueAction(@CurrentUser() user: AccessTokenPayload, @Param('id', new ParseUUIDPipe({ version: '4' })) id: string, @Param('action') action: string) { return this.service.queueAction(user, id, action); }
@@ -38,6 +43,9 @@ export class WorkflowsController {
   logs(@CurrentUser() user: AccessTokenPayload, @Param('id', new ParseUUIDPipe({ version: '4' })) id: string) { return this.service.logs(user, id); }
   @Post('runs/:id/retry')
   retry(@CurrentUser() user: AccessTokenPayload, @Param('id', new ParseUUIDPipe({ version: '4' })) id: string) { return this.service.retry(user, id); }
+  @Post('runs/:id/reconnect/:connectionId')
+  reconnectRunConnection(@CurrentUser() user: AccessTokenPayload, @Param('id', new ParseUUIDPipe({ version: '4' })) id: string, @Param('connectionId', new ParseUUIDPipe({ version: '4' })) connectionId: string) { return this.service.reconnectRunConnection(user, id, connectionId); }
+  @Get(':id/connection-health') connectionHealth(@CurrentUser() user: AccessTokenPayload, @Param('id', new ParseUUIDPipe({ version: '4' })) id: string) { return this.service.validateForActivation(user, id); }
   @Get(':id') get(@CurrentUser() user: AccessTokenPayload, @Param('id', new ParseUUIDPipe({ version: '4' })) id: string) { return this.service.get(user, id); }
   @Post() create(@CurrentUser() user: AccessTokenPayload, @Body() body: unknown) { return this.service.create(user, body); }
   @Patch(':id') update(@CurrentUser() user: AccessTokenPayload, @Param('id', new ParseUUIDPipe({ version: '4' })) id: string, @Body() body: unknown) { return this.service.update(user, id, body); }

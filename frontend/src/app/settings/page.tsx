@@ -9,6 +9,8 @@ import {
   revokeSession,
   updateProfile,
   type SessionRecord,
+  listSecurityEvents,
+  type SecurityEventRecord,
 } from "../../lib/api/settings";
 import { getToken } from "../../lib/api/jwt";
 
@@ -18,6 +20,7 @@ export default function SettingsPage() {
   const [email, setEmail] = useState("");
   const [role, setRole] = useState("");
   const [sessions, setSessions] = useState<SessionRecord[]>([]);
+  const [securityEvents, setSecurityEvents] = useState<SecurityEventRecord[]>([]);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
   const [currentPassword, setCurrentPassword] = useState("");
@@ -26,11 +29,12 @@ export default function SettingsPage() {
   async function load() {
     const token = getToken();
     if (!token) return;
-    const [u, s] = await Promise.all([me(token), listSessions()]);
+    const [u, s, ev] = await Promise.all([me(token), listSessions(), listSecurityEvents()]);
     setName(u.name ?? "");
     setEmail(u.email);
     setRole(u.role);
     setSessions(s);
+    setSecurityEvents(ev);
   }
 
   useEffect(() => {
@@ -150,6 +154,8 @@ export default function SettingsPage() {
                 <tr className="imkan-table-row">
                   <th className="px-3 py-2 text-start font-medium">{label("settings.sessionId")}</th>
                   <th className="px-3 py-2 text-start font-medium">{label("settings.lastSeen")}</th>
+                  <th className="px-3 py-2 text-start font-medium">{label("settings.device")}</th>
+                  <th className="px-3 py-2 text-start font-medium">IP</th>
                   <th className="px-3 py-2 text-start font-medium">{label("settings.expires")}</th>
                   <th className="px-3 py-2 text-end font-medium">{label("files.actions")}</th>
                 </tr>
@@ -157,12 +163,14 @@ export default function SettingsPage() {
               <tbody>
                 {sessions.map((session) => (
                   <tr key={session.id} className="imkan-table-row">
-                    <td className="px-3 py-2">{session.id.slice(0, 12)}…</td>
+                    <td className="px-3 py-2">{session.id.slice(0, 12)}… {session.isCurrent ? <span className="imkan-chip">Current</span> : null}</td>
                     <td className="px-3 py-2">
                       {session.lastSeenAt
                         ? new Date(session.lastSeenAt).toLocaleString()
                         : "—"}
                     </td>
+                    <td className="px-3 py-2 max-w-[260px] truncate" title={session.userAgent || ""}>{session.userAgent || "Web"}</td>
+                    <td className="px-3 py-2">{session.ipAddress || "—"}</td>
                     <td className="px-3 py-2">
                       {session.expiresAt
                         ? new Date(session.expiresAt).toLocaleString()
@@ -186,6 +194,11 @@ export default function SettingsPage() {
               {label("settings.logoutAll")}
             </button>
           </div>
+        </section>
+
+        <section className="imkan-panel imkan-settings-card">
+          <h2 className="imkan-panel-title">Security activity</h2>
+          {securityEvents.length === 0 ? <p className="imkan-muted">No security events.</p> : <div className="overflow-x-auto w-full max-w-full"><table className="imkan-table"><thead><tr><th>Event</th><th>Severity</th><th>IP</th><th>Time</th></tr></thead><tbody>{securityEvents.map((event) => <tr key={event.id} className="imkan-table-row"><td>{event.eventType}</td><td>{event.severity}</td><td>{event.ipAddress || "—"}</td><td>{new Date(event.createdAt).toLocaleString()}</td></tr>)}</tbody></table></div>}
         </section>
       </div>
     </section>

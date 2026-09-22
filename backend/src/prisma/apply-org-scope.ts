@@ -12,6 +12,7 @@ export const TENANT_SCOPED_MODELS = new Set([
   'FileActivity',
   'Tag',
   'AuditLog',
+  'FileDataTemplate',
 ]);
 
 export type QueryArgs = {

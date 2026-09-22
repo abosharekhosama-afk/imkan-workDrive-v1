@@ -19,12 +19,16 @@ import {
   TeamFolderRole,
   TrashReason,
   VersionStatus,
+  UploadStatus,
+  UploadSessionStatus,
+  ResourceType,
 } from '@prisma/client';
 import type { AccessTokenPayload } from '../auth/jwt.types';
 import {
   PermissionService,
   type AccessibleResource,
 } from '../permissions/permission.service';
+import { EffectivePermissionService } from '../permissions/effective-permission.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { STORAGE_SERVICE, type StorageService } from '../storage/storage.types';
 import { contentDispositionInline } from '../common/content-disposition';
@@ -37,6 +41,7 @@ import {
 import { QuotaService } from '../quota/quota.service';
 import { classifyFileType, extractExtension } from '../common/file-classification';
 import { WorkflowEngineService } from '../workflows/workflow-engine.service';
+import { DlpService } from '../dlp/dlp.service';
 
 export type UploadRequestResponse = {
   upload_url: string;
@@ -48,6 +53,23 @@ export type UploadCompleteResponse = {
   file_id: string;
   upload_id: string;
   status: 'complete';
+};
+
+export type ResumableUploadStartResponse = {
+  session_id: string;
+  file_id: string;
+  version_id: string;
+  part_size: number;
+  total_parts: number;
+  expires_at: string;
+};
+
+export type ResumableUploadPartResponse = {
+  session_id: string;
+  part_number: number;
+  size: number;
+  checksum: string;
+  etag: string;
 };
 
 export type FileDownloadResponse = {
@@ -130,9 +152,11 @@ export class FilesService {
     private readonly prisma: PrismaService,
     @Inject(STORAGE_SERVICE) private readonly storage: StorageService,
     private readonly permissions: PermissionService,
+    private readonly effective: EffectivePermissionService,
     private readonly quota: QuotaService,
     private readonly config: ConfigService,
     @Inject(forwardRef(() => WorkflowEngineService)) private readonly workflowEngine: WorkflowEngineService,
+    private readonly dlp: DlpService,
   ) {}
 
   async requestUpload(
@@ -203,6 +227,7 @@ export class FilesService {
           sha256Hash: input.sha256,
           uploadedById: user.sub,
           status: VersionStatus.ACTIVE,
+          uploadStatus: UploadStatus.PENDING,
         },
       });
       await tx.fileActivity.create({
@@ -221,6 +246,7 @@ export class FilesService {
       versionId,
       ownerOrgId: user.org_id,
       contentType: input.mimeType,
+      checksum: input.sha256,
     });
 
     return {
@@ -262,7 +288,7 @@ export class FilesService {
       await this.prisma.$transaction(async (tx) => {
         await tx.file.create({ data: { id: fileId, orgId: user.org_id, folderId: folder?.id ?? null, name: cleanName, originalName: cleanName, extension, mimeType: input.mimeType, fileType: classifyFileType(input.mimeType), size, sha256Hash: sha256, status: FileStatus.ACTIVE, ownerId: user.sub } });
         await tx.storageObject.create({ data: { id: storageObjectId, orgId: user.org_id, fileId, storageKey: objectKey, bucket, region, size, checksum: sha256 } });
-        await tx.fileVersion.create({ data: { id: versionId, orgId: user.org_id, fileId, versionNumber: 1, storageObjectId, size, mimeType: input.mimeType, extension, sha256Hash: sha256, uploadedById: user.sub, status: VersionStatus.ACTIVE } });
+        await tx.fileVersion.create({ data: { id: versionId, orgId: user.org_id, fileId, versionNumber: 1, storageObjectId, size, mimeType: input.mimeType, extension, sha256Hash: sha256, uploadedById: user.sub, status: VersionStatus.ACTIVE, uploadStatus: UploadStatus.COMPLETE } });
         await tx.fileActivity.create({ data: { orgId: user.org_id, fileId, userId: user.sub, action: AuditAction.CREATE, metadata: { versionNumber: 1, name: cleanName, mimeType: input.mimeType, source: 'office-template-wizard' } } });
         await tx.storageQuota.upsert({ where: { orgId: user.org_id }, create: { orgId: user.org_id, quotaBytes: 10737418240n, usedBytes: size }, update: { usedBytes: { increment: size } } });
       });
@@ -412,6 +438,179 @@ export class FilesService {
     };
   }
 
+  async startResumableUpload(
+    user: AccessTokenPayload,
+    input: { folderId?: string | null; name: string; mimeType: string; size: number; sha256: string; partSize?: number },
+  ): Promise<ResumableUploadStartResponse> {
+    const size = BigInt(input.size);
+    if (!Number.isSafeInteger(input.size) || input.size <= 0) throw new BadRequestException('Invalid upload size');
+    if (typeof input.name !== 'string' || typeof input.mimeType !== 'string') throw new BadRequestException('Invalid upload manifest');
+    if (!/^[a-zA-Z0-9][a-zA-Z0-9!#$&^_.+-]{0,126}\/[a-zA-Z0-9][a-zA-Z0-9!#$&^_.+-]{0,126}$/.test(input.mimeType)) throw new BadRequestException('Invalid mime_type');
+    if (!/^[a-f0-9]{64}$/i.test(input.sha256)) throw new BadRequestException('Invalid SHA-256 checksum');
+    const partSize = input.partSize ?? 16 * 1024 * 1024;
+    if (!Number.isInteger(partSize) || partSize < 5 * 1024 * 1024 || partSize > 100 * 1024 * 1024) {
+      throw new BadRequestException('partSize must be between 5 MiB and 100 MiB');
+    }
+    const totalParts = Math.ceil(input.size / partSize);
+    if (totalParts > 10000) throw new BadRequestException('Upload requires too many parts');
+    await this.quota.assertAvailable(user, size);
+    const folder = input.folderId ? await this.prisma.folder.findFirst({ where: { id: input.folderId } }) : null;
+    if (input.folderId && (!folder || folder.orgId !== user.org_id)) throw new NotFoundException('Folder not found');
+    if (folder) await this.assertCanUploadToFolder(user, folder);
+    const cleanName = input.name.trim();
+    if (!cleanName || cleanName.length > 255 || /[\x00-\x1F\x7F]/.test(cleanName)) throw new BadRequestException('Invalid file name');
+    const duplicate = await this.prisma.file.findFirst({ where: { orgId: user.org_id, folderId: folder?.id ?? null, name: cleanName, status: FileStatus.ACTIVE, deletedAt: null }, select: { id: true } });
+    if (duplicate) throw new ConflictException('A file with this name already exists in the destination folder');
+
+    const fileId = randomUUID();
+    const versionId = randomUUID();
+    const storageObjectId = randomUUID();
+    const sessionId = randomUUID();
+    const objectKey = this.storage.buildObjectKey(fileId, versionId);
+    const { bucket, region } = this.storageLocation();
+    let multipart: { uploadId: string; objectKey: string } | null = null;
+    try {
+      multipart = await this.storage.createMultipartUpload({ fileId, versionId, ownerOrgId: user.org_id, contentType: input.mimeType, checksum: input.sha256, storageKey: objectKey });
+      const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
+      await this.prisma.$transaction(async (tx) => {
+        await tx.file.create({ data: { id: fileId, orgId: user.org_id, folderId: folder?.id ?? null, name: cleanName, originalName: cleanName, extension: extractExtension(cleanName), mimeType: input.mimeType, fileType: classifyFileType(input.mimeType), size, sha256Hash: input.sha256.toLowerCase(), status: FileStatus.ACTIVE, ownerId: user.sub } });
+        await tx.storageObject.create({ data: { id: storageObjectId, orgId: user.org_id, fileId, storageKey: objectKey, bucket, region, size, checksum: input.sha256.toLowerCase() } });
+        await tx.fileVersion.create({ data: { id: versionId, orgId: user.org_id, fileId, versionNumber: 1, storageObjectId, size, mimeType: input.mimeType, extension: extractExtension(cleanName), sha256Hash: input.sha256.toLowerCase(), uploadedById: user.sub, status: VersionStatus.ACTIVE, uploadStatus: UploadStatus.PENDING } });
+        await tx.uploadSession.create({ data: { id: sessionId, orgId: user.org_id, fileId, versionId, storageUploadId: multipart!.uploadId, objectKey: multipart!.objectKey, expectedSize: size, expectedSha256: input.sha256.toLowerCase(), partSize, totalParts, status: UploadSessionStatus.PENDING, expiresAt, createdById: user.sub } });
+        await tx.fileActivity.create({ data: { orgId: user.org_id, fileId, userId: user.sub, action: AuditAction.CREATE, metadata: { uploadSessionId: sessionId, pending: true, name: cleanName, mimeType: input.mimeType, totalParts } } });
+      });
+      return { session_id: sessionId, file_id: fileId, version_id: versionId, part_size: partSize, total_parts: totalParts, expires_at: expiresAt.toISOString() };
+    } catch (error) {
+      if (multipart) await this.storage.abortMultipartUpload({ fileId, versionId, ownerOrgId: user.org_id, contentType: input.mimeType, storageKey: objectKey }, multipart.uploadId).catch(() => undefined);
+      throw error;
+    }
+  }
+
+  async uploadResumablePart(user: AccessTokenPayload, sessionId: string, partNumber: number, rawUpload: unknown, checksum: string): Promise<ResumableUploadPartResponse> {
+    if (!Number.isInteger(partNumber) || partNumber < 1) throw new BadRequestException('Invalid part number');
+    if (!/^[a-f0-9]{64}$/i.test(checksum)) throw new BadRequestException('Invalid part checksum');
+    const upload = parseVersionUploadFile(rawUpload);
+    const session = await this.prisma.uploadSession.findFirst({ where: { id: sessionId, orgId: user.org_id }, include: { version: true } });
+    if (!session) throw new NotFoundException('Upload session not found');
+    if (session.status !== UploadSessionStatus.PENDING) throw new ConflictException('Upload session is no longer active');
+    if (session.expiresAt.getTime() <= Date.now()) throw new ConflictException('Upload session has expired');
+    if (partNumber > session.totalParts) throw new BadRequestException('Part number exceeds the upload manifest');
+    const isLast = partNumber === session.totalParts;
+    if (!isLast && upload.size !== session.partSize) throw new BadRequestException('Non-final upload parts must use the configured part size');
+    if (isLast && (upload.size < 1 || upload.size > session.partSize)) throw new BadRequestException('Final upload part has an invalid size');
+    if (BigInt(upload.size) > session.expectedSize) throw new BadRequestException('Upload part exceeds the expected file size');
+    const result = await this.storage.uploadMultipartPart({ fileId: session.fileId, versionId: session.versionId, ownerOrgId: user.org_id, contentType: session.version.mimeType, storageKey: session.objectKey }, session.storageUploadId, partNumber, upload.buffer, checksum.toLowerCase());
+    await this.prisma.uploadPart.upsert({ where: { sessionId_partNumber: { sessionId, partNumber } }, create: { sessionId, partNumber, size: result.size, checksum: result.checksum, etag: result.etag }, update: { size: result.size, checksum: result.checksum, etag: result.etag, createdAt: new Date() } });
+    return { session_id: sessionId, part_number: partNumber, size: result.size, checksum: result.checksum, etag: result.etag };
+  }
+
+  async getResumableUpload(user: AccessTokenPayload, sessionId: string) {
+    const session = await this.prisma.uploadSession.findFirst({ where: { id: sessionId, orgId: user.org_id }, include: { parts: { orderBy: { partNumber: 'asc' } } } });
+    if (!session) throw new NotFoundException('Upload session not found');
+    return { session_id: session.id, file_id: session.fileId, version_id: session.versionId, status: session.status, part_size: session.partSize, total_parts: session.totalParts, expected_size: session.expectedSize.toString(), expected_sha256: session.expectedSha256, expires_at: session.expiresAt.toISOString(), received_parts: session.parts.map(p => ({ part_number: p.partNumber, size: p.size, checksum: p.checksum, etag: p.etag })) };
+  }
+
+  async completeResumableUpload(user: AccessTokenPayload, sessionId: string): Promise<UploadCompleteResponse> {
+    const session = await this.prisma.uploadSession.findFirst({ where: { id: sessionId, orgId: user.org_id }, include: { version: true, file: true, parts: { orderBy: { partNumber: 'asc' } } } });
+    if (!session) throw new NotFoundException('Upload session not found');
+    if (session.status === UploadSessionStatus.COMPLETE) return { file_id: session.fileId, upload_id: session.versionId, status: 'complete' };
+    if (session.status !== UploadSessionStatus.PENDING) throw new ConflictException('Upload session is no longer completable');
+    if (session.expiresAt.getTime() <= Date.now()) throw new ConflictException('Upload session has expired');
+    if (session.parts.length !== session.totalParts || session.parts.some((p, i) => p.partNumber !== i + 1 || !p.etag)) throw new BadRequestException('Not all upload parts have been received');
+    const totalSize = session.parts.reduce((sum, p) => sum + p.size, 0);
+    if (BigInt(totalSize) !== session.expectedSize) throw new BadRequestException('Uploaded parts do not match the expected file size');
+
+    if (!session.storageCompletedAt) {
+      try {
+        await this.storage.completeMultipartUpload({ fileId: session.fileId, versionId: session.versionId, ownerOrgId: user.org_id, contentType: session.version.mimeType, storageKey: session.objectKey }, session.storageUploadId, session.parts.map(p => ({ partNumber: p.partNumber, etag: p.etag! })));
+      } catch (error) {
+        // Crash-safe retry: the storage provider may have completed the
+        // multipart operation immediately before the process lost the DB write.
+        const existing = await this.storage.inspectObject({ fileId: session.fileId, versionId: session.versionId, ownerOrgId: user.org_id, contentType: session.version.mimeType, checksum: session.expectedSha256, storageKey: session.objectKey }).catch(() => null);
+        if (!existing || existing.size !== Number(session.expectedSize) || existing.checksum?.toLowerCase() !== session.expectedSha256.toLowerCase()) throw error;
+      }
+      await this.prisma.uploadSession.update({ where: { id: session.id }, data: { storageCompletedAt: new Date() } });
+    }
+    const inspected = await this.storage.inspectObject({ fileId: session.fileId, versionId: session.versionId, ownerOrgId: user.org_id, contentType: session.version.mimeType, checksum: session.expectedSha256, storageKey: session.objectKey });
+    if (inspected.size !== Number(session.expectedSize) || inspected.checksum?.toLowerCase() !== session.expectedSha256.toLowerCase()) {
+      await this.storage.deleteStoredObject(session.objectKey).catch(() => undefined);
+      await this.prisma.$transaction(async tx => {
+        await tx.uploadSession.updateMany({ where: { id: session.id, status: UploadSessionStatus.PENDING }, data: { status: UploadSessionStatus.ABORTED } });
+        await tx.file.delete({ where: { id: session.fileId } }).catch(() => undefined);
+      });
+      throw new BadRequestException('Completed object failed the upload integrity check');
+    }
+
+    try {
+      await this.prisma.$transaction(async (tx) => {
+        // Claim the session first. This makes completion single-writer and prevents
+        // a losing concurrent request from ever mutating quota or deleting the
+        // physical object finalized by the winning request.
+        const claimed = await tx.uploadSession.updateMany({ where: { id: session.id, status: UploadSessionStatus.PENDING }, data: { status: UploadSessionStatus.COMPLETE, completedAt: new Date() } });
+        if (claimed.count !== 1) throw new ConflictException('Upload completion was already processed; retry the request');
+        await tx.storageQuota.upsert({ where: { orgId: user.org_id }, create: { orgId: user.org_id, quotaBytes: 10737418240n, usedBytes: 0n }, update: {} });
+        const quotaUpdated = await tx.$executeRaw`UPDATE storage_quotas SET used_bytes = used_bytes + ${session.expectedSize} WHERE org_id = ${user.org_id} AND used_bytes + ${session.expectedSize} <= quota_bytes`;
+        if (quotaUpdated !== 1) throw new ForbiddenException('Storage quota exceeded');
+        await tx.fileVersion.update({ where: { id: session.versionId }, data: { uploadStatus: UploadStatus.COMPLETE, status: VersionStatus.ACTIVE } });
+        await tx.file.update({ where: { id: session.fileId }, data: { size: session.expectedSize, sha256Hash: session.expectedSha256, mimeType: session.version.mimeType, fileType: classifyFileType(session.version.mimeType) } });
+        await tx.fileActivity.create({ data: { orgId: user.org_id, fileId: session.fileId, userId: user.sub, action: AuditAction.UPLOAD_VERSION, metadata: { resumable: true, versionNumber: session.version.versionNumber, size: session.expectedSize.toString(), checksum: session.expectedSha256 } } });
+        await tx.auditLog.create({ data: { orgId: user.org_id, actorId: user.sub, action: 'FILE_UPLOAD_COMPLETE', resourceType: 'FILE', resourceId: session.fileId, metadata: { resumable: true, sessionId: session.id } } });
+      });
+    } catch (error) {
+      // If the DB claim/quota gate failed after storage finalization, remove the
+      // physical object and mark the pending session terminal. This avoids an
+      // unreferenced object consuming storage indefinitely. A losing concurrent
+      // request cannot enter this branch after another request has committed the
+      // COMPLETE claim because the transaction above fails before its cleanup.
+      if (error instanceof ForbiddenException) {
+        await this.storage.deleteStoredObject(session.objectKey).catch(() => undefined);
+        await this.prisma.$transaction(async tx => {
+          const rolledBack = await tx.uploadSession.updateMany({ where: { id: session.id, status: UploadSessionStatus.PENDING }, data: { status: UploadSessionStatus.ABORTED } });
+          if (rolledBack.count) {
+            await tx.fileVersion.update({ where: { id: session.versionId }, data: { uploadStatus: UploadStatus.ABORTED, status: VersionStatus.DELETED } });
+            await tx.file.delete({ where: { id: session.fileId } }).catch(() => undefined);
+            await tx.storageObject.delete({ where: { id: session.version.storageObjectId } }).catch(() => undefined);
+          }
+        });
+      }
+      throw error;
+    }
+    void this.dlp.classifyFile(user, session.fileId).catch(() => undefined);
+    return { file_id: session.fileId, upload_id: session.versionId, status: 'complete' };
+  }
+
+  async abortResumableUpload(user: AccessTokenPayload, sessionId: string) {
+    const session = await this.prisma.uploadSession.findFirst({ where: { id: sessionId, orgId: user.org_id }, include: { version: { select: { storageObjectId: true } } } });
+    if (!session) throw new NotFoundException('Upload session not found');
+    if (session.status === UploadSessionStatus.COMPLETE) throw new ConflictException('Completed uploads cannot be aborted');
+    await this.storage.abortMultipartUpload({ fileId: session.fileId, versionId: session.versionId, ownerOrgId: user.org_id, storageKey: session.objectKey }, session.storageUploadId).catch(() => undefined);
+    await this.prisma.$transaction(async tx => {
+      await tx.uploadSession.update({ where: { id: session.id }, data: { status: UploadSessionStatus.ABORTED } });
+      await tx.fileVersion.update({ where: { id: session.versionId }, data: { uploadStatus: UploadStatus.ABORTED, status: VersionStatus.DELETED } });
+      await tx.file.delete({ where: { id: session.fileId } });
+      await tx.storageObject.delete({ where: { id: session.version.storageObjectId } }).catch(() => undefined);
+    });
+    return { session_id: session.id, aborted: true };
+  }
+
+  async cleanupExpiredResumableUploads(user: AccessTokenPayload) {
+    const sessions = await this.prisma.uploadSession.findMany({ where: { orgId: user.org_id, status: UploadSessionStatus.PENDING, expiresAt: { lt: new Date() } }, include: { version: { select: { storageObjectId: true } } }, take: 100 });
+    let cleaned = 0;
+    for (const session of sessions) {
+      await this.storage.abortMultipartUpload({ fileId: session.fileId, versionId: session.versionId, ownerOrgId: user.org_id, storageKey: session.objectKey }, session.storageUploadId).catch(() => undefined);
+      await this.prisma.$transaction(async tx => {
+        const claimed = await tx.uploadSession.updateMany({ where: { id: session.id, status: UploadSessionStatus.PENDING }, data: { status: UploadSessionStatus.EXPIRED } });
+        if (claimed.count) {
+          await tx.fileVersion.update({ where: { id: session.versionId }, data: { uploadStatus: UploadStatus.ABORTED, status: VersionStatus.DELETED } });
+          await tx.file.delete({ where: { id: session.fileId } }).catch(() => undefined);
+          await tx.storageObject.delete({ where: { id: session.version.storageObjectId } }).catch(() => undefined);
+          cleaned++;
+        }
+      });
+    }
+    return { cleaned };
+  }
+
   async completeUpload(
     user: AccessTokenPayload,
     uploadId: string,
@@ -424,22 +623,50 @@ export class FilesService {
       throw new NotFoundException('Upload not found');
     }
 
+    // Completion is idempotent: a client retry must never double-count quota
+    // or emit duplicate completion side effects.
+    if (version.uploadStatus === UploadStatus.COMPLETE) {
+      return { file_id: version.fileId, upload_id: version.id, status: 'complete' };
+    }
+    if (version.uploadStatus !== UploadStatus.PENDING) {
+      throw new BadRequestException('Upload is no longer completable');
+    }
+
+    let inspected: { size: number; checksum: string | null };
     try {
-      await this.storage.assertObjectExists({
+      inspected = await this.storage.inspectObject({
         fileId: version.fileId,
         versionId: version.id,
         ownerOrgId: user.org_id,
+        contentType: version.mimeType,
+        checksum: version.sha256Hash,
       });
     } catch (error) {
-      if (error instanceof BadRequestException) {
-        throw error;
-      }
+      if (error instanceof BadRequestException) throw error;
       throw new BadRequestException('Uploaded object was not found');
     }
+    if (inspected.size !== Number(version.size)) {
+      throw new BadRequestException('Uploaded object size does not match the upload manifest');
+    }
+    if (!inspected.checksum || inspected.checksum !== version.sha256Hash.toLowerCase()) {
+      throw new BadRequestException('Uploaded object checksum does not match the upload manifest');
+    }
 
-    await this.prisma.$transaction([
-      this.prisma.storageQuota.upsert({ where: { orgId: user.org_id }, create: { orgId: user.org_id, quotaBytes: 10737418240n, usedBytes: version.size }, update: { usedBytes: { increment: version.size } } }),
-      this.prisma.file.update({
+    await this.prisma.$transaction(async (tx) => {
+      // Claim completion atomically. Only the request that changes PENDING →
+      // COMPLETE is allowed to increment quota and emit completion effects.
+      const claimed = await tx.fileVersion.updateMany({
+        where: { id: version.id, uploadStatus: UploadStatus.PENDING },
+        data: { uploadStatus: UploadStatus.COMPLETE },
+      });
+      if (claimed.count !== 1) {
+        throw new ConflictException('Upload completion was already processed; retry the request');
+      }
+
+      await tx.storageQuota.upsert({ where: { orgId: user.org_id }, create: { orgId: user.org_id, quotaBytes: 10737418240n, usedBytes: 0n }, update: {} });
+      const quotaUpdated = await tx.$executeRaw`UPDATE storage_quotas SET used_bytes = used_bytes + ${version.size} WHERE org_id = ${user.org_id} AND used_bytes + ${version.size} <= quota_bytes`;
+      if (quotaUpdated !== 1) throw new ForbiddenException('Storage quota exceeded');
+      await tx.file.update({
         where: { id: version.fileId },
         data: {
           size: version.size,
@@ -447,8 +674,8 @@ export class FilesService {
           sha256Hash: version.sha256Hash,
           fileType: classifyFileType(version.mimeType),
         },
-      }),
-      this.prisma.fileActivity.create({
+      });
+      await tx.fileActivity.create({
         data: {
           orgId: user.org_id,
           fileId: version.fileId,
@@ -456,17 +683,18 @@ export class FilesService {
           action: AuditAction.UPLOAD_VERSION,
           metadata: { versionNumber: version.versionNumber, size: version.size.toString() },
         },
-      }),
-    ]);
-    await this.prisma.auditLog.create({
-      data: {
-        orgId: user.org_id,
-        actorId: user.sub,
-        action: 'FILE_UPLOAD_COMPLETE',
-        resourceType: 'FILE',
-        resourceId: version.fileId,
-      },
+      });
+      await tx.auditLog.create({
+        data: {
+          orgId: user.org_id,
+          actorId: user.sub,
+          action: 'FILE_UPLOAD_COMPLETE',
+          resourceType: 'FILE',
+          resourceId: version.fileId,
+        },
+      });
     });
+    void this.dlp.classifyFile(user, version.fileId).catch(() => undefined);
 
     // Active upload workflows are evaluated only after the upload transaction
     // succeeds. Execution is idempotent per workflow/file event and failures
@@ -527,6 +755,7 @@ export class FilesService {
       where: { id: fileId, deletedAt: null },
       include: {
         versions: {
+          where: { uploadStatus: UploadStatus.COMPLETE },
           orderBy: { versionNumber: 'desc' },
           take: 1,
         },
@@ -539,6 +768,7 @@ export class FilesService {
     if (!(await this.canReadFile(user, file))) {
       throw new NotFoundException('File not found');
     }
+    await this.dlp.assertAllowed(user, file.id, 'DOWNLOAD');
     const scan = await this.prisma.$queryRawUnsafe<any[]>(`SELECT status FROM malware_scans WHERE org_id=? AND file_id=? ORDER BY created_at DESC LIMIT 1`, user.org_id, file.id).catch(() => []);
     if (scan[0]?.status === 'INFECTED') throw new NotFoundException('File is unavailable');
 
@@ -587,7 +817,7 @@ export class FilesService {
       where: { id: fileId, deletedAt: null },
       include: {
         versions: {
-          where: { versionNumber },
+          where: { versionNumber, uploadStatus: UploadStatus.COMPLETE },
           take: 1,
         },
         folder: { select: { teamFolderId: true } },
@@ -599,6 +829,7 @@ export class FilesService {
     if (!(await this.canReadFile(user, file))) {
       throw new NotFoundException('File not found');
     }
+    await this.dlp.assertAllowed(user, file.id, 'DOWNLOAD');
 
     const version = file.versions[0];
     const storageObject = await this.resolveVersionStorageObject(version);
@@ -647,7 +878,7 @@ export class FilesService {
     const file = await this.prisma.file.findFirst({
       where: { id: fileId, deletedAt: null },
       include: {
-        versions: { where: { id: versionId }, take: 1 },
+        versions: { where: { id: versionId, uploadStatus: UploadStatus.COMPLETE }, take: 1 },
         folder: { select: { teamFolderId: true } },
       },
     });
@@ -657,6 +888,7 @@ export class FilesService {
     if (!(await this.canReadFile(user, file))) {
       throw new NotFoundException('File not found');
     }
+    await this.dlp.assertAllowed(user, file.id, 'DOWNLOAD');
 
     const version = file.versions[0];
     const storageObject = await this.resolveVersionStorageObject(version);
@@ -723,10 +955,10 @@ export class FilesService {
       throw new NotFoundException('File not found');
     }
     const resource = await this.toFileAccessResource(user, file);
-    if (!this.permissions.canRead(user, resource)) {
+    if (!(await this.effective.canRead(user, ResourceType.FILE, file.id))) {
       throw new NotFoundException('File not found');
     }
-    if (!this.permissions.canWrite(user, resource)) {
+    if (!(await this.effective.canWrite(user, ResourceType.FILE, file.id))) {
       throw new ForbiddenException(
         'Not allowed to upload a new version of this file',
       );
@@ -859,6 +1091,8 @@ export class FilesService {
       throw error;
     }
 
+    void this.dlp.classifyFile(user, fileId).catch(() => undefined);
+
     return {
       file_id: fileId,
       version_id: versionId,
@@ -886,7 +1120,7 @@ export class FilesService {
       where: { id: fileId, deletedAt: null },
       include: {
         versions: {
-          where: { status: VersionStatus.ACTIVE },
+          where: { status: VersionStatus.ACTIVE, uploadStatus: UploadStatus.COMPLETE },
           orderBy: { versionNumber: 'desc' },
           take: 1,
         },
@@ -932,6 +1166,36 @@ export class FilesService {
       version_number: version.versionNumber,
       updated_at: version.createdAt?.toISOString() ?? null,
     };
+  }
+
+
+  /** Aggregated collaboration activity visible to the current user. */
+  async collaborationActivity(user: AccessTokenPayload, limit = 50) {
+    const candidates = await this.prisma.file.findMany({
+      where: { orgId: user.org_id, deletedAt: null },
+      take: 250,
+      orderBy: { updatedAt: 'desc' },
+      select: { id: true, name: true, ownerId: true, folder: { select: { teamFolderId: true } } },
+    });
+    const visible: string[] = [];
+    for (const file of candidates) {
+      if (await this.canReadFile(user, file)) visible.push(file.id);
+      if (visible.length >= 100) break;
+    }
+    if (!visible.length) return [];
+    const rows = await this.prisma.fileActivity.findMany({
+      where: { orgId: user.org_id, fileId: { in: visible } },
+      orderBy: { createdAt: 'desc' },
+      take: Math.min(Math.max(limit, 1), 100),
+      include: {
+        file: { select: { id: true, name: true, ownerId: true } },
+        user: { select: { id: true, name: true, email: true, avatarUrl: true } },
+      },
+    });
+    return rows.map((row) => ({
+      id: row.id, action: row.action, createdAt: row.createdAt.toISOString(),
+      file: row.file, actor: row.user, metadata: (row.metadata as Record<string, unknown> | null) ?? null,
+    }));
   }
 
   /** Recent activity log entries for the preview sidebar drawer. */
@@ -1015,7 +1279,7 @@ export class FilesService {
     }
 
     const versions = await this.prisma.fileVersion.findMany({
-      where: { fileId, orgId: user.org_id },
+      where: { fileId, orgId: user.org_id, uploadStatus: UploadStatus.COMPLETE },
       orderBy: { versionNumber: 'desc' },
       include: {
         uploadedBy: {
@@ -1046,7 +1310,7 @@ export class FilesService {
       where: { id: fileId, deletedAt: null },
       include: {
         versions: {
-          where: { versionNumber },
+          where: { versionNumber, uploadStatus: UploadStatus.COMPLETE },
           take: 1,
         },
         folder: { select: { teamFolderId: true } },
@@ -1056,16 +1320,16 @@ export class FilesService {
       throw new NotFoundException('File or version not found');
     }
     const resource = await this.toFileAccessResource(user, file);
-    if (!this.permissions.canRead(user, resource)) {
+    if (!(await this.effective.canRead(user, ResourceType.FILE, file.id))) {
       throw new NotFoundException('File not found');
     }
-    if (!this.permissions.canWrite(user, resource)) {
+    if (!(await this.effective.canWrite(user, ResourceType.FILE, file.id))) {
       throw new ForbiddenException('Not allowed to restore this file version');
     }
     if (versionNumber === file.versions[0]?.versionNumber) {
       // Check if this is the current version
       const currentVersion = await this.prisma.fileVersion.findFirst({
-        where: { fileId },
+        where: { fileId, uploadStatus: UploadStatus.COMPLETE },
         orderBy: { versionNumber: 'desc' },
       });
       if (currentVersion && versionNumber === currentVersion.versionNumber) {
@@ -1090,7 +1354,7 @@ export class FilesService {
     const file = await this.prisma.file.findFirst({
       where: { id: fileId, deletedAt: null },
       include: {
-        versions: { where: { id: versionId }, take: 1 },
+        versions: { where: { id: versionId, uploadStatus: UploadStatus.COMPLETE }, take: 1 },
         folder: { select: { teamFolderId: true } },
       },
     });
@@ -1098,10 +1362,10 @@ export class FilesService {
       throw new NotFoundException('File or version not found');
     }
     const resource = await this.toFileAccessResource(user, file);
-    if (!this.permissions.canRead(user, resource)) {
+    if (!(await this.effective.canRead(user, ResourceType.FILE, file.id))) {
       throw new NotFoundException('File not found');
     }
-    if (!this.permissions.canWrite(user, resource)) {
+    if (!(await this.effective.canWrite(user, ResourceType.FILE, file.id))) {
       throw new ForbiddenException('Not allowed to restore this file version');
     }
     const targetVersion = file.versions[0];
@@ -1176,6 +1440,7 @@ export class FilesService {
           fileId,
           versionNumber: { lt: newVersionNumber },
           status: VersionStatus.ACTIVE,
+          uploadStatus: UploadStatus.COMPLETE,
         },
         data: { status: VersionStatus.SUPERSEDED },
       });
@@ -1253,14 +1518,14 @@ export class FilesService {
   }
 
   async copy(user: AccessTokenPayload, id: string, input: MoveCopyInput) {
-    const file = await this.requireMutableFile(user, await this.prisma.file.findFirst({ where: { id, deletedAt: null }, include: { folder: { select: { teamFolderId: true } }, versions: { orderBy: { versionNumber: 'desc' }, take: 1 } } }), 'Not allowed to copy this file');
+    const file = await this.requireMutableFile(user, await this.prisma.file.findFirst({ where: { id, deletedAt: null }, include: { folder: { select: { teamFolderId: true } }, versions: { where: { uploadStatus: UploadStatus.COMPLETE }, orderBy: { versionNumber: 'desc' }, take: 1 } } }), 'Not allowed to copy this file');
     await this.assertDestination(user, input.destinationFolderId);
     const version = file.versions[0];
     if (!version) throw new NotFoundException('File version not found');
     const newFileId = randomUUID();
     const copied = await this.prisma.$transaction(async (tx) => {
       const newFile = await tx.file.create({ data: { id: newFileId, orgId: user.org_id, folderId: input.destinationFolderId, name: file.name, originalName: file.originalName, extension: file.extension, mimeType: file.mimeType, fileType: file.fileType, size: file.size, sha256Hash: file.sha256Hash, status: FileStatus.ACTIVE, ownerId: user.sub } });
-      await tx.fileVersion.create({ data: { id: randomUUID(), orgId: user.org_id, fileId: newFileId, versionNumber: 1, storageObjectId: version.storageObjectId, size: version.size, mimeType: version.mimeType, extension: version.extension, sha256Hash: version.sha256Hash, uploadedById: user.sub, status: VersionStatus.ACTIVE } });
+      await tx.fileVersion.create({ data: { id: randomUUID(), orgId: user.org_id, fileId: newFileId, versionNumber: 1, storageObjectId: version.storageObjectId, size: version.size, mimeType: version.mimeType, extension: version.extension, sha256Hash: version.sha256Hash, uploadedById: user.sub, status: VersionStatus.ACTIVE, uploadStatus: UploadStatus.COMPLETE } });
       await tx.fileActivity.create({ data: { orgId: user.org_id, fileId: newFileId, userId: user.sub, action: AuditAction.COPY, metadata: { copiedFromFileId: id } } });
       await tx.auditLog.create({ data: { orgId: user.org_id, actorId: user.sub, action: 'FILE_COPIED', resourceType: 'FILE', resourceId: newFileId } });
       return newFile;
@@ -1312,6 +1577,30 @@ export class FilesService {
     return { deleted: results };
   }
 
+  private async requireMutableFile(
+    user: AccessTokenPayload,
+    file: { id: string; orgId: string; ownerId: string; folder?: { teamFolderId?: string | null } | null } | null,
+    deniedMessage: string,
+  ) {
+    if (!file || file.orgId !== user.org_id) throw new NotFoundException('File not found');
+    if (!(await this.effective.canRead(user, ResourceType.FILE, file.id))) {
+      throw new NotFoundException('File not found');
+    }
+    if (!(await this.effective.canWrite(user, ResourceType.FILE, file.id))) {
+      throw new ForbiddenException(deniedMessage);
+    }
+    return file;
+  }
+
+  private async toFileAccessResource(
+    user: AccessTokenPayload,
+    file: { orgId: string; ownerId: string; folder?: { teamFolderId: string | null } | null },
+  ): Promise<AccessibleResource> {
+    const teamFolderId = file.folder?.teamFolderId ?? null;
+    if (!teamFolderId) return this.toAccessibleResource(file);
+    return this.toTeamFolderResource(user, file.orgId, teamFolderId);
+  }
+
   private async assertDestination(user: AccessTokenPayload, folderId: string | null) {
     if (!folderId) return;
     const folder = await this.prisma.folder.findFirst({ where: { id: folderId } });
@@ -1319,484 +1608,18 @@ export class FilesService {
     if (!(await this.canReadFolderForFile(user, folder)) || !(await this.canWriteFolderForFile(user, folder))) throw new ForbiddenException('Not allowed to use destination folder');
   }
 
-  private async canReadFolderForFile(user: AccessTokenPayload, folder: { orgId: string; ownerId: string; teamFolderId?: string | null }) {
-    if (folder.orgId !== user.org_id) return false;
-    if (!folder.teamFolderId) return this.permissions.canRead(user, { orgId: folder.orgId, ownerId: folder.ownerId });
-    return this.permissions.canRead(user, await this.toTeamFolderResource(user, folder.orgId, folder.teamFolderId));
-  }
-
-  private async canWriteFolderForFile(user: AccessTokenPayload, folder: { orgId: string; ownerId: string; teamFolderId?: string | null }) {
-    if (!folder.teamFolderId) return this.permissions.canWrite(user, { orgId: folder.orgId, ownerId: folder.ownerId });
-    return this.permissions.canWrite(user, await this.toTeamFolderResource(user, folder.orgId, folder.teamFolderId));
-  }
-
-  async rename(user: AccessTokenPayload, id: string, name: string) {
-    const file = await this.requireMutableFile(
-      user,
-      await this.prisma.file.findFirst({
-        where: { id, deletedAt: null },
-        include: { folder: { select: { teamFolderId: true } } },
-      }),
-      'Not allowed to rename this file',
-    );
-    const updated = await this.prisma.file.update({
-      where: { id: file.id },
-      data: { name },
-    });
-    await this.recordActivity(user.org_id, file.id, user.sub, AuditAction.UPDATE, { rename: { previousName: file.name, newName: name } });
-    await this.prisma.auditLog.create({
-      data: {
-        orgId: user.org_id,
-        actorId: user.sub,
-        action: 'FILE_RENAMED',
-        resourceType: 'FILE',
-        resourceId: file.id,
-      },
-    });
-    this.dispatchWorkflowFileEvent(user, 'rename', updated);
-    return updated;
-  }
-
-  async trash(user: AccessTokenPayload, id: string) {
-    const file = await this.requireMutableFile(
-      user,
-      await this.prisma.file.findFirst({
-        where: { id, deletedAt: null },
-        include: { folder: { select: { teamFolderId: true } } },
-      }),
-      'Not allowed to delete this file',
-    );
-    const now = new Date();
-    const expiresAt = new Date(now.getTime() + TRASH_RETENTION_DAYS * 24 * 60 * 60 * 1000);
-    const updated = await this.prisma.file.update({
-      where: { id: file.id },
-      data: { deletedAt: now, status: FileStatus.TRASHED },
-    });
-    await this.prisma.trashEntry.create({
-      data: {
-        orgId: user.org_id,
-        fileId: file.id,
-        deletedById: user.sub,
-        reason: user.sub === file.ownerId ? TrashReason.USER_DELETED : TrashReason.OWNER_DELETED,
-        deletedAt: now,
-        expiresAt,
-      },
-    });
-    await this.recordActivity(user.org_id, file.id, user.sub, AuditAction.DELETE, { reason: 'user_trashed' });
-    await this.prisma.auditLog.create({
-      data: {
-        orgId: user.org_id,
-        actorId: user.sub,
-        action: 'FILE_TRASHED',
-        resourceType: 'FILE',
-        resourceId: file.id,
-      },
-    });
-    this.dispatchWorkflowFileEvent(user, 'delete', { ...file, id: updated.id });
-    return { id: updated.id, deleted: true };
-  }
-
-  async listTrash(user: AccessTokenPayload) {
-    const files = await this.prisma.file.findMany({
-      where: {
-        orgId: user.org_id,
-        deletedAt: { not: null },
-      },
-      include: {
-        folder: { select: { teamFolderId: true, name: true } },
-        owner: { select: { id: true, name: true, email: true, avatarUrl: true } },
-      },
-    });
-    const visible: Array<Omit<(typeof files)[number], 'folder'> & { folderName: string | null }> = [];
-    for (const file of files) {
-      if (await this.canReadFile(user, file)) {
-        const { folder, ...rest } = file;
-        visible.push({ ...rest, folderName: folder?.name ?? null });
-      }
-    }
-    return visible;
-  }
-
-  /**
-   * Headroom for inline previews (PVW-02/03): resolves the current ACTIVE
-   * version + storage object, enforces `canRead` (404-masked), and writes a
-   * correct Content-Type, RFC 6266 inline disposition, ETag and HTTP Range
-   * response so the browser renders rather than downloads.
-   */
-  async streamFile(
+  private async canReadFolderForFile(
     user: AccessTokenPayload,
-    id: string,
-    response: Response,
-    range?: string,
-  ): Promise<void> {
-    const file = await this.prisma.file.findFirst({
-      where: { id, orgId: user.org_id, deletedAt: null },
-      include: {
-        folder: { select: { teamFolderId: true } },
-        versions: {
-          where: { status: VersionStatus.ACTIVE },
-          orderBy: { versionNumber: 'desc' },
-          take: 1,
-        },
-      },
-    });
-    if (!file || !(await this.canReadFile(user, file))) {
-      throw new NotFoundException('File not found');
-    }
-    const version = file.versions[0];
-    if (!version) {
-      throw new NotFoundException('File version not found');
-    }
-    const storageObject = await this.prisma.storageObject.findFirst({
-      where: { id: version.storageObjectId },
-    });
-    if (!storageObject) {
-      throw new NotFoundException('Storage object not found');
-    }
-
-    const contentType = version.mimeType || 'application/octet-stream';
-    const size = Number(version.size ?? storageObject.size ?? 0);
-
-    const resolveLocalPath = this.storage.resolveObjectPath?.bind(this.storage);
-    let path: string | null = null;
-    if (resolveLocalPath) {
-      path = resolveLocalPath(storageObject.storageKey);
-      // The database can still reference a storage object whose bytes were
-      // removed from the disk (manual cleanup, failed migration, restored
-      // volume). stat() before opening the stream so we return a clean 404
-      // instead of letting fs emit an unhandled ENOENT that crashes the
-      // Node.js process.
-      try {
-        await stat(path);
-      } catch {
-        throw new NotFoundException('File object not found on storage disk');
-      }
-    }
-
-    response.setHeader('Content-Type', contentType);
-    response.setHeader('Content-Disposition', contentDispositionInline(file.name));
-    response.setHeader('Accept-Ranges', 'bytes');
-    response.setHeader('Cache-Control', 'private, max-age=3600');
-    if (file.sha256Hash) {
-      response.setHeader('ETag', `"${file.sha256Hash}"`);
-    }
-
-    if (path) {
-      const matcher = /^bytes=(\d*)-(\d*)$/.exec(range ?? '');
-      if (matcher && size > 0) {
-        const start = matcher[1] ? Number(matcher[1]) : 0;
-        const end = matcher[2] ? Math.min(Number(matcher[2]), size - 1) : size - 1;
-        if (start > end || start >= size) {
-          response.status(416).setHeader('Content-Range', `bytes */${size}`);
-          response.end();
-          return;
-        }
-        response
-          .status(206)
-          .setHeader('Content-Range', `bytes ${start}-${end}/${size}`)
-          .setHeader('Content-Length', String(end - start + 1));
-        this.pipeLocalObject(createReadStream(path, { start, end }), response);
-        return;
-      }
-      response.setHeader('Content-Length', String(size));
-      this.pipeLocalObject(createReadStream(path), response);
-      return;
-    }
-
-    // S3 driver: delegate to a presigned GET (range-capable via Content-Range negociation is
-    // handled transparently by the client) with inline-friendly disposition.
-    const urlResult = await this.storage.createDownloadUrl({
-      fileId: file.id,
-      versionId: version.id,
-      storageKey: storageObject.storageKey ?? undefined,
-      ownerOrgId: user.org_id,
-      contentType,
-    });
-    response.setHeader('Location', urlResult.url);
-    response.status(302).end();
-  }
-
-  /**
-   * Pipes a local file stream to the HTTP response with an explicit 'error'
-   * listener. Without one, a read failure surfacing after the stream was
-   * created (e.g. the object vanishing between stat() and open, a truncated
-   * file or an I/O fault) emits an unhandled 'error' event that terminates
-   * the whole Node.js process.
-   */
-  private pipeLocalObject(stream: ReadStream, response: Response): void {
-    stream.on('error', (error: NodeJS.ErrnoException) => {
-      this.logger.error(
-        `Failed to stream local object: ${error.message}`,
-        error.stack,
-      );
-      if (response.headersSent) {
-        // Headers and possibly bytes already went out; the only safe action
-        // is to tear the connection down instead of throwing.
-        response.destroy(error);
-        return;
-      }
-      if (!response.statusCode || response.statusCode === 200) {
-        response.status(500);
-      }
-      response.end();
-    });
-    stream.pipe(response);
-  }
-
-  async restore(user: AccessTokenPayload, id: string) {
-    const file = await this.requireMutableFile(
-      user,
-      await this.prisma.file.findFirst({
-        where: { id, deletedAt: { not: null } },
-        include: { folder: { select: { teamFolderId: true } } },
-      }),
-      'Not allowed to restore this file',
-    );
-    const now = new Date();
-    const updated = await this.prisma.file.update({
-      where: { id: file.id },
-      data: { deletedAt: null, status: FileStatus.ACTIVE },
-    });
-    await this.prisma.trashEntry.updateMany({
-      where: { fileId: file.id, restoredAt: null },
-      data: { restoredAt: now, restoredById: user.sub },
-    });
-    await this.recordActivity(user.org_id, file.id, user.sub, AuditAction.RESTORE, { restoredFromTrash: true });
-    await this.prisma.auditLog.create({
-      data: {
-        orgId: user.org_id,
-        actorId: user.sub,
-        action: 'FILE_RESTORED',
-        resourceType: 'FILE',
-        resourceId: file.id,
-      },
-    });
-    return updated;
-  }
-
-  private async recordActivity(
-    orgId: string,
-    fileId: string,
-    userId: string | null,
-    action: AuditAction,
-    metadata?: Record<string, unknown>,
-  ): Promise<void> {
-    await this.prisma.fileActivity.create({
-      data: {
-        orgId,
-        fileId,
-        userId,
-        action,
-        metadata: metadata === undefined ? undefined : JSON.parse(JSON.stringify(metadata)),
-      },
-    });
-  }
-
-  private async recordDownloadActivity(
-    user: AccessTokenPayload,
-    fileId: string,
-    versionNumber: number,
-  ): Promise<void> {
-    await this.recordActivity(user.org_id, fileId, user.sub, AuditAction.DOWNLOAD, { versionNumber });
-  }
-
-  /**
-   * Deletes the physical bytes behind a file's versions, but only for
-   * storage objects that no other file still references (copy/restore
-   * share physical objects). StorageObject rows are cleaned up by the
-   * database cascade; shared survivors keep their soft owner link.
-   */
-  private async purgeFileVersionObjects(
-    user: AccessTokenPayload,
-    fileId: string,
-    versions: Array<{ storageObjectId: string }>,
-  ): Promise<void> {
-    const objectIds = [...new Set(versions.map((version) => version.storageObjectId))];
-    for (const objectId of objectIds) {
-      const externalRefs = await this.prisma.fileVersion.count({
-        where: { storageObjectId: objectId, fileId: { not: fileId } },
-      });
-      if (externalRefs > 0) {
-        continue;
-      }
-      const object = await this.prisma.storageObject.findFirst({
-        where: { id: objectId, orgId: user.org_id },
-      });
-      if (!object) continue;
-      await this.storage.deleteStoredObject(object.storageKey);
-    }
-  }
-
-  private storageLocation(): { bucket: string; region: string } {
-    return {
-      bucket: this.config.get<string>('S3_BUCKET') ?? 'imkan-workdrive-dev',
-      region: this.config.get<string>('S3_REGION') ?? 'us-east-1',
-    };
-  }
-
-  /**
-   * Resolves the physical storage key backing a version. The StorageObject row
-   * is the source of truth: restored versions re-point at a historical
-   * version's object whose key (tenant_{org}/files/{fileId}/{originalVersionId})
-   * differs from the restored version's own UUID. When the row is missing
-   * (legacy pre-Database-V2 data), the caller falls back to the deterministic
-   * derived key.
-   */
-  private async resolveVersionStorageObject(version: {
-    storageObjectId?: string | null;
-  }): Promise<{ storageKey: string; bucket: string; region: string | null } | null> {
-    if (!version.storageObjectId) return null;
-    const object = await this.prisma.storageObject.findFirst({
-      where: { id: version.storageObjectId },
-      select: { storageKey: true, bucket: true, region: true },
-    });
-    return object
-      ? { storageKey: object.storageKey, bucket: object.bucket, region: object.region }
-      : null;
-  }
-
-  private async requireMutableFile<
-    T extends {
-      id: string;
-      orgId: string;
-      ownerId: string;
-      folder?: { teamFolderId: string | null } | null;
-    },
-  >(
-    user: AccessTokenPayload,
-    file: T | null,
-    deniedMessage: string,
-  ): Promise<T> {
-    if (!file || file.orgId !== user.org_id) {
-      this.logger.warn(
-        `[FileAccess] File not found - org mismatch: fileOrgId=${file?.orgId}, userOrgId=${user.org_id}, fileId=${file?.id}`,
-      );
-      throw new NotFoundException('File not found');
-    }
-
-    const teamFolderId = file.folder?.teamFolderId ?? null;
-    const isPersonalFile = !teamFolderId;
-    const isOwner = file.ownerId === user.sub;
-    const isSuperAdmin = user.role === 'SUPER_ADMIN';
-
-    this.logger.debug(
-      `[FileAccess] Checking mutable access: fileId=${file.id}, isPersonalFile=${isPersonalFile}, isOwner=${isOwner}, userRole=${user.role}, userId=${user.sub}, fileOwnerId=${file.ownerId}, teamFolderId=${teamFolderId}`,
-    );
-
-    if (isPersonalFile && !isSuperAdmin) {
-      if (!isOwner) {
-        this.logger.warn(
-          `[FileAccess] 403 Forbidden (Personal File - Not Owner): userId=${user.sub}, userRole=${user.role}, fileOwnerId=${file.ownerId}, fileId=${file.id}`,
-        );
-        throw new ForbiddenException(deniedMessage);
-      }
-    }
-
-    const resource = await this.toFileAccessResource(user, file);
-    this.logger.debug(
-      `[FileAccess] Resource created: fileId=${file.id}, resource.orgId=${resource.orgId}, resource.teamFolderId=${resource.teamFolderId}`,
-    );
-
-    if (!this.permissions.canRead(user, resource)) {
-      this.logger.warn(
-        `[FileAccess] 404 Not Found (canRead=false): fileId=${file.id}, userId=${user.sub}, userRole=${user.role}, resourceOrgId=${resource.orgId}`,
-      );
-      throw new NotFoundException('File not found');
-    }
-
-    const canWriteResult = this.permissions.canWrite(user, resource);
-    this.logger.debug(
-      `[FileAccess] canWrite check: fileId=${file.id}, userId=${user.sub}, userRole=${user.role}, isPersonalFile=${isPersonalFile}, isOwner=${isOwner}, result=${canWriteResult}`,
-    );
-
-    if (!canWriteResult) {
-      this.logger.warn(
-        `[FileAccess] 403 Forbidden (canWrite=false): fileId=${file.id}, userId=${user.sub}, userRole=${user.role}, isPersonalFile=${isPersonalFile}, isOwner=${isOwner}`,
-      );
-      throw new ForbiddenException(deniedMessage);
-    }
-
-    this.logger.debug(
-      `[FileAccess] Access granted: fileId=${file.id}, userId=${user.sub}, userRole=${user.role}`,
-    );
-    return file;
-  }
-
-  private async toFileAccessResource(
-    user: AccessTokenPayload,
-    file: {
-      orgId: string;
-      ownerId: string;
-      folder?: { teamFolderId: string | null } | null;
-    },
-  ): Promise<AccessibleResource> {
-    const teamFolderId = file.folder?.teamFolderId ?? null;
-    if (!teamFolderId) {
-      return this.toAccessibleResource(file);
-    }
-    return this.toTeamFolderResource(user, file.orgId, teamFolderId);
-  }
-
-  private async assertCanUploadToFolder(
-    user: AccessTokenPayload,
-    folder: { orgId: string; ownerId: string; teamFolderId?: string | null },
+    folder: { id?: string; orgId: string; ownerId: string; teamFolderId?: string | null },
   ) {
-    if (!folder.teamFolderId) {
-      return;
-    }
-    const resource = await this.toTeamFolderResource(
-      user,
-      folder.orgId,
-      folder.teamFolderId,
-    );
-    if (!this.permissions.canRead(user, resource)) {
-      throw new NotFoundException('Folder not found');
-    }
-    if (!this.permissions.canWrite(user, resource)) {
-      throw new ForbiddenException('Not allowed to upload to this folder');
-    }
+    return !!folder.id && this.effective.canRead(user, ResourceType.FOLDER, folder.id);
   }
 
-  private async canReadFile(
+  private async canWriteFolderForFile(
     user: AccessTokenPayload,
-    file: {
-      orgId: string;
-      ownerId: string;
-      folder?: { teamFolderId?: string | null } | null;
-    },
-  ): Promise<boolean> {
-    const teamFolderId = file.folder?.teamFolderId ?? null;
-    if (!teamFolderId) {
-      if (this.permissions.canRead(user, this.toAccessibleResource(file))) return true;
-      const folderShare = await this.hasFolderShareAccess(user, (file as any).id);
-      if (folderShare) return true;
-      const share = await this.prisma.fileShare.findFirst({
-        where: {
-          fileId: (file as any).id,
-          orgId: user.org_id,
-          status: 'ACTIVE',
-          recipients: { some: { userId: user.sub, orgId: user.org_id } },
-          OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }],
-        },
-        select: { id: true },
-      });
-      return !!share;
-    }
-    const resource = await this.toTeamFolderResource(user, file.orgId, teamFolderId);
-    return this.permissions.canRead(user, resource);
-  }
-
-  private async hasFolderShareAccess(user: AccessTokenPayload, fileId: string): Promise<boolean> {
-    const file = await this.prisma.file.findFirst({ where: { id: fileId, orgId: user.org_id }, select: { folderId: true } });
-    let current = file?.folderId ?? null; const ids: string[] = [];
-    for (let i = 0; i < 100 && current; i++) {
-      ids.push(current);
-      const parent = await this.prisma.folder.findFirst({ where: { id: current, orgId: user.org_id }, select: { parentId: true } });
-      current = parent?.parentId ?? null;
-    }
-    if (!ids.length) return false;
-    const share = await this.prisma.folderShare.findFirst({ where: { orgId: user.org_id, folderId: { in: ids }, status: 'ACTIVE', recipients: { some: { userId: user.sub, orgId: user.org_id } }, OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }] }, select: { id: true } });
-    return !!share;
+    folder: { id?: string; orgId: string; ownerId: string; teamFolderId?: string | null },
+  ) {
+    return !!folder.id && this.effective.canWrite(user, ResourceType.FOLDER, folder.id);
   }
 
   private async toTeamFolderResource(

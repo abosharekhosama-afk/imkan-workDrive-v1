@@ -23,7 +23,7 @@ export function recordChange(doc: WriterDocument, blockId: string, before: Write
   next.review.changes.push({id:crypto.randomUUID(),blockId,kind,before:cloneRuns(before),after:cloneRuns(after),createdAt:new Date().toISOString(),status:'pending'});
   next.review.changes=next.review.changes.slice(-500); return next;
 }
-export function acceptChange(doc: WriterDocument, id: string): WriterDocument { const next=cloneWriterDocument(doc); const c=next.review.changes.find(x=>x.id===id); if(c)c.status='accepted'; return next; }
+export function acceptChange(doc: WriterDocument, id: string): WriterDocument { const next=cloneWriterDocument(doc); const c=next.review.changes.find(x=>x.id===id); if(!c||c.status!=='pending') return next; const block=next.blocks.find(b=>b.id===c.blockId); if(block) block.runs=cloneRuns(c.after); c.status='accepted'; return next; }
 export function rejectChange(doc: WriterDocument, id: string): WriterDocument { const next=cloneWriterDocument(doc); const c=next.review.changes.find(x=>x.id===id); if(!c)return next; const block=next.blocks.find(b=>b.id===c.blockId); if(block)block.runs=cloneRuns(c.before); c.status='rejected'; return next; }
 export function addSnapshot(doc: WriterDocument, revision: number): WriterDocument { const next=cloneWriterDocument(doc); const snapshot:WriterSnapshot={id:crypto.randomUUID(),revision,title:doc.title,createdAt:new Date().toISOString(),blocks:cloneWriterDocument(doc).blocks}; next.review.snapshots=[...next.review.snapshots,snapshot].slice(-20); return next; }
 export function compareSnapshot(doc: WriterDocument, snapshotId: string) {
@@ -36,7 +36,7 @@ function cloneRuns(runs:WriterRun[]){return JSON.parse(JSON.stringify(runs)) as 
 
 export function deleteComment(doc: WriterDocument, commentId: string): WriterDocument { const next=cloneWriterDocument(doc); const c=next.review.comments.find(x=>x.id===commentId); if(c){c.deleted=true;c.resolved=true;} return next; }
 export function reopenComment(doc: WriterDocument, commentId: string): WriterDocument { const next=cloneWriterDocument(doc); const c=next.review.comments.find(x=>x.id===commentId); if(c&&!c.deleted)c.resolved=false; return next; }
-export function acceptAllChanges(doc: WriterDocument): WriterDocument { const next=cloneWriterDocument(doc); next.review.changes.forEach(c=>{if(c.status==='pending')c.status='accepted';}); return next; }
+export function acceptAllChanges(doc: WriterDocument): WriterDocument { const next=cloneWriterDocument(doc); for(const c of next.review.changes){ if(c.status!=='pending') continue; const block=next.blocks.find(b=>b.id===c.blockId); if(block) block.runs=cloneRuns(c.after); c.status='accepted'; } return next; }
 export function rejectAllChanges(doc: WriterDocument): WriterDocument { const next=cloneWriterDocument(doc); for(const c of next.review.changes){if(c.status!=='pending')continue;const block=next.blocks.find(b=>b.id===c.blockId);if(block)block.runs=cloneRuns(c.before);c.status='rejected';} return next; }
 export function setReviewDisplayMode(doc: WriterDocument, displayMode: 'simple'|'all'|'original'): WriterDocument { const next=cloneWriterDocument(doc); next.review.displayMode=displayMode; return next; }
 export function setShowFormattingChanges(doc: WriterDocument, value: boolean): WriterDocument { const next=cloneWriterDocument(doc); next.review.showFormattingChanges=value; return next; }

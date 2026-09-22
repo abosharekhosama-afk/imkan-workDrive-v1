@@ -971,7 +971,7 @@ export class TemplatesService {
   }
 
   async createCategory(user: AccessTokenPayload, libraryType: TemplateLibraryType, name: string) {
-    if (libraryType === TemplateLibraryType.PUBLIC) throw new ForbiddenException('Public templates do not support categories');
+    if (libraryType === TemplateLibraryType.PUBLIC) throw new ForbiddenException('Public template categories are managed by the catalog');
     const library = await this.ensureLibrary(user, libraryType);
     if (!this.canManageLibrary(user, library)) throw new ForbiddenException('You cannot manage this template library');
     const existing = await this.prisma.templateCategory.findFirst({ where: { libraryId: library.id, name } });
@@ -993,7 +993,9 @@ export class TemplatesService {
   }
 
   async listCategories(user: AccessTokenPayload, libraryType: TemplateLibraryType) {
-    if (libraryType === TemplateLibraryType.PUBLIC) return [];
+    if (libraryType === TemplateLibraryType.PUBLIC) {
+      await this.publicTemplateSeed.ensureSeed();
+    }
     const library = await this.ensureLibrary(user, libraryType);
     return this.prisma.templateCategory.findMany({ where: { libraryId: library.id }, orderBy: [{ position: 'asc' }, { name: 'asc' }] });
   }

@@ -1,102 +1,12 @@
 "use client";
-
 import { useCallback, useEffect, useState } from "react";
 import { useLocale } from "../../../components/locale-provider";
-import { ApiError } from "../../../lib/api/client";
-import { listAudit, type AuditRecord, formatAuditAction } from "../../../lib/api/audit";
 import { AlertBanner } from "../../../components/alert-banner";
 import { EmptyState } from "../../../components/empty-state";
 import { SkeletonLoader } from "../../../components/skeleton-loader";
-import { errorMessageForStatus } from "../../../components/feedback-state-logic";
+import { listCollaborationActivity, type CollaborationActivity } from "../../../lib/api/notifications";
+import { formatDateLocalized } from "../../../lib/localized";
 
-function formatDate(value: string): string {
-  return new Intl.DateTimeFormat(undefined, { dateStyle: "medium", timeStyle: "short" }).format(new Date(value));
-}
-
-export default function AuditPage() {
-  const { label } = useLocale();
-  const [rows, setRows] = useState<AuditRecord[]>([]);
-  const [error, setError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
-
-  const load = useCallback(async () => {
-    await Promise.resolve();
-    try {
-      setLoading(true);
-      setError(null);
-      setRows(await listAudit());
-    } catch (cause) {
-      setError(errorMessageForStatus(cause instanceof ApiError ? cause.status : undefined, {
-        unauthenticated: label("error.unauthenticated"), forbidden: label("error.forbidden"), generic: label("error.generic"),
-      }));
-    } finally {
-      setLoading(false);
-    }
-  }, [label]);
-
-  useEffect(() => {
-    void load();
-  }, [load]);
-
-  return (
-    <section className="wd-page">
-      <div className="wd-page-head">
-        <div className="wd-page-head-titles">
-          <h1>{label("audit.heading")}</h1>
-          <p>{label("audit.description")}</p>
-        </div>
-        <div className="wd-page-head-actions">
-          <button className="wd-btn wd-btn-ghost" onClick={() => void load()}>
-            {label("audit.refresh")}
-          </button>
-        </div>
-      </div>
-
-      {error ? <AlertBanner message={error} action={<button type="button" className="imkan-button-secondary" onClick={() => void load()}>{label("feedback.retry")}</button>} /> : null}
-
-      {loading ? (
-        <SkeletonLoader rows={5} columns={4} />
-      ) : rows.length === 0 ? (
-        <EmptyState title={label("audit.empty")} />
-      ) : (
-        <div className="wd-card">
-          <div className="wd-table-wrap overflow-x-auto w-full max-w-full">
-            <table className="wd-table">
-              <thead>
-                <tr>
-                  <th className="num">{label("audit.column.time")}</th>
-                  <th>{label("audit.column.action")}</th>
-                  <th>{label("audit.column.actor")}</th>
-                  <th>{label("audit.column.resource")}</th>
-                </tr>
-              </thead>
-              <tbody>
-                {rows.map((row) => (
-                  <tr key={row.id}>
-                    <td className="num" style={{ whiteSpace: "nowrap" }}>{formatDate(row.createdAt)}</td>
-                    <td className="max-w-[400px] truncate" style={{ maxWidth: "400px" }}>
-                      {formatAuditAction(row, label as (key: string) => string)}
-                    </td>
-                    <td>
-                      <div className="flex items-center gap-2">
-                        <div className="wd-avatar">
-                          {row.actor?.name ? row.actor.name.split(/\s+/).map((n) => n[0]).join("").slice(0, 2).toUpperCase() : row.actor?.email?.slice(0, 2).toUpperCase() ?? "؟"}
-                        </div>
-                        <span>{row.actor?.name ?? row.actor?.email ?? label("audit.unknownUser")}</span>
-                      </div>
-                    </td>
-                    <td>
-                      <span className="text-sm text-[color:var(--imkan-color-muted)]">
-                        {row.resourceType} {row.resourceId}
-                      </span>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      )}
-    </section>
-  );
-}
+function initials(name?: string|null,email?: string){return (name||email||"U").split(/\s+/).map(x=>x[0]).join("").slice(0,2).toUpperCase();}
+function actionText(action:string, ar:boolean){const m:Record<string,string>=ar?{CREATE:"أنشأ ملفًا",UPDATE:"حدّث ملفًا",DELETE:"حذف ملفًا",RESTORE:"استعاد ملفًا",MOVE:"نقل ملفًا",COPY:"نسخ ملفًا",DOWNLOAD:"نزّل ملفًا",PREVIEW:"عاين ملفًا",SHARE:"شارك ملفًا",UNSHARE:"أوقف مشاركة ملف",COMMENT:"علّق على ملف",UPLOAD_VERSION:"رفع إصدارًا جديدًا",RESTORE_VERSION:"استعاد إصدارًا",CHANGE_PERMISSION:"غيّر صلاحية ملف"}:{CREATE:"created a file",UPDATE:"updated a file",DELETE:"deleted a file",RESTORE:"restored a file",MOVE:"moved a file",COPY:"copied a file",DOWNLOAD:"downloaded a file",PREVIEW:"previewed a file",SHARE:"shared a file",UNSHARE:"stopped sharing a file",COMMENT:"commented on a file",UPLOAD_VERSION:"uploaded a new version",RESTORE_VERSION:"restored a version",CHANGE_PERMISSION:"changed file permission"}; return m[action]||action;}
+export default function ActivityPage(){const{locale}=useLocale();const ar=locale==='ar';const[rows,setRows]=useState<CollaborationActivity[]>([]);const[loading,setLoading]=useState(true);const[error,setError]=useState('');const load=useCallback(async()=>{setLoading(true);setError('');try{setRows(await listCollaborationActivity(75));}catch{setError(ar?'تعذر تحميل مركز التعاون.':'Unable to load Collaboration Center.')}finally{setLoading(false)}},[ar]);useEffect(()=>{void load()},[load]);return <section className="wd-page" dir={ar?'rtl':'ltr'}><div className="wd-page-head"><div className="wd-page-head-titles"><h1>{ar?'مركز التعاون':'Collaboration Center'}</h1><p>{ar?'نشاط الملفات والتعليقات والمشاركة التي يمكنك الوصول إليها.':'File activity, comments and sharing events across resources you can access.'}</p></div><div className="wd-page-head-actions"><button className="wd-btn wd-btn-ghost" onClick={()=>void load()}>{ar?'تحديث':'Refresh'}</button></div></div>{error?<AlertBanner message={error}/>:null}{loading?<SkeletonLoader rows={6} columns={3}/>:rows.length===0?<EmptyState title={ar?'لا توجد أنشطة بعد':'No collaboration activity yet'}/>:<div className="wd-card overflow-hidden"><div className="divide-y divide-slate-100">{rows.map(r=><article key={r.id} className="flex items-center gap-3 px-5 py-4 hover:bg-slate-50"><div className="wd-avatar shrink-0">{initials(r.actor?.name,r.actor?.email)}</div><div className="min-w-0 flex-1"><div className="text-[11px] text-slate-700"><strong>{r.actor?.name||r.actor?.email|| (ar?'مستخدم':'User')}</strong>{' '}{actionText(r.action,ar)}{' '}<span className="font-semibold text-slate-900">{r.file.name}</span></div><div className="mt-1 text-[9.5px] text-slate-400">{formatDateLocalized(r.createdAt,locale)}</div></div><a href={`/files/${r.file.id}`} className="wd-btn wd-btn-ghost shrink-0">{ar?'فتح':'Open'}</a></article>)}</div></div>}</section>}

@@ -8,9 +8,10 @@ import { OfficeCollaborationService } from './office-collaboration.service';
 import { OfficeConversionService } from './office-conversion.service';
 import { NotificationsModule } from '../notifications/notifications.module';
 import { WorkflowsModule } from '../workflows/workflows.module';
+import { DlpModule } from '../dlp/dlp.module';
 
 @Module({
-  imports: [forwardRef(() => FilesModule), PermissionsModule, StorageModule, NotificationsModule, forwardRef(() => WorkflowsModule)],
+  imports: [forwardRef(() => FilesModule), PermissionsModule, StorageModule, NotificationsModule, forwardRef(() => WorkflowsModule), DlpModule],
   controllers: [OfficeController],
   providers: [OfficeService, OfficeConversionService, OfficeCollaborationService],
   exports: [OfficeService, OfficeConversionService],

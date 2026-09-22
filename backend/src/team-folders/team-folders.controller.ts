@@ -124,6 +124,22 @@ export class TeamFoldersController {
     return this.teamFolders.rename(user, id, parseResourceName(body).name);
   }
 
+  @Post(':id/archive')
+  archive(
+    @CurrentUser() user: AccessTokenPayload,
+    @Param('id', new ParseUUIDPipe({ version: '4' })) id: string,
+  ) {
+    return this.teamFolders.archive(user, id);
+  }
+
+  @Post(':id/restore')
+  restore(
+    @CurrentUser() user: AccessTokenPayload,
+    @Param('id', new ParseUUIDPipe({ version: '4' })) id: string,
+  ) {
+    return this.teamFolders.restore(user, id);
+  }
+
   @Delete(':id')
   remove(
     @CurrentUser() user: AccessTokenPayload,

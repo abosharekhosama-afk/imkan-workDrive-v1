@@ -107,6 +107,12 @@ export class OfficeController {
     return this.office.save(user, fileId, body.content, body.expectedRevision, body.sessionId);
   }
 
+  @Get('files/:fileId/versions')
+  listVersions(@CurrentUser() user: AccessTokenPayload, @Param('fileId') fileId: string) { return this.office.listVersions(user, fileId); }
+
+  @Post('files/:fileId/versions/:versionId/restore')
+  restoreVersion(@CurrentUser() user: AccessTokenPayload, @Param('fileId') fileId: string, @Param('versionId') versionId: string, @Body() body: { expectedRevision?: number }) { return this.office.restoreVersion(user, fileId, versionId, body?.expectedRevision); }
+
   @Post('files/:fileId/session')
   openSession(@CurrentUser() user: AccessTokenPayload, @Param('fileId') fileId: string) { return this.office.openSession(user, fileId); }
 

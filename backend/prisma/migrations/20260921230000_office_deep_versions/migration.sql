@@ -1,0 +1,23 @@
+CREATE TABLE `office_document_versions` (
+  `id` CHAR(36) NOT NULL,
+  `org_id` CHAR(36) NOT NULL,
+  `document_id` CHAR(36) NOT NULL,
+  `file_id` CHAR(36) NOT NULL,
+  `version_number` INTEGER NOT NULL,
+  `revision` INTEGER NOT NULL,
+  `type` ENUM('WRITER','SHEET','SHOW') NOT NULL,
+  `content` JSON NOT NULL,
+  `content_hash` CHAR(64) NOT NULL,
+  `label` VARCHAR(255) NULL,
+  `created_by_id` CHAR(36) NOT NULL,
+  `created_at` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `office_document_versions_document_id_version_number_key` (`document_id`,`version_number`),
+  KEY `office_document_versions_org_id_file_id_created_at_idx` (`org_id`,`file_id`,`created_at`),
+  KEY `office_document_versions_document_id_revision_idx` (`document_id`,`revision`),
+  KEY `office_document_versions_created_by_id_created_at_idx` (`created_by_id`,`created_at`),
+  CONSTRAINT `office_document_versions_org_id_fkey` FOREIGN KEY (`org_id`) REFERENCES `organizations` (`id`) ON DELETE CASCADE ON UPDATE CASCADE,
+  CONSTRAINT `office_document_versions_document_id_fkey` FOREIGN KEY (`document_id`) REFERENCES `office_documents` (`id`) ON DELETE CASCADE ON UPDATE CASCADE,
+  CONSTRAINT `office_document_versions_file_id_fkey` FOREIGN KEY (`file_id`) REFERENCES `files` (`id`) ON DELETE CASCADE ON UPDATE CASCADE,
+  CONSTRAINT `office_document_versions_created_by_id_fkey` FOREIGN KEY (`created_by_id`) REFERENCES `users` (`id`) ON DELETE CASCADE ON UPDATE CASCADE
+) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;

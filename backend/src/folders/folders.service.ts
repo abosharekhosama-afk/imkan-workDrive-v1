@@ -4,12 +4,13 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { FileType, FileStatus, TeamFolderRole } from '@prisma/client';
+import { FileType, FileStatus, TeamFolderRole, ResourceType } from '@prisma/client';
 import type { AccessTokenPayload } from '../auth/jwt.types';
 import {
   PermissionService,
   type AccessibleResource,
 } from '../permissions/permission.service';
+import { EffectivePermissionService } from '../permissions/effective-permission.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { Inject } from '@nestjs/common';
 import { STORAGE_SERVICE, type StorageService } from '../storage/storage.types';
@@ -23,6 +24,7 @@ export class FoldersService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly permissions: PermissionService,
+    private readonly effective: EffectivePermissionService,
     @Inject(STORAGE_SERVICE) private readonly storage: StorageService,
     private readonly workflowEngine: WorkflowEngineService,
   ) {}
@@ -84,8 +86,8 @@ export class FoldersService {
   async bulkMove(user: AccessTokenPayload, input: BulkFolderOperationInput) { const moved:string[]=[]; for(const id of input.ids){try{await this.move(user,id,{destinationFolderId:input.destinationFolderId??null});moved.push(id);}catch{}} return {moved}; }
   async bulkTrash(user: AccessTokenPayload, input: BulkFolderOperationInput) { const deleted:string[]=[]; for(const id of input.ids){try{await this.remove(user,id);deleted.push(id);}catch{}} return {deleted}; }
 
-  private async requireMutableFolder(user: AccessTokenPayload,id:string){ const folder=await this.prisma.folder.findFirst({where:{id}}); if(!folder||folder.orgId!==user.org_id) throw new NotFoundException('Folder not found'); const resource=await this.toFolderAccessResource(user,folder); if(!this.permissions.canRead(user,resource)) throw new NotFoundException('Folder not found'); if(!this.permissions.canWrite(user,resource)) throw new ForbiddenException('Not allowed to modify this folder'); return folder; }
-  private async assertDestination(user:AccessTokenPayload,id:string,movingId:string){ if(id===movingId) throw new BadRequestException('Invalid destination'); const destination=await this.prisma.folder.findFirst({where:{id}}); if(!destination||destination.orgId!==user.org_id) throw new NotFoundException('Destination folder not found'); if(!(await this.canReadFolder(user,destination))||!this.permissions.canWrite(user,await this.toFolderAccessResource(user,destination))) throw new ForbiddenException('Not allowed to use destination folder'); let current=destination.parentId; while(current){ if(current===movingId) throw new BadRequestException('Cannot move a folder into its descendant'); const p=await this.prisma.folder.findFirst({where:{id:current},select:{parentId:true}}); current=p?.parentId??null; } }
+  private async requireMutableFolder(user: AccessTokenPayload,id:string){ const folder=await this.prisma.folder.findFirst({where:{id}}); if(!folder||folder.orgId!==user.org_id) throw new NotFoundException('Folder not found'); if(!(await this.effective.canRead(user,ResourceType.FOLDER,id))) throw new NotFoundException('Folder not found'); if(!(await this.effective.canWrite(user,ResourceType.FOLDER,id))) throw new ForbiddenException('Not allowed to modify this folder'); return folder; }
+  private async assertDestination(user:AccessTokenPayload,id:string,movingId:string){ if(id===movingId) throw new BadRequestException('Invalid destination'); const destination=await this.prisma.folder.findFirst({where:{id}}); if(!destination||destination.orgId!==user.org_id) throw new NotFoundException('Destination folder not found'); if(!(await this.effective.canRead(user,ResourceType.FOLDER,destination.id))||!(await this.effective.canWrite(user,ResourceType.FOLDER,destination.id))) throw new ForbiddenException('Not allowed to use destination folder'); let current=destination.parentId; while(current){ if(current===movingId) throw new BadRequestException('Cannot move a folder into its descendant'); const p=await this.prisma.folder.findFirst({where:{id:current},select:{parentId:true}}); current=p?.parentId??null; } }
   private async collectDescendantFiles(rootId:string){ const ids:string[]=[]; const walk=async(id:string)=>{ ids.push(id); const children=await this.prisma.folder.findMany({where:{parentId:id},select:{id:true}}); for(const c of children) await walk(c.id); }; await walk(rootId); return this.prisma.file.findMany({where:{folderId:{in:ids}},include:{versions:true}}); }
 
   /**
@@ -265,10 +267,10 @@ export class FoldersService {
       throw new NotFoundException('Folder not found');
     }
     const resource = await this.toFolderAccessResource(user, folder);
-    if (!this.permissions.canRead(user, resource)) {
+    if (!(await this.effective.canRead(user, ResourceType.FOLDER, folder.id))) {
       throw new NotFoundException('Folder not found');
     }
-    if (!this.permissions.canWrite(user, resource)) {
+    if (!(await this.effective.canWrite(user, ResourceType.FOLDER, folder.id))) {
       throw new ForbiddenException('Not allowed to rename this folder');
     }
     const updated = await this.prisma.folder.update({
@@ -294,10 +296,10 @@ export class FoldersService {
       throw new NotFoundException('Folder not found');
     }
     const resource = await this.toFolderAccessResource(user, folder);
-    if (!this.permissions.canRead(user, resource)) {
+    if (!(await this.effective.canRead(user, ResourceType.FOLDER, folder.id))) {
       throw new NotFoundException('Folder not found');
     }
-    if (!this.permissions.canWrite(user, resource)) {
+    if (!(await this.effective.canWrite(user, ResourceType.FOLDER, folder.id))) {
       throw new ForbiddenException('Not allowed to delete this folder');
     }
     const child = await this.prisma.folder.findFirst({
@@ -356,16 +358,14 @@ export class FoldersService {
     if (!teamFolder || teamFolder.orgId !== user.org_id) {
       throw new NotFoundException('Team Folder not found');
     }
-    //const teamFolderRole = await this.resolveCallerRole(user, teamFolder.id);
-    const resource = await this.toTeamFolderResource(
-    user,
-    teamFolder.orgId,
-    teamFolder.id,
-  );
-    if (!this.permissions.canRead(user, resource)) {
+    const root = await this.prisma.folder.findFirst({
+      where: { teamFolderId: teamFolder.id, orgId: user.org_id, parentId: null },
+      select: { id: true },
+    });
+    if (!root || !(await this.effective.canRead(user, ResourceType.FOLDER, root.id))) {
       throw new NotFoundException('Team Folder not found');
     }
-    if (!this.permissions.canWrite(user, resource)) {
+    if (!(await this.effective.canWrite(user, ResourceType.FOLDER, root.id))) {
       throw new ForbiddenException(
         'Not allowed to create a folder in this Team Folder',
       );
@@ -425,25 +425,10 @@ export class FoldersService {
 
   private async canReadFile(
     user: AccessTokenPayload,
-    file: { orgId: string; ownerId: string; folder?: { teamFolderId: string | null } | null },
+    file: { id: string; orgId: string; ownerId: string; folder?: { teamFolderId: string | null } | null },
   ): Promise<boolean> {
     if (file.orgId !== user.org_id) return false;
-    const teamFolderId = file.folder?.teamFolderId ?? null;
-    if (teamFolderId) {
-      return this.permissions.canRead(user, await this.toTeamFolderResource(user, file.orgId, teamFolderId));
-    }
-    if (this.permissions.canRead(user, this.toAccessibleResource(file))) return true;
-    const share = await this.prisma.fileShare.findFirst({
-      where: {
-        fileId: (file as any).id,
-        orgId: user.org_id,
-        status: 'ACTIVE',
-        recipients: { some: { userId: user.sub, orgId: user.org_id } },
-        OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }],
-      },
-      select: { id: true },
-    });
-    return !!share;
+    return this.effective.canRead(user, ResourceType.FILE, file.id);
   }
 
   private async canReadFolder(
@@ -451,39 +436,7 @@ export class FoldersService {
     folder: { id: string; orgId: string; ownerId: string; teamFolderId?: string | null },
   ): Promise<boolean> {
     if (folder.orgId !== user.org_id) return false;
-    if (!folder.teamFolderId) {
-      if (this.permissions.canRead(user, this.toAccessibleResource(folder))) return true;
-      return this.hasFolderShareAccess(user, folder.id);
-    }
-    const teamFolder = await this.prisma.teamFolder.findFirst({
-      where: { id: folder.teamFolderId, orgId: folder.orgId },
-      select: { isPublicToOrg: true },
-    });
-    const teamFolderRole = await this.resolveCallerRole(user, folder.teamFolderId);
-    if (this.permissions.canRead(user, {
-      orgId: folder.orgId, ownerId: folder.teamFolderId, teamFolderId: folder.teamFolderId,
-      teamFolderRole, isPublicToOrg: teamFolder?.isPublicToOrg ?? false,
-    })) return true;
-    return this.hasFolderShareAccess(user, folder.id);
-  }
-
-  private async hasFolderShareAccess(user: AccessTokenPayload, folderId: string): Promise<boolean> {
-    const ids: string[] = []; let current: string | null = folderId;
-    for (let i = 0; i < 100 && current; i++) {
-      ids.push(current);
-      const parent: { parentId: string | null } | null =
-        await this.prisma.folder.findFirst({
-          where: { id: current, orgId: user.org_id },
-          select: { parentId: true },
-        });
-      current = parent?.parentId ?? null;
-    }
-    if (!ids.length) return false;
-    const share = await this.prisma.folderShare.findFirst({
-      where: { orgId: user.org_id, folderId: { in: ids }, status: 'ACTIVE', recipients: { some: { userId: user.sub, orgId: user.org_id } }, OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }] },
-      select: { id: true },
-    });
-    return !!share;
+    return this.effective.canRead(user, ResourceType.FOLDER, folder.id);
   }
 
   private toAccessibleResource(folder: {

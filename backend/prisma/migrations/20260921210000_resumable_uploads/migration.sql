@@ -1,0 +1,40 @@
+CREATE TABLE `upload_sessions` (
+  `id` CHAR(36) NOT NULL,
+  `org_id` CHAR(36) NOT NULL,
+  `file_id` CHAR(36) NOT NULL,
+  `version_id` CHAR(36) NOT NULL,
+  `storage_upload_id` VARCHAR(255) NOT NULL,
+  `object_key` VARCHAR(1024) NOT NULL,
+  `expected_size` BIGINT NOT NULL,
+  `expected_sha256` CHAR(64) NOT NULL,
+  `part_size` INT NOT NULL,
+  `total_parts` INT NOT NULL,
+  `status` ENUM('PENDING','COMPLETE','ABORTED','EXPIRED') NOT NULL DEFAULT 'PENDING',
+  `expires_at` DATETIME(3) NOT NULL,
+  `created_by` CHAR(36) NOT NULL,
+  `created_at` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+  `completed_at` DATETIME(3) NULL,
+  `storage_completed_at` DATETIME(3) NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `upload_sessions_version_id_key` (`version_id`),
+  KEY `upload_sessions_org_status_expires_idx` (`org_id`,`status`,`expires_at`),
+  KEY `upload_sessions_file_status_idx` (`file_id`,`status`),
+  CONSTRAINT `upload_sessions_org_id_fkey` FOREIGN KEY (`org_id`) REFERENCES `organizations` (`id`) ON DELETE RESTRICT ON UPDATE CASCADE,
+  CONSTRAINT `upload_sessions_file_id_fkey` FOREIGN KEY (`file_id`) REFERENCES `files` (`id`) ON DELETE CASCADE ON UPDATE CASCADE,
+  CONSTRAINT `upload_sessions_version_id_fkey` FOREIGN KEY (`version_id`) REFERENCES `file_versions` (`id`) ON DELETE CASCADE ON UPDATE CASCADE,
+  CONSTRAINT `upload_sessions_created_by_fkey` FOREIGN KEY (`created_by`) REFERENCES `users` (`id`) ON DELETE RESTRICT ON UPDATE CASCADE
+) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+
+CREATE TABLE `upload_parts` (
+  `id` CHAR(36) NOT NULL,
+  `session_id` CHAR(36) NOT NULL,
+  `part_number` INT NOT NULL,
+  `size` INT NOT NULL,
+  `checksum` CHAR(64) NOT NULL,
+  `etag` VARCHAR(255) NULL,
+  `created_at` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `upload_parts_session_id_part_number_key` (`session_id`,`part_number`),
+  KEY `upload_parts_session_id_part_number_idx` (`session_id`,`part_number`),
+  CONSTRAINT `upload_parts_session_id_fkey` FOREIGN KEY (`session_id`) REFERENCES `upload_sessions` (`id`) ON DELETE CASCADE ON UPDATE CASCADE
+) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;

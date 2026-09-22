@@ -116,6 +116,27 @@ export class EnterpriseService {
     return this.prisma.auditLog.findMany({ where: { orgId: user.org_id }, orderBy: { createdAt: 'desc' }, take: safeLimit, include: { actor: { select: { id: true, name: true, email: true } } } });
   }
 
+
+  async securityCenter(user: AccessTokenPayload) {
+    this.assertAdmin(user);
+    const [activeSessions, revokedSessions, devices, events] = await Promise.all([
+      this.prisma.session.count({ where: { orgId: user.org_id, revokedAt: null, expiresAt: { gt: new Date() } } }),
+      this.prisma.session.count({ where: { orgId: user.org_id, revokedAt: { not: null } } }),
+      this.prisma.userDevice.count({ where: { orgId: user.org_id, revokedAt: null } }),
+      this.prisma.securityEvent.findMany({ where: { orgId: user.org_id }, orderBy: { createdAt: 'desc' }, take: 100, include: { user: { select: { id: true, name: true, email: true } } } }),
+    ]);
+    return { activeSessions, revokedSessions, activeDevices: devices, events };
+  }
+
+  async revokeUserSession(user: AccessTokenPayload, sessionId: string) {
+    this.assertAdmin(user);
+    const session = await this.prisma.session.findFirst({ where: { id: sessionId, orgId: user.org_id } });
+    if (!session) throw new NotFoundException('Session not found');
+    await this.prisma.session.update({ where: { id: session.id }, data: { revokedAt: new Date() } });
+    await this.prisma.securityEvent.create({ data: { orgId: user.org_id, userId: session.userId, severity: 'WARNING', eventType: 'ADMIN_SESSION_REVOKED', resourceType: 'SESSION', resourceId: session.id, metadata: { adminId: user.sub } } });
+    return { ok: true };
+  }
+
   async externalShares(user: AccessTokenPayload) {
     this.assertAdmin(user);
     return this.prisma.fileShare.findMany({ where: { orgId: user.org_id, status: 'ACTIVE' }, orderBy: { createdAt: 'desc' }, take: 500, include: { file: { select: { id: true, name: true } }, recipients: { include: { user: { select: { id: true, name: true, email: true } } } } } });

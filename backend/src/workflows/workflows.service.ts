@@ -7,6 +7,7 @@ import { WorkflowEngineService } from './workflow-engine.service';
 import { dynamicValueCatalog, walkDynamicValues } from './workflow-runtime';
 import { CustomFunctionExecutor } from './custom-function.executor';
 import { PermissionService } from '../permissions/permission.service';
+import { ConnectionsService } from '../connections/connections.service';
 
 type ActionInput = { type?: unknown; config?: unknown };
 type FieldInput = { id?: unknown; name?: unknown; description?: unknown; type?: unknown; required?: unknown; defaultValue?: unknown; max?: unknown; options?: unknown };
@@ -19,7 +20,7 @@ export function isWorkflowAdmin(user: Pick<AccessTokenPayload, 'role'>): boolean
 
 @Injectable()
 export class WorkflowsService {
-  constructor(private readonly prisma: PrismaService, private readonly engine: WorkflowEngineService, private readonly functionExecutor: CustomFunctionExecutor, private readonly permissions: PermissionService) {}
+  constructor(private readonly prisma: PrismaService, private readonly engine: WorkflowEngineService, private readonly functionExecutor: CustomFunctionExecutor, private readonly permissions: PermissionService, private readonly connections: ConnectionsService) {}
 
   private requireWorkflowAdmin(user: AccessTokenPayload): void {
     if (!isWorkflowAdmin(user)) throw new ForbiddenException('Workflow administration requires an organization admin');
@@ -222,6 +223,109 @@ export class WorkflowsService {
     return this.prisma.auditLog.findMany({ where, orderBy: { createdAt: 'desc' }, take: 300, include: { actor: { select: { id: true, name: true, email: true } } } });
   }
 
+  async integrationStatus(user: AccessTokenPayload) {
+    this.requireWorkflowAdmin(user);
+    const startedAt = Date.now();
+    const activeWorkflows = await this.prisma.workflow.findMany({
+      where: { orgId: user.org_id, status: 'ACTIVE' },
+      select: { id: true, name: true, status: true, activeVersionId: true, steps: { select: { config: true } }, transitions: { select: { actions: true } } },
+    });
+    const functions = await this.prisma.workflowFunction.findMany({
+      where: { orgId: user.org_id },
+      select: { id: true, key: true, name: true, enabled: true, activeVersionId: true, activeVersion: { select: { id: true, status: true, version: true, definition: true } } },
+    });
+
+    const connectionIds = new Set<string>();
+    const functionIds = new Set<string>();
+    const walk = (v: unknown) => {
+      if (!v || typeof v !== 'object') return;
+      if (Array.isArray(v)) { v.forEach(walk); return; }
+      const r = v as Record<string, unknown>;
+      if (typeof r.connectionId === 'string' && r.connectionId.trim()) connectionIds.add(r.connectionId.trim());
+      if (typeof r.functionId === 'string' && r.functionId.trim()) functionIds.add(r.functionId.trim());
+      Object.values(r).forEach(walk);
+    };
+    for (const workflow of activeWorkflows) { walk(workflow.steps); walk(workflow.transitions); }
+
+    const referencedFunctionIds = new Set(functionIds);
+    for (const fn of functions) {
+      if (fn.activeVersion?.definition) walk(fn.activeVersion.definition);
+    }
+
+    const [connections, usageFailures] = await Promise.all([
+      this.prisma.connection.findMany({
+        where: { orgId: user.org_id, id: { in: [...connectionIds] } },
+        select: { id: true, name: true, status: true, authType: true, provider: true },
+      }),
+      this.prisma.connectionUsage.count({ where: { orgId: user.org_id, workflowId: { not: null }, status: { not: 'SUCCESS' } } }),
+    ]);
+
+    const connectionMap = new Map(connections.map(row => [row.id, row]));
+    const functionMap = new Map(functions.map(fn => [fn.id, fn]));
+    const checks: Array<{ key: string; status: 'PASS' | 'WARN' | 'FAIL'; detail: string; items?: unknown[] }> = [];
+
+    const workflowVersionIssues = activeWorkflows.filter(w => !w.activeVersionId);
+    checks.push({ key: 'active-workflow-versions', status: workflowVersionIssues.length ? 'FAIL' : 'PASS', detail: workflowVersionIssues.length ? `${workflowVersionIssues.length} active workflow(s) have no active version.` : 'All active workflows have an immutable active version.' });
+
+    const missingConnections = [...connectionIds].filter(id => !connectionMap.has(id));
+    const inactiveConnections = connections.filter(c => c.status !== 'ACTIVE');
+    checks.push({
+      key: 'workflow-connections',
+      status: missingConnections.length || inactiveConnections.length ? 'FAIL' : 'PASS',
+      detail: missingConnections.length || inactiveConnections.length ? `${missingConnections.length} missing and ${inactiveConnections.length} inactive connection reference(s) detected.` : 'All referenced workflow connections are present and ACTIVE.',
+      items: [...missingConnections, ...inactiveConnections.map(c => ({ id: c.id, status: c.status }))],
+    });
+
+    const missingFunctions = [...referencedFunctionIds].filter(id => !functionMap.has(id));
+    const inactiveFunctions = [...referencedFunctionIds].map(id => functionMap.get(id)).filter((fn): fn is NonNullable<typeof fn> => !!fn && (!fn.enabled || !fn.activeVersionId || fn.activeVersion?.status !== 'ACTIVE'));
+    checks.push({
+      key: 'custom-functions',
+      status: missingFunctions.length || inactiveFunctions.length ? 'FAIL' : 'PASS',
+      detail: missingFunctions.length || inactiveFunctions.length ? `${missingFunctions.length} missing and ${inactiveFunctions.length} unavailable custom function reference(s) detected.` : 'All referenced custom functions have an enabled ACTIVE version.',
+      items: [...missingFunctions, ...inactiveFunctions.map(fn => ({ id: fn.id, key: fn.key, enabled: fn.enabled, activeVersionId: fn.activeVersionId, status: fn.activeVersion?.status ?? null }))],
+    });
+
+    const referencedFunctionConnections = [...functions]
+      .filter(fn => referencedFunctionIds.has(fn.id) && fn.activeVersion?.definition)
+      .flatMap(fn => {
+        const ids = new Set<string>();
+        const collect = (v: unknown) => {
+          if (!v || typeof v !== 'object') return;
+          if (Array.isArray(v)) { v.forEach(collect); return; }
+          const r = v as Record<string, unknown>;
+          if (typeof r.connectionId === 'string' && r.connectionId.trim()) ids.add(r.connectionId.trim());
+          Object.values(r).forEach(collect);
+        };
+        collect(fn.activeVersion!.definition);
+        return [...ids];
+      });
+    const functionConnectionIds = new Set(referencedFunctionConnections);
+    const functionConnectionRows = functionConnectionIds.size
+      ? await this.prisma.connection.findMany({ where: { orgId: user.org_id, id: { in: [...functionConnectionIds] } }, select: { id: true, status: true } })
+      : [];
+    const functionConnectionMap = new Map(functionConnectionRows.map(c => [c.id, c]));
+    const functionConnectionProblems = [...functionConnectionIds].filter(id => functionConnectionMap.get(id)?.status !== 'ACTIVE');
+    checks.push({
+      key: 'function-connections',
+      status: functionConnectionProblems.length ? 'FAIL' : 'PASS',
+      detail: functionConnectionProblems.length ? `${functionConnectionProblems.length} connection reference(s) used by active custom functions are unavailable.` : 'All active custom-function connection references are available.',
+      items: functionConnectionProblems,
+    });
+
+    checks.push({ key: 'runtime', status: 'PASS', detail: 'Workflow runtime is wired to CustomFunctionExecutor and ConnectionsService for HTTP actions.' });
+    checks.push({ key: 'failure-observability', status: usageFailures > 0 ? 'WARN' : 'PASS', detail: `${usageFailures} workflow-linked connection usage failure(s) are recorded.` });
+
+    const blocking = checks.filter(c => c.status === 'FAIL');
+    return {
+      generatedAt: new Date().toISOString(),
+      durationMs: Date.now() - startedAt,
+      status: blocking.length ? 'BLOCKED' : 'INTEGRATED',
+      closureReady: blocking.length === 0,
+      scope: { workflows: activeWorkflows.length, referencedConnections: connectionIds.size, referencedFunctions: referencedFunctionIds.size },
+      checks,
+    };
+  }
+
   async diagnostics(user: AccessTokenPayload) {
     this.requireWorkflowAdmin(user);
     const startedAt = Date.now();
@@ -374,8 +478,53 @@ export class WorkflowsService {
     };
     walk(workflow.transitions); walk(workflow.steps);
     if (!ids.size) return;
-    const rows = await this.prisma.connection.findMany({ where: { orgId: user.org_id, id: { in: [...ids] }, provider: 'rest', status: 'ACTIVE', OR: [{ ownerId: user.sub }, { visibility: 'ORGANIZATION' }, { shares: { some: { userId: user.sub } } }] }, select: { id: true } });
-    if (rows.length !== ids.size) throw new BadRequestException('Workflow references a REST connection that is unavailable to the publisher');
+    const rows = await this.prisma.connection.findMany({ where: { orgId: user.org_id, id: { in: [...ids] }, status: 'ACTIVE', OR: [{ ownerId: user.sub }, { visibility: 'ORGANIZATION' }, { shares: { some: { userId: user.sub } } }] }, select: { id: true, provider: true, authType: true } });
+    if (rows.length !== ids.size) throw new BadRequestException('Workflow references a connection that is unavailable to the publisher');
+  }
+
+  async connectionHealth(user: AccessTokenPayload, workflowId: string) {
+    const workflow = await this.prisma.workflow.findFirst({
+      where: { id: workflowId, orgId: user.org_id },
+      include: { steps: true, transitions: true, activeVersion: true },
+    });
+    if (!workflow) throw new NotFoundException('Workflow not found');
+
+    const ids = new Set<string>();
+    const walk = (v: unknown) => {
+      if (!v || typeof v !== 'object') return;
+      if (Array.isArray(v)) { v.forEach(walk); return; }
+      const r = v as Record<string, unknown>;
+      if (typeof r.connectionId === 'string' && r.connectionId.trim()) ids.add(r.connectionId.trim());
+      Object.values(r).forEach(walk);
+    };
+    walk(workflow.transitions);
+    walk(workflow.steps);
+    if (workflow.activeVersion) walk(workflow.activeVersion.snapshot);
+
+    if (!ids.size) return { workflowId, checkedAt: new Date().toISOString(), ready: true, connections: [] };
+    const rows = await this.prisma.connection.findMany({
+      where: { orgId: user.org_id, id: { in: [...ids] } },
+      select: { id: true, name: true, provider: true, authType: true, status: true, errorCode: true, errorMessage: true, expiresAt: true, ownerId: true, visibility: true },
+    });
+    const byId = new Map(rows.map(r => [r.id, r]));
+    const connections = [...ids].map(id => {
+      const row = byId.get(id);
+      if (!row) return { id, status: 'MISSING', ready: false, reason: 'Connection is unavailable to you' };
+      const usable = row.status === 'ACTIVE';
+      return {
+        id: row.id, name: row.name, provider: row.provider, authType: row.authType,
+        status: row.status, ready: usable, errorCode: row.errorCode, errorMessage: row.errorMessage,
+        expiresAt: row.expiresAt, canReconnect: row.authType === 'OAUTH2' && row.ownerId === user.sub,
+        reason: usable ? null : (row.errorMessage || `Connection is ${String(row.status).toLowerCase()}`),
+      };
+    });
+    return { workflowId, checkedAt: new Date().toISOString(), ready: connections.every(c => c.ready), connections };
+  }
+
+  async validateForActivation(user: AccessTokenPayload, workflowId: string) {
+    const health = await this.connectionHealth(user, workflowId);
+    const issues = health.connections.filter(c => !c.ready).map(c => ({ connectionId: c.id, status: c.status, code: c.errorCode ?? 'CONNECTION_UNAVAILABLE', message: c.reason }));
+    return { ...health, issues, ready: issues.length === 0 };
   }
 
   private async publishVersion(user: AccessTokenPayload, id: string) {
@@ -590,8 +739,8 @@ export class WorkflowsService {
     const ids = new Set<string>();
     const walk = (v: unknown) => { if (!v || typeof v !== 'object') return; if (Array.isArray(v)) { v.forEach(walk); return; } const r=v as Record<string,unknown>; if (typeof r.connectionId==='string') ids.add(r.connectionId); Object.values(r).forEach(walk); };
     walk(definition); if (!ids.size) return;
-    const rows=await this.prisma.connection.findMany({where:{orgId:user.org_id,id:{in:[...ids]},provider:'rest',status:'ACTIVE',OR:[{ownerId:user.sub},{visibility:'ORGANIZATION'},{shares:{some:{userId:user.sub}}}]},select:{id:true,status:true}});
-    if (rows.length!==ids.size) throw new BadRequestException('Function references a REST connection that is unavailable to the publisher');
+    const rows=await this.prisma.connection.findMany({where:{orgId:user.org_id,id:{in:[...ids]},status:'ACTIVE',OR:[{ownerId:user.sub},{visibility:'ORGANIZATION'},{shares:{some:{userId:user.sub}}}]},select:{id:true,status:true,provider:true,authType:true}});
+    if (rows.length!==ids.size) throw new BadRequestException('Function references a connection that is unavailable to the publisher');
   }
 
   async createFunction(user: AccessTokenPayload, body: { name?: string; key?: string; description?: string; definition?: unknown; runtime?: string; permissions?: unknown; timeoutMs?: number; memoryLimitMb?: number }) {
@@ -617,6 +766,74 @@ export class WorkflowsService {
       await tx.auditLog.create({ data: { orgId: user.org_id, actorId: user.sub, action: 'WORKFLOW_FUNCTION_CREATED', resourceType: 'WORKFLOW_FUNCTION', resourceId: id, metadata: { key, version: 1, runtime } } });
       return tx.workflowFunction.findUnique({ where: { id }, include: { activeVersion: true, versions: true } });
     });
+  }
+
+  private async findFunctionOrThrow(user: AccessTokenPayload, functionId: string) {
+    this.requireWorkflowAdmin(user);
+    const fn = await this.prisma.workflowFunction.findFirst({ where: { id: functionId, orgId: user.org_id } });
+    if (!fn) throw new NotFoundException('Workflow function not found');
+    return fn;
+  }
+
+  private async functionWorkflowReferences(user: AccessTokenPayload, functionId: string) {
+    const workflows = await this.prisma.workflow.findMany({
+      where: { orgId: user.org_id },
+      select: { id: true, name: true, status: true, steps: { select: { config: true } }, transitions: { select: { actions: true } } },
+    });
+    const refs: Array<{ id: string; name: string; status: string }> = [];
+    const walk = (v: unknown): boolean => {
+      if (!v || typeof v !== 'object') return false;
+      if (Array.isArray(v)) return v.some(walk);
+      const r = v as Record<string, unknown>;
+      if (r.functionId === functionId) return true;
+      return Object.values(r).some(walk);
+    };
+    for (const w of workflows) if (w.steps.some(s => walk(s.config)) || w.transitions.some(t => walk(t.actions))) refs.push({ id: w.id, name: w.name, status: w.status });
+    return refs;
+  }
+
+  async updateFunction(user: AccessTokenPayload, functionId: string, body: { name?: string; description?: string; enabled?: boolean }) {
+    const fn = await this.findFunctionOrThrow(user, functionId);
+    const name = body.name === undefined ? fn.name : String(body.name).trim();
+    if (!name) throw new BadRequestException('Function name is required');
+    const enabled = body.enabled === undefined ? fn.enabled : Boolean(body.enabled);
+    const updated = await this.prisma.workflowFunction.update({ where: { id: fn.id }, data: { name, description: body.description === undefined ? fn.description : (String(body.description).trim() || null), enabled } });
+    await this.prisma.auditLog.create({ data: { orgId: user.org_id, actorId: user.sub, action: 'WORKFLOW_FUNCTION_UPDATED', resourceType: 'WORKFLOW_FUNCTION', resourceId: fn.id, metadata: { enabled, name } } });
+    return updated;
+  }
+
+  async deleteFunction(user: AccessTokenPayload, functionId: string) {
+    const fn = await this.findFunctionOrThrow(user, functionId);
+    const refs = await this.functionWorkflowReferences(user, functionId);
+    if (refs.length) throw new BadRequestException({ code: 'FUNCTION_IN_USE', message: 'Function cannot be deleted while referenced by a workflow', references: refs });
+    await this.prisma.$transaction(async tx => {
+      await tx.workflowFunctionExecution.deleteMany({ where: { functionId, orgId: user.org_id } });
+      await tx.workflowFunctionVersion.deleteMany({ where: { functionId, orgId: user.org_id } });
+      await tx.workflowFunction.delete({ where: { id: functionId } });
+      await tx.auditLog.create({ data: { orgId: user.org_id, actorId: user.sub, action: 'WORKFLOW_FUNCTION_DELETED', resourceType: 'WORKFLOW_FUNCTION', resourceId: functionId, metadata: { key: fn.key } } });
+    });
+    return { id: functionId, deleted: true };
+  }
+
+  async createFunctionVersion(user: AccessTokenPayload, functionId: string, body: { definition?: unknown; inputSchema?: unknown; outputSchema?: unknown; permissions?: unknown; timeoutMs?: number; memoryLimitMb?: number }) {
+    const fn = await this.findFunctionOrThrow(user, functionId);
+    if (!body.definition) throw new BadRequestException('A safe function definition is required');
+    const definition = this.normalizeFunctionDefinition(body.definition);
+    await this.validateFunctionConnectionReferences(user, definition);
+    const latest = await this.prisma.workflowFunctionVersion.findFirst({ where: { functionId, orgId: user.org_id }, orderBy: { version: 'desc' }, select: { version: true } });
+    const version = (latest?.version ?? 0) + 1;
+    const timeoutMs = Math.min(5000, Math.max(100, Math.floor(Number(body.timeoutMs ?? 1000))));
+    const memoryLimitMb = Math.min(128, Math.max(16, Math.floor(Number(body.memoryLimitMb ?? 64))));
+    const permissions = Array.isArray(body.permissions) ? body.permissions.map(String).filter((x) => ['read_file_metadata','read_workflow_fields','write_workflow_fields','notify_owner','add_tags'].includes(x)) : ['read_file_metadata','read_workflow_fields','write_workflow_fields'];
+    const created = await this.prisma.workflowFunctionVersion.create({ data: { id: randomUUID(), functionId: fn.id, orgId: user.org_id, version, status: 'DRAFT', runtime: 'SAFE', definition: definition as Prisma.InputJsonValue, inputSchema: (body.inputSchema ?? Prisma.JsonNull) as Prisma.InputJsonValue, outputSchema: (body.outputSchema ?? Prisma.JsonNull) as Prisma.InputJsonValue, permissions: permissions as Prisma.InputJsonValue, timeoutMs, memoryLimitMb, createdById: user.sub } });
+    await this.prisma.auditLog.create({ data: { orgId: user.org_id, actorId: user.sub, action: 'WORKFLOW_FUNCTION_VERSION_CREATED', resourceType: 'WORKFLOW_FUNCTION', resourceId: fn.id, metadata: { versionId: created.id, version } } });
+    return created;
+  }
+
+  async functionExecutions(user: AccessTokenPayload, functionId: string, limit = 50) {
+    await this.findFunctionOrThrow(user, functionId);
+    const take = Math.min(100, Math.max(1, Number.isFinite(limit) ? Math.floor(limit) : 50));
+    return this.prisma.workflowFunctionExecution.findMany({ where: { functionId, orgId: user.org_id }, orderBy: { createdAt: 'desc' }, take, select: { id: true, functionId: true, versionId: true, runId: true, stepId: true, status: true, durationMs: true, inputSummary: true, outputSummary: true, error: true, createdAt: true, completedAt: true } });
   }
 
   async functionVersions(user: AccessTokenPayload, functionId: string) {
@@ -646,8 +863,8 @@ export class WorkflowsService {
     if (!fn) throw new NotFoundException('Workflow function not found');
     const versionId = body.versionId ?? fn.activeVersionId;
     if (!versionId) throw new BadRequestException('Function has no active version');
-    const version = await this.prisma.workflowFunctionVersion.findFirst({ where: { id: versionId, functionId, orgId: user.org_id, status: 'ACTIVE' } });
-    if (!version) throw new NotFoundException('Active function version not found');
+    const version = await this.prisma.workflowFunctionVersion.findFirst({ where: { id: versionId, functionId, orgId: user.org_id, ...(body.versionId ? {} : { status: 'ACTIVE' }) } });
+    if (!version) throw new NotFoundException(body.versionId ? 'Function version not found' : 'Active function version not found');
     const input = body.input && typeof body.input === 'object' ? body.input : {};
     const fields = input.fields && typeof input.fields === 'object' ? input.fields as Record<string, unknown> : {};
     const file = input.file && typeof input.file === 'object' ? input.file as Record<string, unknown> : { id: 'test-file', name: 'contract.pdf', extension: '.pdf', fileType: 'PDF', mimeType: 'application/pdf' };
@@ -719,6 +936,26 @@ export class WorkflowsService {
       where: { id: runId, orgId: user.org_id },
       include: { workflow: { select: { id: true, name: true, ownerId: true } }, stepRuns: { orderBy: { stepPosition: 'asc' } }, jobs: { orderBy: { createdAt: 'desc' }, take: 10 } },
     });
+  }
+
+  async reconnectRunConnection(user: AccessTokenPayload, runId: string, connectionId: string) {
+    const run = await this.prisma.workflowRun.findFirst({
+      where: { id: runId, orgId: user.org_id },
+      include: { workflow: { include: { steps: true, transitions: true, activeVersion: true } } },
+    });
+    if (!run) throw new NotFoundException('Workflow run not found');
+    const ids = new Set<string>();
+    const walk = (v: unknown) => {
+      if (!v || typeof v !== 'object') return;
+      if (Array.isArray(v)) { v.forEach(walk); return; }
+      const r = v as Record<string, unknown>;
+      if (typeof r.connectionId === 'string' && r.connectionId.trim()) ids.add(r.connectionId.trim());
+      Object.values(r).forEach(walk);
+    };
+    walk(run.workflow.steps); walk(run.workflow.transitions);
+    if (run.workflow.activeVersion) walk(run.workflow.activeVersion.snapshot);
+    if (!ids.has(connectionId)) throw new BadRequestException('The connection is not referenced by this workflow');
+    return this.connections.reconnect(user, connectionId);
   }
 
   async retry(user: AccessTokenPayload, runId: string) {

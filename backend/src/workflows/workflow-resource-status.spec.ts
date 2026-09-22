@@ -16,7 +16,7 @@ describe('workflow resource status', () => {
     const engine = {} as any;
     const functions = {} as any;
     const permissions = { canRead: jest.fn((_user, resource) => resource.ownerId === 'user-1') } as any;
-    const service = new WorkflowsService(prisma, engine, functions, permissions);
+    const service = new WorkflowsService(prisma, engine, functions, permissions, {} as any);
     const result = await service.resourceStatus({ sub: 'user-1', org_id: 'org-1', role: 'MEMBER' } as any, 'FILE', 'file-1,file-2');
     expect(result).toHaveLength(1);
     expect(result[0].resourceId).toBe('file-1');

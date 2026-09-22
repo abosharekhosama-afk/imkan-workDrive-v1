@@ -9,6 +9,7 @@ import { FoldersModule } from './folders/folders.module';
 import { PermissionsModule } from './permissions/permissions.module';
 import { PrismaModule } from './prisma/prisma.module';
 import { SearchModule } from './search/search.module';
+import { MetadataModule } from './metadata/metadata.module';
 import { SharesModule } from './shares/shares.module';
 import { StorageModule } from './storage/storage.module';
 import { TeamFoldersModule } from './team-folders/team-folders.module';
@@ -28,6 +29,7 @@ import { ConnectionsModule } from './connections/connections.module';
 import { TemplatesModule } from './templates/templates.module';
 import { OfficeModule } from './office/office.module';
 import { OfficeEmailModule } from './office-email/office-email.module';
+import { AiModule } from './ai/ai.module';
 
 @Module({
   imports: [
@@ -39,6 +41,7 @@ import { OfficeEmailModule } from './office-email/office-email.module';
     FilesModule,
     SharesModule,
     SearchModule,
+    MetadataModule,
     AuditModule,
     TeamFoldersModule,
     FavoritesModule,
@@ -57,6 +60,7 @@ import { OfficeEmailModule } from './office-email/office-email.module';
     TemplatesModule,
     OfficeModule,
     OfficeEmailModule,
+    AiModule,
   ],
   controllers: [AppController],
   providers: [AppService],

@@ -1,5 +1,5 @@
-import { Body, Controller, Delete, Get, Param, Patch, Post, Query, Res } from '@nestjs/common';
-import type { Response } from 'express';
+import { Body, Controller, Delete, Get, Param, Patch, Post, Query, Req, Res } from '@nestjs/common';
+import type { Request, Response } from 'express';
 import { Public } from './public.decorator';
 import { CurrentUser } from './current-user.decorator';
 import type { AccessTokenPayload } from './jwt.types';
@@ -9,10 +9,11 @@ import { AuthService } from '../auth.service';
 export class AuthController {
   constructor(private readonly auth: AuthService) {}
   @Public() @Post('signup') signup(@Body() body: { name: string; email: string; password: string; inviteToken?: string }) { return this.auth.signup(body); }
-  @Public() @Post('login') login(@Body() body: { email: string; password: string; organizationId?: string }) { return this.auth.login(body); }
+  @Public() @Post('login') login(@Body() body: { email: string; password: string; organizationId?: string }, @Req() req: Request) { return this.auth.login(body, { ipAddress: req.ip, userAgent: req.headers['user-agent'] }); }
   @Post('logout') logout(@CurrentUser() user: AccessTokenPayload) { return this.auth.logout(user); }
   @Post('logout-all') logoutAll(@CurrentUser() user: AccessTokenPayload) { return this.auth.logoutAll(user); }
   @Get('sessions') sessions(@CurrentUser() user: AccessTokenPayload) { return this.auth.sessions(user); }
+  @Get('security-events') securityEvents(@CurrentUser() user: AccessTokenPayload) { return this.auth.securityEvents(user); }
   @Delete('sessions/:id') revokeSession(@CurrentUser() user: AccessTokenPayload, @Param('id') id: string) { return this.auth.revokeSession(user, id); }
   @Public() @Post('forgot-password') forgotPassword(@Body() body: { email: string }) { return this.auth.forgotPassword(body.email); }
   @Public() @Post('reset-password') resetPassword(@Body() body: { token: string; password: string }) { return this.auth.resetPassword(body.token, body.password); }

@@ -210,7 +210,7 @@ export class AuthService {
     });
   }
 
-  async login(input: { email: string; password: string; organizationId?: string }): Promise<AuthResult> {
+  async login(input: { email: string; password: string; organizationId?: string }, context?: { ipAddress?: string; userAgent?: string }): Promise<AuthResult> {
     const email = input.email.trim().toLowerCase();
     const user = await this.prisma.user.findFirst({ where: { email } });
     if (!user?.passwordHash || user.status !== 'ACTIVE' || !(await this.verify(input.password, user.passwordHash))) {
@@ -240,7 +240,9 @@ export class AuthService {
 
     await this.prisma.user.update({ where: { id: user.id }, data: { currentOrganizationId: membership.organizationId, lastLoginAt: new Date() } });
 
-    return this.issue(user, membership);
+    const result = await this.issue(user, membership, context);
+    await this.prisma.securityEvent.create({ data: { orgId: membership.organizationId, userId: user.id, severity: 'INFO', eventType: 'LOGIN_SUCCESS', ipAddress: context?.ipAddress, metadata: { userAgent: context?.userAgent } } });
+    return result;
   }
 
   async switchOrganization(user: AccessTokenPayload, organizationId: string): Promise<AuthResult> {
@@ -264,12 +266,16 @@ export class AuthService {
   }
 
   async logout(user: AccessTokenPayload) {
-    if (user.jti) await this.prisma.session.updateMany({ where: { id: user.jti, userId: user.sub, orgId: user.org_id, revokedAt: null }, data: { revokedAt: new Date() } });
+    if (user.jti) {
+      await this.prisma.session.updateMany({ where: { id: user.jti, userId: user.sub, orgId: user.org_id, revokedAt: null }, data: { revokedAt: new Date() } });
+      await this.prisma.securityEvent.create({ data: { orgId: user.org_id, userId: user.sub, severity: 'INFO', eventType: 'LOGOUT', resourceType: 'SESSION', resourceId: user.jti } });
+    }
     return { ok: true };
   }
 
   async logoutAll(user: AccessTokenPayload) {
     await this.prisma.session.updateMany({ where: { userId: user.sub, orgId: user.org_id, revokedAt: null }, data: { revokedAt: new Date() } });
+    await this.prisma.securityEvent.create({ data: { orgId: user.org_id, userId: user.sub, severity: 'INFO', eventType: 'LOGOUT_ALL' } });
     return { ok: true };
   }
 
@@ -295,11 +301,17 @@ export class AuthService {
   }
 
   async sessions(user: AccessTokenPayload) {
-    return this.prisma.session.findMany({ where: { userId: user.sub, orgId: user.org_id, revokedAt: null, expiresAt: { gt: new Date() } }, orderBy: { lastSeenAt: 'desc' }, select: { id: true, createdAt: true, lastSeenAt: true, expiresAt: true } });
+    const rows = await this.prisma.session.findMany({ where: { userId: user.sub, orgId: user.org_id, revokedAt: null, expiresAt: { gt: new Date() } }, orderBy: { lastSeenAt: 'desc' }, select: { id: true, createdAt: true, lastSeenAt: true, expiresAt: true, ipAddress: true, userAgent: true, deviceId: true } });
+    return rows.map((row) => ({ ...row, isCurrent: row.id === user.jti }));
+  }
+
+  async securityEvents(user: AccessTokenPayload) {
+    return this.prisma.securityEvent.findMany({ where: { orgId: user.org_id, userId: user.sub }, orderBy: { createdAt: 'desc' }, take: 100, select: { id: true, severity: true, eventType: true, ipAddress: true, metadata: true, createdAt: true } });
   }
 
   async revokeSession(user: AccessTokenPayload, id: string) {
     await this.prisma.session.updateMany({ where: { id, userId: user.sub, orgId: user.org_id, revokedAt: null }, data: { revokedAt: new Date() } });
+    await this.prisma.securityEvent.create({ data: { orgId: user.org_id, userId: user.sub, severity: 'INFO', eventType: 'SESSION_REVOKED', resourceType: 'SESSION', resourceId: id } });
     return { ok: true };
   }
 
@@ -353,6 +365,7 @@ export class AuthService {
     await this.prisma.$transaction([
       this.prisma.user.update({ where: { id: found.id }, data: { passwordHash } }),
       this.prisma.session.updateMany({ where: { userId: found.id, orgId: user.org_id, revokedAt: null, id: { not: user.jti ?? '' } }, data: { revokedAt: new Date() } }),
+      this.prisma.securityEvent.create({ data: { orgId: user.org_id, userId: user.sub, severity: 'WARNING', eventType: 'PASSWORD_CHANGED' } }),
     ]);
     return { ok: true };
   }
@@ -465,7 +478,7 @@ export class AuthService {
     return this.issue(user, primaryMembership);
   }
 
-  private async issue(user: { id: string; name: string | null; email: string }, membership: MembershipInfo): Promise<AuthResult> {
+  private async issue(user: { id: string; name: string | null; email: string }, membership: MembershipInfo, context?: { ipAddress?: string; userAgent?: string }): Promise<AuthResult> {
     const secret = this.config.get<string>('JWT_SECRET');
     if (!secret) throw new UnauthorizedException('JWT is not configured');
 
@@ -484,7 +497,11 @@ export class AuthService {
 
     const accessToken = jwt.sign(payload, secret, { expiresIn: '8h' });
 
-    await this.prisma.session.create({ data: { id: sessionId, orgId: membership.organizationId, userId: user.id, tokenHash: this.hashToken(accessToken), expiresAt } });
+    const deviceId = randomUUID();
+    await this.prisma.$transaction([
+      this.prisma.userDevice.create({ data: { id: deviceId, orgId: membership.organizationId, userId: user.id, name: context?.userAgent ? context.userAgent.slice(0, 120) : 'Web browser', platform: context?.userAgent?.slice(0, 80), lastSeenAt: new Date() } }),
+      this.prisma.session.create({ data: { id: sessionId, orgId: membership.organizationId, userId: user.id, tokenHash: this.hashToken(accessToken), expiresAt, ipAddress: context?.ipAddress, userAgent: context?.userAgent, deviceId } }),
+    ]);
 
     return {
       access_token: accessToken,

@@ -26,12 +26,14 @@ import { parseUploadComplete } from './upload-complete.schema';
 import { parseUploadRequest } from './upload-request.schema';
 import { parseRestoreVersion } from './restore-version.schema';
 import { parseBulkFileOperation, parseMoveCopy } from './operation.schema';
+import { DlpService } from '../dlp/dlp.service';
 
 @Controller('files')
 export class FilesController {
   constructor(
     private readonly files: FilesService,
     private readonly recent: RecentService,
+    private readonly dlp: DlpService,
   ) {}
 
   /**
@@ -50,6 +52,50 @@ export class FilesController {
     return this.files.requestUpload(user, parseUploadRequest(body));
   }
 
+  @Post('upload-sessions')
+  startResumableUpload(@CurrentUser() user: AccessTokenPayload, @Body() body: any) {
+    return this.files.startResumableUpload(user, {
+      folderId: body?.folderId ?? body?.folder_id ?? null,
+      name: body?.name,
+      mimeType: body?.mimeType ?? body?.mime_type,
+      size: Number(body?.size),
+      sha256: body?.sha256,
+      partSize: body?.partSize === undefined && body?.part_size === undefined ? undefined : Number(body?.partSize ?? body?.part_size),
+    });
+  }
+
+  @Get('upload-sessions/:sessionId')
+  getResumableUpload(@CurrentUser() user: AccessTokenPayload, @Param('sessionId', new ParseUUIDPipe({ version: '4' })) sessionId: string) {
+    return this.files.getResumableUpload(user, sessionId);
+  }
+
+  @Post('upload-sessions/:sessionId/parts/:partNumber')
+  @UseInterceptors(FileInterceptor('chunk'))
+  uploadResumablePart(
+    @CurrentUser() user: AccessTokenPayload,
+    @Param('sessionId', new ParseUUIDPipe({ version: '4' })) sessionId: string,
+    @Param('partNumber') partNumber: string,
+    @Headers('x-part-sha256') checksum: string,
+    @UploadedFile() chunk: unknown,
+  ) {
+    return this.files.uploadResumablePart(user, sessionId, Number(partNumber), chunk, checksum);
+  }
+
+  @Post('upload-sessions/:sessionId/complete')
+  completeResumableUpload(@CurrentUser() user: AccessTokenPayload, @Param('sessionId', new ParseUUIDPipe({ version: '4' })) sessionId: string) {
+    return this.files.completeResumableUpload(user, sessionId);
+  }
+
+  @Delete('upload-sessions/:sessionId')
+  abortResumableUpload(@CurrentUser() user: AccessTokenPayload, @Param('sessionId', new ParseUUIDPipe({ version: '4' })) sessionId: string) {
+    return this.files.abortResumableUpload(user, sessionId);
+  }
+
+  @Post('upload-sessions/cleanup-expired')
+  cleanupExpiredResumableUploads(@CurrentUser() user: AccessTokenPayload) {
+    return this.files.cleanupExpiredResumableUploads(user);
+  }
+
   @Post('upload-complete')
   completeUpload(
     @CurrentUser() user: AccessTokenPayload,
@@ -62,6 +108,11 @@ export class FilesController {
   listTrash(@CurrentUser() user: AccessTokenPayload) {
     return this.files.listTrash(user);
   }
+
+
+  @Get(':id/dlp') dlp(@CurrentUser() user: AccessTokenPayload, @Param('id', new ParseUUIDPipe({ version: '4' })) id: string) { return this.dlp.evaluate(user, id); }
+  @Post(':id/dlp/labels/:labelId') addDlpLabel(@CurrentUser() user: AccessTokenPayload, @Param('id', new ParseUUIDPipe({ version: '4' })) id: string, @Param('labelId', new ParseUUIDPipe({ version: '4' })) labelId: string) { return this.dlp.associateLabel(user, id, labelId); }
+  @Delete(':id/dlp/labels/:labelId') removeDlpLabel(@CurrentUser() user: AccessTokenPayload, @Param('id', new ParseUUIDPipe({ version: '4' })) id: string, @Param('labelId', new ParseUUIDPipe({ version: '4' })) labelId: string) { return this.dlp.removeLabel(user, id, labelId); }
 
   @Get(':id/details')
   getDetails(
@@ -83,6 +134,12 @@ export class FilesController {
       .catch(() => undefined);
 
     return result;
+  }
+
+  @Get('activity-feed')
+  collaborationActivity(@CurrentUser() user: AccessTokenPayload, @Query('limit') limit?: string) {
+    const parsed = limit ? Number(limit) : undefined;
+    return this.files.collaborationActivity(user, Number.isFinite(parsed) ? parsed : 50);
   }
 
   @Get(':id/activities')

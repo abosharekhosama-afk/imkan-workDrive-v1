@@ -469,6 +469,7 @@
   "shared.noSharedItems": "No shared items.",
   "shared.owner": "Owner",
   "shared.permission": "Permission",
+  "shared.perRecipient": "Per-recipient",
   "shared.publicLink": "Public link",
   "shared.recipients": "Recipients",
   "shared.resource": "Resource",

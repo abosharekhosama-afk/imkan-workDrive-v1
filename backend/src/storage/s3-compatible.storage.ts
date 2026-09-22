@@ -12,10 +12,15 @@ import {
   PutObjectCommand,
   CopyObjectCommand,
   DeleteObjectCommand,
+  CreateMultipartUploadCommand,
+  UploadPartCommand,
+  CompleteMultipartUploadCommand,
+  AbortMultipartUploadCommand,
   S3Client,
 } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { Inject } from '@nestjs/common';
+import { createHash } from 'crypto';
 import { getTenantStore } from '../auth/tenant-context';
 import { buildTenantObjectKey, parseTenantObjectKey, buildPublicTemplateObjectKey, isPublicTemplateObjectKey } from './object-key';
 import { contentDispositionInline } from '../common/content-disposition';
@@ -57,6 +62,7 @@ export class S3CompatibleStorageAdapter implements StorageService {
       Bucket: this.bucket(),
       Key: objectKey,
       ContentType: request.contentType,
+      ...(request.checksum ? { Metadata: { sha256: request.checksum } } : {}),
     });
     const url = await this.presign(this.client, command, {
       expiresIn: expiresInSeconds,
@@ -146,6 +152,87 @@ export class S3CompatibleStorageAdapter implements StorageService {
     );
   }
 
+  async createMultipartUpload(request: StorageObjectRequest): Promise<{ uploadId: string; objectKey: string }> {
+    const orgId = this.authorize(request);
+    const objectKey = request.storageKey ?? buildTenantObjectKey(orgId, request.fileId, request.versionId);
+    const result = await this.client.send(new CreateMultipartUploadCommand({
+      Bucket: this.bucket(), Key: objectKey, ContentType: request.contentType,
+      Metadata: request.checksum ? { sha256: request.checksum } : undefined,
+    }));
+    if (!result.UploadId) throw new BadRequestException('Storage did not return a multipart upload id');
+    return { uploadId: result.UploadId, objectKey };
+  }
+
+  async uploadMultipartPart(request: StorageObjectRequest, uploadId: string, partNumber: number, bytes: Buffer, checksum: string): Promise<{ etag: string; size: number; checksum: string }> {
+    const orgId = this.authorize(request);
+    const objectKey = request.storageKey ?? buildTenantObjectKey(orgId, request.fileId, request.versionId);
+    const actualChecksum = createHash('sha256').update(bytes).digest('hex');
+    if (actualChecksum !== checksum.toLowerCase()) throw new BadRequestException('Multipart part checksum mismatch');
+    const result = await this.client.send(new UploadPartCommand({
+      Bucket: this.bucket(), Key: objectKey, UploadId: uploadId, PartNumber: partNumber, Body: bytes,
+    }));
+    if (!result.ETag) throw new BadRequestException('Storage did not return a part ETag');
+    return { etag: result.ETag, size: bytes.length, checksum };
+  }
+
+  async completeMultipartUpload(request: StorageObjectRequest, uploadId: string, parts: Array<{ partNumber: number; etag: string }>): Promise<void> {
+    const orgId = this.authorize(request);
+    const objectKey = request.storageKey ?? buildTenantObjectKey(orgId, request.fileId, request.versionId);
+    if (!uploadId || !Array.isArray(parts) || parts.length === 0) {
+      throw new BadRequestException('Multipart completion requires an upload id and at least one part');
+    }
+    const ordered = [...parts].sort((a, b) => a.partNumber - b.partNumber);
+    for (let i = 0; i < ordered.length; i += 1) {
+      if (!Number.isInteger(ordered[i].partNumber) || ordered[i].partNumber !== i + 1 || !ordered[i].etag) {
+        throw new BadRequestException('Multipart parts must be contiguous and ordered from part 1');
+      }
+    }
+    await this.client.send(new CompleteMultipartUploadCommand({
+      Bucket: this.bucket(), Key: objectKey, UploadId: uploadId,
+      MultipartUpload: { Parts: ordered.map(p => ({ PartNumber: p.partNumber, ETag: p.etag })) },
+    }));
+  }
+
+  async abortMultipartUpload(request: StorageObjectRequest, uploadId: string): Promise<void> {
+    const orgId = this.authorize(request);
+    const objectKey = request.storageKey ?? buildTenantObjectKey(orgId, request.fileId, request.versionId);
+    await this.client.send(new AbortMultipartUploadCommand({ Bucket: this.bucket(), Key: objectKey, UploadId: uploadId }));
+  }
+
+  async inspectObject(
+    request: StorageObjectRequest,
+  ): Promise<{ size: number; checksum: string | null }> {
+    const orgId = this.authorize(request);
+    const objectKey = request.publicAccess
+      ? (request.storageKey ?? buildPublicTemplateObjectKey(request.fileId, request.versionId))
+      : (request.storageKey ?? buildTenantObjectKey(orgId, request.fileId, request.versionId));
+    try {
+      const result = await this.client.send(
+        new HeadObjectCommand({ Bucket: this.bucket(), Key: objectKey }),
+      );
+      if (typeof result.ContentLength !== 'number') {
+        throw new BadRequestException('Stored object has no measurable size');
+      }
+      let checksum = result.Metadata?.sha256?.toLowerCase() ?? null;
+      if (request.checksum) {
+        const bodyResult = await this.client.send(new GetObjectCommand({ Bucket: this.bucket(), Key: objectKey }));
+        const body: any = bodyResult.Body;
+        if (!body) throw new NotFoundException('Uploaded object has no body');
+        const hash = createHash('sha256');
+        if (typeof body.transformToByteArray === 'function') {
+          hash.update(Buffer.from(await body.transformToByteArray()));
+        } else {
+          for await (const chunk of body as AsyncIterable<Uint8Array>) hash.update(Buffer.from(chunk));
+        }
+        checksum = hash.digest('hex');
+      }
+      return { size: result.ContentLength, checksum };
+    } catch (error) {
+      if (error instanceof BadRequestException) throw error;
+      throw new NotFoundException('Uploaded object was not found');
+    }
+  }
+
   async assertObjectExists(request: StorageObjectRequest): Promise<void> {
     const orgId = this.authorize(request);
     const objectKey = request.publicAccess ? (request.storageKey ?? buildPublicTemplateObjectKey(request.fileId, request.versionId)) : (request.storageKey ?? buildTenantObjectKey(orgId, request.fileId, request.versionId));
@@ -191,6 +278,12 @@ export class S3CompatibleStorageAdapter implements StorageService {
       throw new ForbiddenException(
         'Resource does not belong to this organization',
       );
+    }
+    if (request.storageKey) {
+      const parsed = parseTenantObjectKey(request.storageKey);
+      if (parsed.orgId !== orgId) {
+        throw new ForbiddenException('Storage key does not belong to this organization');
+      }
     }
     return orgId;
   }

@@ -220,7 +220,12 @@ export default function TemplatesPage() {
       setUseTarget(null);
       setNewName("");
       setMessage(text(ar, `Created “${created.name}”.`, `تم إنشاء «${created.name}».`));
-      window.setTimeout(() => router.push(`/files?query=${encodeURIComponent(created.name)}`), 350);
+      window.setTimeout(() => {
+        if (created.office?.type === 'SHEET') router.push(`/office/sheet/${created.file_id}`);
+        else if (created.office?.type === 'SHOW') router.push(`/office/show/${created.file_id}`);
+        else if (created.office?.type === 'WRITER') router.push(`/office/writer/${created.file_id}`);
+        else router.push(`/files?query=${encodeURIComponent(created.name)}`);
+      }, 350);
     } catch (e) {
       setError(e instanceof Error ? e.message : text(ar, "Unable to create file.", "تعذر إنشاء الملف."));
     } finally { setBusy(false); }
@@ -463,7 +468,7 @@ export default function TemplatesPage() {
                   <span className="truncate">{c.name}</span>
                 </button>
               ))}
-              {library === "PUBLIC" && <p className="px-2 pt-2 text-[11px] leading-5 text-slate-400">{text(ar, "Public templates are not organized with categories.", "القوالب العامة لا تُنظم بواسطة التصنيفات.")}</p>}
+              {library === "PUBLIC" && categories.length === 0 && <p className="px-2 pt-2 text-[11px] leading-5 text-slate-400">{text(ar, "Public categories are loading…", "جارٍ تحميل تصنيفات القوالب العامة…")}</p>}
             </aside>
             {empty ? (
               <div className="flex min-h-[420px] flex-1 items-center justify-center p-8">

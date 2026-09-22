@@ -2,7 +2,7 @@ import { ConnectionsService } from './connections.service';
 import { ConnectionProviderRegistry } from './provider-registry.service';
 
 describe('ConnectionsService Phase 6 security/version helpers', () => {
-  const service = new ConnectionsService({} as any, {} as any, {} as any, new ConnectionProviderRegistry()) as any;
+  const service = new ConnectionsService({} as any, {} as any, {} as any, new ConnectionProviderRegistry(), {} as any) as any;
 
   it('creates a complete encrypted snapshot when rotating only one field', () => {
     const existing = { apiKey: 'old-key', bearerToken: 'old-bearer', username: null };

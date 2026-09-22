@@ -1,10 +1,12 @@
 export class ApiError extends Error {
   status: number;
+  code?: string;
 
-  constructor(status: number, message: string) {
+  constructor(status: number, message: string, code?: string) {
     super(message);
     this.name = "ApiError";
     this.status = status;
+    if (code) this.code = code;
   }
 }
 
@@ -99,7 +101,17 @@ export async function apiRequest<T>(path: string, init: RequestInit = {}): Promi
   });
 
   if (!response.ok) {
-    throw new ApiError(response.status, await response.text());
+    const rawBody = await response.text();
+    let message = rawBody;
+    let code: string | undefined;
+    try {
+      const parsed = JSON.parse(rawBody) as { message?: unknown; code?: unknown };
+      if (typeof parsed.message === "string" && parsed.message.length > 0) message = parsed.message;
+      if (typeof parsed.code === "string" && parsed.code.length > 0) code = parsed.code;
+    } catch {
+      // Preserve the original plain-text response body.
+    }
+    throw new ApiError(response.status, message, code);
   }
 
   if (response.status === 204) {

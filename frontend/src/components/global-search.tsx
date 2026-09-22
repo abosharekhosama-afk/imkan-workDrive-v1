@@ -49,7 +49,7 @@ export function GlobalSearch({ onNavigate }: GlobalSearchProps) {
     const runId = ++runIdRef.current;
     setLoading(true);
     try {
-      const result = await searchNames(query);
+      const result = await searchNames(query, filter);
       if (runId !== runIdRef.current) return; // stale response
       setFolders(result.folders ?? []);
       setFiles(result.files ?? []);
@@ -59,7 +59,7 @@ export function GlobalSearch({ onNavigate }: GlobalSearchProps) {
     } finally {
       if (runId === runIdRef.current) setLoading(false);
     }
-  }, []);
+  }, [filter]);
 
   const debouncedSearch = useMemo(() => debounce((q: string) => void runSearch(q), 250), [runSearch]);
 
