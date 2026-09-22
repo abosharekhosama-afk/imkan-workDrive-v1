@@ -628,9 +628,57 @@ export class OfficeService implements OfficeEngine {
 
   async open(user: AccessTokenPayload, fileId: string): Promise<OfficeDocumentState> {
     const file = await this.getAuthorizedFile(user, fileId);
-    const document = await this.prisma.officeDocument.findUnique({ where: { fileId } });
+    let document = await this.prisma.officeDocument.findUnique({ where: { fileId } });
+
+    // Files created/imported before Office initialization (and template working
+    // copies whose initialization was interrupted) must still be openable from
+    // the normal Files/Actions -> Edit Content flow. Bootstrap the native model
+    // from the current Office-compatible WorkDrive bytes instead of returning a
+    // generic "could not open" error.
     if (!document) {
-      throw new NotFoundException('This file is not an IMKAN Office document yet');
+      const extension = (file.extension ?? '').replace(/^\./, '').toLowerCase();
+      if (!['docx', 'xlsx', 'pptx'].includes(extension)) {
+        throw new NotFoundException('This file is not an IMKAN Office document yet');
+      }
+      const version = await this.prisma.fileVersion.findFirst({
+        where: { fileId, orgId: user.org_id, status: 'ACTIVE' },
+        orderBy: { versionNumber: 'desc' },
+        include: { storageObject: true },
+      });
+      if (!version?.storageObject?.storageKey) {
+        throw new NotFoundException('No active Office file version is available');
+      }
+      const bytes = await this.storage.readStoredObject(version.storageObject.storageKey);
+      const imported = await this.conversion.import(bytes, file.name);
+      const content = this.normalizeOfficeContent(imported.content);
+      document = await this.prisma.officeDocument.create({
+        data: {
+          orgId: user.org_id,
+          fileId,
+          type: imported.type as OfficeDocumentType,
+          nativeFormat: TYPE_TO_FORMAT[imported.type],
+          content: content as Prisma.InputJsonValue,
+        },
+      });
+      await this.prisma.officeDocumentVersion.create({
+        data: {
+          orgId: user.org_id,
+          documentId: document.id,
+          fileId,
+          versionNumber: 1,
+          revision: document.revision,
+          type: document.type,
+          content: content as Prisma.InputJsonValue,
+          contentHash: computeOfficeContentHash(content),
+          label: `Initialized from ${extension.toUpperCase()}`,
+          createdById: user.sub,
+        },
+      });
+      await this.auditOfficeEvent(user, 'OFFICE_DOCUMENT_INITIALIZED_FROM_FILE', fileId, {
+        documentId: document.id,
+        sourceFileVersionId: version.id,
+        sourceFormat: extension,
+      });
     }
     const policy = await this.getOfficePolicy(user, fileId);
     await this.auditOfficeEvent(user, 'OFFICE_OPENED', fileId, { documentId: document.id, type: document.type, revision: document.revision });
