@@ -57,7 +57,16 @@ export class PublicTemplateSeedService implements OnModuleInit {
     }
 
     let library = await this.prisma.templateLibrary.findFirst({ where: { orgId: null, ownerId: null, type: TemplateLibraryType.PUBLIC } });
-    if (!library) library = await this.prisma.templateLibrary.create({ data: { orgId: null, ownerId: null, type: TemplateLibraryType.PUBLIC, name: 'Public Templates' } });
+    if (!library) {
+      try {
+        library = await this.prisma.templateLibrary.create({ data: { orgId: null, ownerId: null, type: TemplateLibraryType.PUBLIC, name: 'Public Templates' } });
+      } catch (error) {
+        if ((error as any)?.code !== 'P2002') throw error;
+        library = await this.prisma.templateLibrary.findFirst({ where: { orgId: null, ownerId: null, type: TemplateLibraryType.PUBLIC } });
+        if (!library) throw error;
+      }
+    }
+
 
     const candidates = [join(__dirname, 'public-assets'), join(process.cwd(), 'dist/src/templates/public-assets'), join(process.cwd(), 'src/templates/public-assets')];
     let assetRoot = candidates[0];

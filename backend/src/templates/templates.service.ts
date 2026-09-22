@@ -50,25 +50,25 @@ export class TemplatesService {
   }
 
   private async ensureLibrary(user: AccessTokenPayload, type: TemplateLibraryType) {
-    if (type === TemplateLibraryType.PERSONAL) {
-      const existing = await this.prisma.templateLibrary.findFirst({ where: { orgId: user.org_id, ownerId: user.sub, type } });
-      if (existing) return existing;
-      return this.prisma.templateLibrary.create({ data: { orgId: user.org_id, ownerId: user.sub, type, name: 'My Templates' } });
-    }
-    const existing = await this.prisma.templateLibrary.findFirst({
-      where: type === TemplateLibraryType.PUBLIC
+    const where = type === TemplateLibraryType.PERSONAL
+      ? { orgId: user.org_id, ownerId: user.sub, type }
+      : type === TemplateLibraryType.PUBLIC
         ? { orgId: null, ownerId: null, type }
-        : { orgId: user.org_id, ownerId: null, type },
-    });
+        : { orgId: user.org_id, ownerId: null, type };
+    const name = type === TemplateLibraryType.PERSONAL ? 'My Templates' : type === TemplateLibraryType.ORGANIZATION ? 'Organization Templates' : 'Public Templates';
+    const existing = await this.prisma.templateLibrary.findFirst({ where });
     if (existing) return existing;
-    return this.prisma.templateLibrary.create({
-      data: {
-        orgId: type === TemplateLibraryType.PUBLIC ? null : user.org_id,
-        ownerId: null,
-        type,
-        name: type === TemplateLibraryType.ORGANIZATION ? 'Organization Templates' : 'Public Templates',
-      },
-    });
+    try {
+      return await this.prisma.templateLibrary.create({ data: { ...where, name } });
+    } catch (error) {
+      // Capabilities/categories can be requested concurrently. A competing
+      // request may win the composite unique key between findFirst and create.
+      if ((error as any)?.code === 'P2002') {
+        const concurrent = await this.prisma.templateLibrary.findFirst({ where });
+        if (concurrent) return concurrent;
+      }
+      throw error;
+    }
   }
 
   private async assertCategory(user: AccessTokenPayload, categoryId: string | null, libraryId: string) {
@@ -532,23 +532,22 @@ export class TemplatesService {
     if (library.type === TemplateLibraryType.PUBLIC) throw new ForbiddenException('Public templates are managed by WorkDrive and cannot be created or categorized');
     const category = await this.assertCategory(user, input.categoryId, library.id);
     const templateId = randomUUID();
-    // The template row must exist before its TemplateVersion snapshot is inserted.
-    // The previous order attempted to create the version first, which violates the
-    // TemplateVersion -> Template foreign key and surfaced as a 500 from from-file
-    // and from-blank creation.
-    await this.prisma.template.create({ data: { id: templateId, orgId: user.org_id, libraryId: library.id, categoryId: category?.id ?? null, ownerId: input.library === TemplateLibraryType.PERSONAL ? user.sub : null, name: input.name, description: input.description ?? null, type } });
-    let snapshot: Awaited<ReturnType<TemplatesService['snapshotFileVersion']>> | null = null;
+    let snapshotKey: string | null = null;
     try {
-      snapshot = await this.snapshotFileVersion(user, templateId, 1, file, version);
+      // TemplateVersion has a foreign key to Template, so the parent must be
+      // committed before snapshotFileVersion creates the first version.
+      await this.prisma.template.create({
+        data: { id: templateId, orgId: user.org_id, libraryId: library.id, categoryId: category?.id ?? null, ownerId: input.library === TemplateLibraryType.PERSONAL ? user.sub : null, name: input.name, description: input.description ?? null, type },
+      });
+      const source = await this.snapshotFileVersion(user, templateId, 1, file, version);
+      snapshotKey = source.snapshotKey;
       await this.prisma.auditLog.create({ data: { orgId: user.org_id, actorId: user.sub, action: 'TEMPLATE_CREATED_FROM_FILE', resourceType: 'TEMPLATE', resourceId: templateId, metadata: { sourceFileId: file.id, library: input.library } } });
     } catch (error) {
-      if (snapshot) {
-        await this.prisma.templateVersion.delete({ where: { id: snapshot.versionId } }).catch(() => undefined);
-        await this.storage.deleteStoredObject(snapshot.snapshotKey).catch(() => undefined);
-      }
+      if (snapshotKey) await this.storage.deleteStoredObject(snapshotKey).catch(() => undefined);
       await this.prisma.template.delete({ where: { id: templateId } }).catch(() => undefined);
       throw error;
     }
+
     return this.get(user, templateId);
   }
 
