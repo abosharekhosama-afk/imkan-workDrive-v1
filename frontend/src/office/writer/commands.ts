@@ -180,10 +180,11 @@ export function normalizeWriterDocument(doc: WriterDocument): WriterDocument {
    return block as WriterBlock;
  }):[{id:'p1',type:'paragraph',align:'start',runs:[{text:''}]} as WriterBlock];
  const safe:any={...source, schema:7,type:'WRITER',title:typeof source.title==='string'?source.title:'Untitled document',language:['ar','en','mixed'].includes(String(source.language))?source.language:'mixed',blocks,review:source.review&&typeof source.review==='object'?source.review:{trackChanges:false,comments:[],changes:[],snapshots:[]},citations:Array.isArray(source.citations)?source.citations:[],citationSources:Array.isArray(source.citationSources)?source.citationSources:[],citationStyle:['numeric','apa','mla','chicago'].includes(String(source.citationStyle))?source.citationStyle:'numeric',captions:Array.isArray(source.captions)?source.captions:[],crossReferences:Array.isArray(source.crossReferences)?source.crossReferences:[],indexEntries:Array.isArray(source.indexEntries)?source.indexEntries:[],bookmarks:Array.isArray(source.bookmarks)?source.bookmarks:[],sections:Array.isArray(source.sections)?source.sections:[]};
- let next = rebuildCitationDisplay(safe as WriterDocument);
- next = rebuildTableOfContents(next);
- next = rebuildCaptionsAndCrossReferences(next);
- next = rebuildIndex(next);
+ let next = safe as WriterDocument;
+ try { next = rebuildCitationDisplay(next); } catch { /* keep normalized source */ }
+ try { next = rebuildTableOfContents(next); } catch { /* keep normalized source */ }
+ try { next = rebuildCaptionsAndCrossReferences(next); } catch { /* keep normalized source */ }
+ try { next = rebuildIndex(next); } catch { /* keep normalized source */ }
  return next;
 }
 
