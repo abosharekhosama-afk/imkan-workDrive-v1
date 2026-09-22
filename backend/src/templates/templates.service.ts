@@ -58,25 +58,17 @@ export class TemplatesService {
     const name = type === TemplateLibraryType.PERSONAL ? 'My Templates' : type === TemplateLibraryType.ORGANIZATION ? 'Organization Templates' : 'Public Templates';
     const existing = await this.prisma.templateLibrary.findFirst({ where });
     if (existing) return existing;
-
-    // MySQL can expose the unique-key race for a short interval while another
-    // request is committing the same library. Retry the read/create pair a few
-    // times instead of leaking P2002 as a 500 to the Templates UI.
-    let lastError: unknown;
-    for (let attempt = 0; attempt < 4; attempt += 1) {
-      try {
-        return await this.prisma.templateLibrary.create({ data: { ...where, name } });
-      } catch (error) {
-        lastError = error;
-        if ((error as any)?.code !== 'P2002') throw error;
+    try {
+      return await this.prisma.templateLibrary.create({ data: { ...where, name } });
+    } catch (error) {
+      // Capabilities/categories can be requested concurrently. A competing
+      // request may win the composite unique key between findFirst and create.
+      if ((error as any)?.code === 'P2002') {
         const concurrent = await this.prisma.templateLibrary.findFirst({ where });
         if (concurrent) return concurrent;
-        await new Promise(resolve => setTimeout(resolve, 25 * (attempt + 1)));
       }
+      throw error;
     }
-    const concurrent = await this.prisma.templateLibrary.findFirst({ where });
-    if (concurrent) return concurrent;
-    throw lastError;
   }
 
   private async assertCategory(user: AccessTokenPayload, categoryId: string | null, libraryId: string) {
@@ -522,7 +514,19 @@ export class TemplatesService {
         library: input.library,
         categoryId: category?.id ?? null,
       });
-      return { template, file_id: file.file_id };
+      const latest = await this.prisma.template.findUnique({
+        where: { id: template.id },
+        include: { versions: { orderBy: { versionNumber: 'desc' }, take: 1 } },
+      });
+      let office: Awaited<ReturnType<OfficeService['initializeFromTemplateFile']>> | null = null;
+      if (latest?.versions[0]) {
+        office = await this.office.initializeFromTemplateFile(user, file.file_id, template.id, latest.versions[0].id);
+      }
+      return {
+        template,
+        file_id: file.file_id,
+        office: office ? { documentId: office.id, type: office.type, nativeFormat: office.nativeFormat, revision: office.revision } : null,
+      };
     } catch (error) {
       // A failed template transaction must not leave an orphan working file.
       await this.files.trash(user, file.file_id).catch(() => undefined);
@@ -998,13 +1002,6 @@ export class TemplatesService {
   }
 
   async capabilities(user: AccessTokenPayload, libraryType: TemplateLibraryType) {
-    // The public catalog seeds its PUBLIC library during module startup.
-    // Capabilities can be requested immediately after login, before that seed
-    // finishes, so serialize PUBLIC capability reads behind the seed instead
-    // of racing the same unique TemplateLibrary row.
-    if (libraryType === TemplateLibraryType.PUBLIC) {
-      await this.publicTemplateSeed.ensureSeed();
-    }
     const library = await this.ensureLibrary(user, libraryType);
     const canManage = this.canManageLibrary(user, library);
     return {
