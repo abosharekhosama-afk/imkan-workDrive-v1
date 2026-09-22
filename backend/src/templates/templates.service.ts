@@ -58,17 +58,25 @@ export class TemplatesService {
     const name = type === TemplateLibraryType.PERSONAL ? 'My Templates' : type === TemplateLibraryType.ORGANIZATION ? 'Organization Templates' : 'Public Templates';
     const existing = await this.prisma.templateLibrary.findFirst({ where });
     if (existing) return existing;
-    try {
-      return await this.prisma.templateLibrary.create({ data: { ...where, name } });
-    } catch (error) {
-      // Capabilities/categories can be requested concurrently. A competing
-      // request may win the composite unique key between findFirst and create.
-      if ((error as any)?.code === 'P2002') {
+
+    // MySQL can expose the unique-key race for a short interval while another
+    // request is committing the same library. Retry the read/create pair a few
+    // times instead of leaking P2002 as a 500 to the Templates UI.
+    let lastError: unknown;
+    for (let attempt = 0; attempt < 4; attempt += 1) {
+      try {
+        return await this.prisma.templateLibrary.create({ data: { ...where, name } });
+      } catch (error) {
+        lastError = error;
+        if ((error as any)?.code !== 'P2002') throw error;
         const concurrent = await this.prisma.templateLibrary.findFirst({ where });
         if (concurrent) return concurrent;
+        await new Promise(resolve => setTimeout(resolve, 25 * (attempt + 1)));
       }
-      throw error;
     }
+    const concurrent = await this.prisma.templateLibrary.findFirst({ where });
+    if (concurrent) return concurrent;
+    throw lastError;
   }
 
   private async assertCategory(user: AccessTokenPayload, categoryId: string | null, libraryId: string) {
@@ -990,6 +998,13 @@ export class TemplatesService {
   }
 
   async capabilities(user: AccessTokenPayload, libraryType: TemplateLibraryType) {
+    // The public catalog seeds its PUBLIC library during module startup.
+    // Capabilities can be requested immediately after login, before that seed
+    // finishes, so serialize PUBLIC capability reads behind the seed instead
+    // of racing the same unique TemplateLibrary row.
+    if (libraryType === TemplateLibraryType.PUBLIC) {
+      await this.publicTemplateSeed.ensureSeed();
+    }
     const library = await this.ensureLibrary(user, libraryType);
     const canManage = this.canManageLibrary(user, library);
     return {
