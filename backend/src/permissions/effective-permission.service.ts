@@ -79,7 +79,14 @@ export class EffectivePermissionService {
     user: AccessTokenPayload,
     folderId: string,
   ): Promise<EffectivePermissionResult> {
-    const folder: { id: string; parentId: string | null; orgId: string } | null = await this.prisma.folder.findFirst({
+    const folder: {
+      id: string;
+      parentId: string | null;
+      orgId: string;
+      ownerId: string;
+      teamFolderId: string | null;
+      teamFolder: { archivedAt: Date | null } | null;
+    } | null = await this.prisma.folder.findFirst({
       where: { id: folderId, orgId: user.org_id },
       select: {
         id: true,

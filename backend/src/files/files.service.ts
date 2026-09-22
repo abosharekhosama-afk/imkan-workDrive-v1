@@ -1176,7 +1176,7 @@ export class FilesService {
       where: { orgId: user.org_id, deletedAt: null },
       take: 250,
       orderBy: { updatedAt: 'desc' },
-      select: { id: true, name: true, ownerId: true, folder: { select: { teamFolderId: true } } },
+      select: { id: true, orgId: true, name: true, ownerId: true, folder: { select: { teamFolderId: true } } },
     });
     const visible: string[] = [];
     for (const file of candidates) {
@@ -1596,9 +1596,13 @@ export class FilesService {
     return this.effective.canRead(user, ResourceType.FILE, file.id);
   }
 
-  private async resolveVersionStorageObject(version: { storageObjectId: string; orgId: string }) {
+  private async resolveVersionStorageObject(version: { storageObjectId: string; orgId?: string }) {
     return this.prisma.storageObject.findFirst({
-      where: { id: version.storageObjectId, orgId: version.orgId, status: StorageObjectStatus.ACTIVE },
+      where: {
+        id: version.storageObjectId,
+        ...(version.orgId ? { orgId: version.orgId } : {}),
+        status: StorageObjectStatus.ACTIVE,
+      },
       select: { id: true, storageKey: true, bucket: true, region: true, size: true, checksum: true },
     });
   }
