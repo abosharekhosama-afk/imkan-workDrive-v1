@@ -559,7 +559,12 @@ export class OfficeService implements OfficeEngine {
     }
 
     const bytes = await this.storage.readStoredObject(version.storageObject.storageKey);
+    if (!bytes.length) throw new ConflictException('The template working copy has no content in storage');
     const imported = await this.conversion.import(bytes, file.name);
+    const expectedType = extension === 'docx' ? OfficeDocumentType.WRITER : extension === 'xlsx' ? OfficeDocumentType.SHEET : OfficeDocumentType.SHOW;
+    if (imported.type !== expectedType) {
+      throw new ConflictException(`Template format ${extension.toUpperCase()} was imported as ${String(imported.type)} instead of ${expectedType}`);
+    }
     const content = this.normalizeOfficeContent(imported.content);
     const document = await this.prisma.officeDocument.create({
       data: {
@@ -851,7 +856,27 @@ export class OfficeService implements OfficeEngine {
   }
 
   async openSession(user: AccessTokenPayload, fileId: string) {
-    const document = await this.open(user, fileId);
+    let document: OfficeDocumentState;
+    try {
+      document = await this.open(user, fileId);
+    } catch (error) {
+      // Template working copies may reach the session endpoint immediately
+      // after creation. Retry once through the same authoritative file bytes;
+      // this closes the race where the initial template initialization was
+      // interrupted before OfficeDocument was persisted.
+      const file = await this.getAuthorizedFile(user, fileId, true);
+      const extension = (file.extension ?? '').replace(/^\./, '').toLowerCase();
+      if (!['docx', 'xlsx', 'pptx'].includes(extension)) throw error;
+      const version = await this.prisma.fileVersion.findFirst({ where: { fileId, orgId: user.org_id, status: 'ACTIVE' }, orderBy: { versionNumber: 'desc' }, include: { storageObject: true } });
+      if (!version?.storageObject?.storageKey) throw error;
+      const bytes = await this.storage.readStoredObject(version.storageObject.storageKey);
+      const imported = await this.conversion.import(bytes, file.name);
+      const content = this.normalizeOfficeContent(imported.content);
+      const existing = await this.prisma.officeDocument.findUnique({ where: { fileId } });
+      const persisted = existing ?? await this.prisma.officeDocument.create({ data: { orgId: user.org_id, fileId, type: imported.type as OfficeDocumentType, nativeFormat: TYPE_TO_FORMAT[imported.type], content: content as Prisma.InputJsonValue } });
+      if (!existing) await this.prisma.officeDocumentVersion.create({ data: { orgId: user.org_id, documentId: persisted.id, fileId, versionNumber: 1, revision: persisted.revision, type: persisted.type, content: content as Prisma.InputJsonValue, contentHash: computeOfficeContentHash(content), label: 'Recovered during Office session open', createdById: user.sub } });
+      document = this.toState(persisted);
+    }
     const session = await this.prisma.officeSession.create({
       data: { orgId: user.org_id, fileId, documentId: document.id, userId: user.sub, type: document.type as OfficeDocumentType },
     });
