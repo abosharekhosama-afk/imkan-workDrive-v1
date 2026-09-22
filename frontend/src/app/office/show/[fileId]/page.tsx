@@ -12,7 +12,51 @@ import {OfficeRibbon} from '@/components/office-ribbon';
 import { OfficeMobile } from '@/components/office-mobile';
 import {OfficeTemplateFields} from '@/components/office-template-fields';
 import {addElement,addMaster,addSlide,assignMaster,deleteElement,deleteElements,deleteSlide,duplicateSlide,groupElements,moveSlide,reorderElement,setActiveSlide,setAspectRatio,setLayout,setSlideBackground,setSlideNotes,setSlideTransition,setSlideAutoAdvance,setTheme,setThemePreset,addSection,renameSection,deleteSection,assignSlideSection,duplicateMaster,setElementAnimation,setElementAnimations,addElementAnimation,removeElementAnimation,ungroupElements,updateElement,addComment,resolveComment,deleteComment,addCommentReply} from '@/office/show/commands';
-const normalize=(raw:any):ShowDocument=>{const d=raw&&raw.type==='SHOW'?raw:defaultShow();return{...defaultShow(),...d,schema:6,masters:Array.isArray(d.masters)&&d.masters.length?d.masters:d.masters??defaultShow().masters,sections:Array.isArray(d.sections)?d.sections:[],comments:Array.isArray(d.comments)?d.comments.map((c:any)=>({...c,replies:Array.isArray(c.replies)?c.replies:[],resolved:Boolean(c.resolved)})):[],slides:Array.isArray(d.slides)&&d.slides.length?d.slides.map((s:any)=>({...s,elements:Array.isArray(s.elements)?s.elements:[],background:typeof s.background==='string'?s.background:'#fff',transition:s.transition??'none',transitionDuration:Number(s.transitionDuration)||300,autoAdvanceMs:Number(s.autoAdvanceMs)||0})):defaultShow().slides}};
+const normalize=(raw:any):ShowDocument=>{
+  let source=raw;
+  if(typeof source==='string'){
+    try{source=JSON.parse(source)}catch{source=null}
+  }
+  const base=defaultShow();
+  const d=source&&typeof source==='object'&&source.type==='SHOW'?source:{};
+  const rawMasters=Array.isArray(d.masters)?d.masters:[];
+  const masters=rawMasters.map((m:any,i:number)=>({
+    id:typeof m?.id==='string'&&m.id?m.id:`master-${i+1}`,
+    name:typeof m?.name==='string'&&m.name?m.name:`Master ${i+1}`,
+    background:typeof m?.background==='string'?m.background:'#ffffff',
+    elements:Array.isArray(m?.elements)?m.elements:[],
+  }));
+  const rawSlides=Array.isArray(d.slides)?d.slides:[];
+  const slides=rawSlides.map((s:any,i:number)=>({
+    id:typeof s?.id==='string'&&s.id?s.id:`slide-${i+1}`,
+    layout:['blank','title','title-content','two-column','image-text'].includes(String(s?.layout))?String(s.layout):'blank',
+    background:typeof s?.background==='string'?s.background:'#ffffff',
+    elements:Array.isArray(s?.elements)?s.elements:[],
+    notes:typeof s?.notes==='string'?s.notes:'',
+    master:typeof s?.master==='string'?s.master:undefined,
+    section:typeof s?.section==='string'?s.section:undefined,
+    transition:['none','fade','slide'].includes(String(s?.transition))?String(s.transition):'none',
+    transitionDuration:Number.isFinite(Number(s?.transitionDuration))?Number(s.transitionDuration):300,
+    autoAdvanceMs:Number.isFinite(Number(s?.autoAdvanceMs))?Math.max(0,Number(s.autoAdvanceMs)):0,
+  })) as ShowDocument['slides'];
+  const safeSlides=slides.length?slides:base.slides;
+  const active=typeof d.activeSlide==='string'&&safeSlides.some((s:any)=>s.id===d.activeSlide)?d.activeSlide:safeSlides[0].id;
+  const comments=Array.isArray(d.comments)?d.comments.filter((c:any)=>c&&typeof c==='object').map((c:any)=>({...c,id:typeof c.id==='string'&&c.id?c.id:`comment-${Math.random().toString(36).slice(2)}`,slideId:typeof c.slideId==='string'?c.slideId:safeSlides[0].id,text:typeof c.text==='string'?c.text:'',createdAt:typeof c.createdAt==='string'?c.createdAt:new Date().toISOString(),resolved:Boolean(c.resolved),replies:Array.isArray(c.replies)?c.replies:[]})):[];
+  return {
+    ...base,
+    ...d,
+    schema:6,
+    type:'SHOW',
+    title:typeof d.title==='string'&&d.title?d.title:'Untitled presentation',
+    aspectRatio:d.aspectRatio==='4:3'?'4:3':'16:9',
+    activeSlide:active,
+    theme:{...base.theme,...(d.theme&&typeof d.theme==='object'?d.theme:{}),fontFamily:typeof d.theme?.fontFamily==='string'?d.theme.fontFamily:base.theme.fontFamily,headingFont:typeof d.theme?.headingFont==='string'?d.theme.headingFont:base.theme.headingFont},
+    masters:masters.length?masters:base.masters,
+    sections:Array.isArray(d.sections)?d.sections.filter((s:any)=>s&&typeof s==='object').map((s:any,i:number)=>({id:typeof s.id==='string'&&s.id?s.id:`section-${i+1}`,name:typeof s.name==='string'&&s.name?s.name:`Section ${i+1}`,collapsed:Boolean(s.collapsed)})):[],
+    comments,
+    slides:safeSlides,
+  };
+};
 function ElementView({e,selected,onSelect,onChange,onDragStart}:{e:ShowElement;selected:boolean;onSelect:(ev:React.MouseEvent)=>void;onChange:(p:Partial<ShowElement>)=>void;onDragStart:(ev:React.PointerEvent)=>void}){
   const animations=e.animations?.length?e.animations:[e.animation].filter(Boolean) as any[];
   const a=animations.find(x=>x.phase==='entrance')||animations[0];
