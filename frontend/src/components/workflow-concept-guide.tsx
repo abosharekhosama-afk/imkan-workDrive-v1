@@ -36,29 +36,80 @@ export function ConnectionUseHint({ ar }: { ar: boolean }) {
   </div>;
 }
 
-export function WorkflowBuildPath({ ar }: { ar: boolean }) {
-  return <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm" dir={ar ? "rtl" : "ltr"}>
-    <div className="flex items-start justify-between gap-3">
+export type WorkflowRecipe = "REVIEW_FILE" | "NOTIFY_UPLOAD" | "EXTERNAL_API" | "CUSTOM_FUNCTION";
+
+export const WORKFLOW_RECIPES: Array<{
+  id: WorkflowRecipe;
+  icon: string;
+  en: string;
+  ar: string;
+  enDescription: string;
+  arDescription: string;
+}> = [
+  {
+    id: "REVIEW_FILE",
+    icon: "✓",
+    en: "File review",
+    ar: "مراجعة ملف",
+    enDescription: "Upload → Review → Completed. Start with the workflow structure and add approval details later.",
+    arDescription: "رفع → مراجعة → مكتمل. ابدأ ببنية سير العمل ثم أضف تفاصيل الموافقة لاحقاً.",
+  },
+  {
+    id: "NOTIFY_UPLOAD",
+    icon: "◔",
+    en: "Notify after upload",
+    ar: "إشعار بعد الرفع",
+    enDescription: "Upload → Completed with a real WorkDrive notification action.",
+    arDescription: "رفع → مكتمل مع إجراء إشعار حقيقي داخل WorkDrive.",
+  },
+  {
+    id: "EXTERNAL_API",
+    icon: "↗",
+    en: "External API",
+    ar: "API خارجي",
+    enDescription: "Upload → API request. You choose an ACTIVE Connection and the API path.",
+    arDescription: "رفع → طلب API. تختار Connection نشطاً ومسار الـAPI.",
+  },
+  {
+    id: "CUSTOM_FUNCTION",
+    icon: "ƒ",
+    en: "Custom Function",
+    ar: "Custom Function",
+    enDescription: "Upload → reusable safe function. Create/publish the function, then attach it here.",
+    arDescription: "رفع → دالة آمنة قابلة لإعادة الاستخدام. أنشئ الدالة وانشرها ثم اربطها هنا.",
+  },
+];
+
+export function WorkflowRecipePicker({ ar, value, onChange }: { ar: boolean; value: WorkflowRecipe; onChange: (value: WorkflowRecipe) => void }) {
+  return <div dir={ar ? "rtl" : "ltr"}>
+    <div className="mb-2 flex items-center justify-between gap-2">
       <div>
-        <div className="text-[9px] font-semibold uppercase tracking-[.14em] text-[var(--wd-primary)]">{ar ? "مسار البناء" : "Build path"}</div>
-        <h3 className="mt-1 text-[12px] font-semibold text-slate-900">{ar ? "اتبع هذا الترتيب لأول Workflow" : "Follow this order for your first workflow"}</h3>
-        <p className="mt-1 text-[9.5px] leading-4 text-slate-500">{ar ? "لا تحتاج إلى إعداد Connection إلا عندما يكون الإجراء خارج WorkDrive أو يحتاج API خارجياً." : "You only need a Connection when an action reaches an external service or API."}</p>
+        <div className="text-[10.5px] font-semibold text-slate-800">{ar ? "اختر نقطة بداية" : "Choose a starting recipe"}</div>
+        <div className="mt-0.5 text-[9px] text-slate-500">{ar ? "هذه قوالب إعداد فعلية، وليست تنفيذات وهمية. يمكنك تعديل كل خطوة في المصمم." : "These are real starting configurations, not fake executions. You can edit every step in the builder."}</div>
       </div>
-      <span className="rounded-full bg-blue-50 px-2 py-1 text-[8px] font-semibold text-blue-700">{ar ? "دليل سريع" : "Quick guide"}</span>
     </div>
-    <div className="mt-3 grid gap-2 md:grid-cols-4">
-      {[
-        ["1", ar ? "اختر Trigger" : "Choose Trigger", ar ? "متى يبدأ؟" : "When does it start?"],
-        ["2", ar ? "أنشئ States" : "Create States", ar ? "ما الحالات؟" : "What states exist?"],
-        ["3", ar ? "أضف Action" : "Add Action", ar ? "ماذا يحدث؟" : "What should happen?"],
-        ["4", ar ? "اربط Connection عند الحاجة" : "Connect only when needed", ar ? "OAuth للخدمة الخارجية" : "OAuth for external services"]
-      ].map(([n,title,desc]) => <div key={n} className="rounded-xl border border-slate-100 bg-slate-50/70 p-3">
-        <div className="flex items-center gap-2"><span className="flex h-6 w-6 items-center justify-center rounded-lg bg-white text-[9px] font-bold text-[var(--wd-primary)] shadow-sm">{n}</span><span className="text-[9.5px] font-semibold text-slate-800">{title}</span></div>
-        <div className="mt-1.5 text-[8.5px] leading-4 text-slate-500">{desc}</div>
-      </div>)}
+    <div className="grid gap-2 sm:grid-cols-2">
+      {WORKFLOW_RECIPES.map((recipe) => {
+        const active = value === recipe.id;
+        return <button key={recipe.id} type="button" onClick={() => onChange(recipe.id)} className={`rounded-xl border p-3 text-start transition ${active ? "border-[var(--wd-primary)] bg-[var(--wd-primary-light)] ring-2 ring-[var(--wd-primary)]/10" : "border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50"}`}>
+          <div className="flex items-start gap-2.5">
+            <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-[12px] font-semibold ${active ? "bg-white text-[var(--wd-primary)]" : "bg-slate-100 text-slate-500"}`}>{recipe.icon}</span>
+            <span className="min-w-0"><span className="block text-[10.5px] font-semibold text-slate-900">{ar ? recipe.ar : recipe.en}</span><span className="mt-1 block text-[9px] leading-4 text-slate-500">{ar ? recipe.arDescription : recipe.enDescription}</span></span>
+          </div>
+        </button>;
+      })}
     </div>
-    <div className="mt-3 rounded-xl border border-dashed border-emerald-200 bg-emerald-50/50 px-3 py-2.5 text-[9px] leading-4 text-emerald-800">
-      {ar ? "مثال: File uploaded → Review → HTTP Request → Google Connection → Result. إذا كانت العملية داخل WorkDrive فقط، تجاهل Connection." : "Example: File uploaded → Review → HTTP Request → Google Connection → Result. If the operation stays inside WorkDrive, skip Connection."}
+  </div>;
+}
+
+export function WorkflowNextSteps({ ar, workflowId, recipe }: { ar: boolean; workflowId: string; recipe?: WorkflowRecipe }) {
+  return <div className="rounded-2xl border border-emerald-200 bg-emerald-50/50 p-4" dir={ar ? "rtl" : "ltr"}>
+    <div className="text-[10.5px] font-semibold text-emerald-900">{ar ? "تم حفظ سير العمل. ما الخطوة التالية؟" : "Workflow saved. What should you do next?"}</div>
+    <p className="mt-1 text-[9.5px] leading-5 text-emerald-800">{recipe === "EXTERNAL_API" ? (ar ? "تحقق من Connection ثم نفّذ التشغيل من مورد حقيقي. ستظهر النتيجة في سجل التشغيل." : "Verify the Connection, then run the workflow from a real resource. The result will appear in run history.") : recipe === "CUSTOM_FUNCTION" ? (ar ? "تأكد من نشر الدالة الآمنة ثم استخدمها في الإجراء. راجع سجل التشغيل بعد التنفيذ." : "Make sure the safe function is published, then use it in the action. Review run history after execution.") : (ar ? "فعّل سير العمل ثم ابدأه من مورد حقيقي. راجع سجل التشغيل والمهام الناتجة." : "Activate the workflow, then start it from a real resource. Review run history and generated tasks.")}</p>
+    <div className="mt-3 flex flex-wrap gap-2">
+      <a href={`/files/workflows/runs?workflowId=${encodeURIComponent(workflowId)}`} className="wd-pill wd-pill-record">{ar ? "سجل التشغيل" : "Run history"}</a>
+      <a href="/files/workflows/functions" className="wd-pill wd-pill-record">{ar ? "Custom Functions" : "Custom Functions"}</a>
+      <a href="/files/connections" className="wd-pill wd-pill-record">{ar ? "Connections" : "Connections"}</a>
     </div>
   </div>;
 }
