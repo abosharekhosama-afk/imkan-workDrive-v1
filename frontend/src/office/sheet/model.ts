@@ -2,7 +2,7 @@ export type CellValue = string | number | boolean | null;
 export type NumberFormat = 'general'|'number'|'currency'|'percent'|'date';
 export type ValidationRule = { type:'list'|'number'|'text'; values?:string[]; min?:number; max?:number };
 export type ConditionalFormat = { id:string; range:string; type:'cellIs'|'containsText'; operator:'>'|'>='|'<'|'<='|'='|'!='|'contains'; value:string; format:CellFormat };
-export type CellFormat = { bold?: boolean; italic?: boolean; color?: string; background?: string; align?: 'start'|'center'|'end'; numberFormat?: NumberFormat; decimals?: number; border?: boolean };
+export type CellFormat = { bold?: boolean; italic?: boolean; underline?: boolean; strike?: boolean; color?: string; background?: string; align?: 'start'|'center'|'end'; numberFormat?: NumberFormat; decimals?: number; border?: boolean };
 export type SheetCell = { value: CellValue; formula?: string; format?: CellFormat; validation?: ValidationRule; mergedInto?: string };
 export type NamedRange = { name:string; reference:string; scopeSheetId?:string };
 export type SheetTable = { id:string; name:string; start:string; end:string; hasHeader:boolean; style?:'plain'|'banded'|'minimal'; totalRow?:boolean; filter?:Record<string,string>; };
