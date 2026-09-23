@@ -17,7 +17,6 @@ import {
 } from '@prisma/client';
 import { createHash, randomUUID } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
-import { join } from 'node:path';
 import type { AccessTokenPayload } from '../auth/jwt.types';
 import { FilesService } from '../files/files.service';
 import { PrismaService } from '../prisma/prisma.service';
@@ -28,6 +27,7 @@ import { extractExtension } from '../common/file-classification';
 import type { parseCategory, parseTemplateCreate, parseTemplateFromFile, parseTemplateUpdate, parseTemplateUse, parseTemplateVariable, parseTemplateBuilder, TemplateBuilderConfig } from './templates.schemas';
 import { defaultTemplateBuilderConfig } from './templates.schemas';
 import { PublicTemplateSeedService } from './public-template-seed.service';
+import { blankTemplateAssetCandidates, templateOfficeEditorPath } from './template-blank-assets';
 import { OfficeService } from '../office/office.service';
 import { OfficeConversionService } from '../office/office-conversion.service';
 import { NotificationsService } from '../notifications/notifications.service';
@@ -61,8 +61,6 @@ export class TemplatesService {
     try {
       return await this.prisma.templateLibrary.create({ data: { ...where, name } });
     } catch (error) {
-      // Capabilities/categories can be requested concurrently. A competing
-      // request may win the composite unique key between findFirst and create.
       if ((error as any)?.code === 'P2002') {
         const concurrent = await this.prisma.templateLibrary.findFirst({ where });
         if (concurrent) return concurrent;
@@ -468,22 +466,7 @@ export class TemplatesService {
     };
     const definition = definitions[input.type];
 
-    // Nest copies assets to dist/templates/blank-assets in production, while
-    // local/dev runs commonly read them directly from src/templates/blank-assets.
-    // Render can also start the app from either the backend directory or the
-    // repository root, so try the known layouts instead of returning a raw ENOENT 500.
-    const assetCandidates = [
-      // Nest production output: dist/src/templates/blank-assets when sourceRoot
-      // is `src`, and dist/templates/blank-assets for alternate build layouts.
-      join(__dirname, 'blank-assets', definition.file),
-      join(process.cwd(), 'dist', 'src', 'templates', 'blank-assets', definition.file),
-      join(process.cwd(), 'dist', 'templates', 'blank-assets', definition.file),
-      // Development / monorepo layouts.
-      join(process.cwd(), 'src', 'templates', 'blank-assets', definition.file),
-      join(process.cwd(), 'backend', 'src', 'templates', 'blank-assets', definition.file),
-      join(process.cwd(), 'backend', 'dist', 'src', 'templates', 'blank-assets', definition.file),
-      join(process.cwd(), 'backend', 'dist', 'templates', 'blank-assets', definition.file),
-    ];
+    const assetCandidates = blankTemplateAssetCandidates(definition.file, __dirname);
     let bytes: Buffer | null = null;
     for (const assetPath of assetCandidates) {
       try {
@@ -524,7 +507,14 @@ export class TemplatesService {
       }
       return {
         template,
+        templateId: template.id,
         file_id: file.file_id,
+        editorPath: templateOfficeEditorPath(
+          file.file_id,
+          office?.type ?? null,
+          definition.extension,
+          template.id,
+        ),
         office: office ? { documentId: office.id, type: office.type, nativeFormat: office.nativeFormat, revision: office.revision } : null,
       };
     } catch (error) {
@@ -581,7 +571,18 @@ export class TemplatesService {
         throw new ConflictException(`Unable to prepare the template for IMKAN Office editing: ${reason}`);
       }
     }
-    return { ...created, office: officeDocument ? { documentId: officeDocument.id, type: officeDocument.type, nativeFormat: officeDocument.nativeFormat, revision: officeDocument.revision } : null };
+    const editorPath = templateOfficeEditorPath(
+      created.file_id,
+      officeDocument?.type ?? null,
+      extension ?? null,
+      id,
+    );
+    return {
+      ...created,
+      templateId: id,
+      editorPath,
+      office: officeDocument ? { documentId: officeDocument.id, type: officeDocument.type, nativeFormat: officeDocument.nativeFormat, revision: officeDocument.revision } : null,
+    };
   }
 
   /** Phase 36: create a concrete Office document from a template and optionally a PDF copy. */
@@ -914,7 +915,17 @@ export class TemplatesService {
         throw new ConflictException(`Unable to prepare the selected template version for IMKAN Office editing: ${reason}`);
       }
     }
-    return { ...created, office: officeDocument ? { documentId: officeDocument.id, type: officeDocument.type, nativeFormat: officeDocument.nativeFormat, revision: officeDocument.revision } : null };
+    return {
+      ...created,
+      templateId: id,
+      editorPath: templateOfficeEditorPath(
+        created.file_id,
+        officeDocument?.type ?? null,
+        extension ?? null,
+        id,
+      ),
+      office: officeDocument ? { documentId: officeDocument.id, type: officeDocument.type, nativeFormat: officeDocument.nativeFormat, revision: officeDocument.revision } : null,
+    };
   }
 
   async trash(user: AccessTokenPayload) {

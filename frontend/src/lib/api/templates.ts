@@ -70,12 +70,20 @@ export function listTemplates(params: { library?: TemplateLibrary; categoryId?: 
 export function getTemplate(id: string) { return apiRequest<TemplatePreview>(`/templates/${id}`); }
 
 export function useTemplate(id: string, input: { name: string; folderId?: string | null }) {
-  return apiRequest<{ file_id: string; name: string; folder_id: string | null; file_type: string; office?: { documentId: string; type: 'WRITER'|'SHEET'|'SHOW'; nativeFormat: string; revision: number } | null }>(`/templates/${id}/use`, { method: 'POST', body: JSON.stringify(input) });
+  return apiRequest<{
+    file_id: string;
+    name: string;
+    folder_id: string | null;
+    file_type: string;
+    templateId: string;
+    editorPath: string | null;
+    office?: { documentId: string; type: 'WRITER'|'SHEET'|'SHOW'; nativeFormat: string; revision: number } | null;
+  }>(`/templates/${id}/use`, { method: 'POST', body: JSON.stringify(input) });
 }
 
 
 export function createTemplateFromBlank(input: { name: string; description?: string; type: TemplateType; library?: TemplateLibrary; categoryId?: string | null }) {
-  return apiRequest<{ template: TemplatePreview; file_id: string }>('/templates/from-blank', { method: 'POST', body: JSON.stringify(input) });
+  return apiRequest<{ template: TemplatePreview; templateId: string; file_id: string; editorPath: string | null; office?: { documentId: string; type: 'WRITER'|'SHEET'|'SHOW'; nativeFormat: string; revision: number } | null }>('/templates/from-blank', { method: 'POST', body: JSON.stringify(input) });
 }
 
 export function saveFileAsTemplate(input: { fileId: string; name: string; description?: string; library?: TemplateLibrary; categoryId?: string | null }) {

@@ -30,6 +30,8 @@ import {
   type TemplateRecord,
   type TemplateType,
 } from "@/lib/api/templates";
+import { officeEditorHref } from "@/lib/office-editor-route";
+import { filterTemplateRecords, shouldHydrateLibraryOnce, templatesCacheKey } from "./templates-loading-logic";
 import { searchNames } from "@/lib/api/search";
 
 const tabs: { id: TemplateLibrary; en: string; ar: string }[] = [
@@ -106,35 +108,70 @@ export default function TemplatesPage() {
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
   const cacheRef = useRef(new Map<string, { items: TemplateRecord[]; categories: TemplateCategory[]; capabilities: import("@/lib/api/templates").TemplateLibraryCapabilities }>());
+  const libraryBundleRef = useRef(new Map<TemplateLibrary, { items: TemplateRecord[]; categories: TemplateCategory[]; capabilities: import("@/lib/api/templates").TemplateLibraryCapabilities }>());
+  const loadRequestRef = useRef<{ key: string; promise: Promise<void> } | null>(null);
 
-  const cacheKey = useMemo(() => JSON.stringify({ library, type: type ?? "", categoryId: categoryId ?? "", q: q.trim(), sort }), [library, type, categoryId, q, sort]);
+  const invalidateTemplateCaches = () => {
+    cacheRef.current.clear();
+    libraryBundleRef.current.clear();
+  };
+
+  const cacheKey = useMemo(() => templatesCacheKey({ library, type, categoryId, q, sort }), [library, type, categoryId, q, sort]);
+
+  const applyLibraryData = useCallback((items: TemplateRecord[], cats: TemplateCategory[], capabilities: import("@/lib/api/templates").TemplateLibraryCapabilities) => {
+    setTemplates(items);
+    setCategories(cats);
+    setLibraryCapabilities(capabilities);
+    cacheRef.current.set(cacheKey, { items, categories: cats, capabilities });
+  }, [cacheKey]);
 
   const load = useCallback(async (force = false) => {
     setError("");
     const cached = cacheRef.current.get(cacheKey);
     if (!force && cached) {
-      setTemplates(cached.items);
-      setCategories(cached.categories);
-      setLibraryCapabilities(cached.capabilities);
+      applyLibraryData(cached.items, cached.categories, cached.capabilities);
       return;
     }
-    setLoadingTemplates(true);
-    try {
-      const [items, cats, capabilities] = await Promise.all([
-        listTemplates({ library, type, categoryId, q: q.trim(), sort }),
-        listTemplateCategories(library),
-        getTemplateCapabilities(library),
-      ]);
-      cacheRef.current.set(cacheKey, { items, categories: cats, capabilities });
-      setTemplates(items);
-      setCategories(cats);
-      setLibraryCapabilities(capabilities);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : text(ar, "Unable to load templates.", "تعذر تحميل القوالب."));
-    } finally {
-      setLoadingTemplates(false);
+
+    const libraryBundle = libraryBundleRef.current.get(library);
+    if (!force && shouldHydrateLibraryOnce(library) && libraryBundle) {
+      const filtered = filterTemplateRecords(libraryBundle.items, { type, categoryId, q, sort });
+      applyLibraryData(filtered, libraryBundle.categories, libraryBundle.capabilities);
+      return;
     }
-  }, [library, type, categoryId, q, sort, ar, cacheKey]);
+
+    if (!force && loadRequestRef.current?.key === cacheKey) {
+      await loadRequestRef.current.promise;
+      return;
+    }
+
+    setLoadingTemplates(true);
+    const request = (async () => {
+      try {
+        const fetchFilters = shouldHydrateLibraryOnce(library)
+          ? { library, sort: "updated" as const }
+          : { library, type, categoryId, q: q.trim(), sort };
+        const [items, cats, capabilities] = await Promise.all([
+          listTemplates(fetchFilters),
+          listTemplateCategories(library),
+          getTemplateCapabilities(library),
+        ]);
+        if (shouldHydrateLibraryOnce(library)) {
+          libraryBundleRef.current.set(library, { items, categories: cats, capabilities });
+          applyLibraryData(filterTemplateRecords(items, { type, categoryId, q, sort }), cats, capabilities);
+        } else {
+          applyLibraryData(items, cats, capabilities);
+        }
+      } catch (e) {
+        setError(e instanceof Error ? e.message : text(ar, "Unable to load templates.", "تعذر تحميل القوالب."));
+      } finally {
+        setLoadingTemplates(false);
+        if (loadRequestRef.current?.key === cacheKey) loadRequestRef.current = null;
+      }
+    })();
+    loadRequestRef.current = { key: cacheKey, promise: request };
+    await request;
+  }, [library, type, categoryId, q, sort, ar, cacheKey, applyLibraryData]);
 
   useEffect(() => {
     const timer = window.setTimeout(() => { void load(); }, q.trim() ? 250 : 0);
@@ -188,13 +225,23 @@ export default function TemplatesPage() {
         await saveFileAsTemplate({ fileId: createFile.id, name: createTemplateName.trim(), description: createTemplateDescription.trim() || undefined, library, categoryId: createTemplateCategoryId || null });
         setCreateTemplateOpen(false);
         setMessage(text(ar, "Template created successfully.", "تم إنشاء القالب بنجاح."));
-        cacheRef.current.clear(); await load(true);
+        invalidateTemplateCaches(); await load(true);
       } else {
         const result = await createTemplateFromBlank({ name: createTemplateName.trim(), description: createTemplateDescription.trim() || undefined, type: createType, library, categoryId: createTemplateCategoryId || null });
         setCreateTemplateOpen(false);
-        cacheRef.current.clear();
-        const officeType = result.template.type === "SPREADSHEET" ? "sheet" : result.template.type === "PRESENTATION" ? "show" : "writer";
-        router.push(`/office/${officeType}/${result.file_id}?templateId=${encodeURIComponent(result.template.id)}`);
+        invalidateTemplateCaches();
+        libraryBundleRef.current.delete(library);
+        const href = result.editorPath ?? officeEditorHref({
+          fileId: result.file_id,
+          documentType: result.office?.type ?? null,
+          extension: result.template?.extension,
+          fileName: result.template?.name,
+          mimeType: result.template?.mimeType,
+          templateId: result.templateId ?? result.template.id,
+        });
+        if (!href) throw new Error(text(ar, "Blank template was created, but IMKAN Office could not be opened.", "تم إنشاء القالب الفارغ، لكن تعذر فتح IMKAN Office."));
+        setMessage(text(ar, "Preparing document…", "جارٍ تجهيز المستند…"));
+        router.push(href);
       }
     } catch (e) {
       setError(e instanceof Error ? e.message : text(ar, "Unable to create template.", "تعذر إنشاء القالب."));
@@ -220,11 +267,14 @@ export default function TemplatesPage() {
       const created = await useTemplate(useTarget.id, { name: newName.trim(), folderId });
       setUseTarget(null);
       setNewName("");
-      setMessage(text(ar, `Created “${created.name}”.`, `تم إنشاء «${created.name}».`));
+      setMessage(text(ar, "Preparing document…", "جارٍ تجهيز المستند…"));
+      const href = created.editorPath ?? officeEditorHref({
+        fileId: created.file_id,
+        documentType: created.office?.type ?? null,
+        templateId: useTarget.id,
+      });
       window.setTimeout(() => {
-        if (created.office?.type === 'SHEET') router.push(`/office/sheet/${created.file_id}`);
-        else if (created.office?.type === 'SHOW') router.push(`/office/show/${created.file_id}`);
-        else if (created.office?.type === 'WRITER') router.push(`/office/writer/${created.file_id}`);
+        if (href) router.push(href);
         else router.push(`/files?query=${encodeURIComponent(created.name)}`);
       }, 350);
     } catch (e) {
@@ -244,11 +294,18 @@ export default function TemplatesPage() {
     setBusy(true); setError(""); setMessage("");
     try {
       const created = await useTemplate(contentEditTarget.id, { name: contentEditName.trim(), folderId });
+      const templateId = contentEditTarget.id;
       setContentEditTarget(null);
       setContentEditName("");
-      const officeRoute = created.office?.type === 'SHEET' ? 'sheet' : created.office?.type === 'SHOW' ? 'show' : 'writer';
       if (!created.office) throw new Error(text(ar, 'The template was created, but IMKAN Office could not initialize the editable document.', 'تم إنشاء نسخة القالب، لكن تعذر تجهيز مستند IMKAN Office القابل للتحرير.'));
-      router.push(`/office/${officeRoute}/${created.file_id}?templateId=${encodeURIComponent(contentEditTarget.id)}`);
+      const href = created.editorPath ?? officeEditorHref({
+        fileId: created.file_id,
+        documentType: created.office.type,
+        templateId,
+      });
+      if (!href) throw new Error(text(ar, "Unable to determine the IMKAN Office editor route.", "تعذر تحديد مسار محرر IMKAN Office."));
+      setMessage(text(ar, "Preparing document…", "جارٍ تجهيز المستند…"));
+      router.push(href);
     } catch (e) {
       setError(e instanceof Error ? e.message : text(ar, "Unable to start template editor.", "تعذر بدء محرر القالب."));
     } finally { setBusy(false); }
@@ -263,7 +320,7 @@ export default function TemplatesPage() {
       setSaveCategoryId("");
       router.replace("/files/templates");
       setMessage(text(ar, "Template saved successfully.", "تم حفظ القالب بنجاح."));
-      cacheRef.current.clear(); await load(true);
+      invalidateTemplateCaches(); await load(true);
     } catch (e) {
       setError(e instanceof Error ? e.message : text(ar, "Unable to save template.", "تعذر حفظ القالب."));
     } finally { setBusy(false); }
@@ -283,7 +340,7 @@ export default function TemplatesPage() {
       await updateTemplate(editTarget.id, { name: editName.trim(), description: editDescription.trim(), categoryId: editCategoryId || null });
       setEditTarget(null);
       setMessage(text(ar, "Template updated successfully.", "تم تحديث القالب بنجاح."));
-      cacheRef.current.clear(); await load(true);
+      invalidateTemplateCaches(); await load(true);
     } catch (e) { setError(e instanceof Error ? e.message : text(ar, "Unable to update template.", "تعذر تحديث القالب.")); }
     finally { setBusy(false); }
   };
@@ -295,7 +352,7 @@ export default function TemplatesPage() {
       await updateTemplateFromFile(versionTarget.id, { fileId: versionFileId.trim(), name: versionName.trim(), description: versionTarget.description || undefined, categoryId: versionTarget.category?.id || null });
       setVersionTarget(null); setVersionFileId(""); setVersionName("");
       setMessage(text(ar, "New template version created.", "تم إنشاء إصدار جديد للقالب."));
-      cacheRef.current.clear(); await load(true);
+      invalidateTemplateCaches(); await load(true);
     } catch (e) { setError(e instanceof Error ? e.message : text(ar, "Unable to create version.", "تعذر إنشاء الإصدار.")); }
     finally { setBusy(false); }
   };
@@ -307,7 +364,7 @@ export default function TemplatesPage() {
       await duplicateTemplate(duplicateTarget.id, duplicateName.trim());
       setDuplicateTarget(null); setDuplicateName("");
       setMessage(text(ar, "Template duplicated.", "تم نسخ القالب."));
-      cacheRef.current.clear(); await load(true);
+      invalidateTemplateCaches(); await load(true);
     } catch (e) { setError(e instanceof Error ? e.message : text(ar, "Unable to duplicate template.", "تعذر نسخ القالب.")); }
     finally { setBusy(false); }
   };
@@ -328,7 +385,7 @@ export default function TemplatesPage() {
       await updateTemplate(categoryTarget.id, { categoryId: categoryTargetId || null });
       setCategoryTarget(null); setCategoryTargetId(""); setMenuTemplateId(null);
       setMessage(text(ar, "Category updated.", "تم تحديث التصنيف."));
-      cacheRef.current.clear(); await load(true);
+      invalidateTemplateCaches(); await load(true);
     } catch (e) { setError(e instanceof Error ? e.message : text(ar, "Unable to change category.", "تعذر تغيير التصنيف.")); }
     finally { setBusy(false); }
   };
@@ -340,7 +397,7 @@ export default function TemplatesPage() {
     try {
       await deleteTemplate(template.id);
       setMessage(text(ar, "Template moved to trash.", "تم نقل القالب إلى السلة."));
-      cacheRef.current.clear(); await load(true);
+      invalidateTemplateCaches(); await load(true);
     } catch (e) { setError(e instanceof Error ? e.message : text(ar, "Unable to delete template.", "تعذر حذف القالب.")); }
     finally { setBusy(false); }
   };
@@ -354,7 +411,7 @@ export default function TemplatesPage() {
 
   const restoreFromTrash = async (id: string) => {
     setBusy(true); setError("");
-    try { await restoreTemplate(id); setTrash((items) => items.filter((item) => item.id !== id)); cacheRef.current.clear(); await load(true); setMessage(text(ar, "Template restored.", "تمت استعادة القالب.")); }
+    try { await restoreTemplate(id); setTrash((items) => items.filter((item) => item.id !== id)); invalidateTemplateCaches(); await load(true); setMessage(text(ar, "Template restored.", "تمت استعادة القالب.")); }
     catch (e) { setError(e instanceof Error ? e.message : text(ar, "Unable to restore template.", "تعذر استعادة القالب.")); }
     finally { setBusy(false); }
   };
@@ -479,8 +536,28 @@ export default function TemplatesPage() {
                   <p className="mt-1 text-[12px] leading-5 text-slate-500">{text(ar, library === "PUBLIC" ? "Public templates will appear here when available." : "Save a file as a template to populate this library.", library === "PUBLIC" ? "ستظهر القوالب العامة هنا عند توفرها." : "احفظ ملفًا كقالب لإضافة القوالب إلى هذه المكتبة.")}</p>
                 </div>
               </div>
+            ) : loadingTemplates && templates.length === 0 ? (
+              <div className={layout === "grid" ? "grid flex-1 grid-cols-[repeat(auto-fill,minmax(245px,1fr))] gap-4 p-5" : "flex-1 space-y-2 p-5"}>
+                {Array.from({ length: layout === "grid" ? 8 : 6 }).map((_, index) => (
+                  <div key={index} className={`animate-pulse rounded-xl border border-slate-200 bg-white ${layout === "grid" ? "overflow-hidden" : "flex items-center gap-4 p-3"}`}>
+                    <div className={layout === "grid" ? "h-36 bg-slate-100" : "h-14 w-14 shrink-0 rounded-lg bg-slate-100"} />
+                    <div className={layout === "grid" ? "space-y-2 p-4" : "min-w-0 flex-1 space-y-2"}>
+                      <div className="h-4 w-2/3 rounded bg-slate-100" />
+                      <div className="h-3 w-full rounded bg-slate-100" />
+                      <div className="h-3 w-1/2 rounded bg-slate-100" />
+                    </div>
+                  </div>
+                ))}
+              </div>
             ) : (
-            <div className={layout === "grid" ? "grid flex-1 grid-cols-[repeat(auto-fill,minmax(245px,1fr))] gap-4 p-5" : "flex-1 space-y-2 p-5"}>
+            <div className="relative flex-1">
+            {loadingTemplates && templates.length > 0 && (
+              <div className="pointer-events-none absolute end-5 top-3 z-10 flex items-center gap-2 rounded-full border border-slate-200 bg-white/95 px-3 py-1.5 text-[11px] text-slate-500 shadow-sm">
+                <span className="h-3 w-3 animate-spin rounded-full border-2 border-slate-300 border-t-[var(--wd-primary)]" />
+                {text(ar, "Updating templates…", "جارٍ تحديث القوالب…")}
+              </div>
+            )}
+            <div className={layout === "grid" ? "grid grid-cols-[repeat(auto-fill,minmax(245px,1fr))] gap-4 p-5" : "space-y-2 p-5"}>
             {templates.map((template) => (
               <article key={template.id} className={layout === "grid" ? `relative overflow-visible rounded-xl border border-slate-200 bg-white shadow-sm transition hover:border-slate-300 hover:shadow-md ${menuTemplateId === template.id ? "z-[70]" : "z-0"}` : `relative flex items-center gap-4 rounded-xl border border-slate-200 bg-white p-3 shadow-sm transition hover:border-slate-300 ${menuTemplateId === template.id ? "z-[70]" : "z-0"}`}>
                 <button type="button" onClick={() => void previewTemplate(template)} className={layout === "grid" ? "group relative flex h-36 w-full items-center justify-center overflow-hidden bg-[#f6f8fb] text-[var(--wd-primary)]" : "group flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-[#f6f8fb] text-[var(--wd-primary)]"}>
@@ -531,6 +608,7 @@ export default function TemplatesPage() {
                 </div>
               </article>
             ))}
+            </div>
             </div>
             )}
           </div>
@@ -721,7 +799,7 @@ export default function TemplatesPage() {
             <input autoFocus value={contentEditName} onChange={(e) => setContentEditName(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") void confirmContentEditor(); }} className="mt-2 w-full rounded-lg border border-slate-200 px-3 py-2.5 text-[13px] outline-none focus:border-[var(--wd-primary)]" />
             <div className="mt-5 flex justify-end gap-2">
               <button type="button" disabled={busy} onClick={() => setContentEditTarget(null)} className="rounded-lg border border-slate-200 px-4 py-2 text-[12px] text-slate-600">{text(ar, "Cancel", "إلغاء")}</button>
-              <button type="button" disabled={busy || !contentEditName.trim()} onClick={() => void confirmContentEditor()} className="rounded-lg bg-[var(--wd-primary)] px-4 py-2 text-[12px] font-medium text-white disabled:opacity-50">{busy ? text(ar, "Opening…", "جارٍ الفتح…") : text(ar, "Open editor", "فتح المحرر")}</button>
+              <button type="button" disabled={busy || !contentEditName.trim()} onClick={() => void confirmContentEditor()} className="rounded-lg bg-[var(--wd-primary)] px-4 py-2 text-[12px] font-medium text-white disabled:opacity-50">{busy ? text(ar, "Preparing document…", "جارٍ تجهيز المستند…") : text(ar, "Open editor", "فتح المحرر")}</button>
             </div>
           </div>
         </div>
