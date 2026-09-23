@@ -104,3 +104,8 @@ function shiftRangeRows(m:{start:string;end:string},at:number,delta:number){retu
 function shiftRangeCols(m:{start:string;end:string},at:number,delta:number){return {start:shiftCellCol(m.start,at,delta),end:shiftCellCol(m.end,at,delta)}}
 function shiftRangeRowsText(range:string,at:number,delta:number){const [a,b]=range.split(':');return b?`${shiftCellRow(a,at,delta)}:${shiftCellRow(b,at,delta)}`:shiftCellRow(a,at,delta)}
 function shiftRangeColsText(range:string,at:number,delta:number){const [a,b]=range.split(':');return b?`${shiftCellCol(a,at,delta)}:${shiftCellCol(b,at,delta)}`:shiftCellCol(a,at,delta)}
+
+export function hideRows(w:Workbook, start:number, end=start){const n=cloneWorkbook(w),s=activeSheet(n);if(!s)return w;const set=new Set(s.hiddenRows??[]);for(let r=Math.min(start,end);r<=Math.max(start,end);r++)set.add(r);s.hiddenRows=[...set].sort((a,b)=>a-b);return n}
+export function unhideRows(w:Workbook){const n=cloneWorkbook(w),s=activeSheet(n);if(s)s.hiddenRows=[];return n}
+export function hideColumns(w:Workbook, start:string, end=start){const n=cloneWorkbook(w),s=activeSheet(n);if(!s)return w;const a=colIndex(start),b=colIndex(end),set=new Set(s.hiddenColumns??[]);for(let c=Math.min(a,b);c<=Math.max(a,b);c++)set.add(colName(c));s.hiddenColumns=[...set].sort((x,y)=>colIndex(x)-colIndex(y));return n}
+export function unhideColumns(w:Workbook){const n=cloneWorkbook(w),s=activeSheet(n);if(s)s.hiddenColumns=[];return n}
