@@ -37,7 +37,8 @@ export function activateWorkflow(id: string) { return apiRequest<Workflow>(`/wor
 export function deactivateWorkflow(id: string) { return apiRequest<Workflow>(`/workflows/${id}/deactivate`, { method: 'POST' }); }
 export function deleteWorkflow(id: string) { return apiRequest<{ id: string; deleted: boolean }>(`/workflows/${id}`, { method: 'DELETE' }); }
 export function duplicateWorkflow(id: string) { return apiRequest<Workflow>(`/workflows/${id}/duplicate`, { method: 'POST' }); }
-export function startWorkflow(id: string, input: Record<string, unknown>) { return apiRequest(`/workflows/${id}/start`, { method: 'POST', body: JSON.stringify(input) }); }
+export type WorkflowStartResult = { id: string; workflowId: string; status: string; versionId?: string | null; currentStateId?: string | null };
+export function startWorkflow(id: string, input: Record<string, unknown>) { return apiRequest<WorkflowStartResult>(`/workflows/${id}/start`, { method: 'POST', body: JSON.stringify(input) }); }
 
 export type WorkflowStepRun = { id: string; stepKind: string; stepPosition: number; status: string; input?: unknown; output?: unknown; error?: string | null; startedAt: string; finishedAt?: string | null };
 export type WorkflowRun = { id: string; workflowId: string; versionId?: string | null; eventKey: string; status: string; trigger: Record<string, unknown>; result?: Record<string, unknown> | null; error?: string | null; startedAt: string; finishedAt?: string | null; currentState?: { id: string; name: string } | null; workflow: { id: string; name: string; ownerId?: string }; tasks?: Array<{ id: string; status: string; title: string }>; stepRuns?: WorkflowStepRun[] };
