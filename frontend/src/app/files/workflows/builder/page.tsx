@@ -5,6 +5,7 @@ import { useEffect, useMemo, useRef, useState, type DragEvent, type PointerEvent
 import { useRouter, useSearchParams } from "next/navigation";
 import { useLocale } from "@/components/locale-provider";
 import { WorkflowHelp } from "@/components/workflow-help";
+import { ConnectionUseHint, WorkflowConceptGuide } from "@/components/workflow-concept-guide";
 import { listFolderTree, type FolderTreeItem } from "@/lib/api/folders";
 import { useWorkflowAccess } from "@/components/workflow-access";
 import { listConnections, createWorkflow, getWorkflow, updateWorkflow, getWorkflowConnectionHealth, listWorkflowParticipantOptions, listWorkflowTemplates, listWorkflowFunctions, type Workflow, type WorkflowParticipant, type WorkflowDataTemplate, type WorkflowFunction, type WorkflowConnectionHealth } from "@/lib/api/workflows";
@@ -198,6 +199,10 @@ function ActionEditor({ actions, onChange, resourceType, ar, workflowFields }: {
     </label>;
 
   return <div className="space-y-2.5">
+    <div className="rounded-xl border border-slate-200 bg-slate-50/70 p-3">
+      <div className="text-[9px] font-semibold uppercase tracking-[.14em] text-slate-400">{txt(ar,"What is an action?","ما هو الإجراء؟")}</div>
+      <p className="mt-1 text-[9.5px] leading-5 text-slate-600">{txt(ar,"An action is the actual operation performed when this transition runs. Use a built-in action for common WorkDrive operations, HTTP request when you need an external API, or Custom Function for reusable multi-step logic.","الإجراء هو العملية الفعلية التي ينفذها هذا الانتقال. استخدم إجراءً جاهزاً لعمليات WorkDrive المعتادة، وHTTP Request عند الحاجة إلى API خارجي، وCustom Function للمنطق المخصص متعدد الخطوات.")}</p>
+    </div>
     {actions.map((a, i) => {
       const linkedFunction = a.type === "custom_function" ? functions.find(f => f.id === String(a.config.functionId ?? "")) : null;
       return <div
@@ -236,14 +241,14 @@ function ActionEditor({ actions, onChange, resourceType, ar, workflowFields }: {
           </>}
 
           {a.type === "http_request" && <>
-            <label className="workflow-action-field sm:col-span-2"><span>{txt(ar,"Connection","الاتصال")}</span><select value={String(a.config.connectionId ?? "")} onChange={e=>update(i,"connectionId",e.target.value)}><option value="">{txt(ar,"Select connection","اختر اتصالاً")}</option>{connections.map(c=><option key={c.id} value={c.id}>{c.name}</option>)}</select></label>
+            <label className="workflow-action-field sm:col-span-2"><span>{txt(ar,"Connection — who authorizes this request?","الاتصال — بأي حساب يتم التفويض؟")}</span><select value={String(a.config.connectionId ?? "")} onChange={e=>update(i,"connectionId",e.target.value)}><option value="">{txt(ar,"Select an ACTIVE connection","اختر اتصالاً نشطاً")}</option>{connections.map(c=><option key={c.id} value={c.id}>{c.name} · {c.provider}</option>)}</select><small className="mt-1 block text-[8.5px] leading-4 text-slate-400">{txt(ar,"The server supplies OAuth credentials from this connection. You only configure the API request.","الخادم يستخدم بيانات OAuth الخاصة بهذا الاتصال تلقائياً؛ أنت تضبط طلب الـAPI فقط.")}</small></label>
             {field(txt(ar,"Path / URL path","المسار"), a.config.path, v => update(i,"path",v), "/v1/resource or ?id={{file.id}}")}
             <label className="workflow-action-field"><span>{txt(ar,"Method","الطريقة")}</span><select value={String(a.config.method ?? "GET")} onChange={e=>update(i,"method",e.target.value)}>{["GET","POST","PUT","PATCH","DELETE","HEAD"].map(m=><option key={m}>{m}</option>)}</select></label>
             <label className="workflow-action-field sm:col-span-2"><span>{txt(ar,"Body (optional)","الجسم (اختياري)")}</span><textarea value={String(a.config.body ?? "")} onChange={e=>update(i,"body",e.target.value)} rows={4} placeholder='{"fileId":"{{file.id}}"}' /></label>
             <label className="workflow-action-field"><span>{txt(ar,"Response mode","طريقة الاستجابة")}</span><select value={String(a.config.responseMode ?? "TEXT")} onChange={e=>update(i,"responseMode",e.target.value)}>{["TEXT","JSON","HEADERS","NONE"].map(m=><option key={m}>{m}</option>)}</select></label>
             <label className="workflow-action-field"><span>{txt(ar,"Max response bytes","الحد الأقصى للاستجابة")}</span><input type="number" min={256} max={20000} value={Number(a.config.maxResponseBytes ?? 20000)} onChange={e=>update(i,"maxResponseBytes",Number(e.target.value)||20000)} /></label>
             <label className="workflow-action-field sm:col-span-2"><span>{txt(ar,"Output workflow field (optional)","حقل إخراج سير العمل (اختياري)")}</span><select value={String(a.config.outputFieldId ?? "")} onChange={e=>update(i,"outputFieldId",e.target.value)}><option value="">{txt(ar,"Do not store response","لا تحفظ الاستجابة")}</option>{workflowFields.map(f=><option key={f.id} value={f.id}>{f.name}</option>)}</select></label>
-            <div className="sm:col-span-2 rounded-xl bg-amber-50 p-3 text-[9px] leading-5 text-amber-700">{txt(ar,"Requests use the selected connection credentials. Targets are restricted to the connection origin and private/local network targets are blocked.","تستخدم الطلبات بيانات اعتماد الاتصال المحدد، ويتم تقييد الهدف إلى نفس أصل الاتصال وحظر الشبكات المحلية والخاصة.")}</div>
+            <div className="sm:col-span-2"><ConnectionUseHint ar={ar} /></div><div className="sm:col-span-2 rounded-xl bg-amber-50 p-3 text-[9px] leading-5 text-amber-700">{txt(ar,"Requests use the selected connection credentials. Targets are restricted to the connection origin and private/local network targets are blocked.","تستخدم الطلبات بيانات اعتماد الاتصال المحدد، ويتم تقييد الهدف إلى نفس أصل الاتصال وحظر الشبكات المحلية والخاصة.")}</div>
           </>}
           {a.type === "notify" && <>
             {field(txt(ar,"Notification title","عنوان الإشعار"), a.config.title, v => update(i,"title",v))}
@@ -290,6 +295,7 @@ function ActionEditor({ actions, onChange, resourceType, ar, workflowFields }: {
           </>}
 
           {a.type === "custom_function" && <>
+            <div className="sm:col-span-2 rounded-xl border border-violet-200 bg-violet-50/60 p-3"><div className="text-[9.5px] font-semibold text-violet-900">{txt(ar,"Custom Function = reusable logic","Custom Function = منطق مخصص قابل لإعادة الاستخدام")}</div><p className="mt-1 text-[9px] leading-4 text-violet-800">{txt(ar,"Choose a published safe function. If that function contains HTTP_REQUEST, its configured Connection is used by the runtime.","اختر دالة آمنة منشورة. إذا احتوت الدالة على HTTP_REQUEST فسيستخدم Runtime الاتصال المحدد داخلها.")}</p></div>
             <label className="workflow-action-field sm:col-span-2">
               <span>{txt(ar,"Secure function","الدالة الآمنة")}</span>
               <select value={String(a.config.functionId ?? "")} onChange={e=>update(i,"functionId",e.target.value)}>
@@ -439,6 +445,7 @@ export default function WorkflowBuilderPage() {
       <div className="mt-3 flex items-center justify-center"><div className="flex items-center gap-1 rounded-2xl bg-slate-100 p-1">{([[1,"Configure fields"],[2,"Design workflow"],[3,"Review"]] as const).map(([n,en]) => <button key={n} type="button" onClick={() => setStep(n)} className={`workflow-step-tab px-4 py-2 text-[10.5px] font-medium transition ${step === n ? "is-active" : ""}`}><b className="me-1.5">{n}</b>{txt(ar,en,n===1?"إعداد الحقول":n===2?"تصميم سير العمل":"المراجعة")}</button>)}</div></div>
     </header>
     {error && <div className="mx-5 mt-2 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-[10.5px] text-red-700">{error}</div>}{message && <div className="mx-5 mt-2 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-[10.5px] text-emerald-700">{message}</div>}
+    <div className="mx-5 mt-2"><WorkflowConceptGuide ar={ar} /></div>
 
     {step === 1 && <div className="min-h-0 flex-1 overflow-hidden p-4"><div className="grid h-full min-h-0 grid-cols-[260px_minmax(0,1fr)] gap-4">
       <aside className="wd-card min-h-0 overflow-y-auto p-4"><div className="mb-4"><h2 className="text-[13px] font-semibold text-slate-900">{txt(ar,"Field types","أنواع الحقول")}</h2><p className="mt-1 text-[10.5px] leading-5 text-slate-500">{txt(ar,"Drag a field into the workspace. A configuration window opens only after you drop it.","اسحب الحقل إلى مساحة العمل. تظهر نافذة الإعداد بعد الإفلات فقط.")}</p></div><div className="space-y-2">{FIELD_TYPES.map(([v,en,arLabel,icon]) => <div key={v} draggable onDragStart={(e) => { e.dataTransfer.setData("application/x-workflow-field", v); e.dataTransfer.effectAllowed = "copy"; startFieldDrag(v); }} onDragEnd={() => setDragFieldType(null)} className="group flex cursor-grab items-center gap-3 rounded-xl border border-dashed border-slate-300 bg-white px-3 py-3 transition duration-200 hover:-translate-y-0.5 hover:border-[var(--wd-primary)] hover:bg-[#F8FBFF] hover:shadow-sm active:cursor-grabbing"><span className="flex h-8 w-8 items-center justify-center rounded-lg bg-slate-100 text-[10px] font-semibold text-slate-500 transition group-hover:bg-[var(--wd-primary-light)] group-hover:text-[var(--wd-primary)]">{icon}</span><span className="min-w-0 flex-1 text-[10.5px] font-medium text-slate-700">{txt(ar,en,arLabel)}</span><span className="text-[12px] text-slate-300 group-hover:text-[var(--wd-primary)]">↗</span></div>)}</div></aside>
