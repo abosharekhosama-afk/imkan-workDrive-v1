@@ -28,9 +28,23 @@ async function request<T>(path: string, body?: unknown): Promise<T> {
 export function login(email: string, password: string) { return request<AuthResult>('/auth/login', { email, password }); }
 export function signup(name: string, email: string, password: string, inviteToken?: string) { return request<AuthResult>('/auth/signup', { name, email, password, ...(inviteToken ? { inviteToken } : {}) }); }
 export async function googleUrl() { return request<{ url: string }>('/auth/google'); }
+export class SessionCheckError extends Error {
+  status: number;
+  constructor(status: number) {
+    super(status === 401 ? "Session expired" : "Session check failed");
+    this.name = "SessionCheckError";
+    this.status = status;
+  }
+}
+
 export async function me(token: string) {
-  const response = await fetch(`${getApiBaseUrl()}/auth/me`, { headers: { Authorization: `Bearer ${token}` } });
-  if (!response.ok) throw new Error('Session expired');
+  let response: Response;
+  try {
+    response = await fetch(`${getApiBaseUrl()}/auth/me`, { headers: { Authorization: `Bearer ${token}` } });
+  } catch {
+    throw new SessionCheckError(0);
+  }
+  if (!response.ok) throw new SessionCheckError(response.status);
   return response.json() as Promise<AuthUser>;
 }
 
@@ -41,7 +55,7 @@ export function saveSession(result: AuthResult) {
 
     // حفظ التوكن في الكوكي ليتسنى للسيرفر قراءته أثناء الـ SSR
     const isSecure = window.location.protocol === 'https:' ? '; Secure' : '';
-    document.cookie = `workdrive_access_token=${result.access_token}; path=/; max-age=28800; SameSite=Lax${isSecure}`;
+    document.cookie = `workdrive_access_token=${encodeURIComponent(result.access_token)}; path=/; max-age=28800; SameSite=Lax${isSecure}`;
   }
 }
 
@@ -51,7 +65,8 @@ export function clearSession() {
     localStorage.removeItem('workdrive_user'); 
 
     // مسح الكوكي عند تسجيل الخروج
-    document.cookie = 'workdrive_access_token=; path=/; max-age=0; SameSite=Lax;';
+    const isSecure = window.location.protocol === "https:" ? "; Secure" : "";
+    document.cookie = `workdrive_access_token=; path=/; max-age=0; SameSite=Lax${isSecure}`;
   }
 }
 

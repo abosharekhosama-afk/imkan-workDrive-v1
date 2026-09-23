@@ -1,4 +1,4 @@
-import { BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, ForbiddenException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { randomBytes, randomUUID, createHash } from 'node:crypto';
 import { ConnectionAuthType, ConnectionShareRole, ConnectionStatus, ConnectionType, ConnectionVisibility, Prisma } from '@prisma/client';
@@ -10,6 +10,7 @@ import { ConnectionProviderAdapterService } from './connection-provider-adapter.
 import { URL } from 'node:url';
 import { isIP } from 'node:net';
 import { lookup } from 'node:dns/promises';
+import { buildOAuthBrowserUrl, oauthFailurePreservesActive, resolveOAuthFrontendOrigin, safeOAuthErrorCode, safeOrigin } from './oauth-flow';
 
 const OAUTH_STATE_TTL_MS = 10 * 60 * 1000;
 const SECRET_FIELDS = ['accessToken', 'refreshToken', 'apiKey', 'bearerToken', 'username', 'password', 'customHeaders'] as const;
@@ -22,7 +23,16 @@ type ResolvedProviderDefinition = ConnectionProviderDefinition & { oauthClientId
 
 @Injectable()
 export class ConnectionsService {
+  private readonly logger = new Logger(ConnectionsService.name);
   constructor(private readonly prisma: PrismaService, private readonly crypto: ConnectionCryptoService, private readonly config: ConfigService, private readonly registry: ConnectionProviderRegistry, private readonly providerAdapter: ConnectionProviderAdapterService) {}
+
+  private oauthLog(event: string, fields: Record<string, string | number | null | undefined>) {
+    const detail = Object.entries(fields)
+      .filter(([, value]) => value !== undefined && value !== null && value !== '')
+      .map(([key, value]) => `${key}=${String(value).replace(/[\r\n]/g, ' ').slice(0, 180)}`)
+      .join(' ');
+    this.logger.log(`[OAuth] ${event}${detail ? ` ${detail}` : ''}`);
+  }
 
   async providers(user?: AccessTokenPayload) {
     const configs = user ? await this.prisma.connectionProviderConfig.findMany({ where: { orgId: user.org_id } }) : [];
@@ -744,6 +754,8 @@ export class ConnectionsService {
     const codeVerifier = definition.oauthPkce ? randomBytes(48).toString('base64url') : null;
     const codeChallenge = codeVerifier ? createHash('sha256').update(codeVerifier).digest('base64url') : null;
     await this.prisma.connectionOAuthState.create({ data: { id: randomUUID(), stateHash: this.hash(state), orgId: user.org_id, userId: user.sub, provider, connectionId: connection?.id ?? null, folderId, returnPath: safeReturnPath, ...(codeVerifier ? { codeVerifier: this.crypto.encrypt(codeVerifier) } : {}), expiresAt: new Date(Date.now() + OAUTH_STATE_TTL_MS) } });
+    this.oauthLog('START', { provider, connectionId: connection?.id ?? null, orgId: user.org_id, userId: user.sub, redirectUri: cfg.callbackUrl });
+    this.oauthLog('STATE_CREATED', { provider, connectionId: connection?.id ?? null, orgId: user.org_id, userId: user.sub });
     const configuredScopes = await this.configuredProviderScopes(provider, user.org_id, definition);
     const selectedScopes = connection?.scope?.trim() || configuredScopes.join(' ');
     const params = new URLSearchParams({ client_id: cfg.clientId, redirect_uri: cfg.callbackUrl, response_type: 'code', state });
@@ -757,13 +769,18 @@ export class ConnectionsService {
   }
 
   async completeOAuth(provider: OAuthProvider, code: string, state: string) {
+    this.oauthLog('PROVIDER_CALLBACK', { provider });
     const statePreview = await this.prisma.connectionOAuthState.findFirst({ where: { stateHash: this.hash(state), provider }, select: { orgId: true } });
     const definition = statePreview ? await this.resolveProviderDefinition(provider, statePreview.orgId) : (provider.startsWith('custom:') ? null : this.registry.get(provider));
     if (!definition) throw new BadRequestException('Custom service not found');
     this.assertOAuthProvider(provider, definition);
     if (!code || !state) throw new BadRequestException('Missing OAuth callback parameters');
     const row = await this.prisma.connectionOAuthState.findFirst({ where: { stateHash: this.hash(state), provider, usedAt: null, expiresAt: { gt: new Date() } } });
-    if (!row) throw new BadRequestException('OAuth state is invalid or expired');
+    if (!row) {
+      this.oauthLog('STATE_INVALID', { provider });
+      throw new BadRequestException('OAuth state is invalid or expired');
+    }
+    this.oauthLog('STATE_VALID', { provider, connectionId: row.connectionId, orgId: row.orgId, userId: row.userId });
     await this.prisma.connectionOAuthState.update({ where: { id: row.id }, data: { usedAt: new Date() } });
     const cfg = await this.oauthConfig(provider, definition, row.orgId);
     if (!cfg.clientId || !cfg.clientSecret) throw new BadRequestException(`${provider} OAuth integration is not configured`);
@@ -774,12 +791,15 @@ export class ConnectionsService {
         code,
         row.codeVerifier ? this.crypto.decrypt(row.codeVerifier) : null,
       );
+      this.oauthLog('TOKEN_EXCHANGE_SUCCESS', { provider, connectionId: row.connectionId, orgId: row.orgId, userId: row.userId, redirectUri: cfg.callbackUrl });
     } catch (error) {
       const message = error instanceof Error ? error.message.slice(0, 500) : 'OAuth authorization failed';
+      this.oauthLog('TOKEN_EXCHANGE_FAILED', { provider, connectionId: row.connectionId, orgId: row.orgId, userId: row.userId, redirectUri: cfg.callbackUrl, error: safeOAuthErrorCode(message) });
       if (row.connectionId) await this.prisma.connection.update({ where: { id: row.connectionId }, data: { status: ConnectionStatus.REAUTH_REQUIRED, errorCode: 'TOKEN_EXCHANGE_FAILED', errorMessage: message } }).catch(() => undefined);
       throw new BadRequestException(message);
     }
-    const expiresAt = typeof payload.expires_in === 'number' ? new Date(Date.now() + payload.expires_in * 1000) : null;
+    const expiresIn = typeof payload.expires_in === 'number' ? payload.expires_in : (typeof payload.expires_in === 'string' && /^\d+$/.test(payload.expires_in) ? Number(payload.expires_in) : null);
+    const expiresAt = expiresIn !== null ? new Date(Date.now() + expiresIn * 1000) : null;
     const stateConnection = row.connectionId ? await this.prisma.connection.findFirst({ where: { id: row.connectionId, orgId: row.orgId, ownerId: row.userId, provider, authType: ConnectionAuthType.OAUTH2 } }) : null;
     const existing = stateConnection ?? await this.prisma.connection.findFirst({ where: { orgId: row.orgId, ownerId: row.userId, provider, authType: ConnectionAuthType.OAUTH2 }, orderBy: { updatedAt: 'desc' } });
     const name = existing?.name ?? `${definition.name} connection`;
@@ -787,8 +807,10 @@ export class ConnectionsService {
     let authorizedAccount: Record<string, unknown> | null = null;
     try {
       authorizedAccount = await this.providerAdapter.probe(definition, provider, payload.access_token, existing?.baseUrl ?? null);
+      this.oauthLog('PROVIDER_PROBE_SUCCESS', { provider, connectionId: existing?.id ?? row.connectionId, orgId: row.orgId, userId: row.userId });
     } catch (error) {
       const message = error instanceof Error ? error.message.slice(0, 500) : 'Provider authorization probe failed';
+      this.oauthLog('PROVIDER_PROBE_FAILED', { provider, connectionId: existing?.id ?? row.connectionId, orgId: row.orgId, userId: row.userId, error: safeOAuthErrorCode(message) });
       if (existing) await this.prisma.connection.update({ where: { id: existing.id }, data: { status: ConnectionStatus.REAUTH_REQUIRED, errorCode: 'PROVIDER_PROBE_FAILED', errorMessage: message } }).catch(() => undefined);
       throw new BadRequestException(`OAuth authorization succeeded but provider verification failed: ${message}`);
     }
@@ -800,9 +822,16 @@ export class ConnectionsService {
     };
     const accessToken = this.crypto.encrypt(payload.access_token);
     const newRefreshToken = typeof payload.refresh_token === 'string' ? this.crypto.encrypt(payload.refresh_token) : undefined;
-    const connection = existing
-      ? await this.prisma.connection.update({ where: { id: existing.id }, data: { status: ConnectionStatus.ACTIVE, metadata: metadata as Prisma.InputJsonValue, expiresAt, ...(providerPayloadBaseUrl ? { baseUrl: providerPayloadBaseUrl } : {}), scope: typeof payload.scope === 'string' ? payload.scope.slice(0, 4000) : existing.scope, errorCode: null, errorMessage: null, secret: { upsert: { create: { id: randomUUID(), ownerId: row.userId, accessToken, ...(newRefreshToken ? { refreshToken: newRefreshToken } : {}) }, update: { accessToken, ...(newRefreshToken ? { refreshToken: newRefreshToken } : {}) } } } } })
-      : await this.prisma.connection.create({ data: { id: randomUUID(), orgId: row.orgId, ownerId: row.userId, name, linkName: await this.uniqueLinkName(row.orgId, `${provider}_${name}`), connectionType: ConnectionType.USER, provider, authType: ConnectionAuthType.OAUTH2, visibility: ConnectionVisibility.PRIVATE, status: ConnectionStatus.ACTIVE, metadata: metadata as Prisma.InputJsonValue, expiresAt, ...(providerPayloadBaseUrl ? { baseUrl: providerPayloadBaseUrl } : {}), scope: typeof payload.scope === 'string' ? payload.scope.slice(0, 4000) : null, secret: { create: { id: randomUUID(), ownerId: row.userId, accessToken, ...(newRefreshToken ? { refreshToken: newRefreshToken } : {}) } } } });
+    let connection: { id: string };
+    try {
+      connection = existing
+        ? await this.prisma.connection.update({ where: { id: existing.id }, data: { status: ConnectionStatus.ACTIVE, metadata: metadata as Prisma.InputJsonValue, expiresAt, ...(providerPayloadBaseUrl ? { baseUrl: providerPayloadBaseUrl } : {}), scope: typeof payload.scope === 'string' ? payload.scope.slice(0, 4000) : existing.scope, errorCode: null, errorMessage: null, secret: { upsert: { create: { id: randomUUID(), ownerId: row.userId, accessToken, ...(newRefreshToken ? { refreshToken: newRefreshToken } : {}) }, update: { accessToken, ...(newRefreshToken ? { refreshToken: newRefreshToken } : {}) } } } } })
+        : await this.prisma.connection.create({ data: { id: randomUUID(), orgId: row.orgId, ownerId: row.userId, name, linkName: await this.uniqueLinkName(row.orgId, `${provider}_${name}`), connectionType: ConnectionType.USER, provider, authType: ConnectionAuthType.OAUTH2, visibility: ConnectionVisibility.PRIVATE, status: ConnectionStatus.ACTIVE, metadata: metadata as Prisma.InputJsonValue, expiresAt, ...(providerPayloadBaseUrl ? { baseUrl: providerPayloadBaseUrl } : {}), scope: typeof payload.scope === 'string' ? payload.scope.slice(0, 4000) : null, secret: { create: { id: randomUUID(), ownerId: row.userId, accessToken, ...(newRefreshToken ? { refreshToken: newRefreshToken } : {}) } } } });
+    } catch (error) {
+      this.oauthLog('DATABASE_UPDATE_FAILED', { provider, connectionId: existing?.id ?? row.connectionId, orgId: row.orgId, userId: row.userId, error: safeOAuthErrorCode(error instanceof Error ? error.message : 'database') });
+      throw error;
+    }
+    this.oauthLog('CONNECTION_ACTIVATED', { provider, connectionId: connection.id, orgId: row.orgId, userId: row.userId, status: ConnectionStatus.ACTIVE });
     const oauthSecret = await this.prisma.connectionSecret.findUnique({ where: { connectionId: connection.id } });
     if (oauthSecret) {
       const version = await this.nextSecretVersion(connection.id);
@@ -811,11 +840,13 @@ export class ConnectionsService {
       await this.prisma.connectionSecret.update({ where: { connectionId: connection.id }, data: { keyVersion: version } });
     }
     await this.prisma.auditLog.create({ data: { id: randomUUID(), orgId: row.orgId, actorId: row.userId, action: 'connection.reconnected', resourceType: 'CONNECTION', resourceId: connection.id, metadata: { provider, oauth: true } as Prisma.InputJsonValue } }).catch(() => undefined);
-    return { connectionId: connection.id, frontend: this.frontendUrl(), folderId: row.folderId, returnPath: row.returnPath, orgId: row.orgId, userId: row.userId };
+    const frontend = this.frontendUrl();
+    this.oauthLog('REDIRECT', { provider, connectionId: connection.id, orgId: row.orgId, userId: row.userId, status: ConnectionStatus.ACTIVE, targetOrigin: safeOrigin(frontend) });
+    return { connectionId: connection.id, frontend, folderId: row.folderId, returnPath: row.returnPath, orgId: row.orgId, userId: row.userId };
   }
 
   async handleOAuthCallbackError(provider: OAuthProvider, state?: string, error?: string, description?: string) {
-    let frontend = this.frontendUrl();
+    const frontend = this.frontendUrl();
     if (state) {
       const row = await this.prisma.connectionOAuthState.findFirst({ where: { stateHash: this.hash(state), provider }, select: { id: true, usedAt: true, connectionId: true, returnPath: true } });
       if (row && !row.usedAt) {
@@ -823,12 +854,18 @@ export class ConnectionsService {
       }
       if (row?.connectionId) {
         const current = await this.prisma.connection.findUnique({ where: { id: row.connectionId }, select: { status: true } }).catch(() => null);
+        if (oauthFailurePreservesActive(current?.status)) {
+          this.oauthLog('REDIRECT', { provider, connectionId: row.connectionId, status: ConnectionStatus.ACTIVE, targetOrigin: safeOrigin(frontend) });
+          return { frontend, error: error || 'oauth_cancelled', description: description || 'OAuth authorization was cancelled.', returnPath: row.returnPath ?? null, alreadyActive: true, connectionId: row.connectionId };
+        }
         const nextStatus = current?.status === ConnectionStatus.PENDING_AUTH ? ConnectionStatus.PENDING_AUTH : ConnectionStatus.REAUTH_REQUIRED;
         await this.prisma.connection.update({ where: { id: row.connectionId }, data: { status: nextStatus, errorCode: error || 'OAUTH_CANCELLED', errorMessage: (description || 'OAuth authorization was cancelled.').slice(0, 500) } }).catch(() => undefined);
       }
-      return { frontend, error: error || 'oauth_cancelled', description: description || 'OAuth authorization was cancelled.', returnPath: row?.returnPath ?? null };
+      this.oauthLog('REDIRECT_FAILED', { provider, connectionId: row?.connectionId, error: safeOAuthErrorCode(error || description || 'oauth_cancelled'), targetOrigin: safeOrigin(frontend) });
+      return { frontend, error: error || 'oauth_cancelled', description: description || 'OAuth authorization was cancelled.', returnPath: row?.returnPath ?? null, alreadyActive: false, connectionId: row?.connectionId ?? null };
     }
-    return { frontend, error: error || 'oauth_cancelled', description: description || 'OAuth authorization was cancelled.', returnPath: null };
+    this.oauthLog('REDIRECT_FAILED', { provider, error: safeOAuthErrorCode(error || description || 'oauth_cancelled'), targetOrigin: safeOrigin(frontend) });
+    return { frontend, error: error || 'oauth_cancelled', description: description || 'OAuth authorization was cancelled.', returnPath: null, alreadyActive: false, connectionId: null };
   }
 
   async reconnect(user: AccessTokenPayload, id: string) {
@@ -1050,25 +1087,11 @@ export class ConnectionsService {
    * never PUBLIC_API_URL.
    */
   private frontendUrl() {
-    const configured = this.config.get<string>('FRONTEND_URL')?.trim();
-    const fallback = process.env.NODE_ENV === 'production'
-      ? 'https://imkan-work-drive-v1.vercel.app'
-      : 'http://localhost:3000';
-    const apiUrl = this.config.get<string>('PUBLIC_API_URL')?.trim();
-    let value = configured || fallback;
+    return resolveOAuthFrontendOrigin(this.config.get<string>('FRONTEND_URL'), this.config.get<string>('PUBLIC_API_URL'), process.env.NODE_ENV);
+  }
 
-    // A common deployment mistake is setting FRONTEND_URL to the Render API.
-    // OAuth callbacks must never redirect there: the IMKAN browser session is
-    // owned by the Vercel origin.  Recover safely to the production frontend.
-    try {
-      if (configured && apiUrl && new URL(configured).origin === new URL(apiUrl).origin) {
-        value = fallback;
-      }
-    } catch {
-      value = fallback;
-    }
-
-    return value.replace(/\/$/, '');
+  browserReturnUrl(frontend: string, pathAndQuery: string) {
+    return buildOAuthBrowserUrl(frontend, pathAndQuery);
   }
   private hash(value: string) { return createHash('sha256').update(value).digest('hex'); }
   private normalizeOAuthReturnPath(value: string | null | undefined) {

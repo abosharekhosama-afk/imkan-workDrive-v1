@@ -114,7 +114,7 @@ export default function ConnectionsPage(){
   const reload=async()=>{try{setConnections(await listConnections());}catch(e){setError(e instanceof Error?e.message:"Unable to load connections")}};
   const reloadProviders=async()=>{try{setProviders(await listConnectionProviders())}catch{}}
   const reloadCustom=async()=>{try{setCustomServices(await listCustomConnectionServices())}catch{}}
-  useEffect(()=>{try{const raw=localStorage.getItem("workdrive_user");if(raw){const u=JSON.parse(raw);setIsAdmin(u?.role==="ADMIN"||u?.role==="SUPER_ADMIN")}}catch{} void reloadProviders(); void reloadCustom(); void reload();},[]);
+  useEffect(()=>{try{const raw=localStorage.getItem("workdrive_user");if(raw){const u=JSON.parse(raw);setIsAdmin(u?.role==="ADMIN"||u?.role==="SUPER_ADMIN")}}catch{} void reloadProviders(); void reloadCustom(); void reload(); const params=new URLSearchParams(window.location.search); const oauth=params.get("oauth"); if(!oauth)return; const provider=params.get("provider")??"provider"; if(oauth==="success")setMessage(`${provider} connection is active.`); else setError(params.get("message")||`${provider} authorization was not completed.`);},[]);
   useEffect(()=>{if(isAdmin)void listAdminConnectionProviderConfigs().then(setAdminConfigs).catch(e=>setError(e instanceof Error?e.message:"Admin access required"));},[isAdmin]);
 
   const providerMap=useMemo(()=>new Map(providers.map(p=>[p.key,p])),[providers]);

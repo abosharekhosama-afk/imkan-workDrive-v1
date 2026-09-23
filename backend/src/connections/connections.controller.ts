@@ -1,12 +1,14 @@
-import { Body, Controller, Delete, Get, Param, Patch, Post, Put, Query, Res } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Logger, Param, Patch, Post, Put, Query, Res } from '@nestjs/common';
 import type { Response } from 'express';
 import { Public } from '../auth/public.decorator';
 import { CurrentUser } from '../auth/current-user.decorator';
 import type { AccessTokenPayload } from '../auth/jwt.types';
 import { ConnectionsService } from './connections.service';
+import { safeOAuthErrorCode, safeOrigin } from './oauth-flow';
 
 @Controller('connections')
 export class ConnectionsController {
+  private readonly logger = new Logger(ConnectionsController.name);
   constructor(private readonly service: ConnectionsService) {}
   @Get('providers') providers(@CurrentUser() user: AccessTokenPayload) { return this.service.providers(user); }
   @Get('admin/providers') adminProviderConfigs(@CurrentUser() user: AccessTokenPayload) { return this.service.adminProviderConfigs(user); }
@@ -23,23 +25,40 @@ export class ConnectionsController {
   @Public() @Get('oauth/:provider/callback') async oauthCallback(@Param('provider') provider: string, @Res() response: Response, @Query('code') code?: string, @Query('state') state?: string, @Query('error') error?: string, @Query('error_description') errorDescription?: string) {
     if (error || !code || !state) {
       const result = await this.service.handleOAuthCallbackError(provider as any, state, error, errorDescription);
+      if (result.alreadyActive && result.connectionId) {
+        this.redirectOAuth(response, provider, result, 'success', result.connectionId);
+        return;
+      }
       const returnPath = result.returnPath || '/files/connections';
       const separator = returnPath.includes('?') ? '&' : '?';
-      const target = `${returnPath}${separator}oauth=${encodeURIComponent(error || 'cancelled')}&provider=${encodeURIComponent(provider)}${errorDescription ? `&message=${encodeURIComponent(errorDescription)}` : ''}`;
-      response.redirect(`${result.frontend}${target}`);
+      const target = `${returnPath}${separator}oauth=${encodeURIComponent(error || 'cancelled')}&provider=${encodeURIComponent(provider)}${errorDescription ? `&message=${encodeURIComponent(errorDescription.slice(0, 180))}` : ''}`;
+      response.redirect(this.service.browserReturnUrl(result.frontend, target));
       return;
     }
     try {
       const result = await this.service.completeOAuth(provider as any, code, state);
-      const target = result.folderId ? `/files?cloudImport=${encodeURIComponent(provider === "microsoft" ? "onedrive" : provider)}&folderId=${encodeURIComponent(result.folderId)}` : `${result.returnPath || '/files/connections'}${(result.returnPath || '/files/connections').includes('?') ? '&' : '?'}oauth=success&provider=${encodeURIComponent(provider)}&connectionId=${encodeURIComponent(result.connectionId)}`;
-      response.redirect(`${result.frontend}${target}`);
+      this.redirectOAuth(response, provider, result, 'success', result.connectionId);
     } catch (error) {
       const message = error instanceof Error ? error.message : 'OAuth authorization failed';
       const result = await this.service.handleOAuthCallbackError(provider as any, state, 'oauth_failed', message);
+      if (result.alreadyActive && result.connectionId) {
+        this.redirectOAuth(response, provider, result, 'success', result.connectionId);
+        return;
+      }
       const returnPath = result.returnPath || '/files/connections';
       const separator = returnPath.includes('?') ? '&' : '?';
-      response.redirect(`${result.frontend}${returnPath}${separator}oauth=oauth_failed&provider=${encodeURIComponent(provider)}&message=${encodeURIComponent(message.slice(0, 300))}`);
+      this.logger.log(`[OAuth] REDIRECT_FAILED provider=${provider} error=${safeOAuthErrorCode(message)} targetOrigin=${safeOrigin(result.frontend)}`);
+      response.redirect(this.service.browserReturnUrl(result.frontend, `${returnPath}${separator}oauth=oauth_failed&provider=${encodeURIComponent(provider)}&message=${encodeURIComponent(message.slice(0, 180))}`));
     }
+  }
+
+  private redirectOAuth(response: Response, provider: string, result: { frontend: string; folderId?: string | null; returnPath?: string | null }, outcome: 'success', connectionId: string) {
+    const target = result.folderId
+      ? `/files?cloudImport=${encodeURIComponent(provider === 'microsoft' ? 'onedrive' : provider)}&folderId=${encodeURIComponent(result.folderId)}&oauth=success&connectionId=${encodeURIComponent(connectionId)}`
+      : `${result.returnPath || '/files/connections'}${(result.returnPath || '/files/connections').includes('?') ? '&' : '?'}oauth=${outcome}&provider=${encodeURIComponent(provider)}&connectionId=${encodeURIComponent(connectionId)}`;
+    const location = this.service.browserReturnUrl(result.frontend, target);
+    this.logger.log(`[OAuth] REDIRECT provider=${provider} connectionId=${connectionId} status=ACTIVE targetOrigin=${safeOrigin(result.frontend)}`);
+    response.redirect(location);
   }
   @Get() list(@CurrentUser() user: AccessTokenPayload, @Query('provider') provider?: string, @Query('status') status?: string, @Query('search') search?: string) { return this.service.list(user, { provider, status, search }); }
   @Get(':id/references') references(@CurrentUser() user: AccessTokenPayload, @Param('id') id: string) { return this.service.references(user, id); }

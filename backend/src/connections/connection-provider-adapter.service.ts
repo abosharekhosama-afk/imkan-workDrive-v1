@@ -1,5 +1,6 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
 import type { ConnectionProviderDefinition } from './provider-registry.service';
+import { probeTargets } from './oauth-flow';
 
 export type OAuthClientConfig = {
   clientId: string;
@@ -60,17 +61,28 @@ export class ConnectionProviderAdapterService {
   }
 
   async probe(definition: ConnectionProviderDefinition, provider: string, token: string, baseUrl?: string | null): Promise<AuthorizedAccount | null> {
-    const url = definition.probeUrl ?? baseUrl;
-    if (!url) return null;
-    const response = await fetch(url, {
-      headers: { authorization: `Bearer ${token}`, accept: 'application/json' },
-      redirect: 'error',
-      signal: AbortSignal.timeout(15000),
-    });
-    const payload = await this.readPayload(response);
-    if (!response.ok) throw new Error(this.providerError(payload, `Provider returned HTTP ${response.status}`));
-    if (payload?.ok === false) throw new Error(this.providerError(payload, 'Provider rejected the OAuth access token'));
-    return this.extractAccount(provider, payload);
+    const targets = probeTargets(provider, definition.probeUrl ?? baseUrl);
+    if (!targets.length) return null;
+    let lastError = 'Provider verification failed';
+    for (const target of targets) {
+      const response = await fetch(target.url, {
+        method: target.method,
+        headers: {
+          authorization: `Bearer ${token}`,
+          accept: 'application/json',
+          'user-agent': 'IMKAN-WorkDrive',
+        },
+        redirect: 'error',
+        signal: AbortSignal.timeout(15000),
+      });
+      const payload = await this.readPayload(response);
+      if (response.ok && payload?.ok !== false) return this.extractAccount(provider, payload);
+      lastError = this.providerError(payload, `Provider returned HTTP ${response.status}`);
+      // 401/403 means this endpoint rejected the token or the granted scopes.
+      // Try the next identity endpoint before failing activation.
+      if (response.status !== 401 && response.status !== 403) break;
+    }
+    throw new Error(lastError);
   }
 
   private extractAccount(provider: string, payload: any): AuthorizedAccount | null {
@@ -143,11 +155,24 @@ export class ConnectionProviderAdapterService {
 
   private async readPayload(response: Response): Promise<any> {
     const text = await response.text();
-    try { return JSON.parse(text); } catch { return { raw: text.slice(0, 1000) }; }
+    const trimmed = text.trim();
+    if (!trimmed) return {};
+    if (trimmed.startsWith('{') || trimmed.startsWith('[')) {
+      try { return JSON.parse(trimmed); } catch { return { error: 'invalid_provider_response' }; }
+    }
+    if (trimmed.includes('=')) {
+      const params = new URLSearchParams(trimmed);
+      const parsed: Record<string, string> = {};
+      for (const [key, value] of params.entries()) parsed[key] = value;
+      if (parsed.access_token || parsed.error || parsed.error_description) return parsed;
+    }
+    return { error: 'invalid_provider_response' };
   }
 
   private providerError(payload: any, fallback: string) {
     const detail = payload?.error_description ?? payload?.message ?? payload?.error;
-    return typeof detail === 'string' && detail.length <= 500 ? `${fallback}: ${detail}` : fallback;
+    if (typeof detail !== 'string' || detail.length > 300) return fallback;
+    if (/access_token|refresh_token|client_secret|code_verifier/i.test(detail)) return fallback;
+    return `${fallback}: ${detail}`;
   }
 }
