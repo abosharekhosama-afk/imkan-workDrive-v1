@@ -14,8 +14,12 @@ import { autoFitColumnWidth } from '@/office/sheet/dimension-logic';
 import { SheetGrid } from '@/office/sheet/sheet-grid';
 import type { CellFormat, NumberFormat } from '@/office/sheet/model';
 import { isPrintableInputKey, moveAfterEnter, moveAfterTab, moveCell, rangeBounds } from '@/office/sheet/selection-logic';
-import { OfficeContextMenu } from '@/office/shared/floating';
+import { OfficeContextMenu, OfficeFindReplace } from '@/office/shared/floating';
 import { ZohoSheetChrome } from '@/components/zoho-sheet-chrome';
+import { findNextCell, findPreviousCell, replaceCellText, sheetCellKeys, autoSumRange, type FindScope } from '@/office/sheet/find-replace-logic';
+import { navigateSelection } from '@/office/sheet/navigation-logic';
+import { SheetChartOverlay } from '@/office/sheet/sheet-chart-overlay';
+import type { SheetRibbonTab } from '@/office/sheet/sheet-ribbon';
 import { addFileComment } from '@/lib/api/comments';
 import { OfficeShell } from '@/components/office-shell';
 import { OfficeMobile } from '@/components/office-mobile';
@@ -39,7 +43,10 @@ export default function SheetPage() {
   const [revision, setRevision] = useState(0);
   const [selected, setSelected] = useState('A1');
   const [anchor, setAnchor] = useState('A1');
-  const [sheetTab, setSheetTab] = useState<'home'|'insert'|'data'|'view'>('home');
+  const [sheetTab, setSheetTab] = useState<SheetRibbonTab>('home');
+  const [findOpen, setFindOpen] = useState(false);
+  const [findMode, setFindMode] = useState<'find' | 'replace'>('find');
+  const [selectedChartId, setSelectedChartId] = useState<string | null>(null);
   const [fontFamily, setFontFamily] = useState('Roboto');
   const [fontSize, setFontSize] = useState(10);
   const [numberFormat, setNumberFormat] = useState<NumberFormat>('general');
@@ -136,21 +143,48 @@ export default function SheetPage() {
     }
   };
 
-  const findCell = () => {
-    const q = window.prompt(t('Find in sheet', 'البحث في الورقة'), '');
-    if (!q) return;
-    const needle = q.toLowerCase();
-    const active = activeSheet(ref.current || doc!);
-    const hit = Object.entries(active?.cells ?? {}).find(([, c]) =>
-      String(c.formula ?? c.value ?? '').toLowerCase().includes(needle)
-    );
-    if (hit) {
-      setAnchor(hit[0]);
-      setSelected(hit[0]);
-      setError('');
-    } else {
-      setError(t(`"${q}" was not found in this sheet.`, `لم يتم العثور على "${q}" في هذه الورقة.`));
+  const openFind = (mode: 'find' | 'replace') => { setFindMode(mode); setFindOpen(true); };
+
+  const handleFindNext = (query: string, scope: FindScope, caseSensitive: boolean) => {
+    const w = ref.current;
+    const s = w ? activeSheet(w) : undefined;
+    if (!w || !s) return;
+    const hit = findNextCell(s, w, query, selected, ROWS, COLS, scope, caseSensitive);
+    if (hit) { setAnchor(hit); setSelected(hit); setError(''); }
+    else setError(t(`"${query}" was not found in this sheet.`, `لم يتم العثور على "${query}" في هذه الورقة.`));
+  };
+
+  const handleFindPrevious = (query: string, scope: FindScope, caseSensitive: boolean) => {
+    const w = ref.current;
+    const s = w ? activeSheet(w) : undefined;
+    if (!w || !s) return;
+    const hit = findPreviousCell(s, w, query, selected, ROWS, COLS, scope, caseSensitive);
+    if (hit) { setAnchor(hit); setSelected(hit); setError(''); }
+    else setError(t(`"${query}" was not found in this sheet.`, `لم يتم العثور على "${query}" في هذه الورقة.`));
+  };
+
+  const handleReplace = (find: string, replace: string, scope: FindScope, caseSensitive: boolean) => {
+    const w = ref.current;
+    const s = w ? activeSheet(w) : undefined;
+    if (!w || !s) return;
+    const next = replaceCellText(s, w, selected, find, replace, scope, caseSensitive);
+    if (!next) { handleFindNext(find, scope, caseSensitive); return; }
+    const p = parseKey(selected)!;
+    commit(updateCell(w, p.row, p.col, next.formula ? '' : next.value, next.formula), true);
+    handleFindNext(find, scope, caseSensitive);
+  };
+
+  const handleReplaceAll = (find: string, replace: string, scope: FindScope, caseSensitive: boolean) => {
+    if (!doc) return;
+    let w = cloneWorkbook(doc);
+    for (const key of sheetCellKeys(ROWS, COLS)) {
+      const active = activeSheet(w)!;
+      const next = replaceCellText(active, w, key, find, replace, scope, caseSensitive);
+      if (!next) continue;
+      const p = parseKey(key)!;
+      w = updateCell(w, p.row, p.col, next.formula ? '' : next.value, next.formula);
     }
+    commit(w, true);
   };
 
   const insertTemplateField = (placeholder: string) => {
@@ -182,6 +216,16 @@ export default function SheetPage() {
   const bounds = rangeBounds(anchor, selected);
   const display = formulaDisplay(cell, sheet, doc);
   const selectedCell = sheet.cells[selected];
+  const autoSum = () => begin(selected, autoSumRange(bounds.start, bounds.end));
+  const sortAsc = () => commit(sortSheet(doc, selected.replace(/\d+$/, ''), 'asc'), true);
+  const sortDesc = () => commit(sortSheet(doc, selected.replace(/\d+$/, ''), 'desc'), true);
+  const adjustDecimals = (delta: number) => {
+    const base = selectedCell?.format?.decimals ?? 2;
+    commit(patchRangeFormat(doc, bounds.start, bounds.end, { decimals: Math.max(0, Math.min(10, base + delta)) }), true);
+  };
+  const addChartOfType = (type: 'column' | 'bar' | 'line' | 'pie' | 'area' | 'scatter') => {
+    commit(addChart(doc, type, bounds.start, bounds.end, `${type.charAt(0).toUpperCase()}${type.slice(1)} Chart`), true);
+  };
   const formatCell = (key: string): React.CSSProperties => {
     const f = sheet.cells[key]?.format ?? {};
     let conditional: Partial<CellFormat> = {};
@@ -324,6 +368,8 @@ export default function SheetPage() {
     if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'x') { e.preventDefault(); void cut(); return; }
     if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'v') { e.preventDefault(); void paste(); return; }
     if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'd') { e.preventDefault(); fillDown(); return; }
+    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'f') { e.preventDefault(); openFind('find'); return; }
+    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'h') { e.preventDefault(); openFind('replace'); return; }
     if (e.key === 'F2') { e.preventDefault(); begin(selected); return; }
     if (editing) {
       if (e.key === 'Escape') { e.preventDefault(); cancelEdit(); return; }
@@ -332,6 +378,20 @@ export default function SheetPage() {
       return;
     }
     if (e.key === 'Delete' || e.key === 'Backspace') { e.preventDefault(); clearSelected(); return; }
+    if (e.key === 'Home' || e.key === 'End' || e.key === 'PageUp' || e.key === 'PageDown') {
+      e.preventDefault();
+      const action = e.key === 'Home'
+        ? (e.ctrlKey || e.metaKey ? 'ctrl-home' : 'home')
+        : e.key === 'End'
+          ? (e.ctrlKey || e.metaKey ? 'ctrl-end' : 'end')
+          : e.key === 'PageUp'
+            ? 'page-up'
+            : 'page-down';
+      const next = navigateSelection(selected, action, ROWS - 1, COLS - 1);
+      if (!e.shiftKey) setAnchor(next);
+      setSelected(next);
+      return;
+    }
     if (isPrintableInputKey(e.key) && !e.ctrlKey && !e.metaKey && !e.altKey) { e.preventDefault(); begin(selected, e.key); return; }
     if (e.key === 'Enter') { e.preventDefault(); begin(selected); return; }
     const delta = e.key === 'ArrowDown' ? [1, 0] : e.key === 'ArrowUp' ? [-1, 0] : e.key === 'ArrowRight' ? [0, 1] : e.key === 'ArrowLeft' ? [0, -1] : null;
@@ -358,11 +418,11 @@ export default function SheetPage() {
 
   return <div id="office-main" dir={ar?'rtl':'ltr'} className="flex h-dvh flex-col overflow-hidden bg-slate-100 text-slate-800">
     <OfficeShell type="SHEET" fileId={fileId} title={doc.title} revision={revision} saved={saved} saving={saving} ar={ar} presence={<OfficePresenceView items={presence} ar={ar}/>}/>
-    <ZohoSheetChrome title={doc.title} selected={selected} formulaValue={input} display={display} editing={editing} saved={saved} saving={saving} gridlines={gridlines} canUndo={!!history.length} canRedo={!!future.length} fontFamily={fontFamily} fontSize={fontSize} numberFormat={numberFormat} verticalAlign={verticalAlign} wrap={wrap} paintActive={!!paintFormatActive} onFontFamily={applyFontFamily} onFontSize={applyFontSize} onNumberFormat={applyNumberFormat} onVerticalAlign={applyVerticalAlign} onWrap={applyWrap} onFormulaChange={setInput} onFormulaCommit={(move)=>{if(move==='cancel'){cancelEdit();return;}if(editing)finish(move);else begin(selected);}} onBeginEdit={()=>begin(selected)} onUndo={undo} onRedo={redo} onSave={saveNow} onPrint={()=>window.print()} onExport={exportXlsx} onFind={findCell} onCopy={()=>void copy()} onCut={()=>void cut()} onPaste={()=>void paste()} onClear={clearSelected} onPaint={paintFormat} onBorder={addBorder} onBold={()=>commit(patchRangeFormat(doc,bounds.start,bounds.end,{bold:!selectedCell?.format?.bold}))} onItalic={()=>commit(patchRangeFormat(doc,bounds.start,bounds.end,{italic:!selectedCell?.format?.italic}))} onUnderline={()=>commit(patchRangeFormat(doc,bounds.start,bounds.end,{underline:!selectedCell?.format?.underline}))} onStrike={()=>commit(patchRangeFormat(doc,bounds.start,bounds.end,{strike:!selectedCell?.format?.strike}))} onColor={v=>commit(patchRangeFormat(doc,bounds.start,bounds.end,{color:v}))} onBg={v=>commit(patchRangeFormat(doc,bounds.start,bounds.end,{background:v}))} onAlign={v=>commit(patchRangeFormat(doc,bounds.start,bounds.end,{align:v}))} onMerge={()=>commit(mergeRange(doc,bounds.start,bounds.end),true)} onSort={()=>commit(sortSheet(doc,selected.replace(/\d+$/,''),'asc'),true)} onFilter={()=>{const col=selected.replace(/\d+$/,'');const q=window.prompt(t('Filter value (empty clears)','قيمة التصفية (فارغة للإلغاء)'),sheet.filters?.[col]??'');commit(q?setFilter(doc,col,q):clearFilter(doc,col),true);}} onValidation={()=>{const raw=window.prompt(t('Validation list values separated by commas, or empty to remove','قيم القائمة مفصولة بفواصل، أو فارغ للحذف'),(selectedCell?.validation?.values??[]).join(','));commit(raw?setValidation(doc,selected,{type:'list',values:raw.split(',').map(x=>x.trim()).filter(Boolean).slice(0,50)}):setValidation(doc,selected,undefined),true);}} onConditional={addConditional} onNamedRange={addNewNamedRange} onTable={addNewTable} onPivot={addNewPivot} onChart={addNewChart} onAddSheet={()=>commit(addSheet(doc),true)} onDeleteSheet={()=>commit(deleteActiveSheet(doc),true)} onRename={()=>{const n=window.prompt(t('Sheet name','اسم الورقة'),sheet.name);if(n)commit(renameSheet(doc,n),true);}} onFreeze={()=>commit(toggleFreeze(doc,1,1),true)} onGridlines={()=>setGridlines(v=>!v)} onInsertRows={()=>{const p=parseKey(selected)!;commit(insertRows(doc,p.row,1),true)}} onDeleteRows={()=>{const p=parseKey(selected)!;commit(deleteRows(doc,p.row,1),true)}} onInsertColumns={()=>{const p=parseKey(selected)!;commit(insertColumns(doc,p.col,1),true)}} onDeleteColumns={()=>{const p=parseKey(selected)!;commit(deleteColumns(doc,p.col,1),true)}} onHideRow={()=>{const p=parseKey(selected)!;commit(hideRows(doc,p.row,p.row),true)}} onHideColumn={()=>{const p=parseKey(selected)!;commit(hideColumns(doc,colNameFor(parseKey(selected)!.col)),true)}} onUnhideRows={()=>commit(unhideRows(doc),true)} onUnhideColumns={()=>commit(unhideColumns(doc),true)} onAddComment={()=>void addComment()} onHelp={()=>window.alert(t('IMKAN Sheet\nZoho-style spreadsheet workspace with editing, formulas, tables, pivots, charts, filters, validation, freeze panes, collaboration and XLSX export.','IMKAN Sheet\nواجهة جداول بيانات بأسلوب Zoho مع التحرير والصيغ والجداول والجداول المحورية والرسوم والمرشحات والتحقق والتجميد والتعاون وتصدير XLSX.'))} onInsertFunction={insertFunction}/>
+    <ZohoSheetChrome title={doc.title} selected={selected} formulaValue={input} display={display} editing={editing} saved={saved} saving={saving} gridlines={gridlines} canUndo={!!history.length} canRedo={!!future.length} fontFamily={fontFamily} fontSize={fontSize} numberFormat={numberFormat} verticalAlign={verticalAlign} wrap={wrap} paintActive={!!paintFormatActive} cellFormat={selectedCell?.format} ribbonTab={sheetTab} onRibbonTabChange={setSheetTab} onFindReplace={openFind} onAutoSum={autoSum} onSortAsc={sortAsc} onSortDesc={sortDesc} onDecimalIncrease={() => adjustDecimals(1)} onDecimalDecrease={() => adjustDecimals(-1)} onUnmerge={() => commit(unmergeRange(doc, bounds.start, bounds.end), true)} onFillDown={fillDown} onChartType={addChartOfType} onFreezeTopRow={() => commit(freeze(doc, 1, 0), true)} onFreezeFirstColumn={() => commit(freeze(doc, 0, 1), true)} onAutoFitColumn={() => { const p = parseKey(selected)!; onAutoFitColumn(p.col); }} onFontFamily={applyFontFamily} onFontSize={applyFontSize} onNumberFormat={applyNumberFormat} onVerticalAlign={applyVerticalAlign} onWrap={applyWrap} onFormulaChange={setInput} onFormulaCommit={(move)=>{if(move==='cancel'){cancelEdit();return;}if(editing)finish(move);else begin(selected);}} onBeginEdit={()=>begin(selected)} onUndo={undo} onRedo={redo} onSave={saveNow} onPrint={()=>window.print()} onExport={exportXlsx} onFind={() => openFind('find')} onCopy={()=>void copy()} onCut={()=>void cut()} onPaste={()=>void paste()} onClear={clearSelected} onPaint={paintFormat} onBorder={addBorder} onBold={()=>commit(patchRangeFormat(doc,bounds.start,bounds.end,{bold:!selectedCell?.format?.bold}))} onItalic={()=>commit(patchRangeFormat(doc,bounds.start,bounds.end,{italic:!selectedCell?.format?.italic}))} onUnderline={()=>commit(patchRangeFormat(doc,bounds.start,bounds.end,{underline:!selectedCell?.format?.underline}))} onStrike={()=>commit(patchRangeFormat(doc,bounds.start,bounds.end,{strike:!selectedCell?.format?.strike}))} onColor={v=>commit(patchRangeFormat(doc,bounds.start,bounds.end,{color:v}))} onBg={v=>commit(patchRangeFormat(doc,bounds.start,bounds.end,{background:v}))} onAlign={v=>commit(patchRangeFormat(doc,bounds.start,bounds.end,{align:v}))} onMerge={()=>commit(mergeRange(doc,bounds.start,bounds.end),true)} onSort={()=>sortAsc()} onFilter={()=>{const col=selected.replace(/\d+$/,'');const q=window.prompt(t('Filter value (empty clears)','قيمة التصفية (فارغة للإلغاء)'),sheet.filters?.[col]??'');commit(q?setFilter(doc,col,q):clearFilter(doc,col),true);}} onValidation={()=>{const raw=window.prompt(t('Validation list values separated by commas, or empty to remove','قيم القائمة مفصولة بفواصل، أو فارغ للحذف'),(selectedCell?.validation?.values??[]).join(','));commit(raw?setValidation(doc,selected,{type:'list',values:raw.split(',').map(x=>x.trim()).filter(Boolean).slice(0,50)}):setValidation(doc,selected,undefined),true);}} onConditional={addConditional} onNamedRange={addNewNamedRange} onTable={addNewTable} onPivot={addNewPivot} onChart={addNewChart} onAddSheet={()=>commit(addSheet(doc),true)} onDeleteSheet={()=>commit(deleteActiveSheet(doc),true)} onRename={()=>{const n=window.prompt(t('Sheet name','اسم الورقة'),sheet.name);if(n)commit(renameSheet(doc,n),true);}} onFreeze={()=>commit(toggleFreeze(doc,1,1),true)} onGridlines={()=>setGridlines(v=>!v)} onInsertRows={()=>{const p=parseKey(selected)!;commit(insertRows(doc,p.row,1),true)}} onDeleteRows={()=>{const p=parseKey(selected)!;commit(deleteRows(doc,p.row,1),true)}} onInsertColumns={()=>{const p=parseKey(selected)!;commit(insertColumns(doc,p.col,1),true)}} onDeleteColumns={()=>{const p=parseKey(selected)!;commit(deleteColumns(doc,p.col,1),true)}} onHideRow={()=>{const p=parseKey(selected)!;commit(hideRows(doc,p.row,p.row),true)}} onHideColumn={()=>{const p=parseKey(selected)!;commit(hideColumns(doc,colNameFor(parseKey(selected)!.col)),true)}} onUnhideRows={()=>commit(unhideRows(doc),true)} onUnhideColumns={()=>commit(unhideColumns(doc),true)} onAddComment={()=>void addComment()} onHelp={()=>window.alert(t('IMKAN Sheet\nZoho-style spreadsheet workspace with editing, formulas, tables, pivots, charts, filters, validation, freeze panes, collaboration and XLSX export.','IMKAN Sheet\nواجهة جداول بيانات بأسلوب Zoho مع التحرير والصيغ والجداول والجداول المحورية والرسوم والمرشحات والتحقق والتجميد والتعاون وتصدير XLSX.'))} onInsertFunction={insertFunction}/>
     <OfficeTemplateFields templateId={templateId} ar={ar} onInsert={insertTemplateField} />
     <OfficeMobile type="SHEET" ar={ar} undo={undo} redo={redo} bold={()=>commit(patchFormat(doc,selected,{bold:!selectedCell?.format?.bold}))} italic={()=>commit(patchFormat(doc,selected,{italic:!selectedCell?.format?.italic}))} underline={()=>commit(patchFormat(doc,selected,{underline:!selectedCell?.format?.underline}))} selectedCell={selected} formulaValue={input} editingCell={editing} onFormulaChange={setInput} onFormulaCommit={(move)=>{if(move==='cancel'){cancelEdit();return;}if(editing)finish(move);else begin(selected);}} onBeginCellEdit={()=>begin(selected)} save={()=>persist(ref.current!)} />
     <div className="flex min-h-0 flex-1 flex-col">
-      <div ref={gridFocusRef} className="flex min-h-0 flex-1 flex-col outline-none" tabIndex={0} onKeyDown={gridKeyDown}>
+      <div ref={gridFocusRef} className="relative flex min-h-0 flex-1 flex-col outline-none" tabIndex={0} onKeyDown={gridKeyDown}>
         <SheetGrid
           sheet={sheet}
           workbook={doc}
@@ -384,6 +444,17 @@ export default function SheetPage() {
           onRowHeightChange={onRowHeightChange}
           onAutoFitColumn={onAutoFitColumn}
           formatCell={formatCell}
+          chartOverlay={(
+            <SheetChartOverlay
+              sheet={sheet}
+              workbook={doc}
+              charts={sheet.charts ?? []}
+              selectedChartId={selectedChartId}
+              onSelectChart={setSelectedChartId}
+              onMoveChart={() => {}}
+              onDeleteChart={(id) => commit(deleteChart(doc, id), true)}
+            />
+          )}
         />
       </div>
       <details className="shrink-0 border-t bg-white">
@@ -400,12 +471,27 @@ export default function SheetPage() {
         {contextItem(t('Paste','لصق'), () => void paste(), 'Ctrl+V')}
         {contextItem(t('Clear','مسح'), clearSelected)}
         <div className="my-1 h-px bg-[#e8eaed]" />
+        {contextItem(t('Merge','دمج'), () => commit(mergeRange(doc, bounds.start, bounds.end), true))}
+        {contextItem(t('Unmerge','إلغاء الدمج'), () => commit(unmergeRange(doc, bounds.start, bounds.end), true))}
+        {contextItem(t('Sort A→Z','ترتيب تصاعدي'), sortAsc)}
+        {contextItem(t('Sort Z→A','ترتيب تنازلي'), sortDesc)}
+        {contextItem(t('Filter…','تصفية…'), () => { const col = selected.replace(/\d+$/, ''); const q = window.prompt(t('Filter value (empty clears)', 'قيمة التصفية (فارغة للإلغاء)'), sheet.filters?.[col] ?? ''); commit(q ? setFilter(doc, col, q) : clearFilter(doc, col), true); })}
+        <div className="my-1 h-px bg-[#e8eaed]" />
         {contextItem(t('Insert Row','إدراج صف'), () => { const p = parseKey(contextMenu.key)!; commit(insertRows(doc, p.row, 1), true); })}
         {contextItem(t('Delete Row','حذف صف'), () => { const p = parseKey(contextMenu.key)!; commit(deleteRows(doc, p.row, 1), true); })}
         {contextItem(t('Insert Column','إدراج عمود'), () => { const p = parseKey(contextMenu.key)!; commit(insertColumns(doc, p.col, 1), true); })}
         {contextItem(t('Delete Column','حذف عمود'), () => { const p = parseKey(contextMenu.key)!; commit(deleteColumns(doc, p.col, 1), true); })}
       </OfficeContextMenu>
     ) : null}
+    <OfficeFindReplace
+      open={findOpen}
+      mode={findMode}
+      onClose={() => setFindOpen(false)}
+      onFindNext={handleFindNext}
+      onFindPrevious={handleFindPrevious}
+      onReplace={handleReplace}
+      onReplaceAll={handleReplaceAll}
+    />
     {error&&<div className="border-t bg-amber-50 px-4 py-1 text-xs text-amber-800">{error}</div>}
     {conflict&&<OfficeConflictDialog conflict={conflict} queuedCount={offlineQueueCount(fileId)} ar={ar} onKeepLocal={()=>void resolveConflict('local')} onUseRemote={()=>void resolveConflict('remote')} onDismiss={()=>setConflict(null)}/>}
   </div>;

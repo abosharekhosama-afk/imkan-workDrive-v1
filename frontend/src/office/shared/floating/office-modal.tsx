@@ -8,10 +8,11 @@ type OfficeModalProps = {
   open: boolean;
   onClose: () => void;
   title?: string;
+  panelClassName?: string;
   children: ReactNode;
 };
 
-export function OfficeModal({ open, onClose, title, children }: OfficeModalProps) {
+export function OfficeModal({ open, onClose, title, panelClassName, children }: OfficeModalProps) {
   const [mounted, setMounted] = useState(false);
   const previousFocus = useRef<HTMLElement | null>(null);
 
@@ -46,9 +47,9 @@ export function OfficeModal({ open, onClose, title, children }: OfficeModalProps
         if (event.target === event.currentTarget) onClose();
       }}
     >
-      <div role="dialog" aria-modal="true" aria-label={title} className="office-modal-panel max-h-[90vh] w-full max-w-lg overflow-auto rounded-lg border border-[#dadde0] bg-white shadow-[0_16px_48px_rgba(0,0,0,.22)]">
+      <div role="dialog" aria-modal="true" aria-label={title} className={`office-modal-panel max-h-[90vh] w-full overflow-auto rounded-lg border border-[#dadde0] bg-white shadow-[0_16px_48px_rgba(0,0,0,.22)] ${panelClassName ?? 'max-w-lg'}`}>
         {title ? <div className="border-b px-4 py-3 text-[15px] font-semibold text-[#202428]">{title}</div> : null}
-        <div className="p-4">{children}</div>
+        <div>{children}</div>
       </div>
     </div>,
     document.body,

@@ -1,9 +1,10 @@
 'use client';
 
-import { memo, useCallback, useEffect, useRef, useState, type CSSProperties, type MouseEvent as ReactMouseEvent } from 'react';
+import { memo, useCallback, useEffect, useRef, useState, type CSSProperties, type MouseEvent as ReactMouseEvent, type ReactNode } from 'react';
 import { cellKey, colName, formulaDisplay, parseKey, type Sheet, type Workbook } from './model';
 import { selectedKeys } from './selection-logic';
 import { clampColumnWidth, clampRowHeight, columnWidth, rowHeight } from './dimension-logic';
+import { stickyLeftForCol, stickyTopForRow } from './freeze-panes-logic';
 
 export type SheetGridProps = {
   sheet: Sheet;
@@ -26,6 +27,7 @@ export type SheetGridProps = {
   onRowHeightChange: (row: number, height: number) => void;
   onAutoFitColumn: (col: number) => void;
   formatCell: (key: string) => CSSProperties;
+  chartOverlay?: ReactNode;
 };
 
 function SheetGridInner({
@@ -49,6 +51,7 @@ function SheetGridInner({
   onRowHeightChange,
   onAutoFitColumn,
   formatCell,
+  chartOverlay,
 }: SheetGridProps) {
   const dragRef = useRef<{ active: boolean; anchor: string } | null>(null);
   const colResizeRef = useRef<{ col: number; startX: number; startWidth: number } | null>(null);
@@ -57,6 +60,23 @@ function SheetGridInner({
   const [previewRowHeights, setPreviewRowHeights] = useState<Record<number, number>>({});
   const selection = selectedKeys(anchor, focus);
   const isSelected = useCallback((key: string) => selection.includes(key), [selection]);
+  const frozenRows = sheet.frozenRows ?? 0;
+  const frozenCols = sheet.frozenColumns ?? 0;
+  const headerHeight = 32;
+  const rowHeaderWidth = 48;
+
+  const cellStickyStyle = (r: number, c: number): CSSProperties => {
+    const style: CSSProperties = {};
+    const frozenRow = r < frozenRows;
+    const frozenCol = c < frozenCols;
+    if (frozenRow || frozenCol) style.position = 'sticky';
+    if (frozenRow) style.top = stickyTopForRow(r, sheet, headerHeight);
+    if (frozenCol) style.left = stickyLeftForCol(c, sheet, rowHeaderWidth);
+    if (frozenRow && frozenCol) style.zIndex = 12;
+    else if (frozenRow || frozenCol) style.zIndex = 6;
+    if (frozenRow) style.background = style.background ?? '#fff';
+    return style;
+  };
 
   const visibleCols = Array.from({ length: cols }, (_, c) => c).filter(
     (c) => !(sheet.hiddenColumns ?? []).includes(colName(c)),
@@ -120,24 +140,32 @@ function SheetGridInner({
 
   return (
     <div className="sheet-grid h-full min-h-0 overflow-auto bg-white" onMouseUp={stopDrag} onMouseLeave={stopDrag}>
-      <div className="min-w-max">
+      <div className="relative min-w-max">
+        {chartOverlay}
         <div className="sticky top-0 z-20 flex">
           <button
             type="button"
             aria-label="Select all"
-            className="sticky left-0 z-30 h-8 w-12 shrink-0 border bg-slate-50 hover:bg-slate-200"
+            className="sticky left-0 z-40 h-8 w-12 shrink-0 border bg-slate-50 hover:bg-slate-200"
+            style={{ top: 0 }}
             onClick={() => onSelect(cellKey(0, 0), cellKey(rows - 1, cols - 1))}
           />
           <div className="flex">
             {visibleCols.map((c) => {
               const col = colName(c);
               const w = widthForCol(c);
+              const frozenCol = c < frozenCols;
               return (
                 <div key={c} className="relative shrink-0" style={{ width: w }}>
                   <button
                     type="button"
                     aria-label={`Select column ${col}`}
-                    style={{ width: w }}
+                    style={{
+                      width: w,
+                      position: 'sticky',
+                      top: 0,
+                      ...(frozenCol ? { left: stickyLeftForCol(c, sheet, rowHeaderWidth), zIndex: frozenCol ? 35 : 20 } : { zIndex: 20 }),
+                    }}
                     className={`flex h-8 w-full items-center justify-center ${gridlines ? 'border border-slate-200' : 'border-b border-transparent'} bg-[#f3f6fa] text-[11px] font-semibold text-slate-600 hover:bg-slate-200`}
                     onClick={() => onSelect(cellKey(0, c), cellKey(rows - 1, c))}
                     onDoubleClick={() => onAutoFitColumn(c)}
@@ -162,7 +190,15 @@ function SheetGridInner({
         </div>
         {visibleRows.map((r) => (
           <div className="flex" key={r}>
-            <div className="relative sticky left-0 z-10 shrink-0" style={{ height: heightForRow(r) }}>
+            <div
+              className="relative sticky shrink-0"
+              style={{
+                height: heightForRow(r),
+                left: 0,
+                zIndex: r < frozenRows ? 30 : 10,
+                ...(r < frozenRows ? { top: stickyTopForRow(r, sheet, headerHeight) } : {}),
+              }}
+            >
               <button
                 type="button"
                 aria-label={`Select row ${r + 1}`}
@@ -207,6 +243,7 @@ function SheetGridInner({
                   }}
                   style={{
                     ...formatCell(key),
+                    ...cellStickyStyle(r, c),
                     width: widthForCol(c),
                     height: heightForRow(r),
                     opacity: filtered ? 0.35 : 1,

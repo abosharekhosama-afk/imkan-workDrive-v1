@@ -23,7 +23,8 @@ import {
   formulaAutocompleteSuggestions,
 } from '@/office/sheet/formula-autocomplete';
 import { NUMBER_FORMAT_OPTIONS } from '@/office/sheet/format-display';
-import type { NumberFormat } from '@/office/sheet/model';
+import type { CellFormat, NumberFormat } from '@/office/sheet/model';
+import { SheetRibbon, type SheetRibbonTab } from '@/office/sheet/sheet-ribbon';
 
 type Menu = 'File' | 'Edit' | 'View' | 'Insert' | 'Format' | 'Data' | 'Review' | 'Tools' | 'Help' | null;
 
@@ -45,6 +46,21 @@ type Props = {
   verticalAlign: 'top' | 'middle' | 'bottom';
   wrap: boolean;
   paintActive: boolean;
+  cellFormat?: CellFormat;
+  ribbonTab: SheetRibbonTab;
+  onRibbonTabChange: (tab: SheetRibbonTab) => void;
+  onFindReplace?: (mode: 'find' | 'replace') => void;
+  onAutoSum: () => void;
+  onSortAsc: () => void;
+  onSortDesc: () => void;
+  onDecimalIncrease: () => void;
+  onDecimalDecrease: () => void;
+  onUnmerge: () => void;
+  onFillDown: () => void;
+  onChartType: (type: 'column' | 'bar' | 'line' | 'pie' | 'area' | 'scatter') => void;
+  onFreezeTopRow: () => void;
+  onFreezeFirstColumn: () => void;
+  onAutoFitColumn: () => void;
   onFontFamily: (v: string) => void;
   onFontSize: (v: number) => void;
   onNumberFormat: (v: NumberFormat) => void;
@@ -224,7 +240,8 @@ export function ZohoSheetChrome(p: Props) {
     if (menu === 'Review') return [officeMenuItem('review-comment', 'Add Comment…', () => pick(p.onAddComment))];
     if (menu === 'Tools') {
       return [
-        officeMenuItem('tools-find', 'Find', () => pick(p.onFind), 'Ctrl+F'),
+        officeMenuItem('tools-find', 'Find', () => pick(() => p.onFindReplace?.('find') ?? p.onFind()), 'Ctrl+F'),
+        officeMenuItem('tools-replace', 'Replace', () => pick(() => p.onFindReplace?.('replace')), 'Ctrl+H'),
         officeMenuItem('tools-fn', 'Functions', () => { setMenu(null); setFnOpen(true); }),
       ];
     }
@@ -243,7 +260,7 @@ export function ZohoSheetChrome(p: Props) {
           <span className="truncate text-[16px] font-semibold">{p.title || 'Untitled Spreadsheet'}</span>
         </div>
         <div className="flex items-center gap-2 px-3">
-          <button type="button" onClick={p.onFind} className="flex h-8 w-[205px] items-center gap-2 rounded-md bg-[#f5f6f7] px-3 text-left text-[12px] text-[#6d7278]"><span>⌕</span><span>Search in this sheet</span></button>
+          <button type="button" onClick={() => p.onFindReplace?.('find') ?? p.onFind()} className="flex h-8 w-[205px] items-center gap-2 rounded-md bg-[#f5f6f7] px-3 text-left text-[12px] text-[#6d7278]"><span>⌕</span><span>Search in this sheet</span></button>
           <button type="button" onClick={p.onHelp} className="grid h-8 w-8 place-items-center rounded hover:bg-[#f3f5f7]">⚙</button>
         </div>
       </div>
@@ -263,67 +280,103 @@ export function ZohoSheetChrome(p: Props) {
         <OfficeMenu open={!!menu} onClose={() => setMenu(null)} anchorRef={menuAnchorRef} items={menuItems} minWidth={240} />
       </div>
 
-      <div className="flex h-[42px] items-center gap-1 border-b border-[#d9dde1] bg-white px-2 shadow-[0_1px_2px_rgba(0,0,0,.08)]">
-        <ToolButton title="Print" onClick={p.onPrint}><Svg><path d="M6 9V4h12v5M6 18H4V10h16v8h-2M7 15h10v5H7z" /></Svg></ToolButton>
-        <ToolButton title="Undo" onClick={p.onUndo} disabled={!p.canUndo}><Svg><path d="M9 8 4 12l5 4M4 12h9a6 6 0 0 1 6 6" /></Svg></ToolButton>
-        <ToolButton title="Redo" onClick={p.onRedo} disabled={!p.canRedo}><Svg><path d="m15 8 5 4-5 4M20 12h-9a6 6 0 0 0-6 6" /></Svg></ToolButton>
-        <div className="relative">
-          <button ref={fontAnchorRef} type="button" onClick={() => { setFontOpen((v) => !v); setSizeOpen(false); setFormatOpen(false); }} className="flex h-8 min-w-[124px] items-center justify-between rounded border border-[#d8dce1] bg-white px-2 text-[13px]">{p.fontFamily}<span>⌄</span></button>
-          <OfficePopover open={fontOpen} onClose={() => setFontOpen(false)} anchorRef={fontAnchorRef} className="max-h-[280px] overflow-auto py-1">
-            {fonts.map((f) => (
-              <button key={f} type="button" onClick={() => { p.onFontFamily(f); setFontOpen(false); }} className={`block w-full px-3 py-2 text-left text-[14px] hover:bg-[#f2f4f6] ${f === p.fontFamily ? 'font-semibold' : ''}`}>{f}</button>
-            ))}
-          </OfficePopover>
-        </div>
-        <div className="relative">
-          <button ref={sizeAnchorRef} type="button" onClick={() => { setSizeOpen((v) => !v); setFontOpen(false); setFormatOpen(false); }} className="flex h-8 min-w-[54px] items-center justify-between rounded border border-[#d8dce1] bg-white px-2 text-[13px]">{p.fontSize}<span>⌄</span></button>
-          <OfficePopover open={sizeOpen} onClose={() => setSizeOpen(false)} anchorRef={sizeAnchorRef} className="p-1">
-            <div className="grid w-[140px] grid-cols-4">
-              {[8, 9, 10, 11, 12, 14, 16, 18, 20, 24, 28, 32].map((s) => (
-                <button key={s} type="button" onClick={() => { p.onFontSize(s); setSizeOpen(false); }} className="rounded px-2 py-2 text-[12px] hover:bg-[#f2f4f6]">{s}</button>
+      <SheetRibbon
+        tab={p.ribbonTab}
+        onTabChange={p.onRibbonTabChange}
+        format={p.cellFormat}
+        canUndo={p.canUndo}
+        canRedo={p.canRedo}
+        gridlines={p.gridlines}
+        paintActive={p.paintActive}
+        fontFamily={p.fontFamily}
+        fontSize={p.fontSize}
+        numberFormat={p.numberFormat}
+        verticalAlign={p.verticalAlign}
+        wrap={p.wrap}
+        onUndo={p.onUndo}
+        onRedo={p.onRedo}
+        onCopy={p.onCopy}
+        onCut={p.onCut}
+        onPaste={p.onPaste}
+        onClear={p.onClear}
+        onPaint={p.onPaint}
+        onBold={p.onBold}
+        onItalic={p.onItalic}
+        onUnderline={p.onUnderline}
+        onStrike={p.onStrike}
+        onColor={p.onColor}
+        onBg={p.onBg}
+        onAlign={p.onAlign}
+        onVerticalAlign={p.onVerticalAlign}
+        onWrap={p.onWrap}
+        onNumberFormat={p.onNumberFormat}
+        onDecimalIncrease={p.onDecimalIncrease}
+        onDecimalDecrease={p.onDecimalDecrease}
+        onBorder={p.onBorder}
+        onMerge={p.onMerge}
+        onUnmerge={p.onUnmerge}
+        onAutoSum={p.onAutoSum}
+        onFillDown={p.onFillDown}
+        onFind={() => p.onFindReplace?.('find') ?? p.onFind()}
+        onReplace={() => p.onFindReplace?.('replace')}
+        onOpenFunctions={() => setFnOpen(true)}
+        onTable={p.onTable}
+        onPivot={p.onPivot}
+        onChart={p.onChartType}
+        onInsertRows={p.onInsertRows}
+        onDeleteRows={p.onDeleteRows}
+        onInsertColumns={p.onInsertColumns}
+        onDeleteColumns={p.onDeleteColumns}
+        onSortAsc={p.onSortAsc}
+        onSortDesc={p.onSortDesc}
+        onFilter={p.onFilter}
+        onValidation={p.onValidation}
+        onConditional={p.onConditional}
+        onNamedRange={p.onNamedRange}
+        onFreezeTopRow={p.onFreezeTopRow}
+        onFreezeFirstColumn={p.onFreezeFirstColumn}
+        onFreezePanes={p.onFreeze}
+        onGridlines={p.onGridlines}
+        onHideRow={p.onHideRow}
+        onHideColumn={p.onHideColumn}
+        onUnhideRows={p.onUnhideRows}
+        onUnhideColumns={p.onUnhideColumns}
+        onAutoFitColumn={p.onAutoFitColumn}
+        fontFamilyControl={(
+          <div className="relative">
+            <button ref={fontAnchorRef} type="button" onClick={() => { setFontOpen((v) => !v); setSizeOpen(false); setFormatOpen(false); }} className="flex h-8 min-w-[96px] items-center justify-between rounded border border-[#d8dce1] bg-white px-2 text-[11px]">{p.fontFamily}<span>⌄</span></button>
+            <OfficePopover open={fontOpen} onClose={() => setFontOpen(false)} anchorRef={fontAnchorRef} className="max-h-[280px] overflow-auto py-1">
+              {fonts.map((f) => (
+                <button key={f} type="button" onClick={() => { p.onFontFamily(f); setFontOpen(false); }} className={`block w-full px-3 py-2 text-left text-[14px] hover:bg-[#f2f4f6] ${f === p.fontFamily ? 'font-semibold' : ''}`}>{f}</button>
               ))}
-            </div>
-          </OfficePopover>
-        </div>
-        <ToolButton title="Bold" onClick={p.onBold}><b className="text-[16px]">B</b></ToolButton>
-        <ToolButton title="Italic" onClick={p.onItalic}><i className="text-[16px]">I</i></ToolButton>
-        <ToolButton title="Underline" onClick={p.onUnderline}><u className="text-[16px]">U</u></ToolButton>
-        <ToolButton title="Strikethrough" onClick={p.onStrike}><s className="text-[16px]">S</s></ToolButton>
-        <button ref={textColorAnchorRef} type="button" title="Text color" className="grid h-8 w-8 place-items-center rounded hover:bg-[#eef1f4]" onClick={() => setTextColorOpen(true)}><span className="text-[17px] font-bold" style={{ color: '#e21d3e' }}>A</span></button>
-        <button ref={fillColorAnchorRef} type="button" title="Fill color" className="grid h-8 w-8 place-items-center rounded hover:bg-[#eef1f4]" onClick={() => setFillColorOpen(true)}><span className="h-4 w-5 border-b-2 border-[#e6c900] bg-white" /></button>
-        <OfficeColorPicker open={textColorOpen} onClose={() => setTextColorOpen(false)} anchorRef={textColorAnchorRef} title="Text Color" onPick={p.onColor} />
-        <OfficeColorPicker open={fillColorOpen} onClose={() => setFillColorOpen(false)} anchorRef={fillColorAnchorRef} title="Fill Color" onPick={p.onBg} />
-        <div className="mx-1 h-6 w-px bg-[#e2e5e8]" />
-        <ToolButton title="Format Painter" onClick={p.onPaint} active={p.paintActive}><Svg><path d="M14 3l7 7-9 9H5v-7z" /></Svg></ToolButton>
-        <ToolButton title="Borders" onClick={p.onBorder}><Svg><rect x="5" y="5" width="14" height="14" /><path d="M5 10h14M10 5v14" /></Svg></ToolButton>
-        <ToolButton title="Merge Cells" onClick={p.onMerge}><Svg><rect x="5" y="7" width="14" height="10" /><path d="M10 12h4" /></Svg></ToolButton>
-        <select title="Alignment" aria-label="Alignment" className="h-8 rounded border border-[#d8dce1] bg-white px-2 text-[12px]" value={p.verticalAlign === 'top' ? 'start-top' : p.verticalAlign === 'bottom' ? 'start-bottom' : 'start'} onChange={(e) => {
-          const v = e.target.value;
-          if (v.endsWith('-top')) p.onVerticalAlign('top');
-          else if (v.endsWith('-bottom')) p.onVerticalAlign('bottom');
-          else { p.onAlign(v.replace('-top', '').replace('-bottom', '') as 'start' | 'center' | 'end'); p.onVerticalAlign('middle'); }
-        }}>
-          <option value="start">≡ Left</option>
-          <option value="center">≡ Center</option>
-          <option value="end">≡ Right</option>
-          <option value="start-top">↖ Top</option>
-          <option value="center-top">↑ Middle</option>
-          <option value="end-bottom">↘ Bottom</option>
-        </select>
-        <ToolButton title="Wrap" onClick={() => p.onWrap(!p.wrap)} active={p.wrap}>↩</ToolButton>
-        <div className="relative">
-          <button ref={formatAnchorRef} type="button" onClick={() => { setFormatOpen((v) => !v); setFontOpen(false); setSizeOpen(false); }} className="flex h-8 min-w-[96px] items-center justify-between rounded border border-[#d8dce1] bg-white px-2 text-[12px]">
-            {NUMBER_FORMAT_OPTIONS.find((x) => x.value === p.numberFormat)?.label ?? 'General'}<span>⌄</span>
-          </button>
-          <OfficePopover open={formatOpen} onClose={() => setFormatOpen(false)} anchorRef={formatAnchorRef} className="py-1">
-            {NUMBER_FORMAT_OPTIONS.map((opt) => (
-              <button key={opt.value} type="button" onClick={() => { p.onNumberFormat(opt.value); setFormatOpen(false); }} className={`block w-full px-3 py-2 text-left text-[13px] hover:bg-[#f2f4f6] ${opt.value === p.numberFormat ? 'bg-[#e8f5ed] font-semibold text-[#0b9f4b]' : ''}`}>{opt.label}</button>
-            ))}
-          </OfficePopover>
-        </div>
-        <button ref={fnAnchorRef} type="button" onClick={() => setFnOpen((v) => !v)} className="ml-auto rounded border border-[#18a957] px-2 py-1 text-[11px] font-semibold text-[#0b9f4b]">ƒx Functions</button>
-        <span className="text-[11px] text-[#73777c]">{p.saving ? 'Saving…' : p.saved ? 'Saved' : 'Unsaved'}</span>
-      </div>
+            </OfficePopover>
+          </div>
+        )}
+        fontSizeControl={(
+          <div className="relative">
+            <button ref={sizeAnchorRef} type="button" onClick={() => { setSizeOpen((v) => !v); setFontOpen(false); setFormatOpen(false); }} className="flex h-8 min-w-[44px] items-center justify-between rounded border border-[#d8dce1] bg-white px-2 text-[11px]">{p.fontSize}<span>⌄</span></button>
+            <OfficePopover open={sizeOpen} onClose={() => setSizeOpen(false)} anchorRef={sizeAnchorRef} className="p-1">
+              <div className="grid w-[140px] grid-cols-4">
+                {[8, 9, 10, 11, 12, 14, 16, 18, 20, 24, 28, 32].map((s) => (
+                  <button key={s} type="button" onClick={() => { p.onFontSize(s); setSizeOpen(false); }} className="rounded px-2 py-2 text-[12px] hover:bg-[#f2f4f6]">{s}</button>
+                ))}
+              </div>
+            </OfficePopover>
+          </div>
+        )}
+        textColorControl={(
+          <>
+            <button ref={textColorAnchorRef} type="button" title="Text color" className="grid h-8 w-8 place-items-center rounded hover:bg-[#eef1f4]" onClick={() => setTextColorOpen(true)}><span className="text-[15px] font-bold" style={{ color: p.cellFormat?.color ?? '#e21d3e' }}>A</span></button>
+            <OfficeColorPicker open={textColorOpen} onClose={() => setTextColorOpen(false)} anchorRef={textColorAnchorRef} title="Text Color" onPick={p.onColor} />
+          </>
+        )}
+        fillColorControl={(
+          <>
+            <button ref={fillColorAnchorRef} type="button" title="Fill color" className="grid h-8 w-8 place-items-center rounded hover:bg-[#eef1f4]" onClick={() => setFillColorOpen(true)}><span className="h-4 w-5 border-b-2 border-[#e6c900]" style={{ background: p.cellFormat?.background ?? '#fff' }} /></button>
+            <OfficeColorPicker open={fillColorOpen} onClose={() => setFillColorOpen(false)} anchorRef={fillColorAnchorRef} title="Fill Color" onPick={p.onBg} />
+          </>
+        )}
+      />
 
       <div className="flex h-[34px] items-center border-b border-[#d9dde1] bg-[#fbfbfb] px-2">
         <div className="flex h-7 w-[96px] items-center rounded border border-[#d4d7da] bg-white px-2 font-mono text-[12px] font-semibold">{p.selected}</div>
@@ -364,6 +417,8 @@ export function ZohoSheetChrome(p: Props) {
           />
         </div>
         <button type="button" onClick={() => p.onFormulaCommit()} className="ml-2 rounded border px-2 text-[11px]">✓</button>
+        <button ref={fnAnchorRef} type="button" onClick={() => setFnOpen((v) => !v)} className="ml-2 rounded border border-[#18a957] px-2 py-0.5 text-[11px] font-semibold text-[#0b9f4b]">ƒx</button>
+        <span className="ml-2 text-[11px] text-[#73777c]">{p.saving ? 'Saving…' : p.saved ? 'Saved' : 'Unsaved'}</span>
       </div>
 
       <OfficePopover open={fnOpen} onClose={() => setFnOpen(false)} anchorRef={fnAnchorRef} placement="bottom-end" className="flex w-[420px] flex-col overflow-hidden">
