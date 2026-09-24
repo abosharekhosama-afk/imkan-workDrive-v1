@@ -3316,3 +3316,9 @@ html[data-theme="dark"][data-sidebar-light="true"] .primary-sidebar a {
 html[data-theme="dark"][data-sidebar-light="true"] .primary-sidebar a:hover {
   background: rgba(255,255,255,.08) !important;
 }
+
+/* IMKAN Sheet — Format Painter active cursor */
+body.sheet-format-painter-active,
+body.sheet-format-painter-active * {
+  cursor: crosshair !important;
+}

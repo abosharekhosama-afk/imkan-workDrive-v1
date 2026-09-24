@@ -8,6 +8,7 @@ type OfficePivotPanelProps = {
   pivot: PivotTable;
   result: PivotResult;
   onChange: (patch: Partial<PivotTable>) => void;
+  onRefresh: () => void;
   onDelete: () => void;
   onClose: () => void;
 };
@@ -16,7 +17,7 @@ const inputClass =
   'mt-1 h-8 w-full rounded border border-[#d4d7da] px-2 text-[13px] outline-none focus:border-[var(--wd-primary)]';
 const labelClass = 'block text-[12px] font-medium text-[#30343b]';
 
-export function OfficePivotPanel({ pivot, result, onChange, onDelete, onClose }: OfficePivotPanelProps) {
+export function OfficePivotPanel({ pivot, result, onChange, onRefresh, onDelete, onClose }: OfficePivotPanelProps) {
   return (
     <aside className="office-pivot-panel fixed right-0 top-0 z-[120] flex h-full w-[320px] flex-col border-l border-[#dadde0] bg-white shadow-[-8px_0_24px_rgba(0,0,0,.08)]">
       <div className="flex items-center justify-between border-b px-4 py-3">
@@ -37,6 +38,15 @@ export function OfficePivotPanel({ pivot, result, onChange, onDelete, onClose }:
             value={pivot.sourceRange}
             onChange={(e) => onChange({ sourceRange: e.target.value.toUpperCase() })}
             className={inputClass}
+          />
+        </label>
+        <label className={labelClass}>
+          Destination
+          <input
+            value={pivot.destinationRange ?? ''}
+            onChange={(e) => onChange({ destinationRange: e.target.value.toUpperCase() || undefined })}
+            className={inputClass}
+            placeholder="E1"
           />
         </label>
         <label className={labelClass}>
@@ -110,15 +120,7 @@ export function OfficePivotPanel({ pivot, result, onChange, onDelete, onClose }:
         <button
           type="button"
           className="w-full rounded border px-3 py-1.5 text-[12px] hover:bg-[#f3f5f7]"
-          onClick={() =>
-            onChange({
-              name: pivot.name,
-              sourceRange: pivot.sourceRange,
-              rowField: pivot.rowField,
-              valueField: pivot.valueField,
-              aggregation: pivot.aggregation,
-            })
-          }
+          onClick={onRefresh}
         >
           Refresh
         </button>

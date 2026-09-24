@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { OfficeModal } from '@/office/shared/floating/office-modal';
 import { PIVOT_AGGREGATIONS, type PivotAggregation } from '../pivot/pivot-logic';
+import { defaultPivotDestination } from '../pivot/pivot-render-logic';
 import type { PivotTable } from '../model';
 
 type OfficeCreatePivotDialogProps = {
@@ -29,6 +30,7 @@ export function OfficeCreatePivotDialog({
   const [rowField, setRowField] = useState('');
   const [valueField, setValueField] = useState('');
   const [aggregation, setAggregation] = useState<PivotAggregation>('sum');
+  const [destinationRange, setDestinationRange] = useState('E1');
   const [error, setError] = useState('');
 
   useEffect(() => {
@@ -38,6 +40,7 @@ export function OfficeCreatePivotDialog({
     setRowField(fields[0] ?? '');
     setValueField(fields[1] ?? fields[0] ?? '');
     setAggregation('sum');
+    setDestinationRange(defaultPivotDestination(defaultRange));
     setError('');
   }, [open, defaultRange, fields]);
 
@@ -54,6 +57,7 @@ export function OfficeCreatePivotDialog({
     onCreate({
       name: cleanName,
       sourceRange: sourceRange.trim().toUpperCase(),
+      destinationRange: destinationRange.trim().toUpperCase(),
       rowField: rowField || undefined,
       valueField: valueField || undefined,
       aggregation,
@@ -71,6 +75,10 @@ export function OfficeCreatePivotDialog({
         <label className={labelClass}>
           Pivot name
           <input value={name} onChange={(e) => setName(e.target.value)} className={inputClass} />
+        </label>
+        <label className={labelClass}>
+          Destination
+          <input value={destinationRange} onChange={(e) => setDestinationRange(e.target.value)} className={inputClass} />
         </label>
         <label className={labelClass}>
           Row field

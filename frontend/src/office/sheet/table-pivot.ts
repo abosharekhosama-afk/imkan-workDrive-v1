@@ -1,4 +1,5 @@
-import { Workbook, Sheet, SheetTable, PivotTable, cellKey, parseKey, formulaDisplay } from './model';
+import type { Workbook, Sheet, SheetTable, PivotTable } from './model.ts';
+import { cellKey, parseKey, formulaDisplay } from './model.ts';
 
 export type PivotResult = { headers:string[]; rows:(string|number)[][]; grandTotal:number };
 

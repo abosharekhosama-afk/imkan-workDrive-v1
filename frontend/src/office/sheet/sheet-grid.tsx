@@ -27,6 +27,7 @@ export type SheetGridProps = {
   onRowHeightChange: (row: number, height: number) => void;
   onAutoFitColumn: (col: number) => void;
   formatCell: (key: string) => CSSProperties;
+  hiddenTableRows?: Set<number>;
   chartOverlay?: ReactNode;
 };
 
@@ -51,6 +52,7 @@ function SheetGridInner({
   onRowHeightChange,
   onAutoFitColumn,
   formatCell,
+  hiddenTableRows,
   chartOverlay,
 }: SheetGridProps) {
   const dragRef = useRef<{ active: boolean; anchor: string } | null>(null);
@@ -81,7 +83,9 @@ function SheetGridInner({
   const visibleCols = Array.from({ length: cols }, (_, c) => c).filter(
     (c) => !(sheet.hiddenColumns ?? []).includes(colName(c)),
   );
-  const visibleRows = Array.from({ length: rows }, (_, r) => r).filter((r) => !(sheet.hiddenRows ?? []).includes(r));
+  const visibleRows = Array.from({ length: rows }, (_, r) => r).filter(
+    (r) => !(sheet.hiddenRows ?? []).includes(r) && !(hiddenTableRows?.has(r) ?? false),
+  );
 
   const widthForCol = (c: number) => previewColWidths[c] ?? columnWidth(sheet, c);
   const heightForRow = (r: number) => previewRowHeights[r] ?? rowHeight(sheet, r);
@@ -251,6 +255,9 @@ function SheetGridInner({
                   className={`relative overflow-hidden ${gridlines ? 'border' : ''} px-1 text-xs leading-7 ${isSelected(key) ? 'outline outline-2 outline-[var(--wd-primary)] outline-offset-[-2px]' : ''}`}
                 >
                   {!isEditingCell ? formulaDisplay(sheet.cells[key], sheet, workbook) : null}
+                  {sheet.cells[key]?.note ? (
+                    <span className="pointer-events-none absolute right-0 top-0 h-0 w-0 border-l-[6px] border-t-[6px] border-l-transparent border-t-[#f59e0b]" aria-label="Has note" />
+                  ) : null}
                   {isEditingCell ? (
                     <input
                       autoFocus
