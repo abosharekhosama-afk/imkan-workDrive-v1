@@ -10,6 +10,7 @@ import { ConnectionProviderAdapterService } from './connection-provider-adapter.
 import { URL } from 'node:url';
 import { isIP } from 'node:net';
 import { lookup } from 'node:dns/promises';
+import { AuthService } from '../auth.service';
 import { buildOAuthBrowserUrl, normalizeOAuthReturnPath, oauthFailurePreservesActive, resolveOAuthFrontendOrigin, safeOAuthErrorCode, safeOrigin } from './oauth-flow';
 
 const OAUTH_STATE_TTL_MS = 10 * 60 * 1000;
@@ -24,7 +25,7 @@ type ResolvedProviderDefinition = ConnectionProviderDefinition & { oauthClientId
 @Injectable()
 export class ConnectionsService {
   private readonly logger = new Logger(ConnectionsService.name);
-  constructor(private readonly prisma: PrismaService, private readonly crypto: ConnectionCryptoService, private readonly config: ConfigService, private readonly registry: ConnectionProviderRegistry, private readonly providerAdapter: ConnectionProviderAdapterService) {}
+  constructor(private readonly prisma: PrismaService, private readonly crypto: ConnectionCryptoService, private readonly config: ConfigService, private readonly registry: ConnectionProviderRegistry, private readonly providerAdapter: ConnectionProviderAdapterService, private readonly auth: AuthService) {}
 
   private oauthLog(event: string, fields: Record<string, string | number | null | undefined>) {
     const detail = Object.entries(fields)
@@ -841,14 +842,23 @@ export class ConnectionsService {
     }
     await this.prisma.auditLog.create({ data: { id: randomUUID(), orgId: row.orgId, actorId: row.userId, action: 'connection.reconnected', resourceType: 'CONNECTION', resourceId: connection.id, metadata: { provider, oauth: true } as Prisma.InputJsonValue } }).catch(() => undefined);
     const frontend = this.frontendUrl();
+    const resumeToken = await this.resumeCodeFor(row.userId);
     this.oauthLog('REDIRECT', { provider, connectionId: connection.id, orgId: row.orgId, userId: row.userId, status: ConnectionStatus.ACTIVE, targetOrigin: safeOrigin(frontend) });
-    return { connectionId: connection.id, frontend, folderId: row.folderId, returnPath: row.returnPath, orgId: row.orgId, userId: row.userId };
+    return { connectionId: connection.id, frontend, folderId: row.folderId, returnPath: row.returnPath, orgId: row.orgId, userId: row.userId, resumeToken };
+  }
+
+  private async resumeCodeFor(userId: string | null | undefined) {
+    if (!userId) return null;
+    try { return await this.auth.issueOAuthResumeCode(userId); } catch (error) {
+      this.oauthLog('SESSION_RESUME_FAILED', { error: safeOAuthErrorCode(error instanceof Error ? error.message : 'session') });
+      return null;
+    }
   }
 
   async handleOAuthCallbackError(provider: OAuthProvider, state?: string, error?: string, description?: string) {
     const frontend = this.frontendUrl();
     if (state) {
-      const row = await this.prisma.connectionOAuthState.findFirst({ where: { stateHash: this.hash(state), provider }, select: { id: true, usedAt: true, connectionId: true, returnPath: true } });
+      const row = await this.prisma.connectionOAuthState.findFirst({ where: { stateHash: this.hash(state), provider }, select: { id: true, usedAt: true, connectionId: true, returnPath: true, userId: true } });
       if (row && !row.usedAt) {
         await this.prisma.connectionOAuthState.update({ where: { id: row.id }, data: { usedAt: new Date() } });
       }
@@ -856,23 +866,162 @@ export class ConnectionsService {
         const current = await this.prisma.connection.findUnique({ where: { id: row.connectionId }, select: { status: true } }).catch(() => null);
         if (oauthFailurePreservesActive(current?.status)) {
           this.oauthLog('REDIRECT', { provider, connectionId: row.connectionId, status: ConnectionStatus.ACTIVE, targetOrigin: safeOrigin(frontend) });
-          return { frontend, error: error || 'oauth_cancelled', description: description || 'OAuth authorization was cancelled.', returnPath: row.returnPath ?? null, alreadyActive: true, connectionId: row.connectionId };
+          return { frontend, error: error || 'oauth_cancelled', description: description || 'OAuth authorization was cancelled.', returnPath: row.returnPath ?? null, alreadyActive: true, connectionId: row.connectionId, resumeToken: await this.resumeCodeFor(row.userId) };
         }
         const nextStatus = current?.status === ConnectionStatus.PENDING_AUTH ? ConnectionStatus.PENDING_AUTH : ConnectionStatus.REAUTH_REQUIRED;
         await this.prisma.connection.update({ where: { id: row.connectionId }, data: { status: nextStatus, errorCode: error || 'OAUTH_CANCELLED', errorMessage: (description || 'OAuth authorization was cancelled.').slice(0, 500) } }).catch(() => undefined);
       }
       this.oauthLog('REDIRECT_FAILED', { provider, connectionId: row?.connectionId, error: safeOAuthErrorCode(error || description || 'oauth_cancelled'), targetOrigin: safeOrigin(frontend) });
-      return { frontend, error: error || 'oauth_cancelled', description: description || 'OAuth authorization was cancelled.', returnPath: row?.returnPath ?? null, alreadyActive: false, connectionId: row?.connectionId ?? null };
+      return { frontend, error: error || 'oauth_cancelled', description: description || 'OAuth authorization was cancelled.', returnPath: row?.returnPath ?? null, alreadyActive: false, connectionId: row?.connectionId ?? null, resumeToken: await this.resumeCodeFor(row?.userId) };
     }
     this.oauthLog('REDIRECT_FAILED', { provider, error: safeOAuthErrorCode(error || description || 'oauth_cancelled'), targetOrigin: safeOrigin(frontend) });
-    return { frontend, error: error || 'oauth_cancelled', description: description || 'OAuth authorization was cancelled.', returnPath: null, alreadyActive: false, connectionId: null };
+    return { frontend, error: error || 'oauth_cancelled', description: description || 'OAuth authorization was cancelled.', returnPath: null, alreadyActive: false, connectionId: null, resumeToken: null };
   }
 
-  async reconnect(user: AccessTokenPayload, id: string) {
+  async reconnect(user: AccessTokenPayload, id: string, returnPath: string | null = null) {
     const row = await this.findVisible(user, id);
     if (row.ownerId !== user.sub) throw new ForbiddenException('Only the connection owner can reconnect it');
     if (row.authType !== ConnectionAuthType.OAUTH2) throw new BadRequestException('Only OAuth connections can be reconnected');
-    return this.beginOAuth(user, row.provider as OAuthProvider, null, row.id);
+    return this.beginOAuth(user, row.provider as OAuthProvider, null, row.id, returnPath);
+  }
+
+  async browseResources(user: AccessTokenPayload, id: string, parent?: string | null) {
+    const token = await this.providerAccessToken(user, id);
+    const row = await this.findVisible(user, id);
+    const parentId = String(parent ?? '').trim();
+    try {
+      if (row.provider === 'google') return { connectionId: row.id, provider: row.provider, parent: parentId || null, ...(await this.googleChildren(token, parentId)) };
+      if (row.provider === 'dropbox') return { connectionId: row.id, provider: row.provider, parent: parentId || null, ...(await this.dropboxChildren(token, parentId)) };
+      if (row.provider === 'microsoft') return { connectionId: row.id, provider: row.provider, parent: parentId || null, ...(await this.microsoftChildren(token, parentId)) };
+    } catch (error) {
+      throw new BadRequestException(this.providerBrowseError(error));
+    }
+    throw new BadRequestException('This connection does not support browsing files.');
+  }
+
+  async readResource(user: AccessTokenPayload, id: string, resourceId: string) {
+    const token = await this.providerAccessToken(user, id);
+    const row = await this.findVisible(user, id);
+    const target = resourceId.trim();
+    if (!target) throw new BadRequestException('Choose a file first.');
+    try {
+      if (row.provider === 'google') {
+        const response = await fetch(`https://www.googleapis.com/drive/v3/files/${encodeURIComponent(target)}?fields=id,name,mimeType,size`, { headers: { authorization: `Bearer ${token}` } });
+        const payload = await this.readJson(response);
+        if (!response.ok) throw new Error(String(payload?.error?.message ?? response.status));
+        return { connectionId: row.id, provider: row.provider, id: String(payload.id), name: String(payload.name ?? 'File'), kind: payload.mimeType === 'application/vnd.google-apps.folder' ? 'folder' : 'file', mimeType: payload.mimeType ?? null };
+      }
+      if (row.provider === 'dropbox') {
+        const response = await fetch('https://api.dropboxapi.com/2/files/get_metadata', { method: 'POST', headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' }, body: JSON.stringify({ path: target }) });
+        const payload = await this.readJson(response);
+        if (!response.ok) throw new Error(String(payload?.error_summary ?? response.status));
+        return { connectionId: row.id, provider: row.provider, id: String(payload.id ?? target), name: String(payload.name ?? 'File'), kind: payload['.tag'] === 'folder' ? 'folder' : 'file', mimeType: null };
+      }
+      if (row.provider === 'microsoft') {
+        const response = await fetch(`https://graph.microsoft.com/v1.0/me/drive/items/${encodeURIComponent(target)}?$select=id,name,folder,file`, { headers: { authorization: `Bearer ${token}` } });
+        const payload = await this.readJson(response);
+        if (!response.ok) throw new Error(String(payload?.error?.message ?? response.status));
+        return { connectionId: row.id, provider: row.provider, id: String(payload.id), name: String(payload.name ?? 'File'), kind: payload.folder ? 'folder' : 'file', mimeType: payload.file?.mimeType ?? null };
+      }
+    } catch (error) {
+      throw new BadRequestException(this.providerBrowseError(error));
+    }
+    throw new BadRequestException('This connection does not support reading files.');
+  }
+
+  async uploadResource(user: AccessTokenPayload, id: string, input: { parentId?: string | null; name?: string; contentBase64?: string }) {
+    const name = String(input.name ?? '').trim();
+    const bytes = Buffer.from(String(input.contentBase64 ?? ''), 'base64');
+    if (!name || !bytes.length || bytes.length > 8_000_000) throw new BadRequestException('Choose a file smaller than 8 MB.');
+    const token = await this.providerAccessToken(user, id);
+    const row = await this.findVisible(user, id);
+    const parentId = String(input.parentId ?? '').trim();
+    try {
+      if (row.provider === 'google') return { ...(await this.googleUpload(token, parentId, name, bytes)), provider: row.provider };
+      if (row.provider === 'dropbox') return { ...(await this.dropboxUpload(token, parentId, name, bytes)), provider: row.provider };
+      if (row.provider === 'microsoft') return { ...(await this.microsoftUpload(token, parentId, name, bytes)), provider: row.provider };
+    } catch (error) {
+      throw new BadRequestException(this.providerBrowseError(error));
+    }
+    throw new BadRequestException('This connection does not support upload.');
+  }
+
+  private async googleUpload(token: string, parentId: string, name: string, bytes: Buffer) {
+    const boundary = `imkan${Date.now()}`;
+    const meta = JSON.stringify({ name, ...(parentId ? { parents: [parentId] } : {}) });
+    const body = Buffer.concat([
+      Buffer.from(`--${boundary}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${meta}\r\n--${boundary}\r\nContent-Type: application/octet-stream\r\n\r\n`),
+      bytes,
+      Buffer.from(`\r\n--${boundary}--`),
+    ]);
+    const response = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,name', { method: 'POST', headers: { authorization: `Bearer ${token}`, 'content-type': `multipart/related; boundary=${boundary}` }, body: new Uint8Array(body) });
+    const payload = await this.readJson(response);
+    if (!response.ok) throw new Error(String(payload?.error?.message ?? response.status));
+    return { id: String(payload.id), name: String(payload.name ?? name), kind: 'file' as const };
+  }
+
+  private async dropboxUpload(token: string, parentId: string, name: string, bytes: Buffer) {
+    const path = `${parentId && parentId !== 'root' ? parentId.replace(/\/$/, '') : ''}/${name}`;
+    const response = await fetch('https://content.dropboxapi.com/2/files/upload', { method: 'POST', headers: { authorization: `Bearer ${token}`, 'content-type': 'application/octet-stream', 'dropbox-api-arg': JSON.stringify({ path, mode: 'add', autorename: true }) }, body: new Uint8Array(bytes) });
+    const payload = await this.readJson(response);
+    if (!response.ok) throw new Error(String(payload?.error_summary ?? response.status));
+    return { id: String(payload.id ?? path), name: String(payload.name ?? name), kind: 'file' as const };
+  }
+
+  private async microsoftUpload(token: string, parentId: string, name: string, bytes: Buffer) {
+    const url = parentId
+      ? `https://graph.microsoft.com/v1.0/me/drive/items/${encodeURIComponent(parentId)}:/${encodeURIComponent(name)}:/content`
+      : `https://graph.microsoft.com/v1.0/me/drive/root:/${encodeURIComponent(name)}:/content`;
+    const response = await fetch(url, { method: 'PUT', headers: { authorization: `Bearer ${token}`, 'content-type': 'application/octet-stream' }, body: new Uint8Array(bytes) });
+    const payload = await this.readJson(response);
+    if (!response.ok) throw new Error(String(payload?.error?.message ?? response.status));
+    return { id: String(payload.id), name: String(payload.name ?? name), kind: 'file' as const };
+  }
+
+  private async providerAccessToken(user: AccessTokenPayload, id: string) {
+    const row = await this.findVisible(user, id);
+    if (row.status !== ConnectionStatus.ACTIVE) throw new ForbiddenException('Your connection expired. Reconnect to continue.');
+    const secret = await this.prisma.connectionSecret.findUnique({ where: { connectionId: row.id }, select: { accessToken: true } });
+    if (!secret?.accessToken) throw new ForbiddenException('Your connection expired. Reconnect to continue.');
+    return this.decryptSecret(secret.accessToken);
+  }
+
+  private providerBrowseError(error: unknown) {
+    const message = error instanceof Error ? error.message : '';
+    if (/401|403|invalid_grant|expired/i.test(message)) return 'Your connection expired. Reconnect to continue.';
+    return "We couldn't access this folder.";
+  }
+
+  private async googleChildren(token: string, parentId: string) {
+    const q = parentId ? `'${parentId.replace(/'/g, '')}' in parents and trashed=false` : `'root' in parents and trashed=false`;
+    const response = await fetch(`https://www.googleapis.com/drive/v3/files?pageSize=100&q=${encodeURIComponent(q)}&fields=files(id,name,mimeType,size)&orderBy=folder,name`, { headers: { authorization: `Bearer ${token}` } });
+    const payload = await this.readJson(response);
+    if (!response.ok) throw new Error(String(payload?.error?.message ?? response.status));
+    return this.splitDriveItems(Array.isArray(payload.files) ? payload.files : [], (item) => item.mimeType === 'application/vnd.google-apps.folder');
+  }
+
+  private async dropboxChildren(token: string, parentId: string) {
+    const response = await fetch('https://api.dropboxapi.com/2/files/list_folder', { method: 'POST', headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' }, body: JSON.stringify({ path: parentId || '', recursive: false, limit: 100 }) });
+    const payload = await this.readJson(response);
+    if (!response.ok) throw new Error(String(payload?.error_summary ?? response.status));
+    const entries = Array.isArray(payload.entries) ? payload.entries : [];
+    return this.splitDriveItems(entries.map((item: any) => ({ id: String(item.path_lower ?? item.id), name: item.name, mimeType: item['.tag'] === 'folder' ? 'folder' : null, size: item.size })), (item) => item.mimeType === 'folder');
+  }
+
+  private async microsoftChildren(token: string, parentId: string) {
+    const url = parentId
+      ? `https://graph.microsoft.com/v1.0/me/drive/items/${encodeURIComponent(parentId)}/children?$top=100&$select=id,name,size,folder,file`
+      : 'https://graph.microsoft.com/v1.0/me/drive/root/children?$top=100&$select=id,name,size,folder,file';
+    const response = await fetch(url, { headers: { authorization: `Bearer ${token}` } });
+    const payload = await this.readJson(response);
+    if (!response.ok) throw new Error(String(payload?.error?.message ?? response.status));
+    return this.splitDriveItems(Array.isArray(payload.value) ? payload.value : [], (item) => Boolean(item.folder));
+  }
+
+  private splitDriveItems(items: any[], isFolder: (item: any) => boolean) {
+    const folders = items.filter(isFolder).map((item) => ({ id: String(item.id), name: String(item.name ?? 'Folder'), kind: 'folder' as const }));
+    const files = items.filter((item) => !isFolder(item)).map((item) => ({ id: String(item.id), name: String(item.name ?? 'File'), kind: 'file' as const, mimeType: item.mimeType ?? item.file?.mimeType ?? null }));
+    return { folders, files };
   }
 
   providerDefinition(provider: string) { return this.registry.get(provider); }

@@ -4,7 +4,7 @@ import { Public } from '../auth/public.decorator';
 import { CurrentUser } from '../auth/current-user.decorator';
 import type { AccessTokenPayload } from '../auth/jwt.types';
 import { ConnectionsService } from './connections.service';
-import { safeOAuthErrorCode, safeOrigin } from './oauth-flow';
+import { appendOAuthResumeFragment, friendlyOAuthMessage, safeOAuthErrorCode, safeOrigin } from './oauth-flow';
 
 @Controller('connections')
 export class ConnectionsController {
@@ -31,8 +31,8 @@ export class ConnectionsController {
       }
       const returnPath = result.returnPath || '/files/connections';
       const separator = returnPath.includes('?') ? '&' : '?';
-      const target = `${returnPath}${separator}oauth=${encodeURIComponent(error || 'cancelled')}&provider=${encodeURIComponent(provider)}${errorDescription ? `&message=${encodeURIComponent(errorDescription.slice(0, 180))}` : ''}`;
-      response.redirect(this.service.browserReturnUrl(result.frontend, target));
+      const target = `${returnPath}${separator}oauth=${encodeURIComponent(error || 'cancelled')}&provider=${encodeURIComponent(provider)}&message=${encodeURIComponent(friendlyOAuthMessage(errorDescription || error || 'cancelled'))}`;
+      response.redirect(appendOAuthResumeFragment(this.service.browserReturnUrl(result.frontend, target), result.resumeToken));
       return;
     }
     try {
@@ -48,15 +48,15 @@ export class ConnectionsController {
       const returnPath = result.returnPath || '/files/connections';
       const separator = returnPath.includes('?') ? '&' : '?';
       this.logger.log(`[OAuth] REDIRECT_FAILED provider=${provider} error=${safeOAuthErrorCode(message)} targetOrigin=${safeOrigin(result.frontend)}`);
-      response.redirect(this.service.browserReturnUrl(result.frontend, `${returnPath}${separator}oauth=oauth_failed&provider=${encodeURIComponent(provider)}&message=${encodeURIComponent(message.slice(0, 180))}`));
+      response.redirect(appendOAuthResumeFragment(this.service.browserReturnUrl(result.frontend, `${returnPath}${separator}oauth=oauth_failed&provider=${encodeURIComponent(provider)}&message=${encodeURIComponent(friendlyOAuthMessage(message))}&code=${encodeURIComponent(safeOAuthErrorCode(message))}`), result.resumeToken));
     }
   }
 
-  private redirectOAuth(response: Response, provider: string, result: { frontend: string; folderId?: string | null; returnPath?: string | null }, outcome: 'success', connectionId: string) {
+  private redirectOAuth(response: Response, provider: string, result: { frontend: string; folderId?: string | null; returnPath?: string | null; resumeToken?: string | null }, outcome: 'success', connectionId: string) {
     const target = result.folderId
       ? `/files?cloudImport=${encodeURIComponent(provider === 'microsoft' ? 'onedrive' : provider)}&folderId=${encodeURIComponent(result.folderId)}&oauth=success&connectionId=${encodeURIComponent(connectionId)}`
       : `${result.returnPath || '/files/connections'}${(result.returnPath || '/files/connections').includes('?') ? '&' : '?'}oauth=${outcome}&provider=${encodeURIComponent(provider)}&connectionId=${encodeURIComponent(connectionId)}`;
-    const location = this.service.browserReturnUrl(result.frontend, target);
+    const location = appendOAuthResumeFragment(this.service.browserReturnUrl(result.frontend, target), result.resumeToken);
     this.logger.log(`[OAuth] REDIRECT provider=${provider} connectionId=${connectionId} status=ACTIVE targetOrigin=${safeOrigin(result.frontend)}`);
     response.redirect(location);
   }
@@ -72,7 +72,10 @@ export class ConnectionsController {
   @Get(':id') get(@CurrentUser() user: AccessTokenPayload, @Param('id') id: string) { return this.service.get(user, id); }
   @Post() create(@CurrentUser() user: AccessTokenPayload, @Body() body: any) { return this.service.create(user, body); }
   @Patch(':id') update(@CurrentUser() user: AccessTokenPayload, @Param('id') id: string, @Body() body: any) { return this.service.update(user, id, body); }
-  @Post(':id/reconnect') reconnect(@CurrentUser() user: AccessTokenPayload, @Param('id') id: string) { return this.service.reconnect(user, id); }
+  @Post(':id/reconnect') reconnect(@CurrentUser() user: AccessTokenPayload, @Param('id') id: string, @Query('returnTo') returnTo?: string) { return this.service.reconnect(user, id, returnTo || null); }
+  @Get(':id/resources') resources(@CurrentUser() user: AccessTokenPayload, @Param('id') id: string, @Query('parent') parent?: string) { return this.service.browseResources(user, id, parent); }
+  @Get(':id/resources/:resourceId') resource(@CurrentUser() user: AccessTokenPayload, @Param('id') id: string, @Param('resourceId') resourceId: string) { return this.service.readResource(user, id, resourceId); }
+  @Post(':id/upload') upload(@CurrentUser() user: AccessTokenPayload, @Param('id') id: string, @Body() body: { parentId?: string; name?: string; contentBase64?: string }) { return this.service.uploadResource(user, id, body ?? {}); }
   @Post(':id/transfer-ownership') transferOwnership(@CurrentUser() user: AccessTokenPayload, @Param('id') id: string, @Body() body: { targetUserId?: string }) { return this.service.transferOwnership(user, id, String(body?.targetUserId ?? '')); }
   @Post(':id/test') test(@CurrentUser() user: AccessTokenPayload, @Param('id') id: string) { return this.service.test(user, id); }
   @Post(':id/disable') disable(@CurrentUser() user: AccessTokenPayload, @Param('id') id: string) { return this.service.disable(user, id); }

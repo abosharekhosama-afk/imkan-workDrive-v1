@@ -47,7 +47,7 @@ export default function WorkflowFunctionsPage(){
  return <div key={index} className="rounded-xl border border-slate-200 bg-slate-50/70 p-3">
   <div className="flex items-center gap-2"><span className="grid h-6 w-6 place-items-center rounded-full bg-white text-[9px] font-bold text-slate-500">{index+1}</span>
   <select className="wf-input flex-1" value={kind} onChange={e=>set({op:e.target.value})}>
-   {["SET_FIELD","COPY_VALUE","CONCAT","LOWERCASE","UPPERCASE","NUMBER","ADD","SUBTRACT","MULTIPLY","DIVIDE","NOTIFY_OWNER","ADD_TAG","IF","HTTP_REQUEST"].map(v=><option key={v}>{v}</option>)}
+   {["SET_FIELD","COPY_VALUE","CONCAT","LOWERCASE","UPPERCASE","NUMBER","ADD","SUBTRACT","MULTIPLY","DIVIDE","NOTIFY_OWNER","ADD_TAG","IF","HTTP_REQUEST","CONNECTION_READ"].map(v=><option key={v}>{v}</option>)}
   </select><button type="button" className="wd-icon-btn" onClick={()=>removeOperation(index)}>×</button></div>
   <div className="mt-2 grid gap-2 sm:grid-cols-2">
    {["SET_FIELD","COPY_VALUE","CONCAT","LOWERCASE","UPPERCASE","NUMBER","ADD","SUBTRACT","MULTIPLY","DIVIDE"].includes(kind)?<input className="wf-input" placeholder={ar?"اسم حقل النتيجة":"Output field"} value={String(op.field??"")} onChange={e=>set({field:e.target.value})}/>:null}
@@ -57,6 +57,11 @@ export default function WorkflowFunctionsPage(){
    {kind==="CONCAT"?<input className="wf-input" placeholder={ar?"الفاصل (اختياري)":"Separator (optional)"} value={String(op.separator??"")} onChange={e=>set({separator:e.target.value})}/>:null}
    {kind==="ADD_TAG"?<input className="wf-input" placeholder={ar?"اسم الوسم":"Tag"} value={String(op.tag??"")} onChange={e=>set({tag:e.target.value})}/>:null}
    {kind==="NOTIFY_OWNER"?<><input className="wf-input" placeholder={ar?"عنوان الإشعار":"Notification title"} value={String(op.title??"")} onChange={e=>set({title:e.target.value})}/><input className="wf-input" placeholder={ar?"نص الإشعار":"Notification body"} value={String(op.body??"")} onChange={e=>set({body:e.target.value})}/></>:null}
+   {kind==="CONNECTION_READ"?<>
+    <select className="wf-input" value={String(op.connectionId??"")} onChange={e=>set({connectionId:e.target.value})}><option value="">{ar?"اختر اتصالاً":"Select connection"}</option>{connections.map(c=><option key={c.id} value={c.id}>{c.name}</option>)}</select>
+    <input className="wf-input" placeholder={ar?"اسم الملف المعروض":"File name"} value={String(op.resourceName??"")} onChange={e=>set({resourceName:e.target.value})}/>
+    <details className="sm:col-span-2 text-[11px]"><summary>{ar?"متقدم":"Advanced"}</summary><input className="wf-input mt-1 w-full" aria-label="Internal file reference" value={String(op.resourceId??"")} onChange={e=>set({resourceId:e.target.value})}/></details>
+   </>:null}
    {kind==="HTTP_REQUEST"?<>
     <select className="wf-input" value={String(op.connectionId??"")} onChange={e=>set({connectionId:e.target.value})}><option value="">{ar?"اختر اتصالاً":"Select connection"}</option>{connections.map(c=><option key={c.id} value={c.id}>{c.name} · {c.provider}</option>)}</select>
     <select className="wf-input" value={String(op.method??"GET")} onChange={e=>set({method:e.target.value})}>{["GET","POST","PUT","PATCH","DELETE","HEAD"].map(v=><option key={v}>{v}</option>)}</select>
@@ -66,7 +71,7 @@ export default function WorkflowFunctionsPage(){
   </div>
  </div>})}</div>
  {operations.length===0?<div className="mt-3 rounded-lg border border-dashed border-slate-200 p-4 text-center text-[9px] text-slate-500">{ar?"أضف أول خطوة للبدء.":"Add the first step to start."}</div>:null}
- <div className="mt-3 flex flex-wrap gap-1.5">{["SET_FIELD","COPY_VALUE","CONCAT","LOWERCASE","UPPERCASE","NUMBER","ADD","SUBTRACT","MULTIPLY","DIVIDE","NOTIFY_OWNER","ADD_TAG","IF","HTTP_REQUEST"].map(v=><button key={v} type="button" className="rounded-full border border-slate-200 bg-white px-2 py-1 text-[8px] text-slate-600" onClick={()=>addOperation(v)}>＋ {v}</button>)}</div>
+ <div className="mt-3 flex flex-wrap gap-1.5">{["SET_FIELD","COPY_VALUE","CONCAT","LOWERCASE","UPPERCASE","NUMBER","ADD","SUBTRACT","MULTIPLY","DIVIDE","NOTIFY_OWNER","ADD_TAG","IF","HTTP_REQUEST","Get file"].map(v=><button key={v} type="button" className="rounded-full border border-slate-200 bg-white px-2 py-1 text-[8px] text-slate-600" onClick={()=>addOperation(v==="Get file"?"CONNECTION_READ":v)}>＋ {v}</button>)}</div>
 </div>
 <details className="rounded-xl border border-slate-200 bg-slate-50 p-3"><summary className="cursor-pointer text-[9px] font-semibold text-slate-600">{ar?"تحرير JSON متقدم (اختياري)":"Advanced JSON editor (optional)"}</summary><textarea className="wf-input mt-3 min-h-[160px] font-mono" value={JSON.stringify(draft.definition,null,2)} onChange={e=>{try{setDraft({...draft,definition:JSON.parse(e.target.value)})}catch{}}}/></details></div><div className="mt-5 flex justify-end gap-2"><button className="wd-pill wd-pill-record" onClick={()=>setOpen(false)}>{ar?"إلغاء":"Cancel"}</button><button className="wd-pill wd-pill-new" disabled={busy} onClick={()=>void create()}>{ar?"إنشاء":"Create"}</button></div></div></div>}
  {selected&&<div className="fixed inset-0 z-[240] flex items-center justify-center bg-slate-950/40 p-4"><div className="wf-modal w-[min(820px,96vw)] max-h-[90vh] overflow-y-auto p-5" dir={ar?"rtl":"ltr"}>

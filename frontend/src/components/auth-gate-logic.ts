@@ -2,6 +2,31 @@ export const IMKAN_ACCESS_TOKEN_KEY = "workdrive_access_token";
 
 const OAUTH_TOKEN_BACKUP_KEY = "workdrive_oauth_token_backup";
 
+export const OAUTH_RESUME_HASH_KEY = "imkan_resume";
+
+export type AuthGatePhase = "loading" | "authenticated" | "unauthenticated";
+
+export function readOAuthResumeToken(hash: string): string | null {
+  const raw = hash.startsWith("#") ? hash.slice(1) : hash;
+  if (!raw) return null;
+  const params = new URLSearchParams(raw);
+  if (params.get("imkan_session")) return null;
+  const token = params.get(OAUTH_RESUME_HASH_KEY);
+  return token && token.length > 20 ? token : null;
+}
+
+export function authGatePhase(input: { exchanging: boolean; hasToken: boolean; meStatus: number | null }): AuthGatePhase {
+  if (input.exchanging) return "loading";
+  if (!input.hasToken) return "unauthenticated";
+  if (input.meStatus === null) return "loading";
+  if (input.meStatus === 401) return "unauthenticated";
+  return "authenticated";
+}
+
+export function shouldRedirectToLogin(phase: AuthGatePhase): boolean {
+  return phase === "unauthenticated";
+}
+
 export function stashBrowserAccessTokenForOAuth(token: string | null): void {
   if (typeof window === "undefined" || !token) return;
   try { sessionStorage.setItem(OAUTH_TOKEN_BACKUP_KEY, token); } catch { /* storage may be unavailable */ }

@@ -26,6 +26,7 @@ async function request<T>(path: string, body?: unknown): Promise<T> {
 }
 
 export function login(email: string, password: string) { return request<AuthResult>('/auth/login', { email, password }); }
+export function redeemOAuthResume(code: string) { return request<AuthResult>('/auth/oauth-resume', { code }); }
 export function signup(name: string, email: string, password: string, inviteToken?: string) { return request<AuthResult>('/auth/signup', { name, email, password, ...(inviteToken ? { inviteToken } : {}) }); }
 export async function googleUrl() { return request<{ url: string }>('/auth/google'); }
 export class SessionCheckError extends Error {

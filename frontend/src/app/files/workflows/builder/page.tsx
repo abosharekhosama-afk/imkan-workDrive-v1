@@ -8,7 +8,8 @@ import { WorkflowHelp } from "@/components/workflow-help";
 import { ConnectionUseHint, WorkflowConceptGuide, WorkflowNextSteps, type WorkflowRecipe } from "@/components/workflow-concept-guide";
 import { listFolderTree, type FolderTreeItem } from "@/lib/api/folders";
 import { useWorkflowAccess } from "@/components/workflow-access";
-import { listConnections, createWorkflow, getWorkflow, updateWorkflow, getWorkflowConnectionHealth, listWorkflowParticipantOptions, listWorkflowTemplates, listWorkflowFunctions, type Workflow, type WorkflowParticipant, type WorkflowDataTemplate, type WorkflowFunction, type WorkflowConnectionHealth } from "@/lib/api/workflows";
+import { listConnections, createWorkflow, getWorkflow, updateWorkflow, getWorkflowConnectionHealth, listWorkflowParticipantOptions, listWorkflowTemplates, listWorkflowFunctions, type Workflow, type WorkflowParticipant, type WorkflowDataTemplate, type WorkflowFunction, type WorkflowConnectionHealth, type Connection } from "@/lib/api/workflows";
+import { ConnectionPicker, ConnectionUpload, ResourcePicker } from "@/components/connection-picker";
 
 type Action = { type: string; config: Record<string, unknown> };
 type WorkflowField = { id: string; name: string; description: string; type: string; required: boolean; defaultValue?: string; max?: number; options?: string[] };
@@ -30,7 +31,7 @@ const TRIGGERS = [
   ["properties_updated", "Properties updated", "تم تحديث الخصائص"], ["ready", "File marked as ready", "تم تعليم الملف كجاهز"],
 ] as const;
 const ACTIONS = [
-  ["http_request", "HTTP request", "طلب HTTP"], ["send_email", "Send email", "إرسال بريد إلكتروني"], ["create_document_from_template", "Create document from template", "إنشاء مستند من قالب"], ["notify", "System notification", "إشعار للنظام"], ["move", "Move", "نقل"], ["copy", "Copy", "نسخ"], ["generate_link", "Generate link", "إنشاء رابط"],
+  ["connection_file", "Get file", "جلب ملف"], ["http_request", "HTTP request", "طلب HTTP"], ["send_email", "Send email", "إرسال بريد إلكتروني"], ["create_document_from_template", "Create document from template", "إنشاء مستند من قالب"], ["notify", "System notification", "إشعار للنظام"], ["move", "Move", "نقل"], ["copy", "Copy", "نسخ"], ["generate_link", "Generate link", "إنشاء رابط"],
   ["share", "Share", "مشاركة"], ["request_approval", "Request approval", "طلب موافقة"], ["favorite", "Add to favorites", "إضافة للمفضلة"],
   ["tag", "Add tag", "إضافة وسم"], ["mark_final", "Mark as final", "تعليم كنهائي"], ["create_folder", "Create folder", "إنشاء مجلد"],
   ["data_template", "Apply data template", "تطبيق قالب بيانات"], ["custom_function", "Run custom function", "تشغيل دالة آمنة"],
@@ -141,7 +142,7 @@ function UserPicker({ selected, users, ar, onChange }: { selected: string[]; use
 function ActionEditor({ actions, onChange, resourceType, ar, workflowFields }: { actions: Action[]; onChange: (next: Action[]) => void; resourceType: string; ar: boolean; workflowFields: WorkflowField[] }) {
   const [dragged, setDragged] = useState<number | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
-  const [connections, setConnections] = useState<Array<{id:string;name:string;provider:string;status:string}>>([]);
+  const [connections, setConnections] = useState<Connection[]>([]);
   useEffect(() => { void listConnections({ status: "ACTIVE" }).then(setConnections).catch(() => undefined); }, []);
   const [participantOptions, setParticipantOptions] = useState<{ users: WorkflowParticipant[]; groups: Array<{ id:string; name:string; memberCount?:number }>; roles:string[] }>({ users:[], groups:[], roles:[] });
   const [templates, setTemplates] = useState<WorkflowDataTemplate[]>([]);
@@ -246,8 +247,13 @@ function ActionEditor({ actions, onChange, resourceType, ar, workflowFields }: {
             <label className="workflow-action-field sm:col-span-2"><span>{txt(ar,"Attachment workflow field (optional)","حقل مرفق المستند (اختياري)")}</span><select value={String(a.config.attachmentFieldId ?? "")} onChange={e=>update(i,"attachmentFieldId",e.target.value)}><option value="">{txt(ar,"No attachment","بدون مرفق")}</option>{workflowFields.map(f=><option key={f.id} value={f.id}>{f.name || f.id}</option>)}</select></label>
           </>}
 
+          {a.type === "connection_file" && <>
+            <ConnectionPicker connections={connections} value={String(a.config.connectionId ?? "")} onChange={(id) => { const next = connections.find((item) => item.id === id); update(i, "connectionId", id); update(i, "provider", next?.provider ?? ""); }} />
+            <ResourcePicker connectionId={String(a.config.connectionId ?? "")} provider={String(a.config.provider ?? connections.find((item) => item.id === a.config.connectionId)?.provider ?? "")} value={String(a.config.resourceId ?? "")} label={String(a.config.resourceName ?? "")} onChange={(resource) => { update(i, "resourceId", resource.id); update(i, "resourceName", resource.name); }} />
+            <ConnectionUpload connectionId={String(a.config.connectionId ?? "")} provider={String(a.config.provider ?? connections.find((item) => item.id === a.config.connectionId)?.provider ?? "")} parentId={String(a.config.destinationId ?? "")} parentName={String(a.config.destinationName ?? "")} />
+          </>}
           {a.type === "http_request" && <>
-            <label className="workflow-action-field sm:col-span-2"><span>{txt(ar,"Connection — who authorizes this request?","الاتصال — بأي حساب يتم التفويض؟")}</span><select value={String(a.config.connectionId ?? "")} onChange={e=>update(i,"connectionId",e.target.value)}><option value="">{txt(ar,"Select an ACTIVE connection","اختر اتصالاً نشطاً")}</option>{connections.map(c=><option key={c.id} value={c.id}>{c.name} · {c.provider}</option>)}</select><small className="mt-1 block text-[8.5px] leading-4 text-slate-400">{txt(ar,"The server supplies OAuth credentials from this connection. You only configure the API request.","الخادم يستخدم بيانات OAuth الخاصة بهذا الاتصال تلقائياً؛ أنت تضبط طلب الـAPI فقط.")}</small></label>
+            <ConnectionPicker connections={connections} value={String(a.config.connectionId ?? "")} onChange={(id) => update(i, "connectionId", id)} />
             {field(txt(ar,"Path / URL path","المسار"), a.config.path, v => update(i,"path",v), "/v1/resource or ?id={{file.id}}")}
             <label className="workflow-action-field"><span>{txt(ar,"Method","الطريقة")}</span><select value={String(a.config.method ?? "GET")} onChange={e=>update(i,"method",e.target.value)}>{["GET","POST","PUT","PATCH","DELETE","HEAD"].map(m=><option key={m}>{m}</option>)}</select></label>
             <label className="workflow-action-field sm:col-span-2"><span>{txt(ar,"Body (optional)","الجسم (اختياري)")}</span><textarea value={String(a.config.body ?? "")} onChange={e=>update(i,"body",e.target.value)} rows={4} placeholder='{"fileId":"{{file.id}}"}' /></label>

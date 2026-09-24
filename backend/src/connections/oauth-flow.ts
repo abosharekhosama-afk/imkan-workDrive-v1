@@ -34,7 +34,10 @@ export function normalizeOAuthReturnPath(value: string | null | undefined): stri
 
 export function buildOAuthBrowserUrl(frontend: string, pathAndQuery: string): string {
   const base = frontend.replace(/\/$/, '');
-  const path = pathAndQuery.startsWith('/') ? pathAndQuery : `/${pathAndQuery}`;
+  if (!pathAndQuery.startsWith('/') || pathAndQuery.startsWith('//') || pathAndQuery.includes('://') || pathAndQuery.includes('\\')) {
+    return `${base}/files/connections`;
+  }
+  const path = pathAndQuery;
   try {
     const url = new URL(path, `${base}/`);
     if (url.origin !== new URL(base).origin) return `${base}/files/connections`;
@@ -71,6 +74,20 @@ export function probeTargets(provider: string, configuredProbeUrl?: string | nul
 
 export function safeOrigin(value: string): string {
   try { return new URL(value).origin; } catch { return 'invalid-origin'; }
+}
+
+export function appendOAuthResumeFragment(location: string, resumeCode: string | null | undefined): string {
+  if (!resumeCode || location.includes('imkan_resume=') || location.includes('imkan_session=')) return location;
+  return `${location}#imkan_resume=${encodeURIComponent(resumeCode)}`;
+}
+
+export function friendlyOAuthMessage(codeOrMessage: string): string {
+  const value = codeOrMessage.toLowerCase();
+  if (value.includes('invalid_grant') || value.includes('token_exchange') || value.includes('expired')) return 'Your connection expired. Reconnect to continue.';
+  if (value.includes('state')) return 'This authorization link is no longer valid. Start the connection again.';
+  if (value.includes('access') || value.includes('403') || value.includes('401')) return "We couldn't access this account. Reconnect and try again.";
+  if (value.includes('cancel')) return 'Authorization was cancelled. You can connect again when you are ready.';
+  return 'We could not finish connecting this account.';
 }
 
 export function safeOAuthErrorCode(message: string): string {

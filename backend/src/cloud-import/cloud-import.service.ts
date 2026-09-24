@@ -101,7 +101,7 @@ export class CloudImportService implements OnModuleInit, OnModuleDestroy {
         update: { accessToken: this.encrypt(accessToken), ...(refreshToken ? { refreshToken: this.encrypt(refreshToken) } : {}), expiresAt: generic.expiresAt, scope: generic.scope },
       });
     }
-    return { frontend: result.frontend, folderId: result.folderId, connectionId: result.connectionId };
+    return { frontend: result.frontend, folderId: result.folderId, connectionId: result.connectionId, resumeToken: result.resumeToken ?? null };
   }
 
   async listProviders(user: AccessTokenPayload) {

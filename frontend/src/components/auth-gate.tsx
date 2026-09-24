@@ -1,14 +1,17 @@
 "use client";
 import { useEffect, useState, type ReactNode } from "react";
 import { usePathname, useRouter } from "next/navigation";
-import { clearSession, me, SessionCheckError } from "../lib/api/auth";
+import { clearSession, me, redeemOAuthResume, SessionCheckError } from "../lib/api/auth";
 import {
   authCheckRetryDelayMs,
   buildAuthGateDiagnostic,
   buildAuthLoginNextPath,
   persistBrowserAccessToken,
   readBrowserAccessToken,
+  authGatePhase,
+  readOAuthResumeToken,
   restoreBrowserAccessTokenAfterOAuth,
+  shouldRedirectToLogin,
   shouldEndImkanSession,
   shouldRetryAuthCheck,
 } from "./auth-gate-logic";
@@ -27,17 +30,18 @@ export function AuthGate({ children }: { children: ReactNode }) {
     let cancelled = false;
     const cookie = typeof document !== "undefined" ? document.cookie : "";
     const oauthParams = typeof window !== "undefined" ? new URLSearchParams(window.location.search) : new URLSearchParams();
-    // OAuth returns from a third-party provider can land on a fresh browser
-    // context (or a different app shell) before the page component mounts.
-    // Restore the short-lived token backup before deciding that the session
-    // is missing; otherwise AuthGate sends the user to /auth/login and the
-    // connection flow appears to have lost its return route.
+    const resumeCode = typeof window !== "undefined" ? readOAuthResumeToken(window.location.hash) : null;
+    if (resumeCode && typeof window !== "undefined") {
+      window.history.replaceState(window.history.state, "", `${window.location.pathname}${window.location.search}`);
+    }
     const restoredOAuthToken = (oauthParams.get("oauth") || oauthParams.get("connectionId"))
       ? restoreBrowserAccessTokenAfterOAuth()
       : null;
-    const token = restoredOAuthToken ?? readBrowserAccessToken(localStorage, document.cookie);
-
-    logAuthGate("initialization", buildAuthGateDiagnostic({
+    const storedToken = restoredOAuthToken ?? readBrowserAccessToken(localStorage, document.cookie);
+    const finish = (token: string | null) => {
+      if (cancelled) return;
+      const phase = authGatePhase({ exchanging: false, hasToken: Boolean(token), meStatus: token ? null : 0 });
+      logAuthGate("initialization", buildAuthGateDiagnostic({
       stage: "initialization",
       hasAccessToken: Boolean(token),
       hasCookie: /(?:^| )workdrive_access_token=/.test(cookie),
@@ -46,7 +50,7 @@ export function AuthGate({ children }: { children: ReactNode }) {
       connectionId: oauthParams.get("connectionId"),
     }));
 
-    if (!token) {
+    if (shouldRedirectToLogin(phase) || !token) {
       const next = buildAuthLoginNextPath(pathname, window.location.search);
       logAuthGate("redirect_login_missing_token", buildAuthGateDiagnostic({
         stage: "redirect_login_missing_token",
@@ -111,6 +115,13 @@ export function AuthGate({ children }: { children: ReactNode }) {
     };
 
     validate(0);
+    };
+    if (resumeCode) {
+      void redeemOAuthResume(resumeCode).then((result) => {
+        persistBrowserAccessToken(result.access_token);
+        finish(result.access_token);
+      }).catch(() => finish(storedToken));
+    } else finish(storedToken);
     return () => {
       cancelled = true;
     };

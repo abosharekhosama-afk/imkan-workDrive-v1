@@ -415,6 +415,13 @@ export class WorkflowEngineService implements OnModuleInit, OnModuleDestroy {
   private async executeAction(user: AccessTokenPayload, event: WorkflowFileEvent, action: WorkflowAction, workflowId: string, runId: string, stepId?: string) {
     const config = action.config ?? {};
     switch (action.type) {
+      case 'connection_file': {
+        const connectionId = String(config.connectionId ?? '');
+        const resourceId = String(config.resourceId ?? '');
+        if (!connectionId || !resourceId) throw new Error('Choose a connection and a file.');
+        const resource = await this.connections.readResource(user, connectionId, resourceId);
+        return { action: 'connection_file', connectionId, resource };
+      }
       case 'http_request': {
         const connectionId = typeof config.connectionId === 'string' ? config.connectionId.trim() : '';
         if (!connectionId) throw new Error('HTTP request action requires a connection');

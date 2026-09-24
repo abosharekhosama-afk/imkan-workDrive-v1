@@ -478,6 +478,45 @@ export class AuthService {
     return this.issue(user, primaryMembership);
   }
 
+  async issueOAuthResumeCode(userId: string): Promise<string> {
+    const user = await this.prisma.user.findUnique({ where: { id: userId }, select: { id: true, currentOrganizationId: true } });
+    if (!user) throw new UnauthorizedException('User not found');
+    const membership = await this.prisma.organizationMembership.findFirst({
+      where: { userId: user.id, status: MembershipStatus.ACTIVE, ...(user.currentOrganizationId ? { organizationId: user.currentOrganizationId } : {}) },
+    });
+    if (!membership) throw new UnauthorizedException('No active organization membership');
+    const secret = this.config.get<string>('JWT_SECRET');
+    if (!secret) throw new UnauthorizedException('JWT is not configured');
+    return jwt.sign({ purpose: 'oauth_resume', sub: user.id, org_id: membership.organizationId, jti: randomUUID() }, secret, { expiresIn: '90s' });
+  }
+
+  async redeemOAuthResumeCode(code: string): Promise<AuthResult> {
+    const secret = this.config.get<string>('JWT_SECRET');
+    if (!secret) throw new UnauthorizedException('JWT is not configured');
+    let payload: jwt.JwtPayload;
+    try { payload = jwt.verify(code, secret) as jwt.JwtPayload; } catch { throw new UnauthorizedException('Resume code is invalid'); }
+    if (payload.purpose !== 'oauth_resume' || typeof payload.sub !== 'string' || typeof payload.org_id !== 'string' || typeof payload.jti !== 'string') {
+      throw new UnauthorizedException('Resume code is invalid');
+    }
+    try {
+      await this.prisma.session.create({ data: { id: payload.jti, orgId: payload.org_id, userId: payload.sub, tokenHash: this.hashToken(code), expiresAt: new Date(Date.now() + 90_000), revokedAt: new Date() } });
+    } catch {
+      throw new UnauthorizedException('Resume code was already used');
+    }
+    return this.issueForUserId(payload.sub);
+  }
+
+  async issueForUserId(userId: string): Promise<AuthResult> {
+    const user = await this.prisma.user.findUnique({ where: { id: userId }, select: { id: true, name: true, email: true, currentOrganizationId: true } });
+    if (!user) throw new UnauthorizedException('User not found');
+    const membership = await this.prisma.organizationMembership.findFirst({
+      where: { userId: user.id, status: MembershipStatus.ACTIVE, ...(user.currentOrganizationId ? { organizationId: user.currentOrganizationId } : {}) },
+      orderBy: { joinedAt: 'desc' },
+    });
+    if (!membership) throw new UnauthorizedException('No active organization membership');
+    return this.issue(user, membership, { userAgent: 'oauth-return' });
+  }
+
   private async issue(user: { id: string; name: string | null; email: string }, membership: MembershipInfo, context?: { ipAddress?: string; userAgent?: string }): Promise<AuthResult> {
     const secret = this.config.get<string>('JWT_SECRET');
     if (!secret) throw new UnauthorizedException('JWT is not configured');

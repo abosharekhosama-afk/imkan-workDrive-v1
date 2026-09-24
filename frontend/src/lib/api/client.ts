@@ -133,7 +133,8 @@ export function isUnauthorizedError(error: unknown): boolean {
 export function redirectToLoginOnExpiredSession(error: unknown): boolean {
   if (!isUnauthorizedError(error)) return false;
   if (typeof window !== "undefined" && !window.location.pathname.startsWith("/auth")) {
-    window.location.href = "/auth/login";
+    const next = `${window.location.pathname}${window.location.search}`;
+    window.location.href = `/auth/login?next=${encodeURIComponent(next)}`;
   }
   return true;
 }
