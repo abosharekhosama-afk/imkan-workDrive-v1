@@ -303,7 +303,7 @@ export default function SheetPage() {
           editing={editing}
           editingKey={editingKey}
           editValue={input}
-          onSelect={(nextAnchor, nextFocus) => { setAnchor(nextAnchor); setSelected(nextFocus); }}
+          onSelect={(nextAnchor, nextFocus) => { setAnchor(nextAnchor); setSelected(nextFocus); gridFocusRef.current?.focus(); }}
           onBeginEdit={begin}
           onEditValueChange={setInput}
           onCommitEdit={finish}
