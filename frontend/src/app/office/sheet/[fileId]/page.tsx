@@ -29,10 +29,14 @@ import { deletePivotTable, updateTable } from '@/office/sheet/table-pivot';
 import { cacheOfficeSnapshot, readOfficeSnapshot, queueDocumentChange, offlineQueueCount, installOfflineSync, clearOfflineConflict, readOfflineConflict, prepareOfflineConflict, rebaseOfflineQueue, discardOfflineQueue } from '@/office/offline';
 import { extractRangeData, type RangeCellData, type PasteMode } from '@/office/sheet/clipboard/paste-special-logic';
 import { findTableAtCell } from '@/office/sheet/tables/table-logic';
-import { hiddenTableRows } from '@/office/sheet/tables/table-filter-logic';
 import { findPivotAtCell, refreshPivotToSheet } from '@/office/sheet/pivot/pivot-render-logic';
-import { destinationOverwriteKeys, previewTextToColumns, textToColumnsMatrix } from '@/office/sheet/data/text-to-columns-logic';
 import { applyTextToColumns, deleteTableById, pasteSpecialWorkbook, removeDuplicates, setCellNote, sortTableWorkbook, updatePivot } from '@/office/sheet/data/sheet-data-commands';
+import {
+  duplicateColumnsForSheet,
+  hiddenTableRowsForSheet,
+  textOverwriteCountForSheet,
+  textSplitPreviewForSheet,
+} from '@/office/sheet/sheet-page-derived-logic';
 import { SheetWorkspacePanels, type SheetDialogState } from '@/office/sheet/panels/sheet-workspace-panels';
 
 const ROWS = 100, COLS = 26;
@@ -254,28 +258,16 @@ export default function SheetPage() {
     if(choice==='remote' && conflict?.remote){ discardOfflineQueue(fileId); setDoc(conflict.remote as Workbook); ref.current=conflict.remote as Workbook; setRevision(conflict.remoteRevision); cacheOfficeSnapshot(fileId,'SHEET',conflict.remoteRevision,conflict.remote); setSaved(true); setConflict(null); setError(''); return; }
     const result=await rebaseOfflineQueue(fileId); if(result.ok){ setDoc(result.document as Workbook); ref.current=result.document as Workbook; setRevision(result.revision); setConflict(null); setError(t('Local work was rebased onto the latest remote revision.','تمت إعادة بناء عملك المحلي فوق أحدث إصدار بعيد.')); const {flushOfficeQueue}=await import('@/office/collaboration-v2'); await flushOfficeQueue(fileId,session.current||undefined,r=>setRevision(r),async e=>{if(e?.status===409)setConflict(await prepareOfflineConflict(fileId,'SHEET',e?.code||'OFFICE_OPERATION_CONFLICT'));}); setSaved(offlineQueueCount(fileId)===0); } else setError(t('These changes overlap the remote edit. Keep the conflict open and reconcile manually.','هذه التغييرات تتداخل مع التعديل البعيد. أبقِ التعارض مفتوحًا وقم بالمصالحة يدويًا.'));
   };
+
+  const colNameFor = (n: number) => { let s=''; for (let x=n+1; x>0; x=Math.floor((x-1)/26)) s=String.fromCharCode(65+(x-1)%26)+s; return s; };
+  const duplicateColumns = useMemo(() => duplicateColumnsForSheet(sheet, anchor, selected), [sheet, anchor, selected]);
+  const textSplitPreview = useMemo(() => textSplitPreviewForSheet(sheet, selected), [sheet, selected]);
+  const textOverwriteCount = useMemo(() => textOverwriteCountForSheet(sheet, selected), [sheet, selected, dialogs.textToColumns]);
+  const tableHiddenRows = useMemo(() => hiddenTableRowsForSheet(sheet, doc), [sheet, doc]);
+
   if (!doc || !sheet) return <div className="flex h-screen items-center justify-center text-sm text-slate-500">{error || t('Opening IMKAN Sheet…', 'جارٍ فتح IMKAN Sheet…')}</div>;
 
   const bounds = rangeBounds(anchor, selected);
-  const colNameFor = (n: number) => { let s=''; for (let x=n+1; x>0; x=Math.floor((x-1)/26)) s=String.fromCharCode(65+(x-1)%26)+s; return s; };
-  const duplicateColumns = useMemo(() => {
-    const b = rangeBounds(anchor, selected);
-    const a = parseKey(b.start)!;
-    const c = parseKey(b.end)!;
-    const c0 = Math.min(a.col, c.col);
-    const c1 = Math.max(a.col, c.col);
-    return Array.from({ length: c1 - c0 + 1 }, (_, i) => ({ index: i, label: colNameFor(c0 + i) }));
-  }, [anchor, selected]);
-  const textSplitPreview = useMemo(() => {
-    const source = sheet.cells[selected];
-    const text = source?.formula ? source.formula.replace(/^=/, '') : String(source?.value ?? '');
-    return previewTextToColumns(text, 'comma');
-  }, [selected, sheet.cells]);
-  const textOverwriteCount = useMemo(() => {
-    const { rowCount, colCount } = textToColumnsMatrix(sheet.cells, selected, 'comma');
-    return destinationOverwriteKeys(selected, rowCount, colCount, sheet.cells).length;
-  }, [selected, sheet.cells, dialogs.textToColumns]);
-  const tableHiddenRows = useMemo(() => hiddenTableRows(sheet, doc), [sheet, doc]);
   const display = formulaDisplay(cell, sheet, doc);
   const selectedCell = sheet.cells[selected];
   const autoSum = () => begin(selected, autoSumRange(bounds.start, bounds.end));

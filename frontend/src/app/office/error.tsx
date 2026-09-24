@@ -22,6 +22,10 @@ export default function OfficeError({
   useEffect(() => {
     // Kept for diagnostics: the user sees a recoverable state, not a dead page.
     console.error("[office-page]", error);
+    if (process.env.NODE_ENV !== "production") {
+      console.error("[office-page] message:", error.message);
+      if (error.stack) console.error("[office-page] stack:", error.stack);
+    }
   }, [error]);
 
   return (
