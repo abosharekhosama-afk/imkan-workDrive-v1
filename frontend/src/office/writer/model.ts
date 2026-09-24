@@ -57,6 +57,7 @@ export type WriterReview = {
   trackChanges: boolean;
   showFormattingChanges?: boolean;
   displayMode?: 'simple' | 'all' | 'original';
+  markupColor?: string;
 };
 export type WriterBlockType = 'paragraph' | 'title' | 'subtitle' | 'heading1' | 'heading2' | 'heading3' | 'list-item' | 'table' | 'image' | 'page-break' | 'equation' | 'symbol' | 'bibliography' | 'index' | 'toc';
 
@@ -175,6 +176,7 @@ export function normalizeWriterDocument(value: any): WriterDocument {
     trackChanges: Boolean(rawReview.trackChanges),
     showFormattingChanges: rawReview.showFormattingChanges !== false,
     displayMode: rawReview.displayMode === 'simple' || rawReview.displayMode === 'original' ? rawReview.displayMode : 'all',
+    markupColor: typeof rawReview.markupColor === 'string' ? rawReview.markupColor : '#22c55e',
     comments: Array.isArray(rawReview.comments) ? rawReview.comments.slice(-500).map(normalizeComment) : [],
     changes: Array.isArray(rawReview.changes) ? rawReview.changes.slice(-500).map(normalizeChange) : [],
     snapshots: Array.isArray(rawReview.snapshots) ? rawReview.snapshots.slice(-20).map(normalizeSnapshot) : [],

@@ -40,3 +40,5 @@ export function acceptAllChanges(doc: WriterDocument): WriterDocument { const ne
 export function rejectAllChanges(doc: WriterDocument): WriterDocument { const next=cloneWriterDocument(doc); for(const c of next.review.changes){if(c.status!=='pending')continue;const block=next.blocks.find(b=>b.id===c.blockId);if(block)block.runs=cloneRuns(c.before);c.status='rejected';} return next; }
 export function setReviewDisplayMode(doc: WriterDocument, displayMode: 'simple'|'all'|'original'): WriterDocument { const next=cloneWriterDocument(doc); next.review.displayMode=displayMode; return next; }
 export function setShowFormattingChanges(doc: WriterDocument, value: boolean): WriterDocument { const next=cloneWriterDocument(doc); next.review.showFormattingChanges=value; return next; }
+
+export function setMarkupColor(doc: WriterDocument, color: string): WriterDocument { const next=cloneWriterDocument(doc); next.review.markupColor=color; return next; }

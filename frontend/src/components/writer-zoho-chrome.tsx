@@ -166,6 +166,19 @@ export type WriterChromeProps = {
   onAddParagraph: Action;
   onPageZoom?: (value: number) => void;
   onNavigate?: Action;
+  onClearFormatting?: Action;
+  onLineSpacing?: (value: number) => void;
+  onParagraphStyle?: (value: 'paragraph'|'title'|'subtitle'|'heading1'|'heading2'|'heading3') => void;
+  onSuperscript?: Action;
+  onSubscript?: Action;
+  onMarkupColor?: (value: string) => void;
+  onReviewMode?: (value: 'all'|'simple'|'original') => void;
+  onWordCount?: Action;
+  onDocumentStatistics?: Action;
+  onToggleFormattingMarks?: Action;
+  onToggleImages?: Action;
+  onRuler?: Action;
+  onZoom?: (value: number) => void;
 };
 
 type MenuName = 'File' | 'Edit' | 'View' | 'Insert' | 'Format' | 'Design' | 'Page Setup' | 'Review' | 'Tools' | 'Fields' | 'Automate' | 'Help' | null;
@@ -191,6 +204,8 @@ export function WriterChrome(props: WriterChromeProps) {
   const [fontSize, setFontSize] = useState(12);
   const [color, setColor] = useState('#222222');
   const [highlight, setHighlight] = useState('#ffe86a');
+  const [zoom, setZoom] = useState(100);
+  const [lineSpacing, setLineSpacing] = useState(1.5);
   const rootRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -247,28 +262,48 @@ export function WriterChrome(props: WriterChromeProps) {
   ];
 
   const viewItems: MenuItem[] = [
-    { label: 'Document View : Page View', icon: 'view', arrow: true },
-    { label: 'Reader View', icon: 'reader', onClick: noop },
-    { label: 'Full Screen', icon: 'fullscreen', shortcut: 'Ctrl+F11', onClick: props.onFullscreen },
-    { label: 'Zoom: 100%', icon: 'zoom', arrow: true },
+    { label: 'Document View : Page View', icon: 'view', arrow: true, submenu: [
+      { label: 'Page View', icon: 'view' },
+      { label: 'Web View', icon: 'view' },
+    ] },
+    { label: 'Reader View', icon: 'reader', disabled: true },
+    { label: 'Full Screen', icon: 'fullscreen', shortcut: 'F11', onClick: props.onFullscreen },
+    { label: `Zoom: ${zoom}%`, icon: 'zoom', arrow: true, submenu: [
+      { label: '75%', icon: 'zoom', onClick: () => { setZoom(75); props.onZoom?.(75); } },
+      { label: '90%', icon: 'zoom', onClick: () => { setZoom(90); props.onZoom?.(90); } },
+      { label: '100%', icon: 'zoom', onClick: () => { setZoom(100); props.onZoom?.(100); } },
+      { label: '125%', icon: 'zoom', onClick: () => { setZoom(125); props.onZoom?.(125); } },
+      { label: '150%', icon: 'zoom', onClick: () => { setZoom(150); props.onZoom?.(150); } },
+    ] },
     { label: 'Navigator', icon: 'navigator', onClick: props.onNavigate },
-    { label: 'Hide Images', icon: 'hide' },
-    { label: 'Ruler', icon: 'ruler' },
+    { label: 'Hide Images', icon: 'hide', onClick: props.onToggleImages },
+    { label: 'Ruler', icon: 'ruler', onClick: props.onRuler },
     { label: 'Bookmarks', icon: 'bookmark', disabled: true },
-    { label: 'Smart Grid Lines', icon: 'grid' },
-    { label: 'Object Indicator', icon: 'object' },
-    { label: 'Toggle Formatting ...', icon: 'formatting', shortcut: 'Ctrl+Shift+8' },
-    { label: 'Appearance', icon: 'design', arrow: true },
-    { label: 'More View Options ...', icon: 'more' },
+    { label: 'Smart Grid Lines', icon: 'grid', disabled: true },
+    { label: 'Object Indicator', icon: 'object', disabled: true },
+    { label: 'Toggle Formatting Marks', icon: 'formatting', shortcut: 'Ctrl+Shift+8', onClick: props.onToggleFormattingMarks },
+    { label: 'Appearance', icon: 'design', arrow: true, submenu: [
+      { label: 'Light', icon: 'design' },
+      { label: 'Dark / Night', icon: 'design', disabled: true },
+    ] },
+    { label: 'More View Options ...', icon: 'more', disabled: true },
   ];
 
   const insertItems: MenuItem[] = [
     { label: 'Table', icon: 'table', onClick: props.onInsertTable },
     { label: 'Image', icon: 'image', onClick: props.onInsertImage },
     { label: 'Link', icon: 'link', onClick: props.onLink },
-    { label: 'Page Break', icon: 'break', onClick: props.onPageBreak },
+    { label: 'Break', icon: 'break', arrow: true, submenu: [
+      { label: 'Page Break', icon: 'break', onClick: props.onPageBreak },
+      { label: 'Section Break', icon: 'break', onClick: props.onSectionBreak },
+      { label: 'Column Break', icon: 'columns', disabled: true },
+    ] },
     { label: 'Header / Footer', icon: 'header', onClick: props.onHeaderFooter },
-    { label: 'Columns', icon: 'columns', onClick: props.onColumns },
+    { label: 'Columns', icon: 'columns', arrow: true, submenu: [
+      { label: 'One Column', icon: 'columns', onClick: () => props.onColumns() },
+      { label: 'Two Columns', icon: 'columns', onClick: () => props.onColumns() },
+      { label: 'Three Columns', icon: 'columns', disabled: true },
+    ] },
     { label: 'Equation', icon: 'equation', onClick: props.onEquation },
     { label: 'Symbol', icon: 'symbol', onClick: props.onSymbol },
     { label: 'Bookmark', icon: 'bookmark', onClick: props.onBookmark },
@@ -284,16 +319,26 @@ export function WriterChrome(props: WriterChromeProps) {
   const reviewItems: MenuItem[] = [
     { label: 'Add Comments', icon: 'comments', onClick: props.onComments },
     { label: 'Show Comments', icon: 'comment', onClick: props.onComments },
-    { label: 'Collaboration: Off', icon: 'users', arrow: true },
-    { label: `Track Changes: ${'Off'}`, icon: 'track', arrow: true, onClick: props.onTrackChanges },
-    { label: 'View Suggestions', icon: 'comments' },
-    { label: 'Markup View : All Markup', icon: 'review', arrow: true, disabled: true },
-    { label: 'Markup Color', icon: 'textColor', arrow: true },
+    { label: 'Collaboration: Off', icon: 'users', arrow: true, disabled: true },
+    { label: 'Track Changes: Off', icon: 'track', arrow: true, onClick: props.onTrackChanges },
+    { label: 'View Suggestions', icon: 'comments', onClick: props.onComments },
+    { label: 'Markup View : All Markup', icon: 'review', arrow: true, submenu: [
+      { label: 'All Markup', icon: 'review', onClick: () => props.onReviewMode?.('all') },
+      { label: 'Simple Markup', icon: 'review', onClick: () => props.onReviewMode?.('simple') },
+      { label: 'Original', icon: 'review', onClick: () => props.onReviewMode?.('original') },
+    ] },
+    { label: 'Markup Color', icon: 'textColor', arrow: true, submenu: [
+      { label: 'Green', icon: 'textColor', onClick: () => props.onMarkupColor?.('#22c55e') },
+      { label: 'Purple', icon: 'textColor', onClick: () => props.onMarkupColor?.('#9333ea') },
+      { label: 'Blue', icon: 'textColor', onClick: () => props.onMarkupColor?.('#2563eb') },
+      { label: 'Red', icon: 'textColor', onClick: () => props.onMarkupColor?.('#dc2626') },
+      { label: 'Orange', icon: 'textColor', onClick: () => props.onMarkupColor?.('#f59e0b') },
+    ] },
     { label: 'Compare Versions', icon: 'versions', onClick: props.onSnapshot },
-    { label: 'Combine Revisions', icon: 'versions' },
+    { label: 'Combine Revisions', icon: 'versions', disabled: true },
     { label: 'Lock/Unlock Content', icon: 'lock', disabled: true },
-    { label: 'Mask Content', icon: 'mask' },
-    { label: 'Notification Settings', icon: 'notification' },
+    { label: 'Mask Content', icon: 'mask', disabled: true },
+    { label: 'Notification Settings', icon: 'notification', disabled: true },
   ];
 
   const itemsForMenu = (name: MenuName): MenuItem[] => {
@@ -303,12 +348,41 @@ export function WriterChrome(props: WriterChromeProps) {
     if (name === 'Insert') return insertItems;
     if (name === 'Review') return reviewItems;
     if (name === 'Format') return [
-      { label: 'Paragraph Style', icon: 'paragraph', arrow: true },
-      { label: 'Text', icon: 'font', arrow: true },
-      { label: 'Align', icon: 'align', arrow: true },
-      { label: 'Lists', icon: 'list', arrow: true },
-      { label: 'Indent / Outdent', icon: 'indent', onClick: props.onIndent },
-      { label: 'Clear Formatting', icon: 'eraser' },
+      { label: 'Paragraph Style', icon: 'paragraph', arrow: true, submenu: [
+        { label: 'Normal', icon: 'paragraph', onClick: () => props.onParagraphStyle?.('paragraph') },
+        { label: 'Title', icon: 'paragraph', onClick: () => props.onParagraphStyle?.('title') },
+        { label: 'Subtitle', icon: 'paragraph', onClick: () => props.onParagraphStyle?.('subtitle') },
+        { label: 'Heading 1', icon: 'paragraph', onClick: () => props.onParagraphStyle?.('heading1') },
+        { label: 'Heading 2', icon: 'paragraph', onClick: () => props.onParagraphStyle?.('heading2') },
+        { label: 'Heading 3', icon: 'paragraph', onClick: () => props.onParagraphStyle?.('heading3') },
+      ] },
+      { label: 'Text Formatting', icon: 'font', arrow: true, submenu: [
+        { label: 'Bold', icon: 'bold', onClick: props.onBold },
+        { label: 'Italic', icon: 'italic', onClick: props.onItalic },
+        { label: 'Underline', icon: 'underline', onClick: props.onUnderline },
+        { label: 'Strikethrough', icon: 'strike', onClick: props.onStrike },
+        { label: 'Superscript', icon: 'superscript', onClick: props.onSuperscript },
+        { label: 'Subscript', icon: 'superscript', onClick: props.onSubscript },
+        { label: 'Clear Formatting', icon: 'eraser', onClick: props.onClearFormatting },
+      ] },
+      { label: 'Align', icon: 'align', arrow: true, submenu: [
+        { label: 'Align Left', icon: 'alignLeft', onClick: () => props.onAlign('start') },
+        { label: 'Center', icon: 'alignCenter', onClick: () => props.onAlign('center') },
+        { label: 'Align Right', icon: 'alignRight', onClick: () => props.onAlign('end') },
+        { label: 'Justify', icon: 'justify', onClick: () => props.onAlign('justify') },
+      ] },
+      { label: 'Lists', icon: 'list', arrow: true, submenu: [
+        { label: 'Bulleted List', icon: 'bullets', onClick: () => props.onList(false) },
+        { label: 'Numbered List', icon: 'numbering', onClick: () => props.onList(true) },
+      ] },
+      { label: 'Line Spacing', icon: 'line', arrow: true, submenu: [
+        { label: 'Single', icon: 'line', onClick: () => props.onLineSpacing?.(1) },
+        { label: '1.15', icon: 'line', onClick: () => props.onLineSpacing?.(1.15) },
+        { label: '1.5', icon: 'line', onClick: () => props.onLineSpacing?.(1.5) },
+        { label: 'Double', icon: 'line', onClick: () => props.onLineSpacing?.(2) },
+      ] },
+      { label: 'Indent', icon: 'indent', onClick: props.onIndent },
+      { label: 'Outdent', icon: 'outdent', onClick: props.onOutdent },
     ];
     if (name === 'Design') return [
       { label: 'Current Design : The Writer', icon: 'design', arrow: true },
@@ -329,10 +403,23 @@ export function WriterChrome(props: WriterChromeProps) {
       { label: 'Header / Footer', icon: 'header', onClick: props.onHeaderFooter },
     ];
     if (name === 'Tools') return [
-      { label: 'Spelling & Grammar', icon: 'spell' },
-      { label: 'Word Count', icon: 'document' },
+      { label: 'Ask Zia', icon: 'automation', disabled: true },
+      { label: 'Spell Check', icon: 'spell', onClick: props.onFind },
+      { label: 'Text to Table', icon: 'table', disabled: true },
+      { label: 'Translate Content', icon: 'symbol', disabled: true },
+      { label: 'Transliteration', icon: 'symbol', disabled: true },
+      { label: 'Focus Typing', icon: 'font', disabled: true },
+      { label: 'Typewriter Sound', icon: 'font', disabled: true },
+      { label: 'Thesaurus', icon: 'document', disabled: true },
+      { label: 'Autocorrect', icon: 'font', disabled: true },
+      { label: 'Personal Dictionary', icon: 'document', disabled: true },
+      { label: 'Read Aloud', icon: 'reader', disabled: true },
+      { label: 'Word Count', icon: 'document', onClick: props.onWordCount },
+      { label: 'View Document Images', icon: 'image', onClick: props.onToggleImages },
+      { label: 'Extensions', icon: 'plus', disabled: true },
+      { label: 'Engagement Insights', icon: 'properties', disabled: true },
       { label: 'Find and Replace', icon: 'search', onClick: props.onFind },
-      { label: 'Document Statistics', icon: 'properties' },
+      { label: 'Document Statistics', icon: 'properties', onClick: props.onDocumentStatistics },
     ];
     if (name === 'Fields') return [
       { label: 'Insert Field', icon: 'document' },
@@ -401,9 +488,9 @@ export function WriterChrome(props: WriterChromeProps) {
       <ToolbarButton icon="bold" title="Bold" onClick={props.onBold}/><ToolbarButton icon="italic" title="Italic" onClick={props.onItalic}/><ToolbarButton icon="underline" title="Underline" onClick={props.onUnderline}/><ToolbarButton icon="strike" title="Strikethrough" onClick={props.onStrike}/>
       <ColorButton icon="textColor" color={color} title="Text color" onChange={(v) => { setColor(v); props.onColor(v); }}/>
       <ColorButton icon="highlight" color={highlight} title="Highlight" onChange={(v) => { setHighlight(v); props.onHighlight(v); }}/>
-      <ToolbarButton icon="eraser" title="Clear formatting"/>
+      <ToolbarButton icon="eraser" title="Clear formatting" onClick={props.onClearFormatting}/>
       <Divider/>
-      <ToolbarButton icon="line" title="Line spacing"/><ToolbarButton icon="align" title="Alignment" onClick={() => { setAlignMenu(v => !v); setFontMenu(false); setMoreMenu(false); }} />
+      <ToolbarButton icon="line" title={`Line spacing ${lineSpacing}`} onClick={() => { const values=[1,1.15,1.5,2]; const next=values[(values.indexOf(lineSpacing)+1)%values.length]; setLineSpacing(next); props.onLineSpacing?.(next); }}/><ToolbarButton icon="align" title="Alignment" onClick={() => { setAlignMenu(v => !v); setFontMenu(false); setMoreMenu(false); }} />
       {alignMenu && <div className="absolute left-[720px] top-[43px] z-[170] w-[225px] rounded-[5px] border border-[#dedede] bg-white p-1.5 shadow-[0_4px_18px_rgba(0,0,0,.18)]">
         <AlignRow icon="alignLeft" label="Align Left" shortcut="Ctrl+Shift+L" onClick={() => run(() => props.onAlign('start'))}/>
         <AlignRow icon="alignCenter" label="Align Center" shortcut="Ctrl+Shift+E" onClick={() => run(() => props.onAlign('center'))}/>
@@ -413,7 +500,7 @@ export function WriterChrome(props: WriterChromeProps) {
       <ToolbarButton icon="indent" title="Indent" onClick={props.onIndent}/><ToolbarButton icon="outdent" title="Outdent" onClick={props.onOutdent}/><ToolbarButton icon="bullets" title="Bulleted list" onClick={() => props.onList(false)}/><ToolbarButton icon="numbering" title="Numbered list" onClick={() => props.onList(true)}/><ToolbarButton icon="checklist" title="Checklist"/>
       <ToolbarButton icon="image" title="Insert image" onClick={props.onInsertImage}/><ToolbarButton icon="table" title="Insert table" onClick={props.onInsertTable}/><ToolbarButton icon="link" title="Insert link" onClick={props.onLink}/><ToolbarButton icon="comment" title="Comments" onClick={props.onComments}/>
       <div className="relative"><ToolbarButton icon="more" title="More" onClick={() => { setMoreMenu(v => !v); setFontMenu(false); setAlignMenu(false); }}/>{moreMenu&&<div className="absolute right-0 top-[39px] z-[170] flex h-[54px] w-[258px] items-center gap-[2px] rounded-[5px] border border-[#dedede] bg-white px-[7px] shadow-[0_4px_18px_rgba(0,0,0,.18)]">
-        <MiniMore icon="textColor" label="Text direction" onClick={noop}/><MiniMore icon="paragraph" label="Paragraph" onClick={noop}/><MiniMore icon="align" label="Paragraph align" onClick={()=>setAlignMenu(true)}/><MiniMore icon="textColor" label="Text color" onClick={()=>undefined}/><MiniMore icon="comment" label="Comments" onClick={props.onComments}/>
+        <MiniMore icon="paragraph" label="Paragraph" onClick={() => run(props.onClearFormatting)}/><MiniMore icon="align" label="Paragraph align" onClick={()=>setAlignMenu(true)}/><MiniMore icon="textColor" label="Text color" onClick={()=>{setMoreMenu(false);}}/><MiniMore icon="comment" label="Comments" onClick={props.onComments}/>
       </div>}</div>
     </div>
 
@@ -425,7 +512,11 @@ function IconButton({ name, title }: { name: IconName; title: string }) { return
 function Divider() { return <span className="mx-[5px] h-[26px] w-px bg-[#e1e1e1]"/>; }
 function ToolbarButton({ icon, title, onClick }: { icon: IconName; title: string; onClick?: Action }) { return <button type="button" onMouseDown={e => e.preventDefault()} onClick={onClick} title={title} className="flex h-[35px] w-[34px] shrink-0 items-center justify-center rounded-[3px] text-[#41454a] hover:bg-[#f0f3f7] active:bg-[#e6edf7]"><Icon name={icon} size={18}/></button>; }
 function ToolbarSelect({ value, width, onChange }: { value: string; width: string; onChange: (value: string) => void }) { return <select value={value} onChange={e => onChange(e.target.value)} className="mx-[2px] h-[31px] shrink-0 rounded-[3px] border border-transparent bg-white px-[8px] text-[14px] outline-none hover:border-[#d7dce2] focus:border-[#8db7f4]" style={{ width }}><option>{value}</option>{value === 'Roboto' && <><option>Arial</option><option>Tahoma</option><option>Times New Roman</option></>}{value === '12' && <><option>10</option><option>11</option><option>14</option><option>16</option><option>18</option><option>24</option><option>36</option></>}</select>; }
-function ColorButton({ icon, color, title, onChange }: { icon: IconName; color: string; title: string; onChange: (value: string) => void }) { return <label className="relative flex h-[35px] w-[35px] cursor-pointer items-center justify-center rounded-[3px] hover:bg-[#f0f3f7]" title={title}><Icon name={icon} size={18}/><span className="absolute bottom-[4px] left-[9px] right-[9px] h-[2px] rounded" style={{ backgroundColor: color }}/><input className="absolute inset-0 cursor-pointer opacity-0" type="color" value={color} onChange={e => onChange(e.target.value)}/></label>; }
+function ColorButton({ icon, color, title, onChange }: { icon: IconName; color: string; title: string; onChange: (value: string) => void }) {
+  const [open,setOpen]=useState(false);
+  const colors=['#000000','#444444','#777777','#ffffff','#ef4444','#f97316','#f59e0b','#eab308','#22c55e','#14b8a6','#06b6d4','#3b82f6','#6366f1','#8b5cf6','#ec4899','#f3e8ff','#dbeafe','#dcfce7','#fef3c7','#fee2e2'];
+  return <div className="relative shrink-0"><button type="button" onClick={()=>setOpen(v=>!v)} className="relative flex h-[35px] w-[35px] items-center justify-center rounded-[3px] hover:bg-[#f0f3f7]" title={title}><Icon name={icon} size={18}/><span className="absolute bottom-[4px] left-[8px] right-[8px] h-[3px] rounded" style={{backgroundColor:color}}/></button>{open&&<div className="absolute left-0 top-[38px] z-[190] w-[250px] rounded-[5px] border border-[#d9dde2] bg-white p-2 shadow-[0_5px_20px_rgba(0,0,0,.2)]"><div className="mb-2 text-[12px] font-medium text-[#646a72]">Theme colors</div><div className="grid grid-cols-10 gap-1.5">{colors.map(c=><button key={c} type="button" aria-label={c} onClick={()=>{onChange(c);setOpen(false);}} className="h-[20px] w-[20px] rounded-[3px] border border-[#d5d9df]" style={{backgroundColor:c}}/> )}</div><div className="mt-2 border-t pt-2"><label className="flex items-center gap-2 text-[12px] text-[#555b62]">Custom<input type="color" value={color} onChange={e=>onChange(e.target.value)} className="ms-auto h-7 w-9"/></label></div></div>}</div>;
+}
 function FontPicker({ current, onSelect }: { current: string; onSelect: (value: string) => void }) {
   const [query, setQuery] = useState('');
   const fonts = ['Anonymous Pro','Arimo','Arvo','Lato 2','Liberation Mono','Liberation Sans','Liberation Serif','Roboto','Rokkitt','Quicksand','Source Sans Pro','League Gothic'];

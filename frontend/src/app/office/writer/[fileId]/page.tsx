@@ -12,12 +12,12 @@ import { WriterChrome } from '@/components/writer-zoho-chrome';
 import { ShareModal } from '@/components/share-modal';
 import { WorkflowPicker } from '@/components/workflow-picker';
 import { OfficeTemplateFields } from '@/components/office-template-fields';
-import { addParagraph, addTableColumn, addTableRow, cloneWriterDocument, insertHorizontalRule, insertImage, insertPageBreak, insertTable, mergeAdjacentRuns, patchBlockRuns, removeBlock, removeTableColumn, removeTableRow, setBlockAlignment, setBlockDirection, setBlockSpacing, setParagraphStyle, setListOrdered, toggleTableBorders, updatePageSettings, updateBlockLayout, insertTableOfContents, rebuildTableOfContents, rebuildIndex, addBookmark, addFootnote, addEndnote, replaceAllText, updateSection, addSection, insertSectionBreak, insertEquation, insertSymbol, addCitation, insertBibliography, insertIndex, addCaption, addCrossReference, addIndexEntry, rebuildCaptionsAndCrossReferences, updateImage, updateTableOptions, setTableCellVerticalAlign, addNestedTable, buildBibliographyEntries } from '@/office/writer/commands';
+import { addParagraph, splitParagraph, addTableColumn, addTableRow, cloneWriterDocument, insertHorizontalRule, insertImage, insertPageBreak, insertTable, mergeAdjacentRuns, patchBlockRuns, removeBlock, removeTableColumn, removeTableRow, setBlockAlignment, setBlockDirection, setBlockSpacing, setParagraphStyle, setListOrdered, toggleTableBorders, updatePageSettings, updateBlockLayout, insertTableOfContents, rebuildTableOfContents, rebuildIndex, addBookmark, addFootnote, addEndnote, replaceAllText, updateSection, addSection, insertSectionBreak, insertEquation, insertSymbol, addCitation, insertBibliography, insertIndex, addCaption, addCrossReference, addIndexEntry, rebuildCaptionsAndCrossReferences, updateImage, updateTableOptions, setTableCellVerticalAlign, addNestedTable, buildBibliographyEntries } from '@/office/writer/commands';
 import { normalizeWriterDocument } from '@/office/writer/model';
 import type { WriterBlock, WriterDocument, WriterRun } from '@/office/writer/model';
 import { applyWriterPatches } from '@/office/writer/operation-patches';
 import { readWriterQueue } from '@/office/writer/collaboration';
-import { addComment, acceptChange, acceptAllChanges, addSnapshot, compareSnapshot, deleteComment, rejectAllChanges, rejectChange, replyComment, setReviewDisplayMode, setShowFormattingChanges, toggleCommentResolved, toggleTrackChanges, recordChange, textOfRuns } from '@/office/writer/review';
+import { addComment, acceptChange, acceptAllChanges, addSnapshot, compareSnapshot, deleteComment, rejectAllChanges, rejectChange, replyComment, setReviewDisplayMode, setShowFormattingChanges, toggleCommentResolved, toggleTrackChanges, recordChange, textOfRuns, setMarkupColor } from '@/office/writer/review';
 import { officeClone } from '@/office/performance';
 import { prepareWriterPrintExport } from '@/office/writer/pdf';
 import { cacheOfficeSnapshot, readOfficeSnapshot, offlineQueueCount, installOfflineSync, readOfflineConflict, prepareWriterConflict, rebaseWriterQueue, discardWriterQueue } from '@/office/offline';
@@ -28,7 +28,21 @@ function escapeHtml(text: string) { return text.replaceAll('&','&amp;').replaceA
 function htmlForRuns(runs: WriterRun[]) { return runs.map(run => { let v=escapeHtml(run.text).replaceAll('\n','<br/>'); if(run.bold)v=`<strong>${v}</strong>`; if(run.italic)v=`<em>${v}</em>`; if(run.underline)v=`<u>${v}</u>`; if(run.strike)v=`<s>${v}</s>`; if(run.href)v=`<a href="${escapeHtml(run.href)}" target="_blank" rel="noreferrer">${v}</a>`; if(run.verticalAlign==='superscript')v=`<sup>${v}</sup>`; if(run.verticalAlign==='subscript')v=`<sub>${v}</sub>`; const style=[run.fontFamily?`font-family:${escapeHtml(run.fontFamily)}`:'',run.fontSize?`font-size:${run.fontSize}px`:'',run.color?`color:${run.color}`:'',run.highlight?`background-color:${run.highlight}`:''].filter(Boolean).join(';'); return style?`<span style="${style}">${v}</span>`:v; }).join('') || '<br />'; }
 function runsFromElement(element: HTMLElement): WriterRun[] {
  const runs: WriterRun[]=[];
- const walk=(node:Node, marks:Omit<WriterRun,'text'>)=>{ if(node.nodeType===Node.TEXT_NODE){const text=node.textContent??'';if(text)runs.push({text,...marks});return;} if(node.nodeType!==Node.ELEMENT_NODE)return; const el=node as HTMLElement; const style=el.style; const href=el.tagName==='A'?(el as HTMLAnchorElement).href:marks.href; const next={bold:marks.bold||el.tagName==='STRONG'||el.tagName==='B',italic:marks.italic||el.tagName==='EM'||el.tagName==='I',underline:marks.underline||el.tagName==='U',strike:marks.strike||el.tagName==='S'||el.tagName==='DEL',fontFamily:style.fontFamily?.replaceAll('"',''),fontSize:style.fontSize?Number.parseFloat(style.fontSize):marks.fontSize,color:style.color?.startsWith('rgb')?rgbToHex(style.color):style.color||marks.color,href,verticalAlign:el.tagName==='SUP'?'superscript':el.tagName==='SUB'?'subscript':marks.verticalAlign}; el.childNodes.forEach(c=>walk(c,next));}; element.childNodes.forEach(c=>walk(c,{})); return mergeAdjacentRuns(runs);
+ const push=(text:string, marks:Omit<WriterRun,'text'>)=>{ if(text)runs.push({text,...marks}); };
+ const walk=(node:Node, marks:Omit<WriterRun,'text'>)=>{
+  if(node.nodeType===Node.TEXT_NODE){ push(node.textContent??'',marks); return; }
+  if(node.nodeType!==Node.ELEMENT_NODE)return;
+  const el=node as HTMLElement;
+  if(el.tagName==='BR'){ push('\n',marks); return; }
+  const style=el.style;
+  const href=el.tagName==='A'?(el as HTMLAnchorElement).href:marks.href;
+  const next={bold:marks.bold||el.tagName==='STRONG'||el.tagName==='B',italic:marks.italic||el.tagName==='EM'||el.tagName==='I',underline:marks.underline||el.tagName==='U',strike:marks.strike||el.tagName==='S'||el.tagName==='DEL',fontFamily:style.fontFamily?.replaceAll('"',''),fontSize:style.fontSize?Number.parseFloat(style.fontSize):marks.fontSize,color:style.color?.startsWith('rgb')?rgbToHex(style.color):style.color||marks.color,highlight:style.backgroundColor?.startsWith('rgb')?rgbToHex(style.backgroundColor):style.backgroundColor||marks.highlight,href,verticalAlign:el.tagName==='SUP'?'superscript':el.tagName==='SUB'?'subscript':marks.verticalAlign};
+  const blockLike=el.tagName==='DIV'||el.tagName==='P'||el.tagName==='LI';
+  el.childNodes.forEach(c=>walk(c,next));
+  if(blockLike && el.nextSibling) push('\n',marks);
+ };
+ element.childNodes.forEach(c=>walk(c,{}));
+ return mergeAdjacentRuns(runs);
 }
 function rgbToHex(value:string){const m=value.match(/\d+/g);if(!m||m.length<3)return value;return '#'+m.slice(0,3).map(x=>Number(x).toString(16).padStart(2,'0')).join('');}
 function blockClass(block:WriterBlock){if(block.type==='title')return 'text-4xl font-bold leading-tight';if(block.type==='subtitle')return 'text-2xl text-slate-600 leading-tight';if(block.type==='heading1')return 'text-3xl font-bold leading-tight';if(block.type==='heading2')return 'text-2xl font-bold leading-tight';if(block.type==='heading3')return 'text-xl font-semibold leading-tight';return 'text-[16px] leading-7';}
@@ -155,7 +169,31 @@ export default function ImkanWriterPage(){
  const insertTemplateField=(placeholder:string)=>{const current=docRef.current;const target=activeBlock;if(!current||!target)return;const next=cloneWriterDocument(current);const block=next.blocks.find(b=>b.id===target.id);if(!block)return;const last=block.runs[block.runs.length-1];if(last)last.text=(last.text||'')+placeholder;else block.runs=[{text:placeholder}];commit(next);};
  const undo=()=>{const current=docRef.current,previous=history[history.length-1];if(!current||!previous)return;setHistory(items=>items.slice(0,-1));setFuture(items=>[cloneWriterDocument(current),...items].slice(0,100));docRef.current=previous;setDoc(previous);persist(current,previous);};
  const redo=()=>{const current=docRef.current,next=future[0];if(!current||!next)return;setFuture(items=>items.slice(1));setHistory(items=>[...items.slice(-99),cloneWriterDocument(current)]);docRef.current=next;setDoc(next);persist(current,next);};
- useEffect(()=>{const onKeyDown=(event:KeyboardEvent)=>{const mod=event.ctrlKey||event.metaKey;if(!mod)return;const key=event.key.toLowerCase();if(key==='z'){event.preventDefault();event.shiftKey?redo():undo();return;}if(key==='y'){event.preventDefault();redo();return;}if(key==='b'||key==='i'||key==='u'){event.preventDefault();applyCommand(key as 'bold'|'italic'|'underline');return;}if(key==='f'){event.preventDefault();setFindOpen(true);return;}if(key==='enter'&&activeBlockId&&docRef.current){event.preventDefault();commit(insertPageBreak(docRef.current,activeBlockId));}};window.addEventListener('keydown',onKeyDown);return()=>window.removeEventListener('keydown',onKeyDown);},[activeBlockId,history,future]);
+ const splitAtCaret=useCallback((blockId:string)=>{
+  const current=docRef.current;
+  const el=document.querySelector(`[data-writer-block="${blockId}"]`) as HTMLElement|null;
+  const selection=window.getSelection();
+  if(!current||!el||!selection||selection.rangeCount===0)return false;
+  const range=selection.getRangeAt(0);
+  if(!el.contains(range.startContainer)||!el.contains(range.endContainer))return false;
+  const beforeRange=document.createRange(); beforeRange.selectNodeContents(el); beforeRange.setEnd(range.startContainer,range.startOffset);
+  const afterRange=document.createRange(); afterRange.selectNodeContents(el); afterRange.setStart(range.endContainer,range.endOffset);
+  const beforeBox=document.createElement('div'); beforeBox.appendChild(beforeRange.cloneContents());
+  const afterBox=document.createElement('div'); afterBox.appendChild(afterRange.cloneContents());
+  const before=runsFromElement(beforeBox); const after=runsFromElement(afterBox);
+  const next=splitParagraph(current,blockId,before,after);
+  const index=next.blocks.findIndex(b=>b.id===blockId);
+  const newId=next.blocks[index+1]?.id;
+  commit(next);
+  if(newId)requestAnimationFrame(()=>{const target=document.querySelector(`[data-writer-block="${newId}"]`) as HTMLElement|null;if(target){target.focus();const r=document.createRange();r.selectNodeContents(target);r.collapse(true);const sel=window.getSelection();sel?.removeAllRanges();sel?.addRange(r);}});
+  return true;
+ },[commit]);
+ const handleEditorKeyDown=useCallback((event:React.KeyboardEvent<HTMLDivElement>,blockId:string)=>{
+  const mod=event.ctrlKey||event.metaKey;
+  if(event.key==='Enter' && mod){ event.preventDefault(); const current=docRef.current;if(current)commit(insertPageBreak(current,blockId));return; }
+  if(event.key==='Enter'){ event.preventDefault(); if(event.shiftKey){ document.execCommand('insertLineBreak'); } else splitAtCaret(blockId); return; }
+ },[commit,splitAtCaret]);
+ useEffect(()=>{const onKeyDown=(event:KeyboardEvent)=>{const mod=event.ctrlKey||event.metaKey;if(!mod)return;const key=event.key.toLowerCase();if(key==='z'){event.preventDefault();event.shiftKey?redo():undo();return;}if(key==='y'){event.preventDefault();redo();return;}if(key==='b'||key==='i'||key==='u'){event.preventDefault();applyCommand(key as 'bold'|'italic'|'underline');return;}if(key==='f'){event.preventDefault();setFindOpen(true);return;}};window.addEventListener('keydown',onKeyDown);return()=>window.removeEventListener('keydown',onKeyDown);},[history,future]);
  const insertLink=()=>{const url=window.prompt(t(ar,'Enter URL','أدخل الرابط'),'https://');if(!url)return;document.execCommand('createLink',false,url);const el=document.querySelector(`[data-writer-block="${activeBlock?.id}"]`) as HTMLElement|null;const current=docRef.current;if(el&&current&&activeBlock)commit({...current,blocks:current.blocks.map(b=>b.id===activeBlock.id?{...b,runs:runsFromElement(el)}:b)});};
  const addImage=()=>{const src=window.prompt(t(ar,'Enter image URL','أدخل رابط الصورة'));if(!src)return;const current=docRef.current;if(current)commit(insertImage(current,src,t(ar,'Image','صورة'),activeBlock?.id));};
  const applyRunPatch=(patch: any)=>{const current=docRef.current;if(!current||!activeBlock)return;commit(patchBlockRuns(current,activeBlock.id,patch));};
@@ -177,6 +215,14 @@ export default function ImkanWriterPage(){
  const imageOptions=()=>{const current=docRef.current;if(!current||activeBlock?.type!=='image'||!activeBlock.image)return;const rotation=Number(window.prompt(t(ar,'Rotation degrees','زاوية الدوران'),String(activeBlock.image.rotation??0)));const wrap=window.prompt(t(ar,'Wrap: inline/square/tight/through/top-bottom/behind/front','التفاف: inline/square/tight/through/top-bottom/behind/front'),activeBlock.image.wrap||'inline') as any;const anchor=window.prompt(t(ar,'Anchor: paragraph/page/margin','تثبيت: paragraph/page/margin'),activeBlock.image.anchor||'paragraph') as any;commit(updateImage(current,activeBlock.id,{...activeBlock.image,rotation:Number.isFinite(rotation)?rotation:0,wrap,anchor}));};
  const tableOptions=()=>{const current=docRef.current;if(!current||activeBlock?.type!=='table'||!activeBlock.table)return;const headerRows=Number(window.prompt(t(ar,'Header rows','صفوف الرأس'),String(activeBlock.table.headerRows||0)));const repeat=window.confirm(t(ar,'Repeat header row on each page?','تكرار صف الرأس في كل صفحة؟'));const allow=window.confirm(t(ar,'Allow rows to split across pages?','السماح بانقسام الصفوف عبر الصفحات؟'));commit(updateTableOptions(current,activeBlock.id,{...activeBlock.table,headerRows:Number.isFinite(headerRows)?headerRows:0,repeatHeaderRow:repeat,allowRowBreak:allow}));};
  const pageSettings=()=>{const current=docRef.current;if(!current)return;const page=current.page;const size=window.prompt(t(ar,'Page size: A4, LETTER, LEGAL or CUSTOM','حجم الصفحة: A4 أو LETTER أو LEGAL أو CUSTOM'),page.size);if(!size)return;const orientation=window.prompt(t(ar,'Orientation: portrait or landscape','الاتجاه: portrait أو landscape'),page.orientation);const margin=window.prompt(t(ar,'Margins in mm (top,right,bottom,left)','الهوامش بالملليمتر (علوي، يمين، سفلي، يسار)'),`${page.marginTopMm},${page.marginRightMm},${page.marginBottomMm},${page.marginLeftMm}`);const header=window.prompt(t(ar,'Header text','نص الرأس'),page.header??'');const footer=window.prompt(t(ar,'Footer text','نص التذييل'),page.footer??'');const format=window.prompt(t(ar,'Page number format: decimal/roman-lower/roman-upper/letter-upper/letter-lower','تنسيق رقم الصفحة: decimal/roman-lower/roman-upper/letter-upper/letter-lower'),page.pageNumberFormat||'decimal') as any;const start=Number(window.prompt(t(ar,'Page number start','بداية ترقيم الصفحات'),String(page.pageNumberStart||1)));const first=window.confirm(t(ar,'Different first page?','صفحة أولى مختلفة؟'));const oddEven=window.confirm(t(ar,'Different odd/even pages?','صفحات فردية/زوجية مختلفة؟'));const m=(margin??'').split(',').map(Number);commit(updatePageSettings(current,{size:size.toUpperCase() as any,orientation:orientation==='landscape'?'landscape':'portrait',marginTopMm:m[0]||page.marginTopMm,marginRightMm:m[1]||page.marginRightMm,marginBottomMm:m[2]||page.marginBottomMm,marginLeftMm:m[3]||page.marginLeftMm,header:header??'',footer:footer??'',showPageNumbers:true,pageNumberFormat:format,pageNumberStart:Number.isFinite(start)?start:1,differentFirstPage:first,differentOddEven:oddEven}));};
+ const clearFormatting=()=>{if(activeBlock)applyRunPatch({bold:false,italic:false,underline:false,strike:false,fontFamily:undefined,fontSize:undefined,color:undefined,highlight:undefined,verticalAlign:'baseline'});};
+ const setParagraphStyleForActive=(style:'paragraph'|'title'|'subtitle'|'heading1'|'heading2'|'heading3')=>{if(doc&&activeBlock)commit(setParagraphStyle(doc,activeBlock.id,style));};
+ const setLineSpacing=(value:number)=>{if(doc&&activeBlock)commit(setBlockSpacing(doc,activeBlock.id,{lineSpacing:value}));};
+ const setMarkup=(color:string)=>{if(doc)commit(setMarkupColor(doc,color));};
+ const showWordCount=()=>{setError(t(ar,`Word count: ${wordStats.words} · Characters: ${wordStats.chars}`,`عدد الكلمات: ${wordStats.words} · الأحرف: ${wordStats.chars}`));};
+ const showDocumentStatistics=()=>{setError(t(ar,`Document statistics — ${wordStats.words} words, ${wordStats.chars} characters, ${pages.length} page(s), ${doc.blocks.length} blocks.`,`إحصاءات المستند — ${wordStats.words} كلمة، ${wordStats.chars} حرف، ${pages.length} صفحة، ${doc.blocks.length} عنصر.`));};
+ const applySuperscript=()=>applyRunPatch({verticalAlign:'superscript'});
+ const applySubscript=()=>applyRunPatch({verticalAlign:'subscript'});
  const addReviewComment=()=>{const current=docRef.current;if(!current||!activeBlockId||!commentDraft.trim())return;commit(addComment(current,activeBlockId,commentDraft,{name:'You'}));setCommentDraft('');};
  const saveReviewSnapshot=()=>{const current=docRef.current;if(!current)return;commit(addSnapshot(current,revision));};
  const visibleComments=doc?doc.review.comments.filter(c=>!c.deleted && (commentFilter==='all'||(commentFilter==='open'&&!c.resolved)||(commentFilter==='resolved'&&c.resolved))):[];
@@ -209,6 +255,9 @@ export default function ImkanWriterPage(){
     onCaption={addCaptionPrompt} onCrossReference={addCrossRefPrompt} onIndex={addIndexPrompt}
     onBookmark={askBookmark} onFootnote={askFootnote} onEndnote={askEndnote}
     onComments={()=>setReviewOpen(true)} onTrackChanges={()=>doc&&commit(toggleTrackChanges(doc))} onSnapshot={saveReviewSnapshot}
+    onClearFormatting={clearFormatting} onLineSpacing={setLineSpacing} onParagraphStyle={setParagraphStyleForActive}
+    onSuperscript={applySuperscript} onSubscript={applySubscript} onMarkupColor={setMarkup}
+    onReviewMode={mode=>doc&&commit(setReviewDisplayMode(doc,mode))} onWordCount={showWordCount} onDocumentStatistics={showDocumentStatistics}
     onPrint={exportPdf} onExport={exportPdf} onFullscreen={()=>document.documentElement.requestFullscreen?.()}
     onAddParagraph={()=>doc&&commit(addParagraph(doc,activeBlock?.id))}
     onNavigate={()=>document.querySelector('main')?.scrollTo({top:0,behavior:'smooth'})}
@@ -239,7 +288,7 @@ export default function ImkanWriterPage(){
        :block.type==='image'&&block.image?<img src={block.image.src} alt={block.image.alt??''} style={imageStyle(block)} className="rounded-sm" onError={()=>setError(t(ar,'Unable to load this image.','تعذر تحميل هذه الصورة.'))}/>
        :<>
          {block.runs.map(r=>r.text).join('').length===0&&<><div className="pointer-events-none absolute -start-[34px] top-0 flex gap-[4px]"><button type="button" onMouseDown={e=>e.preventDefault()} onClick={()=>doc&&commit(addParagraph(doc,block.id))} className="pointer-events-auto flex h-[20px] w-[20px] items-center justify-center rounded-[2px] border border-[#b9d2fb] bg-white text-[15px] leading-none text-[#7ba6e9]" title="Add block">+</button><button type="button" onMouseDown={e=>e.preventDefault()} onClick={()=>doc&&commit(setListOrdered(doc,block.id,false))} className="pointer-events-auto flex h-[20px] w-[20px] items-center justify-center rounded-[2px] border border-[#b9d2fb] bg-white text-[11px] leading-none text-[#7ba6e9]" title="List">≡</button></div><button type="button" onMouseDown={e=>e.preventDefault()} onClick={()=>setAiOpen(true)} className="absolute end-0 top-0 flex h-[28px] w-[28px] items-center justify-center rounded-[7px] border border-[#d5dfe9] bg-[#f7fafc] text-[#587083] shadow-sm" title="AI">✣</button></>}
-         <div data-writer-block={block.id} data-placeholder={block.runs.map(r=>r.text).join('').length===0?t(ar,"Type '/' for commands or '//' for AI prompts","اكتب '/' للأوامر أو '//' لمطالبات AI"):''} contentEditable role="textbox" aria-multiline="true" aria-label={t(ar,'Document paragraph','فقرة المستند')} suppressContentEditableWarning spellCheck onFocus={()=>setActiveBlockId(block.id)} onInput={e=>updateBlockRuns(block.id,e.currentTarget)} className={`min-h-8 rounded px-1 outline-none focus:bg-slate-50 ${blockClass(block)}`} dangerouslySetInnerHTML={{__html:htmlForRuns(block.runs)}} />
+         <div data-writer-block={block.id} data-placeholder={block.runs.map(r=>r.text).join('').length===0?t(ar,"Type '/' for commands or '//' for AI prompts","اكتب '/' للأوامر أو '//' لمطالبات AI"):''} contentEditable role="textbox" aria-multiline="true" aria-label={t(ar,'Document paragraph','فقرة المستند')} suppressContentEditableWarning spellCheck onFocus={()=>setActiveBlockId(block.id)} onInput={e=>updateBlockRuns(block.id,e.currentTarget)} onKeyDown={e=>handleEditorKeyDown(e,block.id)} className={`min-h-8 rounded px-1 outline-none focus:bg-slate-50 ${blockClass(block)}`} dangerouslySetInnerHTML={{__html:htmlForRuns(block.runs)}} />
          {doc.blocks.length>1&&<button title={t(ar,'Delete block','حذف العنصر')} onMouseDown={e=>e.preventDefault()} onClick={()=>commit(removeBlock(doc,block.id))} className="absolute -end-7 top-1 hidden rounded p-1 text-xs text-slate-300 hover:bg-red-50 hover:text-red-500 group-hover:block print:hidden">×</button>}
        </>}
       </div>)}
