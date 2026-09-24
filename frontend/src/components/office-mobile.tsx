@@ -5,7 +5,7 @@ import type {ReactNode} from 'react';
 type OfficeType='WRITER'|'SHEET'|'SHOW';
 export type OfficeMobileProps={
  type:OfficeType; ar?:boolean; undo?:()=>void; redo?:()=>void; save?:()=>void; find?:()=>void; bold?:()=>void; italic?:()=>void; underline?:()=>void; navigation?:()=>void;
- selectedCell?:string; formulaValue?:string; editingCell?:boolean; onFormulaChange?:(v:string)=>void; onFormulaCommit?:()=>void; onBeginCellEdit?:()=>void;
+ selectedCell?:string; formulaValue?:string; editingCell?:boolean; onFormulaChange?:(v:string)=>void; onFormulaCommit?:(move?:'enter'|'tab'|'shift-tab'|'cancel')=>void; onBeginCellEdit?:()=>void;
  showIndex?:number; showCount?:number; onPrevSlide?:()=>void; onNextSlide?:()=>void; onPresent?:()=>void; onEdit?:()=>void; note?:string; onNoteChange?:(v:string)=>void;
  extra?:ReactNode;
 };
