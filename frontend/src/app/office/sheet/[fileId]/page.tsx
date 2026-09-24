@@ -13,7 +13,8 @@ import { decodeClipboard, parseClipboardValue } from '@/office/sheet/clipboard';
 import { autoFitColumnWidth } from '@/office/sheet/dimension-logic';
 import { SheetGrid } from '@/office/sheet/sheet-grid';
 import type { CellFormat, NumberFormat } from '@/office/sheet/model';
-import { isPrintableInputKey, moveAfterEnter, moveAfterTab, moveCell, rangeBounds } from '@/office/sheet/selection-logic';
+import { isPrintableInputKey, moveAfterEnter, moveAfterTab, moveCell, rangeBounds, selectedKeys } from '@/office/sheet/selection-logic';
+import '@/office/sheet/sheet-ui.css';
 import { OfficeContextMenu, OfficeFindReplace } from '@/office/shared/floating';
 import { ZohoSheetChrome } from '@/components/zoho-sheet-chrome';
 import { findNextCell, findPreviousCell, replaceCellText, sheetCellKeys, autoSumRange, type FindScope } from '@/office/sheet/find-replace-logic';
@@ -513,9 +514,9 @@ export default function SheetPage() {
     }
   };
   const contextItem = (label: string, action?: () => void, shortcut?: string, disabled = false) => (
-    <button type="button" disabled={disabled || !action} onClick={() => { action?.(); setContextMenu(null); }} className="flex w-full items-center justify-between gap-4 px-3 py-2 text-left text-[13px] text-[#30343b] hover:bg-[#f3f5f7] disabled:text-[#a7a7a7]">
+    <button type="button" disabled={disabled || !action} onClick={() => { action?.(); setContextMenu(null); }} className="sheet-context-item">
       <span>{label}</span>
-      {shortcut ? <span className="text-[11px] text-[#8b8f94]">{shortcut}</span> : null}
+      {shortcut ? <span className="sheet-context-shortcut">{shortcut}</span> : null}
     </button>
   );
   const addNewNamedRange = () => setDialog({ namedRange: true });
@@ -524,12 +525,13 @@ export default function SheetPage() {
   const openRenameSheet = () => setDialog({ renameSheet: true });
   const openHelp = () => setDialog({ help: true });
 
-  return <div id="office-main" dir={ar?'rtl':'ltr'} className="flex h-dvh flex-col overflow-hidden bg-slate-100 text-slate-800">
+  const selectionCount = selectedKeys(anchor, selected).length;
+  return <div id="office-main" dir={ar?'rtl':'ltr'} className="imkan-sheet flex h-dvh flex-col overflow-hidden">
     <OfficeShell type="SHEET" fileId={fileId} title={doc.title} revision={revision} saved={saved} saving={saving} ar={ar} presence={<OfficePresenceView items={presence} ar={ar}/>}/>
     <ZohoSheetChrome title={doc.title} selected={selected} formulaValue={input} display={display} editing={editing} saved={saved} saving={saving} gridlines={gridlines} canUndo={!!history.length} canRedo={!!future.length} fontFamily={fontFamily} fontSize={fontSize} numberFormat={numberFormat} verticalAlign={verticalAlign} wrap={wrap} paintActive={!!paintFormatActive} cellFormat={selectedCell?.format} ribbonTab={sheetTab} onRibbonTabChange={setSheetTab} onFindReplace={openFind} onAutoSum={autoSum} onSortAsc={sortAsc} onSortDesc={sortDesc} onDecimalIncrease={() => adjustDecimals(1)} onDecimalDecrease={() => adjustDecimals(-1)} onUnmerge={() => commit(unmergeRange(doc, bounds.start, bounds.end), true)} onFillDown={fillDown} onChartType={addChartOfType} onFreezeTopRow={() => commit(freeze(doc, 1, 0), true)} onFreezeFirstColumn={() => commit(freeze(doc, 0, 1), true)} onAutoFitColumn={() => { const p = parseKey(selected)!; onAutoFitColumn(p.col); }} onFontFamily={applyFontFamily} onFontSize={applyFontSize} onNumberFormat={applyNumberFormat} onVerticalAlign={applyVerticalAlign} onWrap={applyWrap} onFormulaChange={setInput} onFormulaCommit={(move)=>{if(move==='cancel'){cancelEdit();return;}if(editing)finish(move);else begin(selected);}} onBeginEdit={()=>begin(selected)} onUndo={undo} onRedo={redo} onSave={saveNow} onPrint={()=>window.print()} onExport={exportXlsx} onFind={() => openFind('find')} onCopy={()=>void copy()} onCut={()=>void cut()} onPaste={()=>void paste()} onPasteSpecial={()=>setDialog({ pasteSpecial: true })} onClear={clearSelected} onPaint={paintFormat} onBorder={addBorder} onBold={()=>commit(patchRangeFormat(doc,bounds.start,bounds.end,{bold:!selectedCell?.format?.bold}))} onItalic={()=>commit(patchRangeFormat(doc,bounds.start,bounds.end,{italic:!selectedCell?.format?.italic}))} onUnderline={()=>commit(patchRangeFormat(doc,bounds.start,bounds.end,{underline:!selectedCell?.format?.underline}))} onStrike={()=>commit(patchRangeFormat(doc,bounds.start,bounds.end,{strike:!selectedCell?.format?.strike}))} onColor={v=>commit(patchRangeFormat(doc,bounds.start,bounds.end,{color:v}))} onBg={v=>commit(patchRangeFormat(doc,bounds.start,bounds.end,{background:v}))} onAlign={v=>commit(patchRangeFormat(doc,bounds.start,bounds.end,{align:v}))} onMerge={()=>commit(mergeRange(doc,bounds.start,bounds.end),true)} onSort={()=>sortAsc()} onFilter={toggleColumnFilter} onValidation={openDataValidation} onConditional={addConditional} onNamedRange={addNewNamedRange} onTable={()=>setDialog({ createTable: true })} onPivot={()=>setDialog({ createPivot: true })} onChart={()=>addChartOfType('column')} onAddSheet={()=>commit(addSheet(doc),true)} onDeleteSheet={()=>commit(deleteActiveSheet(doc),true)} onRename={openRenameSheet} onFreeze={()=>commit(toggleFreeze(doc,1,1),true)} onGridlines={()=>setGridlines(v=>!v)} onInsertRows={()=>{const p=parseKey(selected)!;commit(insertRows(doc,p.row,1),true)}} onDeleteRows={()=>{const p=parseKey(selected)!;commit(deleteRows(doc,p.row,1),true)}} onInsertColumns={()=>{const p=parseKey(selected)!;commit(insertColumns(doc,p.col,1),true)}} onDeleteColumns={()=>{const p=parseKey(selected)!;commit(deleteColumns(doc,p.col,1),true)}} onHideRow={()=>{const p=parseKey(selected)!;commit(hideRows(doc,p.row,p.row),true)}} onHideColumn={()=>{const p=parseKey(selected)!;commit(hideColumns(doc,colNameFor(parseKey(selected)!.col)),true)}} onUnhideRows={()=>commit(unhideRows(doc),true)} onUnhideColumns={()=>commit(unhideColumns(doc),true)} onAddComment={openCellNote} onRemoveDuplicates={()=>setDialog({ removeDuplicates: true })} onTextToColumns={()=>setDialog({ textToColumns: true })} onCellNote={openCellNote} onHelp={openHelp} onInsertFunction={insertFunction}/>
     <OfficeTemplateFields templateId={templateId} ar={ar} onInsert={insertTemplateField} />
     <OfficeMobile type="SHEET" ar={ar} undo={undo} redo={redo} bold={()=>commit(patchFormat(doc,selected,{bold:!selectedCell?.format?.bold}))} italic={()=>commit(patchFormat(doc,selected,{italic:!selectedCell?.format?.italic}))} underline={()=>commit(patchFormat(doc,selected,{underline:!selectedCell?.format?.underline}))} selectedCell={selected} formulaValue={input} editingCell={editing} onFormulaChange={setInput} onFormulaCommit={(move)=>{if(move==='cancel'){cancelEdit();return;}if(editing)finish(move);else begin(selected);}} onBeginCellEdit={()=>begin(selected)} save={()=>persist(ref.current!)} />
-    <div className="flex min-h-0 flex-1 flex-col">
+      <div className="sheet-workspace flex min-h-0 flex-1 flex-col">
       <div ref={gridFocusRef} className="relative flex min-h-0 flex-1 flex-col outline-none" tabIndex={0} onKeyDown={gridKeyDown}>
         <SheetGrid
           sheet={sheet}
@@ -580,7 +582,19 @@ export default function SheetPage() {
           )}
         />
       </div>
-      <div className="flex h-9 shrink-0 items-center gap-1 overflow-x-auto border-t bg-white px-2">{doc.sheets.map(s=><button key={s.id} onClick={()=>commit(setActiveSheet(doc,s.id))} className={`rounded-t px-4 py-1.5 text-xs ${s.id===doc.activeSheet?'border border-b-0 bg-white font-semibold':'text-slate-500 hover:bg-slate-50'}`}>{s.name}</button>)}<button onClick={()=>commit(addSheet(doc),true)} className="px-2 text-lg text-slate-500">＋</button></div>
+      <div className="sheet-bottom">
+        <div className="sheet-tabs" role="tablist" aria-label="Worksheets">
+          {doc.sheets.map(s => (
+            <button key={s.id} type="button" role="tab" aria-selected={s.id === doc.activeSheet} onClick={() => commit(setActiveSheet(doc, s.id))} className="sheet-tab">{s.name}</button>
+          ))}
+          <button type="button" className="sheet-add" aria-label="Add sheet" onClick={() => commit(addSheet(doc), true)}>+</button>
+        </div>
+        <div className="sheet-status">
+          <span>Ready</span>
+          <span>{selectionCount === 1 ? selected : `${bounds.start}:${bounds.end}`}</span>
+          <span>Count {selectionCount}</span>
+        </div>
+      </div>
     </div>
     {contextMenu ? (
       <OfficeContextMenu open x={contextMenu.x} y={contextMenu.y} onClose={() => setContextMenu(null)}>

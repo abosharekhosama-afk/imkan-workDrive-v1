@@ -64,8 +64,8 @@ function SheetGridInner({
   const isSelected = useCallback((key: string) => selection.includes(key), [selection]);
   const frozenRows = sheet.frozenRows ?? 0;
   const frozenCols = sheet.frozenColumns ?? 0;
-  const headerHeight = 32;
-  const rowHeaderWidth = 48;
+  const headerHeight = 22;
+  const rowHeaderWidth = 42;
 
   const cellStickyStyle = (r: number, c: number): CSSProperties => {
     const style: CSSProperties = {};
@@ -150,7 +150,7 @@ function SheetGridInner({
           <button
             type="button"
             aria-label="Select all"
-            className="sticky left-0 z-40 h-8 w-12 shrink-0 border bg-slate-50 hover:bg-slate-200"
+            className="sheet-corner sticky left-0 z-40 shrink-0"
             style={{ top: 0 }}
             onClick={() => onSelect(cellKey(0, 0), cellKey(rows - 1, cols - 1))}
           />
@@ -170,7 +170,8 @@ function SheetGridInner({
                       top: 0,
                       ...(frozenCol ? { left: stickyLeftForCol(c, sheet, rowHeaderWidth), zIndex: frozenCol ? 35 : 20 } : { zIndex: 20 }),
                     }}
-                    className={`flex h-8 w-full items-center justify-center ${gridlines ? 'border border-slate-200' : 'border-b border-transparent'} bg-[#f3f6fa] text-[11px] font-semibold text-slate-600 hover:bg-slate-200`}
+                    data-selected={selection.some((key) => parseKey(key)?.col === c) || undefined}
+                    className="sheet-col-header flex w-full items-center justify-center"
                     onClick={() => onSelect(cellKey(0, c), cellKey(rows - 1, c))}
                     onDoubleClick={() => onAutoFitColumn(c)}
                   >
@@ -207,7 +208,8 @@ function SheetGridInner({
                 type="button"
                 aria-label={`Select row ${r + 1}`}
                 style={{ height: heightForRow(r) }}
-                className="flex w-12 items-center justify-center border border-slate-200 bg-[#f3f6fa] text-[10px] font-semibold text-slate-600 hover:bg-slate-200"
+                data-selected={selection.some((key) => parseKey(key)?.row === r) || undefined}
+                className="sheet-row-header flex w-full items-center justify-center"
                 onClick={() => onSelect(cellKey(r, 0), cellKey(r, cols - 1))}
               >
                 {r + 1}
@@ -252,7 +254,7 @@ function SheetGridInner({
                     height: heightForRow(r),
                     opacity: filtered ? 0.35 : 1,
                   }}
-                  className={`relative overflow-hidden ${gridlines ? 'border' : ''} px-1 text-xs leading-7 ${isSelected(key) ? 'outline outline-2 outline-[var(--wd-primary)] outline-offset-[-2px]' : ''}`}
+                  className={`sheet-cell relative overflow-hidden ${gridlines ? 'border' : ''} px-1`}
                 >
                   {!isEditingCell ? formulaDisplay(sheet.cells[key], sheet, workbook) : null}
                   {sheet.cells[key]?.note ? (

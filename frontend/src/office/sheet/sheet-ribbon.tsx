@@ -90,27 +90,29 @@ const TABS: [SheetRibbonTab, string][] = [
 
 function Group({ label, children }: { label: string; children: ReactNode }) {
   return (
-    <div className="flex h-[76px] flex-col justify-between px-1">
-      <div className="flex flex-1 items-center gap-0.5">{children}</div>
-      <div className="border-t border-[#e2e5e9] pt-1 text-center text-[9px] font-medium text-[#616161]">{label}</div>
+    <div className="sheet-group">
+      <div className="sheet-group-cmds">{children}</div>
+      <div className="sheet-group-label">{label}</div>
     </div>
   );
 }
 
 function Divider() {
-  return <span className="mx-1 h-12 w-px bg-[#d9dde3]" />;
+  return <span className="sheet-divider" />;
 }
 
-function Btn({ label, title, onClick, active, disabled }: { label: string; title?: string; onClick?: () => void; active?: boolean; disabled?: boolean }) {
+function Btn({ label, title, onClick, active, disabled, glyph }: { label: string; title?: string; onClick?: () => void; active?: boolean; disabled?: boolean; glyph?: string }) {
   return (
     <button
       type="button"
       title={title ?? label}
       aria-label={title ?? label}
+      aria-pressed={active || undefined}
       disabled={disabled || !onClick}
       onClick={onClick}
-      className={`flex min-w-[44px] flex-col items-center justify-center gap-0.5 rounded px-1.5 py-1 text-[10px] ${active ? 'bg-[#dce6f1] text-[#185abd]' : 'text-[#242424] hover:bg-[#e8edf3]'} disabled:opacity-35`}
+      className="sheet-cmd"
     >
+      <span className="sheet-cmd-glyph" aria-hidden="true">{glyph ?? label.slice(0, 1)}</span>
       <span className="whitespace-nowrap leading-none">{label}</span>
     </button>
   );
@@ -118,29 +120,30 @@ function Btn({ label, title, onClick, active, disabled }: { label: string; title
 
 export function SheetRibbon(p: SheetRibbonProps) {
   return (
-    <div className="border-b border-[#c8cdd3] bg-[#f7f7f7] shadow-[0_1px_2px_rgba(0,0,0,.06)]">
-      <div className="flex h-9 items-end border-b border-[#d5d8dc] bg-white px-2">
+    <div className="sheet-ribbon">
+      <div className="sheet-ribbon-tabs" role="tablist">
         {TABS.map(([id, label]) => (
           <button
             key={id}
             type="button"
+            role="tab"
+            aria-selected={p.tab === id}
             onClick={() => p.onTabChange(id)}
-            className={`relative h-9 min-w-[64px] px-3 text-[12px] font-medium ${p.tab === id ? 'text-[#185abd]' : 'text-[#444] hover:bg-[#f3f5f7]'}`}
+            className="sheet-ribbon-tab"
           >
             {label}
-            {p.tab === id ? <span className="absolute inset-x-2 bottom-0 h-[2px] bg-[#185abd]" /> : null}
           </button>
         ))}
       </div>
-      <div className="flex min-h-[80px] items-stretch overflow-x-auto px-2 py-0.5">
+      <div className="sheet-ribbon-body">
         {p.tab === 'home' ? (
           <>
             <Group label="Clipboard">
-              <Btn label="Cut" onClick={p.onCut} />
-              <Btn label="Copy" onClick={p.onCopy} />
-              <Btn label="Paste" onClick={p.onPaste} />
-              <Btn label="Special" title="Paste Special" onClick={p.onPasteSpecial} />
-              <Btn label="Painter" onClick={p.onPaint} active={p.paintActive} />
+              <Btn label="Cut" glyph="X" onClick={p.onCut} />
+              <Btn label="Copy" glyph="C" onClick={p.onCopy} />
+              <Btn label="Paste" glyph="P" onClick={p.onPaste} />
+              <Btn label="Special" title="Paste Special" glyph="S" onClick={p.onPasteSpecial} />
+              <Btn label="Painter" glyph="F" onClick={p.onPaint} active={p.paintActive} />
             </Group>
             <Divider />
             <Group label="Font">
@@ -170,7 +173,7 @@ export function SheetRibbon(p: SheetRibbonProps) {
                 aria-label="Number format"
                 value={p.numberFormat}
                 onChange={(e) => p.onNumberFormat(e.target.value as NumberFormat)}
-                className="h-8 max-w-[110px] rounded border border-[#c9cdd2] bg-white px-2 text-[10px]"
+                className="sheet-combo max-w-[120px]"
               >
                 {NUMBER_FORMAT_OPTIONS.map((opt) => (
                   <option key={opt.value} value={opt.value}>{opt.label}</option>

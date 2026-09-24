@@ -1,0 +1,395 @@
+/* IMKAN Sheet — Excel-style visual system. Sheet surfaces only. */
+.imkan-sheet {
+  --sheet-appbar-height: 32px;
+  --sheet-ribbon-tab-height: 28px;
+  --sheet-ribbon-body-height: 72px;
+  --sheet-control-height: 28px;
+  --sheet-icon-size: 16px;
+  --sheet-formula-height: 30px;
+  --sheet-grid-header-height: 22px;
+  --sheet-row-header-width: 42px;
+  --sheet-tab-height: 28px;
+  --sheet-status-height: 24px;
+  --sheet-border: #d0d4d9;
+  --sheet-border-strong: #b4b8bd;
+  --sheet-surface: #f3f3f3;
+  --sheet-surface-2: #fafafa;
+  --sheet-header: #f2f2f2;
+  --sheet-hover: #e6e6e6;
+  --sheet-active: #d6e4f5;
+  --sheet-selected: #c5d8f2;
+  --sheet-accent: #217346;
+  --sheet-accent-ink: #0e5c2f;
+  --sheet-text: #242424;
+  --sheet-muted: #616161;
+  --sheet-disabled: 0.38;
+  --sheet-radius: 2px;
+  --sheet-font: "Segoe UI", system-ui, sans-serif;
+  --sheet-formula-font: "Segoe UI", Calibri, system-ui, sans-serif;
+  color: var(--sheet-text);
+  font-family: var(--sheet-font);
+  background: #e6e6e6;
+}
+
+.imkan-sheet .sheet-appbar {
+  display: flex;
+  align-items: center;
+  height: var(--sheet-appbar-height);
+  gap: 8px;
+  padding: 0 8px;
+  background: #fff;
+  border-bottom: 1px solid var(--sheet-border);
+}
+.imkan-sheet .sheet-appbar-mark {
+  display: grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  border: 1px solid var(--sheet-accent);
+  color: var(--sheet-accent);
+  font-size: 11px;
+  font-weight: 700;
+  background: #fff;
+}
+.imkan-sheet .sheet-appbar-title {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13px;
+  font-weight: 600;
+}
+.imkan-sheet .sheet-appbar-status {
+  font-size: 11px;
+  color: var(--sheet-muted);
+}
+.imkan-sheet .sheet-appbar-actions {
+  margin-inline-start: auto;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+.imkan-sheet .sheet-icon-btn {
+  display: grid;
+  place-items: center;
+  width: var(--sheet-control-height);
+  height: var(--sheet-control-height);
+  border: 0;
+  background: transparent;
+  color: var(--sheet-text);
+  border-radius: var(--sheet-radius);
+}
+.imkan-sheet .sheet-icon-btn:hover:not(:disabled) { background: var(--sheet-hover); }
+.imkan-sheet .sheet-icon-btn:disabled { opacity: var(--sheet-disabled); }
+.imkan-sheet .sheet-icon-btn:focus-visible,
+.imkan-sheet .sheet-ribbon-tab:focus-visible,
+.imkan-sheet .sheet-cmd:focus-visible,
+.imkan-sheet .sheet-tab:focus-visible {
+  outline: 1px solid var(--sheet-accent);
+  outline-offset: -1px;
+}
+
+.imkan-sheet .sheet-menubar {
+  display: flex;
+  align-items: center;
+  height: 26px;
+  padding: 0 4px;
+  background: #fff;
+  border-bottom: 1px solid var(--sheet-border);
+  font-size: 12px;
+}
+.imkan-sheet .sheet-menubar button {
+  height: 24px;
+  padding: 0 8px;
+  border: 0;
+  background: transparent;
+  border-radius: var(--sheet-radius);
+}
+.imkan-sheet .sheet-menubar button:hover,
+.imkan-sheet .sheet-menubar button[aria-expanded="true"] { background: var(--sheet-hover); }
+
+.imkan-sheet .sheet-ribbon {
+  background: var(--sheet-surface);
+  border-bottom: 1px solid var(--sheet-border-strong);
+}
+.imkan-sheet .sheet-ribbon-tabs {
+  display: flex;
+  align-items: flex-end;
+  height: var(--sheet-ribbon-tab-height);
+  padding: 0 6px;
+  background: #fff;
+  border-bottom: 1px solid var(--sheet-border);
+  overflow-x: auto;
+}
+.imkan-sheet .sheet-ribbon-tab {
+  position: relative;
+  height: 26px;
+  min-width: 56px;
+  padding: 0 10px;
+  border: 0;
+  background: transparent;
+  color: #444;
+  font-size: 12px;
+}
+.imkan-sheet .sheet-ribbon-tab:hover { background: var(--sheet-hover); }
+.imkan-sheet .sheet-ribbon-tab[aria-selected="true"] {
+  color: var(--sheet-accent-ink);
+  font-weight: 600;
+}
+.imkan-sheet .sheet-ribbon-tab[aria-selected="true"]::after {
+  content: "";
+  position: absolute;
+  left: 8px;
+  right: 8px;
+  bottom: 0;
+  height: 2px;
+  background: var(--sheet-accent);
+}
+.imkan-sheet .sheet-ribbon-body {
+  display: flex;
+  align-items: stretch;
+  min-height: var(--sheet-ribbon-body-height);
+  overflow-x: auto;
+  padding: 2px 4px 0;
+}
+.imkan-sheet .sheet-group {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  min-height: 68px;
+  padding: 2px 4px 0;
+}
+.imkan-sheet .sheet-group-cmds {
+  display: flex;
+  align-items: center;
+  gap: 1px;
+  flex: 1;
+}
+.imkan-sheet .sheet-group-label {
+  border-top: 1px solid var(--sheet-border);
+  padding: 1px 0 2px;
+  text-align: center;
+  font-size: 10px;
+  color: var(--sheet-muted);
+}
+.imkan-sheet .sheet-divider {
+  width: 1px;
+  margin: 6px 2px 16px;
+  background: var(--sheet-border);
+}
+.imkan-sheet .sheet-cmd {
+  display: flex;
+  min-width: 28px;
+  height: 46px;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  padding: 2px 4px;
+  border: 0;
+  border-radius: var(--sheet-radius);
+  background: transparent;
+  color: var(--sheet-text);
+  font-size: 10px;
+  line-height: 1;
+}
+.imkan-sheet .sheet-cmd:hover:not(:disabled) { background: var(--sheet-hover); }
+.imkan-sheet .sheet-cmd[aria-pressed="true"] { background: var(--sheet-active); color: var(--sheet-accent-ink); }
+.imkan-sheet .sheet-cmd:disabled { opacity: var(--sheet-disabled); }
+.imkan-sheet .sheet-cmd-glyph {
+  width: var(--sheet-icon-size);
+  height: var(--sheet-icon-size);
+  display: grid;
+  place-items: center;
+  font-size: 12px;
+  font-weight: 700;
+}
+.imkan-sheet .sheet-combo {
+  display: flex;
+  align-items: center;
+  height: var(--sheet-control-height);
+  min-width: 72px;
+  padding: 0 6px;
+  border: 1px solid var(--sheet-border-strong);
+  border-radius: var(--sheet-radius);
+  background: #fff;
+  font-size: 12px;
+}
+.imkan-sheet .sheet-combo:hover { background: var(--sheet-surface-2); }
+
+.imkan-sheet .sheet-formula {
+  display: flex;
+  align-items: center;
+  height: var(--sheet-formula-height);
+  gap: 6px;
+  padding: 0 6px;
+  background: var(--sheet-surface-2);
+  border-bottom: 1px solid var(--sheet-border);
+}
+.imkan-sheet .sheet-namebox {
+  display: flex;
+  align-items: center;
+  width: 88px;
+  height: 24px;
+  padding: 0 6px;
+  border: 1px solid var(--sheet-border-strong);
+  background: #fff;
+  font-family: var(--sheet-formula-font);
+  font-size: 12px;
+  font-weight: 600;
+}
+.imkan-sheet .sheet-fx {
+  width: 22px;
+  color: var(--sheet-muted);
+  font-family: "Times New Roman", serif;
+  font-style: italic;
+  font-size: 14px;
+  text-align: center;
+}
+.imkan-sheet .sheet-formula-input {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  align-items: center;
+  height: 24px;
+  padding: 0 6px;
+  border: 1px solid var(--sheet-border-strong);
+  background: #fff;
+}
+.imkan-sheet .sheet-formula-input:focus-within { border-color: var(--sheet-accent); }
+.imkan-sheet .sheet-formula-input input {
+  width: 100%;
+  height: 22px;
+  border: 0;
+  background: transparent;
+  font-family: var(--sheet-formula-font);
+  font-size: 12px;
+  outline: none;
+}
+.imkan-sheet .sheet-formula-action {
+  height: 24px;
+  padding: 0 8px;
+  border: 1px solid var(--sheet-border);
+  background: #fff;
+  font-size: 12px;
+}
+.imkan-sheet .sheet-formula-action:hover { background: var(--sheet-hover); }
+
+.imkan-sheet .sheet-workspace {
+  min-height: 0;
+  flex: 1;
+  background: #fff;
+  overflow: hidden;
+}
+.imkan-sheet .sheet-grid {
+  background: #fff;
+}
+.imkan-sheet .sheet-corner {
+  height: var(--sheet-grid-header-height);
+  width: var(--sheet-row-header-width);
+}
+.imkan-sheet .sheet-col-header { height: var(--sheet-grid-header-height); }
+.imkan-sheet .sheet-row-header { width: var(--sheet-row-header-width); }
+.imkan-sheet .sheet-col-header,
+.imkan-sheet .sheet-row-header,
+.imkan-sheet .sheet-corner {
+  background: var(--sheet-header);
+  color: #3b3b3b;
+  font-size: 11px;
+  font-weight: 600;
+  border: 1px solid #d4d4d4;
+}
+.imkan-sheet .sheet-col-header:hover,
+.imkan-sheet .sheet-row-header:hover,
+.imkan-sheet .sheet-corner:hover { background: #e5e5e5; }
+.imkan-sheet .sheet-col-header[data-selected="true"],
+.imkan-sheet .sheet-row-header[data-selected="true"] {
+  background: var(--sheet-selected);
+  color: #1a1a1a;
+}
+.imkan-sheet .sheet-cell {
+  border-color: #e1e1e1;
+  font-size: 12px;
+  line-height: 20px;
+}
+.imkan-sheet .sheet-cell[aria-selected="true"] {
+  outline: 2px solid var(--sheet-accent);
+  outline-offset: -2px;
+  background-image: linear-gradient(rgba(33, 115, 70, 0.08), rgba(33, 115, 70, 0.08));
+}
+.imkan-sheet .sheet-cell input {
+  font-family: var(--sheet-formula-font);
+  font-size: 12px;
+}
+
+.imkan-sheet .sheet-bottom {
+  display: flex;
+  align-items: stretch;
+  height: var(--sheet-tab-height);
+  background: var(--sheet-surface);
+  border-top: 1px solid var(--sheet-border-strong);
+}
+.imkan-sheet .sheet-tabs {
+  display: flex;
+  align-items: flex-end;
+  gap: 1px;
+  min-width: 0;
+  overflow-x: auto;
+  padding: 0 4px;
+}
+.imkan-sheet .sheet-tab {
+  height: 24px;
+  max-width: 140px;
+  padding: 0 12px;
+  border: 1px solid transparent;
+  border-bottom: 0;
+  background: transparent;
+  color: #444;
+  font-size: 12px;
+  white-space: nowrap;
+}
+.imkan-sheet .sheet-tab:hover { background: #eaeaea; }
+.imkan-sheet .sheet-tab[aria-selected="true"] {
+  background: #fff;
+  border-color: var(--sheet-border-strong);
+  font-weight: 600;
+  color: var(--sheet-accent-ink);
+}
+.imkan-sheet .sheet-add {
+  width: 24px;
+  height: 24px;
+  border: 0;
+  background: transparent;
+  font-size: 16px;
+  line-height: 1;
+}
+.imkan-sheet .sheet-add:hover { background: var(--sheet-hover); }
+.imkan-sheet .sheet-status {
+  margin-inline-start: auto;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 0 10px;
+  border-inline-start: 1px solid var(--sheet-border);
+  color: var(--sheet-muted);
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.imkan-sheet .sheet-context-item {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  height: 26px;
+  padding: 0 10px;
+  border: 0;
+  background: transparent;
+  text-align: start;
+  font-size: 12px;
+  color: var(--sheet-text);
+}
+.imkan-sheet .sheet-context-item:hover:not(:disabled) { background: var(--sheet-active); }
+.imkan-sheet .sheet-context-item:disabled { color: #a0a0a0; }
+.imkan-sheet .sheet-context-shortcut { color: var(--sheet-muted); font-size: 11px; }

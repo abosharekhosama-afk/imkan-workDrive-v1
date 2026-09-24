@@ -255,29 +255,28 @@ export function ZohoSheetChrome(p: Props) {
   }, [menu, p]);
 
   return (
-    <div className="print:hidden shrink-0 bg-white text-[#242424]" dir="ltr">
-      <div className="flex h-[52px] items-center border-b border-[#e5e5e5] bg-white">
-        <button type="button" className="flex h-full w-[124px] shrink-0 items-center gap-3 bg-[#0fa85a] px-4 text-white" onClick={() => { window.location.href = '/office/new'; }}>
-          <span className="grid h-7 w-7 place-items-center rounded-sm border-2 border-white text-[17px] font-semibold">▦</span>
-          <span className="text-[20px] font-medium">Sheet</span>
-        </button>
-        <div className="flex min-w-0 flex-1 items-center gap-3 px-4">
-          <span className="truncate text-[16px] font-semibold">{p.title || 'Untitled Spreadsheet'}</span>
-        </div>
-        <div className="flex items-center gap-2 px-3">
-          <button type="button" onClick={() => p.onFindReplace?.('find') ?? p.onFind()} className="flex h-8 w-[205px] items-center gap-2 rounded-md bg-[#f5f6f7] px-3 text-left text-[12px] text-[#6d7278]"><span>⌕</span><span>Search in this sheet</span></button>
-          <button type="button" onClick={p.onHelp} className="grid h-8 w-8 place-items-center rounded hover:bg-[#f3f5f7]">⚙</button>
+    <div className="print:hidden shrink-0" dir="ltr">
+      <div className="sheet-appbar">
+        <button type="button" className="sheet-appbar-mark" title="IMKAN Office" onClick={() => { window.location.href = '/office/new'; }}>S</button>
+        <span className="sheet-appbar-title">{p.title || 'Untitled Spreadsheet'}</span>
+        <span className="sheet-appbar-status">{p.saving ? 'Saving' : p.saved ? 'Saved' : 'Unsaved'}</span>
+        <div className="sheet-appbar-actions">
+          <button type="button" className="sheet-icon-btn" title="Undo" aria-label="Undo" disabled={!p.canUndo} onClick={p.onUndo}>↺</button>
+          <button type="button" className="sheet-icon-btn" title="Redo" aria-label="Redo" disabled={!p.canRedo} onClick={p.onRedo}>↻</button>
+          <button type="button" className="sheet-icon-btn" title="Find" aria-label="Find" onClick={() => p.onFindReplace?.('find') ?? p.onFind()}>Find</button>
+          <button type="button" className="sheet-icon-btn" title="Help" aria-label="Help" onClick={p.onHelp}>?</button>
         </div>
       </div>
 
-      <div className="flex h-[34px] items-center border-b border-[#dfe2e5] px-2 text-[13px]">
+      <div className="sheet-menubar">
         {(['File', 'Edit', 'View', 'Insert', 'Format', 'Data', 'Review', 'Tools', 'Help'] as const).map((label) => (
           <button
             key={label}
             ref={menu === label ? menuAnchorRef : undefined}
             type="button"
             onClick={(e) => { menuAnchorRef.current = e.currentTarget; setMenu(menu === label ? null : label); }}
-            className={`h-full px-3 hover:bg-[#f3f5f7] ${menu === label ? 'font-medium text-[#111]' : ''}`}
+            className=""
+            aria-expanded={menu === label}
           >
             {label}
           </button>
@@ -353,7 +352,7 @@ export function ZohoSheetChrome(p: Props) {
         onAutoFitColumn={p.onAutoFitColumn}
         fontFamilyControl={(
           <div className="relative">
-            <button ref={fontAnchorRef} type="button" onClick={() => { setFontOpen((v) => !v); setSizeOpen(false); setFormatOpen(false); }} className="flex h-8 min-w-[96px] items-center justify-between rounded border border-[#d8dce1] bg-white px-2 text-[11px]">{p.fontFamily}<span>⌄</span></button>
+            <button ref={fontAnchorRef} type="button" onClick={() => { setFontOpen((v) => !v); setSizeOpen(false); setFormatOpen(false); }} className="sheet-combo min-w-[108px] justify-between">{p.fontFamily}</button>
             <OfficePopover open={fontOpen} onClose={() => setFontOpen(false)} anchorRef={fontAnchorRef} className="max-h-[280px] overflow-auto py-1">
               {fonts.map((f) => (
                 <button key={f} type="button" onClick={() => { p.onFontFamily(f); setFontOpen(false); }} className={`block w-full px-3 py-2 text-left text-[14px] hover:bg-[#f2f4f6] ${f === p.fontFamily ? 'font-semibold' : ''}`}>{f}</button>
@@ -363,7 +362,7 @@ export function ZohoSheetChrome(p: Props) {
         )}
         fontSizeControl={(
           <div className="relative">
-            <button ref={sizeAnchorRef} type="button" onClick={() => { setSizeOpen((v) => !v); setFontOpen(false); setFormatOpen(false); }} className="flex h-8 min-w-[44px] items-center justify-between rounded border border-[#d8dce1] bg-white px-2 text-[11px]">{p.fontSize}<span>⌄</span></button>
+            <button ref={sizeAnchorRef} type="button" onClick={() => { setSizeOpen((v) => !v); setFontOpen(false); setFormatOpen(false); }} className="sheet-combo min-w-[48px] justify-center">{p.fontSize}</button>
             <OfficePopover open={sizeOpen} onClose={() => setSizeOpen(false)} anchorRef={sizeAnchorRef} className="p-1">
               <div className="grid w-[140px] grid-cols-4">
                 {[8, 9, 10, 11, 12, 14, 16, 18, 20, 24, 28, 32].map((s) => (
@@ -387,14 +386,13 @@ export function ZohoSheetChrome(p: Props) {
         )}
       />
 
-      <div className="flex h-[34px] items-center border-b border-[#d9dde1] bg-[#fbfbfb] px-2">
-        <div className="flex h-7 w-[96px] items-center rounded border border-[#d4d7da] bg-white px-2 font-mono text-[12px] font-semibold">{p.selected}</div>
-        <div className="mx-2 text-[16px] font-serif italic text-[#444]">fx</div>
-        <div ref={formulaAnchorRef} className="relative flex min-w-0 flex-1 items-center rounded border border-[#d4d7da] bg-white px-2">
+      <div className="sheet-formula">
+        <div className="sheet-namebox" aria-label="Name box">{p.selected}</div>
+        <div className="sheet-fx">fx</div>
+        <div ref={formulaAnchorRef} className="sheet-formula-input relative">
           <input
             ref={formulaInputRef}
             aria-label="Formula bar"
-            className="h-6 min-w-0 flex-1 bg-transparent text-[12px] outline-none"
             value={p.formulaValue}
             placeholder={p.display || 'Enter value or formula'}
             onFocus={() => { p.onBeginEdit(); setAcOpen(shouldShowAutocomplete(p.formulaValue)); }}
@@ -425,9 +423,9 @@ export function ZohoSheetChrome(p: Props) {
             onClose={() => setAcOpen(false)}
           />
         </div>
-        <button type="button" onClick={() => p.onFormulaCommit()} className="ml-2 rounded border px-2 text-[11px]">✓</button>
-        <button ref={fnAnchorRef} type="button" onClick={() => setFnOpen((v) => !v)} className="ml-2 rounded border border-[#18a957] px-2 py-0.5 text-[11px] font-semibold text-[#0b9f4b]">ƒx</button>
-        <span className="ml-2 text-[11px] text-[#73777c]">{p.saving ? 'Saving…' : p.saved ? 'Saved' : 'Unsaved'}</span>
+        <button type="button" className="sheet-formula-action" title="Enter" onClick={() => p.onFormulaCommit()}>OK</button>
+        <button type="button" className="sheet-formula-action" title="Cancel" onClick={() => p.onFormulaCommit('cancel')}>Cancel</button>
+        <button ref={fnAnchorRef} type="button" className="sheet-formula-action" title="Insert function" onClick={() => setFnOpen((v) => !v)}>fx</button>
       </div>
 
       <OfficePopover open={fnOpen} onClose={() => setFnOpen(false)} anchorRef={fnAnchorRef} placement="bottom-end" className="flex w-[420px] flex-col overflow-hidden">
