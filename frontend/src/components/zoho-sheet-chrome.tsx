@@ -78,6 +78,7 @@ type Props = {
   onCopy: () => void;
   onCut: () => void;
   onPaste: () => void;
+  onPasteSpecial: () => void;
   onClear: () => void;
   onPaint: () => void;
   onBorder: () => void;
@@ -94,6 +95,9 @@ type Props = {
   onValidation: () => void;
   onConditional: () => void;
   onNamedRange: () => void;
+  onRemoveDuplicates: () => void;
+  onTextToColumns: () => void;
+  onCellNote: () => void;
   onTable: () => void;
   onPivot: () => void;
   onChart: () => void;
@@ -189,6 +193,7 @@ export function ZohoSheetChrome(p: Props) {
         officeMenuItem('edit-cut', 'Cut', () => pick(p.onCut), 'Ctrl+X'),
         officeMenuItem('edit-copy', 'Copy', () => pick(p.onCopy), 'Ctrl+C'),
         officeMenuItem('edit-paste', 'Paste', () => pick(p.onPaste), 'Ctrl+V'),
+        officeMenuItem('edit-paste-special', 'Paste Special…', () => pick(p.onPasteSpecial)),
         officeMenuItem('edit-clear', 'Clear', () => pick(p.onClear)),
       ];
     }
@@ -298,6 +303,7 @@ export function ZohoSheetChrome(p: Props) {
         onCopy={p.onCopy}
         onCut={p.onCut}
         onPaste={p.onPaste}
+        onPasteSpecial={p.onPasteSpecial}
         onClear={p.onClear}
         onPaint={p.onPaint}
         onBold={p.onBold}
@@ -333,6 +339,9 @@ export function ZohoSheetChrome(p: Props) {
         onValidation={p.onValidation}
         onConditional={p.onConditional}
         onNamedRange={p.onNamedRange}
+        onRemoveDuplicates={p.onRemoveDuplicates}
+        onTextToColumns={p.onTextToColumns}
+        onCellNote={p.onCellNote}
         onFreezeTopRow={p.onFreezeTopRow}
         onFreezeFirstColumn={p.onFreezeFirstColumn}
         onFreezePanes={p.onFreeze}

@@ -13,9 +13,10 @@ export function buildPivot(sheet:Sheet, pivot:PivotTable, workbook:Workbook):Piv
   const raw:string[][]=[]; for(let r=b.r0;r<=b.r1;r++){const row:string[]=[];for(let c=b.c0;c<=b.c1;c++){const cell=sheet.cells[cellKey(r,c)];row.push(cell?String(formulaDisplay(cell,sheet,workbook)):'');}raw.push(row);}
   if(!raw.length)return {headers:['Row Labels','Values'],rows:[],grandTotal:0};
   const headers=raw[0], data=raw.slice(1), ri=Math.max(0,pivot.rowField?headers.findIndex(h=>h.toLowerCase()===pivot.rowField!.toLowerCase()):-1), vi=Math.max(0,pivot.valueField?headers.findIndex(h=>h.toLowerCase()===pivot.valueField!.toLowerCase()):-1);
-  const groups=new Map<string,{sum:number,count:number}>();
-  for(const row of data){const key=row[ri]??'';const n=Number(row[vi]);const g=groups.get(key)??{sum:0,count:0};if(Number.isFinite(n)){g.sum+=n;g.count++;}groups.set(key,g);}
-  const rows=[...groups.entries()].sort((a,b)=>a[0].localeCompare(b[0])).map(([k,g])=>[k,pivot.aggregation==='count'?g.count:pivot.aggregation==='average'?(g.count?g.sum/g.count:0):g.sum]);
+  const groups=new Map<string,{sum:number;count:number;min:number;max:number}>();
+  for(const row of data){const key=row[ri]??'';const n=Number(row[vi]);const g=groups.get(key)??{sum:0,count:0,min:Number.POSITIVE_INFINITY,max:Number.NEGATIVE_INFINITY};if(Number.isFinite(n)){g.sum+=n;g.count++;g.min=Math.min(g.min,n);g.max=Math.max(g.max,n);}groups.set(key,g);}
+  const aggValue=(g:{sum:number;count:number;min:number;max:number})=>{if(pivot.aggregation==='count')return g.count;if(pivot.aggregation==='average')return g.count?g.sum/g.count:0;if(pivot.aggregation==='min')return g.count?g.min:0;if(pivot.aggregation==='max')return g.count?g.max:0;return g.sum;};
+  const rows=[...groups.entries()].sort((a,b)=>a[0].localeCompare(b[0])).map(([k,g])=>[k,aggValue(g)]);
   return {headers:[pivot.rowField||headers[ri]||'Row Labels',pivot.valueField||headers[vi]||'Values'],rows,grandTotal:rows.reduce((s,r)=>s+Number(r[1]||0),0)};
 }
 export function updateTable(workbook:Workbook,id:string,patch:Partial<SheetTable>){const n=JSON.parse(JSON.stringify(workbook)) as Workbook;const s=n.sheets.find(x=>x.id===n.activeSheet);const t=s?.tables?.find(x=>x.id===id);if(t)Object.assign(t,patch);return n;}

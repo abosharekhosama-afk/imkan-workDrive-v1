@@ -7,7 +7,7 @@ import { OfficePresence as OfficePresenceView } from '@/components/office-presen
 import { OfficeConflictDialog } from '@/components/office-conflict-dialog';
 import { useLocale } from '@/components/locale-provider';
 import { addConditionalFormat, addNamedRange, addPivotTable, addSheet, addTable, clearFilter, deleteActiveSheet, deleteColumns, deleteRows, freeze, insertColumns, insertRows, mergeRange, patchFormat, renameSheet, setActiveSheet, setColumnWidth, setFilter, setRowHeight, setValidation, shiftFormulaReferences, sortSheet, unmergeRange, updateCell, hideRows, hideColumns, unhideRows, unhideColumns } from '@/office/sheet/commands';
-import { activeSheet, cellKey, cloneWorkbook, formulaDisplay, parseKey, type Sheet, type SheetCell, type Workbook } from '@/office/sheet/model';
+import { activeSheet, cellKey, cloneWorkbook, formulaDisplay, parseKey, type SheetCell, type Workbook } from '@/office/sheet/model';
 import { clearRange, patchRangeFormat, toggleFreeze } from '@/office/sheet/phase2-commands';
 import { decodeClipboard, parseClipboardValue } from '@/office/sheet/clipboard';
 import { autoFitColumnWidth } from '@/office/sheet/dimension-logic';
@@ -18,17 +18,20 @@ import { OfficeContextMenu, OfficeFindReplace } from '@/office/shared/floating';
 import { ZohoSheetChrome } from '@/components/zoho-sheet-chrome';
 import { findNextCell, findPreviousCell, replaceCellText, sheetCellKeys, autoSumRange, type FindScope } from '@/office/sheet/find-replace-logic';
 import { navigateSelection } from '@/office/sheet/navigation-logic';
-import { SheetChartOverlay } from '@/office/sheet/sheet-chart-overlay';
+import { SheetChartOverlay } from '@/office/sheet/charts/sheet-chart-overlay';
 import type { SheetRibbonTab } from '@/office/sheet/sheet-ribbon';
-import { addFileComment } from '@/lib/api/comments';
 import { OfficeShell } from '@/components/office-shell';
 import { OfficeMobile } from '@/components/office-mobile';
 import { OfficeTemplateFields } from '@/components/office-template-fields';
-import { addChart, deleteChart, exportChartPng, exportChartSvg, updateChart } from '@/office/sheet/charts';
+import { addChart, deleteChart, updateChart } from '@/office/sheet/charts';
 import { downloadOfficeExport, exportOfficeFile } from '@/lib/api/office-conversion';
-import { buildPivot, deletePivotTable, updateTable } from '@/office/sheet/table-pivot';
+import { deletePivotTable, updateTable } from '@/office/sheet/table-pivot';
 import { cacheOfficeSnapshot, readOfficeSnapshot, queueDocumentChange, offlineQueueCount, installOfflineSync, clearOfflineConflict, readOfflineConflict, prepareOfflineConflict, rebaseOfflineQueue, discardOfflineQueue } from '@/office/offline';
-import type { ChartType, SheetChart } from '@/office/sheet/charts';
+import { extractRangeData, type RangeCellData, type PasteMode } from '@/office/sheet/clipboard/paste-special-logic';
+import { findTableAtCell } from '@/office/sheet/tables/table-logic';
+import { destinationOverwriteKeys, previewTextToColumns, textToColumnsMatrix } from '@/office/sheet/data/text-to-columns-logic';
+import { applyTextToColumns, deleteTableById, pasteSpecialWorkbook, removeDuplicates, setCellNote, sortTableWorkbook, updatePivot } from '@/office/sheet/data/sheet-data-commands';
+import { SheetWorkspacePanels, type SheetDialogState } from '@/office/sheet/panels/sheet-workspace-panels';
 
 const ROWS = 100, COLS = 26;
 
@@ -47,6 +50,19 @@ export default function SheetPage() {
   const [findOpen, setFindOpen] = useState(false);
   const [findMode, setFindMode] = useState<'find' | 'replace'>('find');
   const [selectedChartId, setSelectedChartId] = useState<string | null>(null);
+  const [dialogs, setDialogs] = useState<SheetDialogState>({
+    createTable: false,
+    createPivot: false,
+    pasteSpecial: false,
+    removeDuplicates: false,
+    textToColumns: false,
+    cellNote: false,
+    chartPanel: false,
+    selectedPivotId: null,
+    selectedTableId: null,
+  });
+  const internalClipboard = useRef<RangeCellData[][] | null>(null);
+  const setDialog = (patch: Partial<SheetDialogState>) => setDialogs((d) => ({ ...d, ...patch }));
   const [fontFamily, setFontFamily] = useState('Roboto');
   const [fontSize, setFontSize] = useState(10);
   const [numberFormat, setNumberFormat] = useState<NumberFormat>('general');
@@ -198,6 +214,17 @@ export default function SheetPage() {
   const sheet = useMemo(() => doc ? activeSheet(doc) : undefined, [doc]);
   const cell = sheet?.cells[selected];
   useEffect(() => {
+    if (!sheet) return;
+    const table = findTableAtCell(sheet, selected);
+    setDialog({ selectedTableId: table?.id ?? null });
+  }, [selected, sheet?.tables, sheet?.id]);
+
+  useEffect(() => {
+    document.body.classList.toggle('sheet-format-painter-active', !!paintFormatActive);
+    return () => document.body.classList.remove('sheet-format-painter-active');
+  }, [paintFormatActive]);
+
+  useEffect(() => {
     if (editing) return;
     setInput(cell?.formula ?? (cell?.value == null ? '' : String(cell.value)));
     const f = cell?.format;
@@ -214,6 +241,24 @@ export default function SheetPage() {
   if (!doc || !sheet) return <div className="flex h-screen items-center justify-center text-sm text-slate-500">{error || t('Opening IMKAN Sheet…', 'جارٍ فتح IMKAN Sheet…')}</div>;
 
   const bounds = rangeBounds(anchor, selected);
+  const colNameFor = (n: number) => { let s=''; for (let x=n+1; x>0; x=Math.floor((x-1)/26)) s=String.fromCharCode(65+(x-1)%26)+s; return s; };
+  const duplicateColumns = useMemo(() => {
+    const b = rangeBounds(anchor, selected);
+    const a = parseKey(b.start)!;
+    const c = parseKey(b.end)!;
+    const c0 = Math.min(a.col, c.col);
+    const c1 = Math.max(a.col, c.col);
+    return Array.from({ length: c1 - c0 + 1 }, (_, i) => ({ index: i, label: colNameFor(c0 + i) }));
+  }, [anchor, selected]);
+  const textSplitPreview = useMemo(() => {
+    const source = sheet.cells[selected];
+    const text = source?.formula ? source.formula.replace(/^=/, '') : String(source?.value ?? '');
+    return previewTextToColumns(text, 'comma');
+  }, [selected, sheet.cells]);
+  const textOverwriteCount = useMemo(() => {
+    const { rowCount, colCount } = textToColumnsMatrix(sheet.cells, selected, 'comma');
+    return destinationOverwriteKeys(selected, rowCount, colCount, sheet.cells).length;
+  }, [selected, sheet.cells, dialogs.textToColumns]);
   const display = formulaDisplay(cell, sheet, doc);
   const selectedCell = sheet.cells[selected];
   const autoSum = () => begin(selected, autoSumRange(bounds.start, bounds.end));
@@ -256,7 +301,6 @@ export default function SheetPage() {
       borderStyle: f.border ? 'solid' : undefined,
     };
   };
-  const colNameFor = (n: number) => { let s=''; for (let x=n+1; x>0; x=Math.floor((x-1)/26)) s=String.fromCharCode(65+(x-1)%26)+s; return s; };
   const validate = (key: string, value: string) => { const rule = sheet.cells[key]?.validation; if (!rule) return true; if (rule.type === 'list') return (rule.values ?? []).includes(value); if (rule.type === 'number') { const n=Number(value); return Number.isFinite(n) && (rule.min===undefined||n>=rule.min) && (rule.max===undefined||n<=rule.max); } if (rule.type === 'text') { const len=value.length; return (rule.min===undefined||len>=rule.min) && (rule.max===undefined||len<=rule.max); } return true; };
   const validationMessage = (key: string, value: string) => { const rule = sheet.cells[key]?.validation; if (!rule) return ''; if (rule.type === 'list') return t(`Allowed values: ${(rule.values ?? []).join(', ')}`, `القيم المسموحة: ${(rule.values ?? []).join('، ')}`); if (rule.type === 'number') return t(`Enter a number${rule.min!==undefined?` from ${rule.min}`:''}${rule.max!==undefined?` to ${rule.max}`:''}.`, `أدخل رقمًا${rule.min!==undefined?` من ${rule.min}`:''}${rule.max!==undefined?` إلى ${rule.max}`:''}.`); if (rule.type === 'text') return t(`Text length must be${rule.min!==undefined?` at least ${rule.min}`:''}${rule.max!==undefined?` and at most ${rule.max}`:''} characters.`, `يجب أن يكون طول النص${rule.min!==undefined?` ${rule.min} أحرف على الأقل`:''}${rule.max!==undefined?` و${rule.max} حرفًا كحد أقصى`:''}.`); return ''; };
   const assertValid = (key:string,value:string) => { if(validate(key,value)) return true; setError(validationMessage(key,value) || t('Value rejected by data validation','القيمة مرفوضة بواسطة التحقق من البيانات')); return false; };
@@ -312,45 +356,84 @@ export default function SheetPage() {
       }
       rows.push(cols.join('\t'));
     }
-    await navigator.clipboard?.writeText(rows.join('\n'));
+    internalClipboard.current = extractRangeData(sheet, doc, bounds.start, bounds.end);
+    try {
+      await navigator.clipboard?.writeText(rows.join('\n'));
+    } catch {
+      setError(t('Clipboard access denied. Internal copy is still available for Paste Special.', 'تم رفض الوصول إلى الحافظة. لا يزال النسخ الداخلي متاحًا للصق الخاص.'));
+    }
+  };
+  const pasteSpecial = (mode: PasteMode) => {
+    if (editing) finish();
+    const matrix = internalClipboard.current;
+    if (!matrix?.length) {
+      setError(t('Copy a range first, then use Paste Special.', 'انسخ نطاقًا أولاً، ثم استخدم اللصق الخاص.'));
+      return;
+    }
+    setError('');
+    commit(pasteSpecialWorkbook(doc, selected, matrix, mode), true);
   };
   const paste = async () => {
     if (editing) finish();
-    const txt = await navigator.clipboard?.readText();
-    if (!txt) return;
-    const matrix = decodeClipboard(txt);
-    const p = parseKey(selected)!;
-    for (let ri = 0; ri < matrix.length; ri++) {
-      for (let ci = 0; ci < matrix[ri].length; ci++) {
-        const target = cellKey(p.row + ri, p.col + ci);
-        const parsed = parseClipboardValue(matrix[ri][ci]);
-        const probe = parsed.formula ?? parsed.value;
-        if (!assertValid(target, probe)) return;
+    try {
+      const txt = await navigator.clipboard?.readText();
+      if (!txt) {
+        if (internalClipboard.current?.length) pasteSpecial('all');
+        else setError(t('Clipboard is empty. Copy cells first.', 'الحافظة فارغة. انسخ الخلايا أولاً.'));
+        return;
       }
+      const matrix = decodeClipboard(txt);
+      const p = parseKey(selected)!;
+      for (let ri = 0; ri < matrix.length; ri++) {
+        for (let ci = 0; ci < matrix[ri].length; ci++) {
+          const target = cellKey(p.row + ri, p.col + ci);
+          const parsed = parseClipboardValue(matrix[ri][ci]);
+          const probe = parsed.formula ?? parsed.value;
+          if (!assertValid(target, probe)) return;
+        }
+      }
+      let w = cloneWorkbook(doc);
+      matrix.forEach((row, ri) => row.forEach((raw, ci) => {
+        const parsed = parseClipboardValue(raw);
+        w = updateCell(w, p.row + ri, p.col + ci, parsed.formula ? '' : parsed.value, parsed.formula);
+      }));
+      setError('');
+      commit(w, true);
+    } catch {
+      if (internalClipboard.current?.length) pasteSpecial('all');
+      else setError(t('Clipboard permission denied. Use Copy then Paste Special.', 'تم رفض إذن الحافظة. استخدم نسخ ثم لصق خاص.'));
     }
-    let w = cloneWorkbook(doc);
-    matrix.forEach((row, ri) => row.forEach((raw, ci) => {
-      const parsed = parseClipboardValue(raw);
-      w = updateCell(w, p.row + ri, p.col + ci, parsed.formula ? '' : parsed.value, parsed.formula);
-    }));
-    setError('');
-    commit(w, true);
   };
   const cut = async () => { if (editing) finish(); await copy(); commit(clearRange(doc, bounds.start, bounds.end), true); };
   const clearSelected = () => commit(clearRange(doc,bounds.start,bounds.end),true);
-  const addComment = async () => { const body = window.prompt(t('Comment','تعليق'), `${selected}: `); if (!body?.trim()) return; try { await addFileComment(fileId, body.trim()); setError(''); } catch (e:any) { setError(e?.message || t('Unable to add comment','تعذر إضافة التعليق')); } };
+  const openCellNote = () => setDialog({ cellNote: true });
+  const saveCellNote = (note: string) => {
+    commit(setCellNote(doc, selected, note.trim() || undefined), true);
+    setDialog({ cellNote: false });
+  };
+  const toggleColumnFilter = () => {
+    const col = selected.replace(/\d+$/, '');
+    const value = String(selectedCell?.value ?? formulaDisplay(selectedCell, sheet, doc) ?? '').trim();
+    if (!value) {
+      commit(clearFilter(doc, col), true);
+      return;
+    }
+    commit(sheet.filters?.[col] === value ? clearFilter(doc, col) : setFilter(doc, col, value), true);
+  };
   const insertFunction = (name: string) => { begin(selected, `=${name}(`); window.setTimeout(() => document.querySelector<HTMLInputElement>('[aria-label="Formula bar"]')?.focus(), 0); };
   const applyFontFamily = (family:string) => { setFontFamily(family); commit(patchRangeFormat(doc,bounds.start,bounds.end,{fontFamily:family} as any),true); };
   const applyFontSize = (size:number) => { setFontSize(size); commit(patchRangeFormat(doc,bounds.start,bounds.end,{fontSize:size} as any),true); };
   const applyNumberFormat = (format: NumberFormat) => { setNumberFormat(format); commit(patchRangeFormat(doc, bounds.start, bounds.end, { numberFormat: format }), true); };
   const applyVerticalAlign = (align: 'top' | 'middle' | 'bottom') => { setVerticalAlign(align); commit(patchRangeFormat(doc, bounds.start, bounds.end, { verticalAlign: align }), true); };
   const applyWrap = (next: boolean) => { setWrap(next); commit(patchRangeFormat(doc, bounds.start, bounds.end, { wrap: next }), true); };
-  const startFormatPainter = () => { if (selectedCell?.format) setPaintFormatActive({ ...selectedCell.format }); };
+  const startFormatPainter = () => {
+    if (selectedCell?.format) setPaintFormatActive({ ...selectedCell.format });
+    else setError(t('Select a formatted cell first.', 'حدد خلية منسّقة أولاً.'));
+  };
   const applyPaintedFormat = (nextAnchor: string, nextFocus: string) => {
     if (!paintFormatActive) return;
     const target = rangeBounds(nextAnchor, nextFocus);
     commit(patchRangeFormat(doc, target.start, target.end, paintFormatActive), true);
-    setPaintFormatActive(null);
   };
   const onColumnWidthChange = (col: number, width: number) => commit(setColumnWidth(doc, colNameFor(col), width), true);
   const onRowHeightChange = (row: number, height: number) => commit(setRowHeight(doc, row, height), true);
@@ -377,7 +460,23 @@ export default function SheetPage() {
       if (e.key === 'Tab') { e.preventDefault(); finish(e.shiftKey ? 'shift-tab' : 'tab'); return; }
       return;
     }
-    if (e.key === 'Delete' || e.key === 'Backspace') { e.preventDefault(); clearSelected(); return; }
+    if (e.key === 'Escape') {
+      e.preventDefault();
+      if (paintFormatActive) { setPaintFormatActive(null); return; }
+      if (selectedChartId) { setSelectedChartId(null); setDialog({ chartPanel: false }); return; }
+      return;
+    }
+    if (e.key === 'Delete' || e.key === 'Backspace') {
+      e.preventDefault();
+      if (selectedChartId) {
+        commit(deleteChart(doc, selectedChartId), true);
+        setSelectedChartId(null);
+        setDialog({ chartPanel: false });
+        return;
+      }
+      clearSelected();
+      return;
+    }
     if (e.key === 'Home' || e.key === 'End' || e.key === 'PageUp' || e.key === 'PageDown') {
       e.preventDefault();
       const action = e.key === 'Home'
@@ -410,15 +509,11 @@ export default function SheetPage() {
     </button>
   );
   const addNewNamedRange = () => { const name=window.prompt(t('Named range name','اسم النطاق المسمى'),'SalesData'); if(!name)return; commit(addNamedRange(doc,name,`${bounds.start}:${bounds.end}`,sheet.id),true); };
-  const addNewTable = () => { const name=window.prompt(t('Table name','اسم الجدول'),'Table1'); if(!name)return; commit(addTable(doc,bounds.start,bounds.end,name,true),true); };
-  const deleteSelectedTable = (id:string) => commit({ ...doc, sheets: doc.sheets.map(s => s.id===doc.activeSheet ? { ...s, tables:(s.tables??[]).filter(t=>t.id!==id) } : s) }, true);
-  const addNewPivot = () => { const name=window.prompt(t('Pivot name','اسم Pivot'),'Pivot1'); if(!name)return; const rowField=window.prompt(t('Row field/header','حقل الصف/اسم العمود'),''); const valueField=window.prompt(t('Value field/header','حقل القيمة/اسم العمود'),''); const agg=(window.prompt(t('Aggregation: sum, count, average','التجميع: sum, count, average'),'sum')||'sum') as 'sum'|'count'|'average'; if(!['sum','count','average'].includes(agg))return; commit(addPivotTable(doc,`${bounds.start}:${bounds.end}`,name,rowField||undefined,valueField||undefined,agg),true); };
   const addConditional = () => { const range=window.prompt(t('Range','النطاق'),`${bounds.start}:${bounds.end}`); if(!range)return; const type=(window.prompt(t('Rule type: cellIs or containsText','نوع القاعدة: cellIs أو containsText'),'cellIs')||'cellIs') as 'cellIs'|'containsText'; const operator=(window.prompt(t('Operator: >, >=, <, <=, =, !=, contains','المعامل: >، >=، <، <=، =، !=، contains'),' >'.trim())||'>') as any; const value=window.prompt(t('Compare value','قيمة المقارنة'),'0'); if(value===null)return; commit(addConditionalFormat(doc,range,type,operator,value,{background:'#FEF3C7',color:'#92400E'}),true); };
-  const addNewChart = () => { const type=(window.prompt(t('Chart type: column, bar, line, area, pie, doughnut, scatter, combo','نوع الرسم: column, bar, line, area, pie, doughnut, scatter, combo'),'column')||'column') as ChartType; if(!['column','bar','line','area','pie','doughnut','scatter','combo'].includes(type)) return; const title=window.prompt(t('Chart title','عنوان الرسم'),'Chart')||'Chart'; commit(addChart(doc,type,bounds.start,bounds.end,title),true); };
 
   return <div id="office-main" dir={ar?'rtl':'ltr'} className="flex h-dvh flex-col overflow-hidden bg-slate-100 text-slate-800">
     <OfficeShell type="SHEET" fileId={fileId} title={doc.title} revision={revision} saved={saved} saving={saving} ar={ar} presence={<OfficePresenceView items={presence} ar={ar}/>}/>
-    <ZohoSheetChrome title={doc.title} selected={selected} formulaValue={input} display={display} editing={editing} saved={saved} saving={saving} gridlines={gridlines} canUndo={!!history.length} canRedo={!!future.length} fontFamily={fontFamily} fontSize={fontSize} numberFormat={numberFormat} verticalAlign={verticalAlign} wrap={wrap} paintActive={!!paintFormatActive} cellFormat={selectedCell?.format} ribbonTab={sheetTab} onRibbonTabChange={setSheetTab} onFindReplace={openFind} onAutoSum={autoSum} onSortAsc={sortAsc} onSortDesc={sortDesc} onDecimalIncrease={() => adjustDecimals(1)} onDecimalDecrease={() => adjustDecimals(-1)} onUnmerge={() => commit(unmergeRange(doc, bounds.start, bounds.end), true)} onFillDown={fillDown} onChartType={addChartOfType} onFreezeTopRow={() => commit(freeze(doc, 1, 0), true)} onFreezeFirstColumn={() => commit(freeze(doc, 0, 1), true)} onAutoFitColumn={() => { const p = parseKey(selected)!; onAutoFitColumn(p.col); }} onFontFamily={applyFontFamily} onFontSize={applyFontSize} onNumberFormat={applyNumberFormat} onVerticalAlign={applyVerticalAlign} onWrap={applyWrap} onFormulaChange={setInput} onFormulaCommit={(move)=>{if(move==='cancel'){cancelEdit();return;}if(editing)finish(move);else begin(selected);}} onBeginEdit={()=>begin(selected)} onUndo={undo} onRedo={redo} onSave={saveNow} onPrint={()=>window.print()} onExport={exportXlsx} onFind={() => openFind('find')} onCopy={()=>void copy()} onCut={()=>void cut()} onPaste={()=>void paste()} onClear={clearSelected} onPaint={paintFormat} onBorder={addBorder} onBold={()=>commit(patchRangeFormat(doc,bounds.start,bounds.end,{bold:!selectedCell?.format?.bold}))} onItalic={()=>commit(patchRangeFormat(doc,bounds.start,bounds.end,{italic:!selectedCell?.format?.italic}))} onUnderline={()=>commit(patchRangeFormat(doc,bounds.start,bounds.end,{underline:!selectedCell?.format?.underline}))} onStrike={()=>commit(patchRangeFormat(doc,bounds.start,bounds.end,{strike:!selectedCell?.format?.strike}))} onColor={v=>commit(patchRangeFormat(doc,bounds.start,bounds.end,{color:v}))} onBg={v=>commit(patchRangeFormat(doc,bounds.start,bounds.end,{background:v}))} onAlign={v=>commit(patchRangeFormat(doc,bounds.start,bounds.end,{align:v}))} onMerge={()=>commit(mergeRange(doc,bounds.start,bounds.end),true)} onSort={()=>sortAsc()} onFilter={()=>{const col=selected.replace(/\d+$/,'');const q=window.prompt(t('Filter value (empty clears)','قيمة التصفية (فارغة للإلغاء)'),sheet.filters?.[col]??'');commit(q?setFilter(doc,col,q):clearFilter(doc,col),true);}} onValidation={()=>{const raw=window.prompt(t('Validation list values separated by commas, or empty to remove','قيم القائمة مفصولة بفواصل، أو فارغ للحذف'),(selectedCell?.validation?.values??[]).join(','));commit(raw?setValidation(doc,selected,{type:'list',values:raw.split(',').map(x=>x.trim()).filter(Boolean).slice(0,50)}):setValidation(doc,selected,undefined),true);}} onConditional={addConditional} onNamedRange={addNewNamedRange} onTable={addNewTable} onPivot={addNewPivot} onChart={addNewChart} onAddSheet={()=>commit(addSheet(doc),true)} onDeleteSheet={()=>commit(deleteActiveSheet(doc),true)} onRename={()=>{const n=window.prompt(t('Sheet name','اسم الورقة'),sheet.name);if(n)commit(renameSheet(doc,n),true);}} onFreeze={()=>commit(toggleFreeze(doc,1,1),true)} onGridlines={()=>setGridlines(v=>!v)} onInsertRows={()=>{const p=parseKey(selected)!;commit(insertRows(doc,p.row,1),true)}} onDeleteRows={()=>{const p=parseKey(selected)!;commit(deleteRows(doc,p.row,1),true)}} onInsertColumns={()=>{const p=parseKey(selected)!;commit(insertColumns(doc,p.col,1),true)}} onDeleteColumns={()=>{const p=parseKey(selected)!;commit(deleteColumns(doc,p.col,1),true)}} onHideRow={()=>{const p=parseKey(selected)!;commit(hideRows(doc,p.row,p.row),true)}} onHideColumn={()=>{const p=parseKey(selected)!;commit(hideColumns(doc,colNameFor(parseKey(selected)!.col)),true)}} onUnhideRows={()=>commit(unhideRows(doc),true)} onUnhideColumns={()=>commit(unhideColumns(doc),true)} onAddComment={()=>void addComment()} onHelp={()=>window.alert(t('IMKAN Sheet\nZoho-style spreadsheet workspace with editing, formulas, tables, pivots, charts, filters, validation, freeze panes, collaboration and XLSX export.','IMKAN Sheet\nواجهة جداول بيانات بأسلوب Zoho مع التحرير والصيغ والجداول والجداول المحورية والرسوم والمرشحات والتحقق والتجميد والتعاون وتصدير XLSX.'))} onInsertFunction={insertFunction}/>
+    <ZohoSheetChrome title={doc.title} selected={selected} formulaValue={input} display={display} editing={editing} saved={saved} saving={saving} gridlines={gridlines} canUndo={!!history.length} canRedo={!!future.length} fontFamily={fontFamily} fontSize={fontSize} numberFormat={numberFormat} verticalAlign={verticalAlign} wrap={wrap} paintActive={!!paintFormatActive} cellFormat={selectedCell?.format} ribbonTab={sheetTab} onRibbonTabChange={setSheetTab} onFindReplace={openFind} onAutoSum={autoSum} onSortAsc={sortAsc} onSortDesc={sortDesc} onDecimalIncrease={() => adjustDecimals(1)} onDecimalDecrease={() => adjustDecimals(-1)} onUnmerge={() => commit(unmergeRange(doc, bounds.start, bounds.end), true)} onFillDown={fillDown} onChartType={addChartOfType} onFreezeTopRow={() => commit(freeze(doc, 1, 0), true)} onFreezeFirstColumn={() => commit(freeze(doc, 0, 1), true)} onAutoFitColumn={() => { const p = parseKey(selected)!; onAutoFitColumn(p.col); }} onFontFamily={applyFontFamily} onFontSize={applyFontSize} onNumberFormat={applyNumberFormat} onVerticalAlign={applyVerticalAlign} onWrap={applyWrap} onFormulaChange={setInput} onFormulaCommit={(move)=>{if(move==='cancel'){cancelEdit();return;}if(editing)finish(move);else begin(selected);}} onBeginEdit={()=>begin(selected)} onUndo={undo} onRedo={redo} onSave={saveNow} onPrint={()=>window.print()} onExport={exportXlsx} onFind={() => openFind('find')} onCopy={()=>void copy()} onCut={()=>void cut()} onPaste={()=>void paste()} onPasteSpecial={()=>setDialog({ pasteSpecial: true })} onClear={clearSelected} onPaint={paintFormat} onBorder={addBorder} onBold={()=>commit(patchRangeFormat(doc,bounds.start,bounds.end,{bold:!selectedCell?.format?.bold}))} onItalic={()=>commit(patchRangeFormat(doc,bounds.start,bounds.end,{italic:!selectedCell?.format?.italic}))} onUnderline={()=>commit(patchRangeFormat(doc,bounds.start,bounds.end,{underline:!selectedCell?.format?.underline}))} onStrike={()=>commit(patchRangeFormat(doc,bounds.start,bounds.end,{strike:!selectedCell?.format?.strike}))} onColor={v=>commit(patchRangeFormat(doc,bounds.start,bounds.end,{color:v}))} onBg={v=>commit(patchRangeFormat(doc,bounds.start,bounds.end,{background:v}))} onAlign={v=>commit(patchRangeFormat(doc,bounds.start,bounds.end,{align:v}))} onMerge={()=>commit(mergeRange(doc,bounds.start,bounds.end),true)} onSort={()=>sortAsc()} onFilter={toggleColumnFilter} onValidation={()=>{const raw=window.prompt(t('Validation list values separated by commas, or empty to remove','قيم القائمة مفصولة بفواصل، أو فارغ للحذف'),(selectedCell?.validation?.values??[]).join(','));commit(raw?setValidation(doc,selected,{type:'list',values:raw.split(',').map(x=>x.trim()).filter(Boolean).slice(0,50)}):setValidation(doc,selected,undefined),true);}} onConditional={addConditional} onNamedRange={addNewNamedRange} onTable={()=>setDialog({ createTable: true })} onPivot={()=>setDialog({ createPivot: true })} onChart={()=>addChartOfType('column')} onAddSheet={()=>commit(addSheet(doc),true)} onDeleteSheet={()=>commit(deleteActiveSheet(doc),true)} onRename={()=>{const n=window.prompt(t('Sheet name','اسم الورقة'),sheet.name);if(n)commit(renameSheet(doc,n),true);}} onFreeze={()=>commit(toggleFreeze(doc,1,1),true)} onGridlines={()=>setGridlines(v=>!v)} onInsertRows={()=>{const p=parseKey(selected)!;commit(insertRows(doc,p.row,1),true)}} onDeleteRows={()=>{const p=parseKey(selected)!;commit(deleteRows(doc,p.row,1),true)}} onInsertColumns={()=>{const p=parseKey(selected)!;commit(insertColumns(doc,p.col,1),true)}} onDeleteColumns={()=>{const p=parseKey(selected)!;commit(deleteColumns(doc,p.col,1),true)}} onHideRow={()=>{const p=parseKey(selected)!;commit(hideRows(doc,p.row,p.row),true)}} onHideColumn={()=>{const p=parseKey(selected)!;commit(hideColumns(doc,colNameFor(parseKey(selected)!.col)),true)}} onUnhideRows={()=>commit(unhideRows(doc),true)} onUnhideColumns={()=>commit(unhideColumns(doc),true)} onAddComment={openCellNote} onRemoveDuplicates={()=>setDialog({ removeDuplicates: true })} onTextToColumns={()=>setDialog({ textToColumns: true })} onCellNote={openCellNote} onHelp={()=>window.alert(t('IMKAN Sheet\nZoho-style spreadsheet workspace with editing, formulas, tables, pivots, charts, filters, validation, freeze panes, collaboration and XLSX export.','IMKAN Sheet\nواجهة جداول بيانات بأسلوب Zoho مع التحرير والصيغ والجداول والجداول المحورية والرسوم والمرشحات والتحقق والتجميد والتعاون وتصدير XLSX.'))} onInsertFunction={insertFunction}/>
     <OfficeTemplateFields templateId={templateId} ar={ar} onInsert={insertTemplateField} />
     <OfficeMobile type="SHEET" ar={ar} undo={undo} redo={redo} bold={()=>commit(patchFormat(doc,selected,{bold:!selectedCell?.format?.bold}))} italic={()=>commit(patchFormat(doc,selected,{italic:!selectedCell?.format?.italic}))} underline={()=>commit(patchFormat(doc,selected,{underline:!selectedCell?.format?.underline}))} selectedCell={selected} formulaValue={input} editingCell={editing} onFormulaChange={setInput} onFormulaCommit={(move)=>{if(move==='cancel'){cancelEdit();return;}if(editing)finish(move);else begin(selected);}} onBeginCellEdit={()=>begin(selected)} save={()=>persist(ref.current!)} />
     <div className="flex min-h-0 flex-1 flex-col">
@@ -434,7 +529,14 @@ export default function SheetPage() {
           editing={editing}
           editingKey={editingKey}
           editValue={input}
-          onSelect={(nextAnchor, nextFocus) => { applyPaintedFormat(nextAnchor, nextFocus); setAnchor(nextAnchor); setSelected(nextFocus); gridFocusRef.current?.focus(); }}
+          onSelect={(nextAnchor, nextFocus) => {
+            applyPaintedFormat(nextAnchor, nextFocus);
+            setSelectedChartId(null);
+            setDialog({ chartPanel: false });
+            setAnchor(nextAnchor);
+            setSelected(nextFocus);
+            gridFocusRef.current?.focus();
+          }}
           onBeginEdit={begin}
           onEditValueChange={setInput}
           onCommitEdit={finish}
@@ -450,18 +552,16 @@ export default function SheetPage() {
               workbook={doc}
               charts={sheet.charts ?? []}
               selectedChartId={selectedChartId}
-              onSelectChart={setSelectedChartId}
-              onMoveChart={() => {}}
-              onDeleteChart={(id) => commit(deleteChart(doc, id), true)}
+              maxRow={ROWS - 1}
+              maxCol={COLS - 1}
+              onSelectChart={(id) => { setSelectedChartId(id); if (id) setDialog({ chartPanel: true }); }}
+              onCommitLayout={(id, patch) => commit(updateChart(doc, id, patch), true)}
+              onDeleteChart={(id) => { commit(deleteChart(doc, id), true); if (selectedChartId === id) { setSelectedChartId(null); setDialog({ chartPanel: false }); } }}
+              onEditChart={(id) => { setSelectedChartId(id); setDialog({ chartPanel: true }); }}
             />
           )}
         />
       </div>
-      <details className="shrink-0 border-t bg-white">
-        <summary className="cursor-pointer px-4 py-2 text-xs font-semibold text-slate-700">{t('Data tools (Tables, Pivot, Charts)','أدوات البيانات (جداول، Pivot، رسوم)')}</summary>
-        <div className="border-t bg-white p-3"><div className="mb-2 flex items-center justify-between"><div className="text-xs font-semibold text-slate-700">{t('Tables & Pivot Tables','الجداول والجداول المحورية')}</div><div className="text-[10px] text-slate-400">{t('Structured data tools','أدوات البيانات المنظمة')}</div></div><div className="grid gap-3 lg:grid-cols-2"><div className="rounded-lg border bg-slate-50 p-2"><div className="mb-2 text-[11px] font-semibold">{t('Tables','الجداول')}</div>{(sheet.tables??[]).map(table=><div key={table.id} className="mb-2 rounded border bg-white p-2"><div className="flex items-center gap-2"><input className="min-w-0 flex-1 rounded border px-2 py-1 text-xs font-semibold" value={table.name} onChange={e=>commit(updateTable(doc,table.id,{name:e.target.value.replace(/\s+/g,'_').slice(0,80)}),true)}/><select className="rounded border px-1 py-1 text-[10px]" value={table.style??'banded'} onChange={e=>commit(updateTable(doc,table.id,{style:e.target.value as any}),true)}><option value="banded">Banded</option><option value="plain">Plain</option><option value="minimal">Minimal</option></select><label className="text-[10px]"><input type="checkbox" checked={!!table.totalRow} onChange={e=>commit(updateTable(doc,table.id,{totalRow:e.target.checked}),true)}/> Total</label><button className="rounded px-2 py-1 text-xs text-red-600 hover:bg-red-50" onClick={()=>deleteSelectedTable(table.id)}>×</button></div><div className="text-[10px] text-slate-400">{table.start}:{table.end}</div></div>)}{!(sheet.tables?.length)&&<div className="rounded border border-dashed bg-white p-3 text-[10px] text-slate-400">{t('Select a range and choose Table.','حدد نطاقًا ثم اختر Table.')}</div>}</div><div className="rounded-lg border bg-slate-50 p-2"><div className="mb-2 text-[11px] font-semibold">{t('Pivot Tables','الجداول المحورية')}</div>{(sheet.pivotTables??[]).map(pivot=>{const result=buildPivot(sheet,pivot,doc);return <div key={pivot.id} className="mb-2 rounded border bg-white p-2"><div className="mb-2 flex items-center gap-2"><span className="min-w-0 flex-1 text-xs font-semibold">{pivot.name}</span><span className="text-[10px] text-slate-400">{pivot.aggregation}</span><button className="rounded px-2 py-1 text-xs text-red-600 hover:bg-red-50" onClick={()=>commit(deletePivotTable(doc,pivot.id),true)}>×</button></div><div className="overflow-auto"><table className="min-w-full border-collapse text-[10px]"><thead><tr>{result.headers.map(h=><th key={h} className="border bg-slate-100 px-2 py-1 text-left">{h}</th>)}</tr></thead><tbody>{result.rows.map((r,i)=><tr key={i}>{r.map((v,j)=><td key={j} className="border px-2 py-1">{typeof v==='number'?Number(v.toFixed(4)):v}</td>)}</tr>)}<tr className="font-semibold"><td className="border px-2 py-1">Grand Total</td><td className="border px-2 py-1">{Number(result.grandTotal.toFixed(4))}</td></tr></tbody></table></div></div>})}{!(sheet.pivotTables?.length)&&<div className="rounded border border-dashed bg-white p-3 text-[10px] text-slate-400">{t('Select a range and choose Pivot.','حدد نطاقًا ثم اختر Pivot.')}</div>}</div></div></div>
-        <div className="border-t bg-slate-50 p-3"><div className="mb-2 flex items-center justify-between"><div className="text-xs font-semibold text-slate-700">{t('Charts','الرسوم البيانية')}</div><div className="text-[10px] text-slate-400">{t('Native visualization engine','محرك رسوم أصلي')}</div></div><div className="flex flex-wrap gap-3">{(sheet.charts??[]).map(chart=><ChartCard key={chart.id} chart={chart} sheet={sheet} workbook={doc} onChange={patch=>commit(updateChart(doc,chart.id,patch),true)} onDelete={()=>commit(deleteChart(doc,chart.id),true)} ar={ar}/>)}</div>{!(sheet.charts?.length)&&<div className="rounded border border-dashed bg-white p-4 text-xs text-slate-400">{t('Select a range and choose Chart to create a visualization.','حدد نطاقًا ثم اختر Chart لإنشاء رسم بياني.')}</div>}</div>
-      </details>
       <div className="flex h-9 shrink-0 items-center gap-1 overflow-x-auto border-t bg-white px-2">{doc.sheets.map(s=><button key={s.id} onClick={()=>commit(setActiveSheet(doc,s.id))} className={`rounded-t px-4 py-1.5 text-xs ${s.id===doc.activeSheet?'border border-b-0 bg-white font-semibold':'text-slate-500 hover:bg-slate-50'}`}>{s.name}</button>)}<button onClick={()=>commit(addSheet(doc),true)} className="px-2 text-lg text-slate-500">＋</button></div>
     </div>
     {contextMenu ? (
@@ -469,13 +569,18 @@ export default function SheetPage() {
         {contextItem(t('Cut','قص'), () => void cut(), 'Ctrl+X')}
         {contextItem(t('Copy','نسخ'), () => void copy(), 'Ctrl+C')}
         {contextItem(t('Paste','لصق'), () => void paste(), 'Ctrl+V')}
+        {contextItem(t('Paste Values','لصق القيم'), () => pasteSpecial('values'))}
+        {contextItem(t('Paste Formulas','لصق الصيغ'), () => pasteSpecial('formulas'))}
+        {contextItem(t('Paste Formats','لصق التنسيق'), () => pasteSpecial('formats'))}
+        {contextItem(t('Paste Special…','لصق خاص…'), () => setDialog({ pasteSpecial: true }))}
         {contextItem(t('Clear','مسح'), clearSelected)}
         <div className="my-1 h-px bg-[#e8eaed]" />
         {contextItem(t('Merge','دمج'), () => commit(mergeRange(doc, bounds.start, bounds.end), true))}
         {contextItem(t('Unmerge','إلغاء الدمج'), () => commit(unmergeRange(doc, bounds.start, bounds.end), true))}
         {contextItem(t('Sort A→Z','ترتيب تصاعدي'), sortAsc)}
         {contextItem(t('Sort Z→A','ترتيب تنازلي'), sortDesc)}
-        {contextItem(t('Filter…','تصفية…'), () => { const col = selected.replace(/\d+$/, ''); const q = window.prompt(t('Filter value (empty clears)', 'قيمة التصفية (فارغة للإلغاء)'), sheet.filters?.[col] ?? ''); commit(q ? setFilter(doc, col, q) : clearFilter(doc, col), true); })}
+        {contextItem(t('Filter','تصفية'), toggleColumnFilter)}
+        {contextItem(t('Cell Note…','ملاحظة…'), openCellNote)}
         <div className="my-1 h-px bg-[#e8eaed]" />
         {contextItem(t('Insert Row','إدراج صف'), () => { const p = parseKey(contextMenu.key)!; commit(insertRows(doc, p.row, 1), true); })}
         {contextItem(t('Delete Row','حذف صف'), () => { const p = parseKey(contextMenu.key)!; commit(deleteRows(doc, p.row, 1), true); })}
@@ -483,6 +588,65 @@ export default function SheetPage() {
         {contextItem(t('Delete Column','حذف عمود'), () => { const p = parseKey(contextMenu.key)!; commit(deleteColumns(doc, p.col, 1), true); })}
       </OfficeContextMenu>
     ) : null}
+    <SheetWorkspacePanels
+      doc={doc}
+      sheet={sheet}
+      selected={selected}
+      rangeStart={bounds.start}
+      rangeEnd={bounds.end}
+      selectedChartId={selectedChartId}
+      dialogs={dialogs}
+      textPreview={textSplitPreview}
+      textOverwriteCount={textOverwriteCount}
+      duplicateColumns={duplicateColumns}
+      noteText={selectedCell?.note ?? ''}
+      onCloseDialog={setDialog}
+      onCreateTable={({ range, name, hasHeader, style }) => {
+        const parts = range.split(':');
+        let w = addTable(doc, parts[0], parts[1] ?? parts[0], name, hasHeader);
+        const created = activeSheet(w)?.tables?.find((tbl) => tbl.name.toLowerCase() === name.trim().replace(/\s+/g, '_').toLowerCase());
+        if (created && style) w = updateTable(w, created.id, { style });
+        commit(w, true);
+        if (created) setDialog({ selectedTableId: created.id });
+      }}
+      onCreatePivot={(input) => {
+        const w = addPivotTable(doc, input.sourceRange, input.name, input.rowField, input.valueField, input.aggregation ?? 'sum');
+        commit(w, true);
+        const created = activeSheet(w)?.pivotTables?.at(-1);
+        if (created) setDialog({ selectedPivotId: created.id });
+      }}
+      onPasteSpecial={(mode) => pasteSpecial(mode)}
+      onRemoveDuplicates={({ range, columnIndexes, hasHeader }) => {
+        const parts = range.split(':');
+        const { workbook: next, removed } = removeDuplicates(doc, parts[0], parts[1] ?? parts[0], columnIndexes, hasHeader);
+        commit(next, true);
+        setError(t(`Removed ${removed} duplicate row(s).`, `تمت إزالة ${removed} صف(وف) مكرر.`));
+        return removed;
+      }}
+      onTextToColumns={({ delimiter, custom }) => {
+        if (textOverwriteCount > 0) {
+          setError(t('Text to Columns would overwrite existing data. Clear destination cells first.', 'سيؤدي تقسيم النص إلى أعمدة إلى الكتابة فوق بيانات موجودة. امسح الخلايا الهدف أولاً.'));
+          return;
+        }
+        commit(applyTextToColumns(doc, selected, delimiter, custom), true);
+        setDialog({ textToColumns: false });
+      }}
+      onSaveNote={saveCellNote}
+      onChartChange={(patch) => { if (selectedChartId) commit(updateChart(doc, selectedChartId, patch), true); }}
+      onTableChange={(id, patch) => commit(updateTable(doc, id, patch), true)}
+      onTableSort={(id, direction, colOffset) => commit(sortTableWorkbook(doc, id, colOffset, direction), true)}
+      onTableFilter={(id, column, values) => {
+        const table = sheet.tables?.find((tbl) => tbl.id === id);
+        if (!table) return;
+        const nextFilter = { ...(table.filter ?? {}) };
+        if (values === null) delete nextFilter[column];
+        else nextFilter[column] = values.join('\u0001');
+        commit(updateTable(doc, id, { filter: Object.keys(nextFilter).length ? nextFilter : undefined }), true);
+      }}
+      onTableDelete={(id) => { commit(deleteTableById(doc, id), true); setDialog({ selectedTableId: null }); }}
+      onPivotChange={(id, patch) => commit(updatePivot(doc, id, patch), true)}
+      onPivotDelete={(id) => { commit(deletePivotTable(doc, id), true); setDialog({ selectedPivotId: null }); }}
+    />
     <OfficeFindReplace
       open={findOpen}
       mode={findMode}
@@ -495,23 +659,4 @@ export default function SheetPage() {
     {error&&<div className="border-t bg-amber-50 px-4 py-1 text-xs text-amber-800">{error}</div>}
     {conflict&&<OfficeConflictDialog conflict={conflict} queuedCount={offlineQueueCount(fileId)} ar={ar} onKeepLocal={()=>void resolveConflict('local')} onUseRemote={()=>void resolveConflict('remote')} onDismiss={()=>setConflict(null)}/>}
   </div>;
-}
-
-function ChartCard({chart,sheet,workbook,onChange,onDelete,ar}:{chart:SheetChart;sheet:Sheet;workbook:Workbook;onChange:(p:Partial<SheetChart>)=>void;onDelete:()=>void;ar:boolean}) {
-  const [advanced,setAdvanced]=useState(false);
-  const setAxis=(axis:'xAxis'|'yAxis',key:string,value:string)=>{const n=Number(value);onChange({[axis]:{...(chart[axis]??{}),[key]:key==='title'?value:(Number.isFinite(n)?n:undefined)}} as Partial<SheetChart>)};
-  const toggle=(key:'legend'|'showLabels'|'showValues'|'showMarkers')=>onChange({[key]:!chart[key]} as Partial<SheetChart>);
-  return <div className="rounded-lg border bg-white p-2 shadow-sm" style={{width:chart.width+16}}>
-    <div className="mb-2 flex items-center gap-2"><input className="min-w-0 flex-1 rounded border px-2 py-1 text-xs font-semibold" value={chart.title} onChange={e=>onChange({title:e.target.value})}/><select className="rounded border px-1 py-1 text-[10px]" value={chart.type} onChange={e=>onChange({type:e.target.value as ChartType})}><option value="column">Column</option><option value="bar">Bar</option><option value="line">Line</option><option value="area">Area</option><option value="pie">Pie</option><option value="doughnut">Doughnut</option><option value="scatter">Scatter</option><option value="combo">Combo</option></select><button className="rounded border px-2 py-1 text-[10px]" onClick={()=>setAdvanced(!advanced)}>{ar?'خيارات':'Options'}</button><button className="rounded px-2 py-1 text-xs text-red-600 hover:bg-red-50" onClick={onDelete}>×</button></div>
-    <div className="rounded border bg-slate-50 p-1"><ChartSvgPreview chart={chart} sheet={sheet} workbook={workbook}/></div>
-    <div className="mt-2 flex flex-wrap gap-1 text-[10px]"><button className="rounded border px-2 py-1" onClick={()=>toggle('legend')}>{ar?(chart.legend?'إخفاء المفتاح':'إظهار المفتاح'):(chart.legend?'Hide legend':'Show legend')}</button><button className="rounded border px-2 py-1" onClick={()=>toggle('showLabels')}>{ar?'التسميات':'Labels'}</button><button className="rounded border px-2 py-1" onClick={()=>toggle('showValues')}>{ar?'القيم':'Values'}</button><button className="rounded border px-2 py-1" onClick={()=>toggle('showMarkers')}>{ar?'النقاط':'Markers'}</button><button className="rounded border px-2 py-1" onClick={()=>{const n=window.prompt(ar?'السمة':'Theme',chart.theme??'office');if(n&&['office','mono','ocean','nature','sunset'].includes(n))onChange({theme:n});}}>{ar?'السمة':'Theme'}</button><button className="rounded border px-2 py-1" onClick={()=>exportChartSvg(chart,sheet,workbook)}>{ar?'SVG':'Export SVG'}</button><button className="rounded border px-2 py-1" onClick={()=>exportChartPng(chart,sheet,workbook)}>{ar?'PNG':'Export PNG'}</button></div>
-    {advanced&&<div className="mt-2 grid grid-cols-2 gap-2 rounded border bg-slate-50 p-2 text-[10px]"><label>{ar?'نمط التكديس':'Stack'}<select className="ml-1 rounded border px-1" value={chart.stackMode??'none'} onChange={e=>onChange({stackMode:e.target.value as any})}><option value="none">None</option><option value="stacked">Stacked</option><option value="percent">100% Stacked</option></select></label><label>{ar?'خط الاتجاه':'Trendline'}<input className="ml-1" type="checkbox" checked={!!chart.trendline?.enabled} onChange={e=>onChange({trendline:{...(chart.trendline??{type:'linear',seriesIndex:0}),enabled:e.target.checked,type:'linear'}})}/></label><label>{ar?'عنوان المحور X':'X axis title'}<input className="ml-1 w-24 rounded border px-1" value={chart.xAxis?.title??''} onChange={e=>setAxis('xAxis','title',e.target.value)}/></label><label>{ar?'عنوان المحور Y':'Y axis title'}<input className="ml-1 w-24 rounded border px-1" value={chart.yAxis?.title??''} onChange={e=>setAxis('yAxis','title',e.target.value)}/></label><label>{ar?'Y min':'Y min'}<input className="ml-1 w-16 rounded border px-1" value={chart.yAxis?.min??''} onChange={e=>setAxis('yAxis','min',e.target.value)}/></label><label>{ar?'Y max':'Y max'}<input className="ml-1 w-16 rounded border px-1" value={chart.yAxis?.max??''} onChange={e=>setAxis('yAxis','max',e.target.value)}/></label><label>{ar?'Y step':'Y step'}<input className="ml-1 w-16 rounded border px-1" value={chart.yAxis?.tick??''} onChange={e=>setAxis('yAxis','tick',e.target.value)}/></label><label>{ar?'نوع السلاسل في Combo':'Combo series'}<select className="ml-1 rounded border px-1" value={(chart.seriesTypes?.[0]??'column')} onChange={e=>onChange({seriesTypes:[e.target.value as any]})}><option value="column">Column</option><option value="line">Line</option><option value="bar">Bar</option></select></label></div>}
-    <div className="mt-1 text-[10px] text-slate-400">{chart.rangeStart}:{chart.rangeEnd}</div>
-  </div>;
-}
-
-function ChartSvgPreview({chart,sheet,workbook}:{chart:SheetChart;sheet:Sheet;workbook:Workbook}) {
-  const [markup,setMarkup]=useState('');
-  useEffect(()=>{import('@/office/sheet/charts').then(m=>setMarkup(m.chartSvgMarkup(chart,sheet,workbook))).catch(()=>setMarkup(''));},[chart,sheet,workbook]);
-  return markup ? <div className="overflow-auto" dangerouslySetInnerHTML={{__html:markup}}/> : <div className="flex h-[330px] items-center justify-center text-xs text-slate-400">Loading chart…</div>;
 }

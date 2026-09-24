@@ -4,7 +4,7 @@ import type { ReactNode } from 'react';
 import { NUMBER_FORMAT_OPTIONS } from './format-display';
 import type { CellFormat, NumberFormat } from './model';
 
-export type SheetRibbonTab = 'home' | 'insert' | 'formulas' | 'data' | 'layout' | 'view';
+export type SheetRibbonTab = 'home' | 'insert' | 'formulas' | 'data' | 'layout' | 'review' | 'view';
 
 type SheetRibbonProps = {
   tab: SheetRibbonTab;
@@ -24,6 +24,7 @@ type SheetRibbonProps = {
   onCopy: () => void;
   onCut: () => void;
   onPaste: () => void;
+  onPasteSpecial: () => void;
   onClear: () => void;
   onPaint: () => void;
   onBold: () => void;
@@ -59,6 +60,9 @@ type SheetRibbonProps = {
   onValidation: () => void;
   onConditional: () => void;
   onNamedRange: () => void;
+  onRemoveDuplicates: () => void;
+  onTextToColumns: () => void;
+  onCellNote: () => void;
   onFreezeTopRow: () => void;
   onFreezeFirstColumn: () => void;
   onFreezePanes: () => void;
@@ -80,6 +84,7 @@ const TABS: [SheetRibbonTab, string][] = [
   ['formulas', 'Formulas'],
   ['data', 'Data'],
   ['layout', 'Layout'],
+  ['review', 'Review'],
   ['view', 'View'],
 ];
 
@@ -134,6 +139,7 @@ export function SheetRibbon(p: SheetRibbonProps) {
               <Btn label="Cut" onClick={p.onCut} />
               <Btn label="Copy" onClick={p.onCopy} />
               <Btn label="Paste" onClick={p.onPaste} />
+              <Btn label="Special" title="Paste Special" onClick={p.onPasteSpecial} />
               <Btn label="Painter" onClick={p.onPaint} active={p.paintActive} />
             </Group>
             <Divider />
@@ -230,6 +236,15 @@ export function SheetRibbon(p: SheetRibbonProps) {
             <Group label="Data Tools">
               <Btn label="Validation" onClick={p.onValidation} />
               <Btn label="Conditional" onClick={p.onConditional} />
+              <Btn label="Dedupe" title="Remove Duplicates" onClick={p.onRemoveDuplicates} />
+              <Btn label="Text→Cols" title="Text to Columns" onClick={p.onTextToColumns} />
+            </Group>
+          </>
+        ) : null}
+        {p.tab === 'review' ? (
+          <>
+            <Group label="Comments">
+              <Btn label="Note" title="Cell note" onClick={p.onCellNote} />
             </Group>
           </>
         ) : null}
