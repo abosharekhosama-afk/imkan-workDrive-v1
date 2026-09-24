@@ -5,6 +5,7 @@ import {
   FormulaAutocompletePopover,
   OfficeColorPicker,
   OfficeMenu,
+  OfficeModal,
   OfficePopover,
   officeMenuDivider,
   officeMenuItem,
@@ -272,9 +273,9 @@ export function ZohoSheetChrome(p: Props) {
         {(['File', 'Edit', 'View', 'Insert', 'Format', 'Data', 'Review', 'Tools', 'Help'] as const).map((label) => (
           <button
             key={label}
-            ref={menu === label ? menuAnchorRef : undefined}
             type="button"
             onClick={(e) => { menuAnchorRef.current = e.currentTarget; setMenu(menu === label ? null : label); }}
+            onMouseEnter={(e) => { if (menu && menu !== label) { menuAnchorRef.current = e.currentTarget; setMenu(label); } }}
             className=""
             aria-expanded={menu === label}
           >
@@ -428,27 +429,50 @@ export function ZohoSheetChrome(p: Props) {
         <button ref={fnAnchorRef} type="button" className="sheet-formula-action" title="Insert function" onClick={() => setFnOpen((v) => !v)}>fx</button>
       </div>
 
-      <OfficePopover open={fnOpen} onClose={() => setFnOpen(false)} anchorRef={fnAnchorRef} placement="bottom-end" className="flex w-[420px] flex-col overflow-hidden">
-        <div className="flex h-10 items-center justify-between border-b px-3"><span className="text-[17px] font-semibold">Functions</span><button type="button" onClick={() => setFnOpen(false)} className="text-[#9aa0a6]">×</button></div>
-        <div className="border-b px-3 py-2"><div className="flex h-8 items-center rounded border bg-white px-2"><span className="mr-2 text-[#7d8389]">⌕</span><input value={fnQuery} onChange={(e) => setFnQuery(e.target.value)} placeholder="Search function" className="min-w-0 flex-1 text-[12px] outline-none" /></div></div>
-        <div className="flex border-b px-2 py-1 text-[10px]">
-          <button type="button" onClick={() => setFnCategory('All')} className={`rounded px-2 py-1 ${fnCategory === 'All' ? 'bg-[#e8f5ed] text-[#0b9f4b]' : ''}`}>All</button>
-          {SHEET_FUNCTION_CATEGORIES.map((cat) => (
-            <button key={cat} type="button" onClick={() => setFnCategory(cat)} className={`rounded px-2 py-1 ${fnCategory === cat ? 'bg-[#e8f5ed] text-[#0b9f4b]' : ''}`}>{cat.split(' ')[0]}</button>
-          ))}
+      <OfficeModal open={fnOpen} onClose={() => setFnOpen(false)} title="Insert Function" panelClassName="w-[560px] max-w-[92vw]">
+        <div className="space-y-3 p-3 text-[12px] text-[#242424]">
+          <label className="block">
+            Search for a function
+            <input value={fnQuery} onChange={(e) => setFnQuery(e.target.value)} placeholder="Type a brief description or a function name" className="mt-1 h-7 w-full border border-[#b4b8bd] px-2 outline-none focus:border-[#217346]" />
+          </label>
+          <div className="grid grid-cols-[160px_1fr] gap-3">
+            <label className="block">
+              Category
+              <select value={fnCategory} onChange={(e) => setFnCategory(e.target.value as SheetFunctionCategory | 'All')} className="mt-1 h-7 w-full border border-[#b4b8bd] bg-white px-1">
+                <option value="All">All</option>
+                {SHEET_FUNCTION_CATEGORIES.map((cat) => <option key={cat} value={cat}>{cat}</option>)}
+              </select>
+            </label>
+            <div>
+              <div className="mb-1">Select a function</div>
+              <div className="h-[180px] overflow-auto border border-[#b4b8bd] bg-white" role="listbox" aria-label="Functions">
+                {filteredFns.map((fn) => (
+                  <button
+                    key={fn.name}
+                    type="button"
+                    role="option"
+                    aria-selected={fn.name === fnDetail?.name}
+                    onClick={() => setActiveFn(fn.name)}
+                    onDoubleClick={() => { p.onInsertFunction(fn.name); setFnOpen(false); }}
+                    className={`block w-full px-2 py-1 text-left font-mono ${fn.name === fnDetail?.name ? 'bg-[#217346] text-white' : 'hover:bg-[#e8f2ec]'}`}
+                  >
+                    {fn.name}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+          <div className="border border-[#d0d4d9] bg-[#fafafa] p-2">
+            <div className="font-semibold">{fnDetail?.name}</div>
+            <div className="mt-1 text-[#444]">{fnDetail?.description}</div>
+            <div className="mt-2 font-mono text-[11px]">{fnDetail?.syntax}</div>
+          </div>
+          <div className="flex justify-end gap-2">
+            <button type="button" className="h-7 border border-[#b4b8bd] bg-white px-3" onClick={() => setFnOpen(false)}>Cancel</button>
+            <button type="button" className="h-7 border border-[#185c37] bg-[#217346] px-3 text-white" onClick={() => { if (fnDetail) { p.onInsertFunction(fnDetail.name); setFnOpen(false); } }}>OK</button>
+          </div>
         </div>
-        <div className="max-h-[220px] overflow-auto">{filteredFns.map((fn) => (
-          <button key={fn.name} type="button" onMouseEnter={() => setActiveFn(fn.name)} onClick={() => { p.onInsertFunction(fn.name); setFnOpen(false); }} className="flex w-full items-center justify-between border-b px-3 py-2 text-left hover:bg-[#f3f5f7]"><span className="font-mono text-[12px]">{fn.name}</span><span className="text-[10px] text-[#7b8086]">{fn.category}</span></button>
-        ))}</div>
-        <div className="border-t bg-white p-4">
-          <div className="text-[12px] font-semibold text-[#18a957]">ƒx {fnDetail?.name}</div>
-          <div className="mt-1 text-[10px] text-[#8b8f94]">{fnDetail?.category}</div>
-          <div className="mt-3 text-[12px] leading-5 text-[#333]">{fnDetail?.description}</div>
-          <div className="mt-4 text-[12px] text-[#777]">Syntax</div>
-          <div className="mt-1 rounded border bg-[#fafafa] px-2 py-2 font-mono text-[11px]">{fnDetail?.syntax}</div>
-          <button type="button" className="mt-3 rounded border border-[#18a957] px-3 py-1 text-[11px] font-semibold text-[#0b9f4b]" onClick={() => { p.onInsertFunction(fnDetail.name); setFnOpen(false); }}>Insert Function</button>
-        </div>
-      </OfficePopover>
+      </OfficeModal>
     </div>
   );
 }

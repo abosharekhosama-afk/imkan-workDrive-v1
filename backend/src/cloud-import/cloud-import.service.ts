@@ -82,9 +82,9 @@ export class CloudImportService implements OnModuleInit, OnModuleDestroy {
     };
   }
 
-  async beginOAuth(user: AccessTokenPayload, provider: CloudProvider, folderId: string | null) {
+  async beginOAuth(user: AccessTokenPayload, provider: CloudProvider, folderId: string | null, connectionId: string | null = null) {
     const genericProvider = provider === 'onedrive' ? 'microsoft' : provider;
-    return this.connections.beginOAuth(user, genericProvider as 'google' | 'microsoft' | 'dropbox', folderId);
+    return this.connections.beginOAuth(user, genericProvider as 'google' | 'microsoft' | 'dropbox', folderId, connectionId, '/files');
   }
 
   async oauthCallback(provider: CloudProvider, code: string, state: string) {
@@ -101,16 +101,34 @@ export class CloudImportService implements OnModuleInit, OnModuleDestroy {
         update: { accessToken: this.encrypt(accessToken), ...(refreshToken ? { refreshToken: this.encrypt(refreshToken) } : {}), expiresAt: generic.expiresAt, scope: generic.scope },
       });
     }
-    return { frontend: result.frontend, folderId: result.folderId };
+    return { frontend: result.frontend, folderId: result.folderId, connectionId: result.connectionId };
   }
 
   async listProviders(user: AccessTokenPayload) {
-    const rows = await this.prisma.cloudConnection.findMany({ where: { orgId: user.org_id, userId: user.sub }, select: { id: true, provider: true, expiresAt: true, updatedAt: true } });
-    return ['google', 'dropbox', 'onedrive'].map((provider) => ({ provider, connected: rows.some((r) => r.provider === provider), updatedAt: rows.find((r) => r.provider === provider)?.updatedAt ?? null }));
+    const genericRows = await this.prisma.connection.findMany({
+      where: { orgId: user.org_id, authType: 'OAUTH2', provider: { in: ['google', 'microsoft', 'dropbox'] }, status: 'ACTIVE', OR: [{ ownerId: user.sub }, { visibility: 'ORGANIZATION' }, { shares: { some: { userId: user.sub } } }] },
+      select: { id: true, provider: true, name: true, status: true, updatedAt: true, expiresAt: true },
+      orderBy: { updatedAt: 'desc' },
+    });
+    const legacyRows = await this.prisma.cloudConnection.findMany({ where: { orgId: user.org_id, userId: user.sub }, select: { id: true, provider: true, expiresAt: true, updatedAt: true } });
+    return ['google', 'dropbox', 'onedrive'].map((provider) => {
+      const genericProvider = provider === 'onedrive' ? 'microsoft' : provider;
+      const matches = genericRows.filter((r) => r.provider === genericProvider);
+      const legacy = legacyRows.find((r) => r.provider === provider);
+      const first = matches[0];
+      return {
+        provider,
+        connected: Boolean(first || legacy),
+        connectionId: first?.id ?? (legacy ? legacy.id : null),
+        connectionName: first?.name ?? null,
+        connections: matches.map((r) => ({ id: r.id, name: r.name, updatedAt: r.updatedAt, expiresAt: r.expiresAt })),
+        updatedAt: first?.updatedAt ?? legacy?.updatedAt ?? null,
+      };
+    });
   }
 
-  async listFiles(user: AccessTokenPayload, provider: CloudProvider): Promise<RemoteFile[]> {
-    const connection = await this.getConnection(user, provider);
+  async listFiles(user: AccessTokenPayload, provider: CloudProvider, connectionId: string | null = null): Promise<RemoteFile[]> {
+    const connection = await this.getConnection(user, provider, connectionId);
     const token = await this.ensureAccessToken(connection);
     if (provider === 'google') {
       const q = encodeURIComponent("trashed = false and mimeType != 'application/vnd.google-apps.folder'");
@@ -134,8 +152,8 @@ export class CloudImportService implements OnModuleInit, OnModuleDestroy {
       const folder = await this.prisma.folder.findFirst({ where: { id: input.folderId } });
       if (!folder || folder.orgId !== user.org_id) throw new NotFoundException('Destination folder not found');
     }
-    const connection = await this.getConnection(user, provider);
-    const remote = await this.listFiles(user, provider);
+    const connection = await this.getConnection(user, provider, input.connectionId ?? null);
+    const remote = await this.listFiles(user, provider, input.connectionId ?? null);
     const byId = new Map(remote.map((file) => [file.id, file]));
     const jobs = [];
     for (const requested of input.files) {
@@ -269,9 +287,11 @@ export class CloudImportService implements OnModuleInit, OnModuleDestroy {
 
   private async graphMetadata(token: string, id: string) { const response = await fetch(`https://graph.microsoft.com/v1.0/me/drive/items/${encodeURIComponent(id)}?$select=name,size,file,@microsoft.graph.downloadUrl`, { headers: { authorization: `Bearer ${token}` } }); const payload = await this.readJson(response); if (!response.ok) throw new BadRequestException('OneDrive metadata request failed'); return { downloadUrl: payload['@microsoft.graph.downloadUrl'], name: payload.name, size: payload.size, mimeType: payload.file?.mimeType }; }
 
-  private async getConnection(user: AccessTokenPayload, provider: CloudProvider) {
+  private async getConnection(user: AccessTokenPayload, provider: CloudProvider, connectionId: string | null = null) {
     const genericProvider = provider === 'onedrive' ? 'microsoft' : provider;
-    const generic = await this.prisma.connection.findFirst({ where: { orgId: user.org_id, ownerId: user.sub, provider: genericProvider, authType: 'OAUTH2' }, include: { secret: true } });
+    const generic = connectionId
+      ? await this.prisma.connection.findFirst({ where: { id: connectionId, orgId: user.org_id, provider: genericProvider, authType: 'OAUTH2', status: 'ACTIVE', OR: [{ ownerId: user.sub }, { visibility: 'ORGANIZATION' }, { shares: { some: { userId: user.sub } } }] }, include: { secret: true } })
+      : await this.prisma.connection.findFirst({ where: { orgId: user.org_id, ownerId: user.sub, provider: genericProvider, authType: 'OAUTH2', status: 'ACTIVE' }, include: { secret: true }, orderBy: { updatedAt: 'desc' } });
     if (generic?.secret?.accessToken) return { id: generic.id, provider, accessToken: this.connections.decryptSecret(generic.secret.accessToken), refreshToken: generic.secret.refreshToken ? this.connections.decryptSecret(generic.secret.refreshToken) : null, expiresAt: generic.expiresAt };
     const row = await this.prisma.cloudConnection.findFirst({ where: { orgId: user.org_id, userId: user.sub, provider } });
     if (!row) throw new ConflictException('Connect this cloud provider first');

@@ -1,5 +1,23 @@
 export const IMKAN_ACCESS_TOKEN_KEY = "workdrive_access_token";
 
+const OAUTH_TOKEN_BACKUP_KEY = "workdrive_oauth_token_backup";
+
+export function stashBrowserAccessTokenForOAuth(token: string | null): void {
+  if (typeof window === "undefined" || !token) return;
+  try { sessionStorage.setItem(OAUTH_TOKEN_BACKUP_KEY, token); } catch { /* storage may be unavailable */ }
+}
+
+export function restoreBrowserAccessTokenAfterOAuth(): string | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const token = sessionStorage.getItem(OAUTH_TOKEN_BACKUP_KEY);
+    if (!token) return null;
+    persistBrowserAccessToken(token);
+    sessionStorage.removeItem(OAUTH_TOKEN_BACKUP_KEY);
+    return token;
+  } catch { return null; }
+}
+
 export function readCookieAccessToken(cookie: string): string | null {
   const match = cookie.match(/(?:^| )workdrive_access_token=([^;]+)/);
   if (!match?.[1]) return null;

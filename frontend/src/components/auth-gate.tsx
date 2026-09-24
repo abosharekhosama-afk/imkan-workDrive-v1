@@ -8,6 +8,7 @@ import {
   buildAuthLoginNextPath,
   persistBrowserAccessToken,
   readBrowserAccessToken,
+  restoreBrowserAccessTokenAfterOAuth,
   shouldEndImkanSession,
   shouldRetryAuthCheck,
 } from "./auth-gate-logic";
@@ -25,8 +26,16 @@ export function AuthGate({ children }: { children: ReactNode }) {
   useEffect(() => {
     let cancelled = false;
     const cookie = typeof document !== "undefined" ? document.cookie : "";
-    const token = readBrowserAccessToken(localStorage, cookie);
     const oauthParams = typeof window !== "undefined" ? new URLSearchParams(window.location.search) : new URLSearchParams();
+    // OAuth returns from a third-party provider can land on a fresh browser
+    // context (or a different app shell) before the page component mounts.
+    // Restore the short-lived token backup before deciding that the session
+    // is missing; otherwise AuthGate sends the user to /auth/login and the
+    // connection flow appears to have lost its return route.
+    const restoredOAuthToken = (oauthParams.get("oauth") || oauthParams.get("connectionId"))
+      ? restoreBrowserAccessTokenAfterOAuth()
+      : null;
+    const token = restoredOAuthToken ?? readBrowserAccessToken(localStorage, document.cookie);
 
     logAuthGate("initialization", buildAuthGateDiagnostic({
       stage: "initialization",

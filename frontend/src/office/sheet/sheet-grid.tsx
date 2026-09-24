@@ -2,7 +2,7 @@
 
 import { memo, useCallback, useEffect, useRef, useState, type CSSProperties, type MouseEvent as ReactMouseEvent, type ReactNode } from 'react';
 import { cellKey, colName, formulaDisplay, parseKey, type Sheet, type Workbook } from './model';
-import { selectedKeys } from './selection-logic';
+import { rangeBounds, selectedKeys } from './selection-logic';
 import { clampColumnWidth, clampRowHeight, columnWidth, rowHeight } from './dimension-logic';
 import { stickyLeftForCol, stickyTopForRow } from './freeze-panes-logic';
 
@@ -29,6 +29,7 @@ export type SheetGridProps = {
   formatCell: (key: string) => CSSProperties;
   hiddenTableRows?: Set<number>;
   chartOverlay?: ReactNode;
+  onFill?: (start: string, end: string) => void;
 };
 
 function SheetGridInner({
@@ -54,8 +55,11 @@ function SheetGridInner({
   formatCell,
   hiddenTableRows,
   chartOverlay,
+  onFill,
 }: SheetGridProps) {
   const dragRef = useRef<{ active: boolean; anchor: string } | null>(null);
+  const fillRef = useRef<{ start: string } | null>(null);
+  const [fillEnd, setFillEnd] = useState<string | null>(null);
   const colResizeRef = useRef<{ col: number; startX: number; startWidth: number } | null>(null);
   const rowResizeRef = useRef<{ row: number; startY: number; startHeight: number } | null>(null);
   const [previewColWidths, setPreviewColWidths] = useState<Record<number, number>>({});
@@ -139,8 +143,12 @@ function SheetGridInner({
   };
 
   const stopDrag = () => {
+    if (fillRef.current && fillEnd && onFill) onFill(fillRef.current.start, fillEnd);
+    fillRef.current = null;
+    setFillEnd(null);
     dragRef.current = null;
   };
+  const selectionEnd = rangeBounds(anchor, focus).end;
 
   return (
     <div className="sheet-grid h-full min-h-0 overflow-auto bg-white" onMouseUp={stopDrag} onMouseLeave={stopDrag}>
@@ -240,7 +248,10 @@ function SheetGridInner({
                   role="gridcell"
                   aria-selected={isSelected(key)}
                   onMouseDown={(e) => onCellMouseDown(key, e)}
-                  onMouseEnter={() => onCellMouseEnter(key)}
+                  onMouseEnter={() => {
+                    if (fillRef.current) { setFillEnd(key); return; }
+                    onCellMouseEnter(key);
+                  }}
                   onDoubleClick={() => onBeginEdit(key)}
                   onContextMenu={(e) => {
                     e.preventDefault();
@@ -259,6 +270,20 @@ function SheetGridInner({
                   {!isEditingCell ? formulaDisplay(sheet.cells[key], sheet, workbook) : null}
                   {sheet.cells[key]?.note ? (
                     <span className="pointer-events-none absolute right-0 top-0 h-0 w-0 border-l-[6px] border-t-[6px] border-l-transparent border-t-[#f59e0b]" aria-label="Has note" />
+                  ) : null}
+                  {key === selectionEnd && !isEditingCell ? (
+                    <span
+                      role="button"
+                      aria-label="Fill handle"
+                      title="Fill"
+                      className="sheet-fill-handle"
+                      onMouseDown={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        fillRef.current = { start: rangeBounds(anchor, focus).start };
+                        setFillEnd(key);
+                      }}
+                    />
                   ) : null}
                   {isEditingCell ? (
                     <input

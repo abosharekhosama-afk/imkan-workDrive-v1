@@ -317,6 +317,17 @@
   outline-offset: -2px;
   background-image: linear-gradient(rgba(33, 115, 70, 0.08), rgba(33, 115, 70, 0.08));
 }
+.imkan-sheet .sheet-fill-handle {
+  position: absolute;
+  right: -4px;
+  bottom: -4px;
+  z-index: 6;
+  width: 8px;
+  height: 8px;
+  background: var(--sheet-accent);
+  border: 1px solid #fff;
+  cursor: crosshair;
+}
 .imkan-sheet .sheet-cell input {
   font-family: var(--sheet-formula-font);
   font-size: 12px;

@@ -41,7 +41,12 @@ export function OfficeFloatingLayer({
   const previousFocus = useRef<HTMLElement | null>(null);
   const labelId = useId();
   const [mounted, setMounted] = useState(false);
-  const rect = useOfficeFloatingPosition(open, anchorEl, layerRef.current, placement, offset);
+  const [layerEl, setLayerEl] = useState<HTMLDivElement | null>(null);
+  const rect = useOfficeFloatingPosition(open, anchorEl, layerEl, placement, offset);
+  const assignLayer = (node: HTMLDivElement | null) => {
+    layerRef.current = node;
+    setLayerEl((current) => (current === node ? current : node));
+  };
 
   useEffect(() => setMounted(true), []);
 
@@ -83,7 +88,7 @@ export function OfficeFloatingLayer({
 
   return createPortal(
     <div
-      ref={layerRef}
+      ref={assignLayer}
       role={role}
       aria-label={ariaLabel}
       aria-labelledby={ariaLabel ? undefined : labelId}

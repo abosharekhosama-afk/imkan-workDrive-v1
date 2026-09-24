@@ -6,7 +6,7 @@ import { closeOfficeSession, openOfficeDocument, openOfficeSession, saveOfficeDo
 import { OfficePresence as OfficePresenceView } from '@/components/office-presence';
 import { OfficeConflictDialog } from '@/components/office-conflict-dialog';
 import { useLocale } from '@/components/locale-provider';
-import { addConditionalFormat, addNamedRange, addPivotTable, addSheet, addTable, clearFilter, deleteActiveSheet, deleteColumns, deleteConditionalFormat, deleteNamedRange, deleteRows, freeze, insertColumns, insertRows, mergeRange, patchFormat, renameSheet, setActiveSheet, setColumnWidth, setFilter, setRowHeight, setValidation, shiftFormulaReferences, sortSheet, unmergeRange, updateCell, updateConditionalFormat, updateNamedRange, hideRows, hideColumns, unhideRows, unhideColumns } from '@/office/sheet/commands';
+import { addConditionalFormat, addNamedRange, addPivotTable, addSheet, addTable, clearFilter, deleteActiveSheet, deleteColumns, deleteConditionalFormat, deleteNamedRange, deleteRows, fillRange, freeze, insertColumns, insertRows, mergeRange, patchFormat, renameSheet, setActiveSheet, setColumnWidth, setFilter, setRowHeight, setValidation, shiftFormulaReferences, sortSheet, unmergeRange, updateCell, updateConditionalFormat, updateNamedRange, hideRows, hideColumns, unhideRows, unhideColumns } from '@/office/sheet/commands';
 import { activeSheet, cellKey, cloneWorkbook, formulaDisplay, parseKey, type SheetCell, type Workbook } from '@/office/sheet/model';
 import { clearRange, patchRangeFormat, toggleFreeze } from '@/office/sheet/phase2-commands';
 import { decodeClipboard, parseClipboardValue } from '@/office/sheet/clipboard';
@@ -566,6 +566,7 @@ export default function SheetPage() {
           onAutoFitColumn={onAutoFitColumn}
           formatCell={formatCell}
           hiddenTableRows={tableHiddenRows}
+          onFill={(start, end) => commit(fillRange(doc, start, end), true)}
           chartOverlay={(
             <SheetChartOverlay
               sheet={sheet}
