@@ -11,12 +11,30 @@ export function readCookieAccessToken(cookie: string): string | null {
 }
 
 export function readBrowserAccessToken(storage: Pick<Storage, "getItem">, cookie: string): string | null {
-  return (
-    storage.getItem(IMKAN_ACCESS_TOKEN_KEY) ||
-    storage.getItem("access_token") ||
-    storage.getItem("token") ||
-    readCookieAccessToken(cookie)
-  );
+  const primary = storage.getItem(IMKAN_ACCESS_TOKEN_KEY);
+  if (primary) return primary;
+  const cookieToken = readCookieAccessToken(cookie);
+  if (cookieToken) return cookieToken;
+  return storage.getItem("access_token") || storage.getItem("token");
+}
+
+export function persistBrowserAccessToken(token: string): void {
+  if (typeof window === "undefined") return;
+  localStorage.setItem(IMKAN_ACCESS_TOKEN_KEY, token);
+  localStorage.removeItem("access_token");
+  localStorage.removeItem("token");
+  const isSecure = window.location.protocol === "https:" ? "; Secure" : "";
+  document.cookie = `workdrive_access_token=${encodeURIComponent(token)}; path=/; max-age=28800; SameSite=Lax${isSecure}`;
+}
+
+const TRANSIENT_AUTH_STATUSES = new Set([0, 502, 503, 504]);
+
+export function shouldRetryAuthCheck(status: number, attempt: number, maxAttempts = 4): boolean {
+  return attempt < maxAttempts - 1 && TRANSIENT_AUTH_STATUSES.has(status);
+}
+
+export function authCheckRetryDelayMs(attempt: number): number {
+  return 400 * 2 ** attempt;
 }
 
 export function shouldEndImkanSession(status: number): boolean {

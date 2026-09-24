@@ -761,8 +761,9 @@ export class WorkflowsService {
       if (existing) throw new BadRequestException('A function with this key already exists');
       const id = randomUUID();
       const versionId = randomUUID();
-      await tx.workflowFunction.create({ data: { id, orgId: user.org_id, name, key, description: body.description?.trim() || null, kind: 'SAFE', enabled: true, activeVersionId: versionId, createdById: user.sub } });
+      await tx.workflowFunction.create({ data: { id, orgId: user.org_id, name, key, description: body.description?.trim() || null, kind: 'SAFE', enabled: true, createdById: user.sub } });
       await tx.workflowFunctionVersion.create({ data: { id: versionId, functionId: id, orgId: user.org_id, version: 1, status: 'ACTIVE', runtime, definition: definition as Prisma.InputJsonValue, permissions: permissions as Prisma.InputJsonValue, timeoutMs, memoryLimitMb, createdById: user.sub, publishedAt: new Date() } });
+      await tx.workflowFunction.update({ where: { id }, data: { activeVersionId: versionId } });
       await tx.auditLog.create({ data: { orgId: user.org_id, actorId: user.sub, action: 'WORKFLOW_FUNCTION_CREATED', resourceType: 'WORKFLOW_FUNCTION', resourceId: id, metadata: { key, version: 1, runtime } } });
       return tx.workflowFunction.findUnique({ where: { id }, include: { activeVersion: true, versions: true } });
     });

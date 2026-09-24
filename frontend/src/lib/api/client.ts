@@ -57,15 +57,13 @@ export function getApiBaseUrl(): string {
 export async function getAccessToken(): Promise<string | null> {
   // 1. إذا كان الكود يعمل في المتصفح (Client-side)
   if (typeof window !== "undefined") {
-    const localToken =
-      window.localStorage.getItem("workdrive_access_token") ||
-      window.localStorage.getItem("access_token") ||
-      window.localStorage.getItem("token");
-
-    if (localToken) return localToken;
+    const primary = window.localStorage.getItem("workdrive_access_token");
+    if (primary) return primary;
 
     const match = document.cookie.match(new RegExp("(^| )workdrive_access_token=([^;]+)"));
-    return match ? decodeURIComponent(match[2]) : null;
+    if (match) return decodeURIComponent(match[2]);
+
+    return window.localStorage.getItem("access_token") || window.localStorage.getItem("token");
   }
 
   // 2. إذا كان الكود يعمل على السيرفر (Server-side / SSR)

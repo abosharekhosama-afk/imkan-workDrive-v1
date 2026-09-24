@@ -3,11 +3,13 @@ import { useEffect, useState, type ReactNode } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { clearSession, me, SessionCheckError } from "../lib/api/auth";
 import {
+  authCheckRetryDelayMs,
   buildAuthGateDiagnostic,
   buildAuthLoginNextPath,
-  IMKAN_ACCESS_TOKEN_KEY,
+  persistBrowserAccessToken,
   readBrowserAccessToken,
   shouldEndImkanSession,
+  shouldRetryAuthCheck,
 } from "./auth-gate-logic";
 
 function logAuthGate(stage: string, detail: ReturnType<typeof buildAuthGateDiagnostic>) {
@@ -23,7 +25,6 @@ export function AuthGate({ children }: { children: ReactNode }) {
   useEffect(() => {
     let cancelled = false;
     const cookie = typeof document !== "undefined" ? document.cookie : "";
-    const storageToken = localStorage.getItem(IMKAN_ACCESS_TOKEN_KEY);
     const token = readBrowserAccessToken(localStorage, cookie);
     const oauthParams = typeof window !== "undefined" ? new URLSearchParams(window.location.search) : new URLSearchParams();
 
@@ -49,14 +50,12 @@ export function AuthGate({ children }: { children: ReactNode }) {
       return;
     }
 
-    if (!storageToken) {
-      localStorage.setItem(IMKAN_ACCESS_TOKEN_KEY, token);
-      logAuthGate("token_restored", buildAuthGateDiagnostic({
-        stage: "token_restored",
-        hasAccessToken: true,
-        hasCookie: /(?:^| )workdrive_access_token=/.test(cookie),
-      }));
-    }
+    persistBrowserAccessToken(token);
+    logAuthGate("token_restored", buildAuthGateDiagnostic({
+      stage: "token_restored",
+      hasAccessToken: true,
+      hasCookie: /(?:^| )workdrive_access_token=/.test(cookie),
+    }));
 
     const validate = (attempt: number) => {
       me(token)
@@ -82,8 +81,8 @@ export function AuthGate({ children }: { children: ReactNode }) {
           }));
 
           if (!shouldEndImkanSession(status)) {
-            if (attempt === 0 && status === 0) {
-              window.setTimeout(() => validate(1), 400);
+            if (shouldRetryAuthCheck(status, attempt)) {
+              window.setTimeout(() => validate(attempt + 1), authCheckRetryDelayMs(attempt));
               return;
             }
             setReady(true);

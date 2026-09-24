@@ -51,7 +51,9 @@ export async function me(token: string) {
 export function saveSession(result: AuthResult) { 
   if (typeof window !== 'undefined') {
     localStorage.setItem('workdrive_access_token', result.access_token); 
-    localStorage.setItem('workdrive_user', JSON.stringify(result.user)); 
+    localStorage.setItem('workdrive_user', JSON.stringify(result.user));
+    localStorage.removeItem('access_token');
+    localStorage.removeItem('token');
 
     // حفظ التوكن في الكوكي ليتسنى للسيرفر قراءته أثناء الـ SSR
     const isSecure = window.location.protocol === 'https:' ? '; Secure' : '';
@@ -62,7 +64,9 @@ export function saveSession(result: AuthResult) {
 export function clearSession() { 
   if (typeof window !== 'undefined') {
     localStorage.removeItem('workdrive_access_token'); 
-    localStorage.removeItem('workdrive_user'); 
+    localStorage.removeItem('workdrive_user');
+    localStorage.removeItem('access_token');
+    localStorage.removeItem('token');
 
     // مسح الكوكي عند تسجيل الخروج
     const isSecure = window.location.protocol === "https:" ? "; Secure" : "";

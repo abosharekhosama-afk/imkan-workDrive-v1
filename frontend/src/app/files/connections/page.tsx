@@ -20,6 +20,7 @@ import {
   isOAuthReturnSuccess,
   parseOAuthReturnParams,
 } from "./connections-oauth-return-logic";
+import { persistBrowserAccessToken, readBrowserAccessToken } from "../../../components/auth-gate-logic";
 import {
   createConnection,
   deleteConnection,
@@ -141,6 +142,8 @@ export default function ConnectionsPage(){
     const params=parseOAuthReturnParams(window.location.search);
     if(!params.oauth)return;
     void (async()=>{
+      const token=readBrowserAccessToken(localStorage,document.cookie);
+      if(token)persistBrowserAccessToken(token);
       if(isOAuthReturnSuccess(params)){
         setView("my");
         await reload();
