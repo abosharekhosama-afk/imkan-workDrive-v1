@@ -1,8 +1,8 @@
 export type CellValue = string | number | boolean | null;
-export type NumberFormat = 'general'|'number'|'currency'|'percent'|'date';
+export type NumberFormat = 'general'|'number'|'currency'|'accounting'|'percent'|'date'|'time'|'datetime'|'scientific';
 export type ValidationRule = { type:'list'|'number'|'text'; values?:string[]; min?:number; max?:number };
 export type ConditionalFormat = { id:string; range:string; type:'cellIs'|'containsText'; operator:'>'|'>='|'<'|'<='|'='|'!='|'contains'; value:string; format:CellFormat };
-export type CellFormat = { fontFamily?: string; fontSize?: number; bold?: boolean; italic?: boolean; underline?: boolean; strike?: boolean; color?: string; background?: string; align?: 'start'|'center'|'end'; numberFormat?: NumberFormat; decimals?: number; border?: boolean };
+export type CellFormat = { fontFamily?: string; fontSize?: number; bold?: boolean; italic?: boolean; underline?: boolean; strike?: boolean; color?: string; background?: string; align?: 'start'|'center'|'end'; verticalAlign?: 'top'|'middle'|'bottom'; wrap?: boolean; numberFormat?: NumberFormat; decimals?: number; border?: boolean; borderColor?: string };
 export type SheetCell = { value: CellValue; formula?: string; format?: CellFormat; validation?: ValidationRule; mergedInto?: string };
 export type NamedRange = { name:string; reference:string; scopeSheetId?:string };
 export type SheetTable = { id:string; name:string; start:string; end:string; hasHeader:boolean; style?:'plain'|'banded'|'minimal'; totalRow?:boolean; filter?:Record<string,string>; };
@@ -57,6 +57,7 @@ export function evalFormula(formula:string,sheet:Sheet,stack=new Set<string>(),w
     if(name==='IFERROR'){ try { const value=scalar(args[0]??'0',w,sheet,stack); return value===undefined||String(value).startsWith('#') ? (args[1]?scalar(args[1],w,sheet,stack):'') : value; } catch { return args[1]?scalar(args[1],w,sheet,stack):''; } }
     if(name==='DATE'){ const y=Number(scalar(args[0]??'0',w,sheet,stack)),m=Number(scalar(args[1]??'1',w,sheet,stack)),d=Number(scalar(args[2]??'1',w,sheet,stack)); return new Date(Date.UTC(y,m-1,d)).toISOString().slice(0,10); }
     if(name==='TODAY'||name==='NOW'){ const d=new Date(); return name==='TODAY'?d.toISOString().slice(0,10):d.toISOString(); }
+    if(name==='YEAR'||name==='MONTH'||name==='DAY'){ const raw=scalar(args[0]??'0',w,sheet,stack); const d=new Date(String(raw)); if(Number.isNaN(d.getTime())) return '#VALUE!'; if(name==='YEAR') return d.getUTCFullYear(); if(name==='MONTH') return d.getUTCMonth()+1; return d.getUTCDate(); }
     if(name==='SUMPRODUCT'){ const arrays=args.map(a=>expandRange(a,sheet,w,stack)); const len=Math.max(0,...arrays.map(a=>a.length)); let total=0; for(let i=0;i<len;i++){ let product=1; for(const arr of arrays) product*=Number(arr[i]??0)||0; total+=product; } return total; }
     if(name==='COUNTIF'||name==='SUMIF'){const rr=rangeRefs(args[0]??'',sheet,w,stack);const crit=scalar(args[1]??'""',w,sheet,stack);const vals=rr.keys.map(k=>rawValue(k,w,rr.sheet,stack));const matched=vals.map((v,i)=>({v,k:rr.keys[i]})).filter(x=>criterionMatch(x.v,crit));if(name==='COUNTIF')return matched.length;const sumRange=args[2]?rangeRefs(args[2],sheet,w,stack):rr;return matched.reduce((n,x)=>n+Number(rawValue(sumRange.keys[rr.keys.indexOf(x.k)]??x.k,w,sumRange.sheet,stack)||0),0);}
     if(name==='COUNTIFS'||name==='SUMIFS'){const offset=name==='SUMIFS'?1:0;if(args.length<offset+2||(args.length-offset)%2!==0)throw Error(name);const target=name==='SUMIFS'?rangeRefs(args[0],sheet,w,stack):null;const pairs:number[][]=[];for(let i=offset;i<args.length;i+=2){const rr=rangeRefs(args[i],sheet,w,stack);const crit=scalar(args[i+1],w,sheet,stack);pairs.push(rr.keys.map(k=>criterionMatch(rawValue(k,w,rr.sheet,stack),crit)?1:-1));}const len=pairs[0]?.length??0;const matched:number[]=[];for(let i=0;i<len;i++)if(pairs.every(p=>p[i]>=0))matched.push(i);if(name==='COUNTIFS')return matched.length;return matched.reduce((n,i)=>n+Number(rawValue(target!.keys[i]??'',w,target!.sheet,stack)||0),0);}
@@ -79,7 +80,7 @@ export function evalFormula(formula:string,sheet:Sheet,stack=new Set<string>(),w
   }
   const tokens=f.match(/"[^"]*"|'(?:[^']|'')+'![A-Z]+\$?\d+:[A-Z]+\$?\d+|'(?:[^']|'')+'![A-Z]+\$?\d+|[A-Za-z_][\w ]*![A-Z]+\$?\d+:[A-Z]+\$?\d+|[A-Za-z_][\w ]*![A-Z]+\$?\d+|\$?[A-Z]+\$?\d+(?::\$?[A-Z]+\$?\d+)?|\d+(?:\.\d+)?|[+\-*/><=()]|<>|<=|>=/gi);if(!tokens)throw Error('formula');let expr='';for(const t of tokens){if(/^"/.test(t))expr+=JSON.stringify(t.slice(1,-1));else if(/(?:!|\$?[A-Z]+\$?\d+)/i.test(t)){const v=t.includes(':')?expandRange(t,sheet,w,stack)[0]:rawValue(t,w,sheet,stack);expr+=typeof v==='number'?String(v):JSON.stringify(v??0);}else expr+=t;}if(!/^[0-9+\-*/><=()." A-Za-z_]+$/.test(expr))throw Error('unsafe');return Function(`"use strict";return (${expr.replace(/<>/g,'!==')})`)();
 }
-export function formulaDisplay(cell:SheetCell|undefined,sheet:Sheet,workbook?:Workbook):string{if(!cell)return '';if(!cell.formula)return cell.value===null?'':String(cell.value);try{return String(evalFormula(cell.formula,sheet,new Set(),workbook))}catch{return '#ERROR!'}}
+export { formulaDisplay } from './formula-display.ts';
 export function listDependencies(formula:string):string[]{
   if(!formula)return [];
   const out:string[]=[];

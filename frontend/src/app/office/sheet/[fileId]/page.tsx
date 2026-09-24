@@ -10,7 +10,9 @@ import { addConditionalFormat, addNamedRange, addPivotTable, addSheet, addTable,
 import { activeSheet, cellKey, cloneWorkbook, formulaDisplay, parseKey, type Sheet, type SheetCell, type Workbook } from '@/office/sheet/model';
 import { clearRange, patchRangeFormat, toggleFreeze } from '@/office/sheet/phase2-commands';
 import { decodeClipboard, parseClipboardValue } from '@/office/sheet/clipboard';
+import { autoFitColumnWidth } from '@/office/sheet/dimension-logic';
 import { SheetGrid } from '@/office/sheet/sheet-grid';
+import type { CellFormat, NumberFormat } from '@/office/sheet/model';
 import { isPrintableInputKey, moveAfterEnter, moveAfterTab, moveCell, rangeBounds } from '@/office/sheet/selection-logic';
 import { OfficeContextMenu } from '@/office/shared/floating';
 import { ZohoSheetChrome } from '@/components/zoho-sheet-chrome';
@@ -40,6 +42,10 @@ export default function SheetPage() {
   const [sheetTab, setSheetTab] = useState<'home'|'insert'|'data'|'view'>('home');
   const [fontFamily, setFontFamily] = useState('Roboto');
   const [fontSize, setFontSize] = useState(10);
+  const [numberFormat, setNumberFormat] = useState<NumberFormat>('general');
+  const [verticalAlign, setVerticalAlign] = useState<'top' | 'middle' | 'bottom'>('middle');
+  const [wrap, setWrap] = useState(false);
+  const [paintFormatActive, setPaintFormatActive] = useState<CellFormat | null>(null);
   const [gridlines, setGridlines] = useState(true);
   const [editing, setEditing] = useState(false);
   const [editingKey, setEditingKey] = useState<string | null>(null);
@@ -160,7 +166,13 @@ export default function SheetPage() {
   useEffect(() => {
     if (editing) return;
     setInput(cell?.formula ?? (cell?.value == null ? '' : String(cell.value)));
-  }, [selected, doc, editing, cell?.formula, cell?.value]);
+    const f = cell?.format;
+    if (f?.fontFamily) setFontFamily(f.fontFamily);
+    if (f?.fontSize) setFontSize(f.fontSize);
+    if (f?.numberFormat) setNumberFormat(f.numberFormat);
+    if (f?.verticalAlign) setVerticalAlign(f.verticalAlign);
+    if (f?.wrap != null) setWrap(!!f.wrap);
+  }, [selected, doc, editing, cell?.formula, cell?.value, cell?.format]);
   const resolveConflict = async (choice:'local'|'remote') => {
     if(choice==='remote' && conflict?.remote){ discardOfflineQueue(fileId); setDoc(conflict.remote as Workbook); ref.current=conflict.remote as Workbook; setRevision(conflict.remoteRevision); cacheOfficeSnapshot(fileId,'SHEET',conflict.remoteRevision,conflict.remote); setSaved(true); setConflict(null); setError(''); return; }
     const result=await rebaseOfflineQueue(fileId); if(result.ok){ setDoc(result.document as Workbook); ref.current=result.document as Workbook; setRevision(result.revision); setConflict(null); setError(t('Local work was rebased onto the latest remote revision.','تمت إعادة بناء عملك المحلي فوق أحدث إصدار بعيد.')); const {flushOfficeQueue}=await import('@/office/collaboration-v2'); await flushOfficeQueue(fileId,session.current||undefined,r=>setRevision(r),async e=>{if(e?.status===409)setConflict(await prepareOfflineConflict(fileId,'SHEET',e?.code||'OFFICE_OPERATION_CONFLICT'));}); setSaved(offlineQueueCount(fileId)===0); } else setError(t('These changes overlap the remote edit. Keep the conflict open and reconcile manually.','هذه التغييرات تتداخل مع التعديل البعيد. أبقِ التعارض مفتوحًا وقم بالمصالحة يدويًا.'));
@@ -170,7 +182,36 @@ export default function SheetPage() {
   const bounds = rangeBounds(anchor, selected);
   const display = formulaDisplay(cell, sheet, doc);
   const selectedCell = sheet.cells[selected];
-  const formatCell = (key: string): React.CSSProperties => { const f = sheet.cells[key]?.format ?? {}; let conditional:any={}; const value=sheet.cells[key]?.value; for(const rule of sheet.conditionalFormats??[]){ const parts=rule.range.split(':'); const a=parseKey(parts[0]),b=parseKey(parts[1]??parts[0]),k=parseKey(key); if(!a||!b||!k||k.row<Math.min(a.row,b.row)||k.row>Math.max(a.row,b.row)||k.col<Math.min(a.col,b.col)||k.col>Math.max(a.col,b.col)) continue; const left=String(value??''); const right=Number(rule.value); const lv=Number(value); const hit=rule.type==='containsText'?left.toLowerCase().includes(rule.value.toLowerCase()):rule.operator==='>'?lv>right:rule.operator==='>='?lv>=right:rule.operator==='<'?lv<right:rule.operator==='<='?lv<=right:rule.operator==='!='?left!==rule.value:left===rule.value; if(hit) conditional=rule.format; } return { fontWeight: f.bold ? 700 : 400, fontStyle: f.italic ? 'italic' : 'normal', color: conditional.color??f.color, background: conditional.background??f.background, textAlign: f.align === 'end' ? 'right' : f.align === 'center' ? 'center' : 'left', textDecoration: `${f.underline ? 'underline' : ''}${f.strike ? `${f.underline ? ' ' : ''}line-through` : ''}` || 'none', borderWidth: f.border ? 2 : 1 }; };
+  const formatCell = (key: string): React.CSSProperties => {
+    const f = sheet.cells[key]?.format ?? {};
+    let conditional: Partial<CellFormat> = {};
+    const value = sheet.cells[key]?.value;
+    for (const rule of sheet.conditionalFormats ?? []) {
+      const parts = rule.range.split(':');
+      const a = parseKey(parts[0]), b = parseKey(parts[1] ?? parts[0]), k = parseKey(key);
+      if (!a || !b || !k || k.row < Math.min(a.row, b.row) || k.row > Math.max(a.row, b.row) || k.col < Math.min(a.col, b.col) || k.col > Math.max(a.col, b.col)) continue;
+      const left = String(value ?? '');
+      const right = Number(rule.value);
+      const lv = Number(value);
+      const hit = rule.type === 'containsText' ? left.toLowerCase().includes(rule.value.toLowerCase()) : rule.operator === '>' ? lv > right : rule.operator === '>=' ? lv >= right : rule.operator === '<' ? lv < right : rule.operator === '<=' ? lv <= right : rule.operator === '!=' ? left !== rule.value : left === rule.value;
+      if (hit) conditional = rule.format;
+    }
+    return {
+      fontFamily: f.fontFamily,
+      fontSize: f.fontSize ? `${f.fontSize}px` : undefined,
+      fontWeight: f.bold ? 700 : 400,
+      fontStyle: f.italic ? 'italic' : 'normal',
+      color: conditional.color ?? f.color,
+      background: conditional.background ?? f.background,
+      textAlign: f.align === 'end' ? 'right' : f.align === 'center' ? 'center' : 'left',
+      verticalAlign: f.verticalAlign === 'top' ? 'top' : f.verticalAlign === 'bottom' ? 'bottom' : 'middle',
+      whiteSpace: f.wrap ? 'normal' : 'nowrap',
+      textDecoration: `${f.underline ? 'underline' : ''}${f.strike ? `${f.underline ? ' ' : ''}line-through` : ''}` || 'none',
+      borderWidth: f.border ? 2 : 1,
+      borderColor: f.borderColor,
+      borderStyle: f.border ? 'solid' : undefined,
+    };
+  };
   const colNameFor = (n: number) => { let s=''; for (let x=n+1; x>0; x=Math.floor((x-1)/26)) s=String.fromCharCode(65+(x-1)%26)+s; return s; };
   const validate = (key: string, value: string) => { const rule = sheet.cells[key]?.validation; if (!rule) return true; if (rule.type === 'list') return (rule.values ?? []).includes(value); if (rule.type === 'number') { const n=Number(value); return Number.isFinite(n) && (rule.min===undefined||n>=rule.min) && (rule.max===undefined||n<=rule.max); } if (rule.type === 'text') { const len=value.length; return (rule.min===undefined||len>=rule.min) && (rule.max===undefined||len<=rule.max); } return true; };
   const validationMessage = (key: string, value: string) => { const rule = sheet.cells[key]?.validation; if (!rule) return ''; if (rule.type === 'list') return t(`Allowed values: ${(rule.values ?? []).join(', ')}`, `القيم المسموحة: ${(rule.values ?? []).join('، ')}`); if (rule.type === 'number') return t(`Enter a number${rule.min!==undefined?` from ${rule.min}`:''}${rule.max!==undefined?` to ${rule.max}`:''}.`, `أدخل رقمًا${rule.min!==undefined?` من ${rule.min}`:''}${rule.max!==undefined?` إلى ${rule.max}`:''}.`); if (rule.type === 'text') return t(`Text length must be${rule.min!==undefined?` at least ${rule.min}`:''}${rule.max!==undefined?` and at most ${rule.max}`:''} characters.`, `يجب أن يكون طول النص${rule.min!==undefined?` ${rule.min} أحرف على الأقل`:''}${rule.max!==undefined?` و${rule.max} حرفًا كحد أقصى`:''}.`); return ''; };
@@ -212,8 +253,25 @@ export default function SheetPage() {
     setEditDraft(value);
     setInput(value);
   };
-  const copy = async () => { const a=parseKey(anchor)!, b=parseKey(selected)!; const rows:string[]=[]; for(let r=Math.min(a.row,b.row);r<=Math.max(a.row,b.row);r++){const cols:string[]=[];for(let c=Math.min(a.col,b.col);c<=Math.max(a.col,b.col);c++){const cell=sheet.cells[cellKey(r,c)];cols.push(cell?.formula??(cell?.value==null?'':String(cell.value)));}rows.push(cols.join('\t'));} await navigator.clipboard?.writeText(rows.join('\n')); };
+  const copy = async () => {
+    const a = parseKey(anchor)!, b = parseKey(selected)!;
+    const rows: string[] = [];
+    for (let r = Math.min(a.row, b.row); r <= Math.max(a.row, b.row); r++) {
+      const cols: string[] = [];
+      for (let c = Math.min(a.col, b.col); c <= Math.max(a.col, b.col); c++) {
+        const key = cellKey(r, c);
+        if (editing && editingKey === key) cols.push(input);
+        else {
+          const cellData = sheet.cells[key];
+          cols.push(cellData?.formula ?? (cellData?.value == null ? '' : String(cellData.value)));
+        }
+      }
+      rows.push(cols.join('\t'));
+    }
+    await navigator.clipboard?.writeText(rows.join('\n'));
+  };
   const paste = async () => {
+    if (editing) finish();
     const txt = await navigator.clipboard?.readText();
     if (!txt) return;
     const matrix = decodeClipboard(txt);
@@ -234,13 +292,26 @@ export default function SheetPage() {
     setError('');
     commit(w, true);
   };
-  const cut = async () => { await copy(); commit(clearRange(doc,bounds.start,bounds.end),true); };
+  const cut = async () => { if (editing) finish(); await copy(); commit(clearRange(doc, bounds.start, bounds.end), true); };
   const clearSelected = () => commit(clearRange(doc,bounds.start,bounds.end),true);
   const addComment = async () => { const body = window.prompt(t('Comment','تعليق'), `${selected}: `); if (!body?.trim()) return; try { await addFileComment(fileId, body.trim()); setError(''); } catch (e:any) { setError(e?.message || t('Unable to add comment','تعذر إضافة التعليق')); } };
   const insertFunction = (name: string) => { begin(selected, `=${name}(`); window.setTimeout(() => document.querySelector<HTMLInputElement>('[aria-label="Formula bar"]')?.focus(), 0); };
   const applyFontFamily = (family:string) => { setFontFamily(family); commit(patchRangeFormat(doc,bounds.start,bounds.end,{fontFamily:family} as any),true); };
   const applyFontSize = (size:number) => { setFontSize(size); commit(patchRangeFormat(doc,bounds.start,bounds.end,{fontSize:size} as any),true); };
-  const paintFormat = () => { const f=selectedCell?.format; if(f) commit(patchRangeFormat(doc,bounds.start,bounds.end,{...f}),true); };
+  const applyNumberFormat = (format: NumberFormat) => { setNumberFormat(format); commit(patchRangeFormat(doc, bounds.start, bounds.end, { numberFormat: format }), true); };
+  const applyVerticalAlign = (align: 'top' | 'middle' | 'bottom') => { setVerticalAlign(align); commit(patchRangeFormat(doc, bounds.start, bounds.end, { verticalAlign: align }), true); };
+  const applyWrap = (next: boolean) => { setWrap(next); commit(patchRangeFormat(doc, bounds.start, bounds.end, { wrap: next }), true); };
+  const startFormatPainter = () => { if (selectedCell?.format) setPaintFormatActive({ ...selectedCell.format }); };
+  const applyPaintedFormat = (nextAnchor: string, nextFocus: string) => {
+    if (!paintFormatActive) return;
+    const target = rangeBounds(nextAnchor, nextFocus);
+    commit(patchRangeFormat(doc, target.start, target.end, paintFormatActive), true);
+    setPaintFormatActive(null);
+  };
+  const onColumnWidthChange = (col: number, width: number) => commit(setColumnWidth(doc, colNameFor(col), width), true);
+  const onRowHeightChange = (row: number, height: number) => commit(setRowHeight(doc, row, height), true);
+  const onAutoFitColumn = (col: number) => commit(setColumnWidth(doc, colNameFor(col), autoFitColumnWidth(sheet, col, doc, ROWS)), true);
+  const paintFormat = startFormatPainter;
   const addBorder = () => commit(patchRangeFormat(doc,bounds.start,bounds.end,{border:true}),true);
   const fillDown = () => { const a=parseKey(anchor)!,b=parseKey(selected)!; const minR=Math.min(a.row,b.row),maxR=Math.max(a.row,b.row),col=a.col; if(minR===maxR)return; const source=sheet.cells[cellKey(minR,col)]; if(!source)return; let w=cloneWorkbook(doc); for(let r=minR+1;r<=maxR;r++){const formula=source.formula?shiftFormulaReferences(source.formula,r-minR,0):undefined; w=updateCell(w,r,col,formula?'':String(source.value??''),formula);} commit(w,true); };
   const gridKeyDown = (e: React.KeyboardEvent) => {
@@ -287,7 +358,7 @@ export default function SheetPage() {
 
   return <div id="office-main" dir={ar?'rtl':'ltr'} className="flex h-dvh flex-col overflow-hidden bg-slate-100 text-slate-800">
     <OfficeShell type="SHEET" fileId={fileId} title={doc.title} revision={revision} saved={saved} saving={saving} ar={ar} presence={<OfficePresenceView items={presence} ar={ar}/>}/>
-    <ZohoSheetChrome title={doc.title} selected={selected} formulaValue={input} display={display} editing={editing} saved={saved} saving={saving} gridlines={gridlines} canUndo={!!history.length} canRedo={!!future.length} fontFamily={fontFamily} fontSize={fontSize} onFontFamily={applyFontFamily} onFontSize={applyFontSize} onFormulaChange={setInput} onFormulaCommit={(move)=>{if(move==='cancel'){cancelEdit();return;}if(editing)finish(move);else begin(selected);}} onBeginEdit={()=>begin(selected)} onUndo={undo} onRedo={redo} onSave={saveNow} onPrint={()=>window.print()} onExport={exportXlsx} onFind={findCell} onCopy={()=>void copy()} onCut={()=>void cut()} onPaste={()=>void paste()} onClear={clearSelected} onPaint={paintFormat} onBorder={addBorder} onBold={()=>commit(patchRangeFormat(doc,bounds.start,bounds.end,{bold:!selectedCell?.format?.bold}))} onItalic={()=>commit(patchRangeFormat(doc,bounds.start,bounds.end,{italic:!selectedCell?.format?.italic}))} onUnderline={()=>commit(patchRangeFormat(doc,bounds.start,bounds.end,{underline:!selectedCell?.format?.underline}))} onStrike={()=>commit(patchRangeFormat(doc,bounds.start,bounds.end,{strike:!selectedCell?.format?.strike}))} onColor={v=>commit(patchRangeFormat(doc,bounds.start,bounds.end,{color:v}))} onBg={v=>commit(patchRangeFormat(doc,bounds.start,bounds.end,{background:v}))} onAlign={v=>commit(patchRangeFormat(doc,bounds.start,bounds.end,{align:v}))} onFormat={v=>commit(patchRangeFormat(doc,bounds.start,bounds.end,{numberFormat:(v==='text'?'general':v) as any}))} onMerge={()=>commit(mergeRange(doc,bounds.start,bounds.end),true)} onSort={()=>commit(sortSheet(doc,selected.replace(/\d+$/,''),'asc'),true)} onFilter={()=>{const col=selected.replace(/\d+$/,'');const q=window.prompt(t('Filter value (empty clears)','قيمة التصفية (فارغة للإلغاء)'),sheet.filters?.[col]??'');commit(q?setFilter(doc,col,q):clearFilter(doc,col),true);}} onValidation={()=>{const raw=window.prompt(t('Validation list values separated by commas, or empty to remove','قيم القائمة مفصولة بفواصل، أو فارغ للحذف'),(selectedCell?.validation?.values??[]).join(','));commit(raw?setValidation(doc,selected,{type:'list',values:raw.split(',').map(x=>x.trim()).filter(Boolean).slice(0,50)}):setValidation(doc,selected,undefined),true);}} onConditional={addConditional} onNamedRange={addNewNamedRange} onTable={addNewTable} onPivot={addNewPivot} onChart={addNewChart} onAddSheet={()=>commit(addSheet(doc),true)} onDeleteSheet={()=>commit(deleteActiveSheet(doc),true)} onRename={()=>{const n=window.prompt(t('Sheet name','اسم الورقة'),sheet.name);if(n)commit(renameSheet(doc,n),true);}} onFreeze={()=>commit(toggleFreeze(doc,1,1),true)} onGridlines={()=>setGridlines(v=>!v)} onInsertRows={()=>{const p=parseKey(selected)!;commit(insertRows(doc,p.row,1),true)}} onDeleteRows={()=>{const p=parseKey(selected)!;commit(deleteRows(doc,p.row,1),true)}} onInsertColumns={()=>{const p=parseKey(selected)!;commit(insertColumns(doc,p.col,1),true)}} onDeleteColumns={()=>{const p=parseKey(selected)!;commit(deleteColumns(doc,p.col,1),true)}} onHideRow={()=>{const p=parseKey(selected)!;commit(hideRows(doc,p.row,p.row),true)}} onHideColumn={()=>{const p=parseKey(selected)!;commit(hideColumns(doc,colNameFor(parseKey(selected)!.col)),true)}} onUnhideRows={()=>commit(unhideRows(doc),true)} onUnhideColumns={()=>commit(unhideColumns(doc),true)} onAddComment={()=>void addComment()} onHelp={()=>window.alert(t('IMKAN Sheet\nZoho-style spreadsheet workspace with editing, formulas, tables, pivots, charts, filters, validation, freeze panes, collaboration and XLSX export.','IMKAN Sheet\nواجهة جداول بيانات بأسلوب Zoho مع التحرير والصيغ والجداول والجداول المحورية والرسوم والمرشحات والتحقق والتجميد والتعاون وتصدير XLSX.'))} onInsertFunction={insertFunction}/>
+    <ZohoSheetChrome title={doc.title} selected={selected} formulaValue={input} display={display} editing={editing} saved={saved} saving={saving} gridlines={gridlines} canUndo={!!history.length} canRedo={!!future.length} fontFamily={fontFamily} fontSize={fontSize} numberFormat={numberFormat} verticalAlign={verticalAlign} wrap={wrap} paintActive={!!paintFormatActive} onFontFamily={applyFontFamily} onFontSize={applyFontSize} onNumberFormat={applyNumberFormat} onVerticalAlign={applyVerticalAlign} onWrap={applyWrap} onFormulaChange={setInput} onFormulaCommit={(move)=>{if(move==='cancel'){cancelEdit();return;}if(editing)finish(move);else begin(selected);}} onBeginEdit={()=>begin(selected)} onUndo={undo} onRedo={redo} onSave={saveNow} onPrint={()=>window.print()} onExport={exportXlsx} onFind={findCell} onCopy={()=>void copy()} onCut={()=>void cut()} onPaste={()=>void paste()} onClear={clearSelected} onPaint={paintFormat} onBorder={addBorder} onBold={()=>commit(patchRangeFormat(doc,bounds.start,bounds.end,{bold:!selectedCell?.format?.bold}))} onItalic={()=>commit(patchRangeFormat(doc,bounds.start,bounds.end,{italic:!selectedCell?.format?.italic}))} onUnderline={()=>commit(patchRangeFormat(doc,bounds.start,bounds.end,{underline:!selectedCell?.format?.underline}))} onStrike={()=>commit(patchRangeFormat(doc,bounds.start,bounds.end,{strike:!selectedCell?.format?.strike}))} onColor={v=>commit(patchRangeFormat(doc,bounds.start,bounds.end,{color:v}))} onBg={v=>commit(patchRangeFormat(doc,bounds.start,bounds.end,{background:v}))} onAlign={v=>commit(patchRangeFormat(doc,bounds.start,bounds.end,{align:v}))} onMerge={()=>commit(mergeRange(doc,bounds.start,bounds.end),true)} onSort={()=>commit(sortSheet(doc,selected.replace(/\d+$/,''),'asc'),true)} onFilter={()=>{const col=selected.replace(/\d+$/,'');const q=window.prompt(t('Filter value (empty clears)','قيمة التصفية (فارغة للإلغاء)'),sheet.filters?.[col]??'');commit(q?setFilter(doc,col,q):clearFilter(doc,col),true);}} onValidation={()=>{const raw=window.prompt(t('Validation list values separated by commas, or empty to remove','قيم القائمة مفصولة بفواصل، أو فارغ للحذف'),(selectedCell?.validation?.values??[]).join(','));commit(raw?setValidation(doc,selected,{type:'list',values:raw.split(',').map(x=>x.trim()).filter(Boolean).slice(0,50)}):setValidation(doc,selected,undefined),true);}} onConditional={addConditional} onNamedRange={addNewNamedRange} onTable={addNewTable} onPivot={addNewPivot} onChart={addNewChart} onAddSheet={()=>commit(addSheet(doc),true)} onDeleteSheet={()=>commit(deleteActiveSheet(doc),true)} onRename={()=>{const n=window.prompt(t('Sheet name','اسم الورقة'),sheet.name);if(n)commit(renameSheet(doc,n),true);}} onFreeze={()=>commit(toggleFreeze(doc,1,1),true)} onGridlines={()=>setGridlines(v=>!v)} onInsertRows={()=>{const p=parseKey(selected)!;commit(insertRows(doc,p.row,1),true)}} onDeleteRows={()=>{const p=parseKey(selected)!;commit(deleteRows(doc,p.row,1),true)}} onInsertColumns={()=>{const p=parseKey(selected)!;commit(insertColumns(doc,p.col,1),true)}} onDeleteColumns={()=>{const p=parseKey(selected)!;commit(deleteColumns(doc,p.col,1),true)}} onHideRow={()=>{const p=parseKey(selected)!;commit(hideRows(doc,p.row,p.row),true)}} onHideColumn={()=>{const p=parseKey(selected)!;commit(hideColumns(doc,colNameFor(parseKey(selected)!.col)),true)}} onUnhideRows={()=>commit(unhideRows(doc),true)} onUnhideColumns={()=>commit(unhideColumns(doc),true)} onAddComment={()=>void addComment()} onHelp={()=>window.alert(t('IMKAN Sheet\nZoho-style spreadsheet workspace with editing, formulas, tables, pivots, charts, filters, validation, freeze panes, collaboration and XLSX export.','IMKAN Sheet\nواجهة جداول بيانات بأسلوب Zoho مع التحرير والصيغ والجداول والجداول المحورية والرسوم والمرشحات والتحقق والتجميد والتعاون وتصدير XLSX.'))} onInsertFunction={insertFunction}/>
     <OfficeTemplateFields templateId={templateId} ar={ar} onInsert={insertTemplateField} />
     <OfficeMobile type="SHEET" ar={ar} undo={undo} redo={redo} bold={()=>commit(patchFormat(doc,selected,{bold:!selectedCell?.format?.bold}))} italic={()=>commit(patchFormat(doc,selected,{italic:!selectedCell?.format?.italic}))} underline={()=>commit(patchFormat(doc,selected,{underline:!selectedCell?.format?.underline}))} selectedCell={selected} formulaValue={input} editingCell={editing} onFormulaChange={setInput} onFormulaCommit={(move)=>{if(move==='cancel'){cancelEdit();return;}if(editing)finish(move);else begin(selected);}} onBeginCellEdit={()=>begin(selected)} save={()=>persist(ref.current!)} />
     <div className="flex min-h-0 flex-1 flex-col">
@@ -303,12 +374,15 @@ export default function SheetPage() {
           editing={editing}
           editingKey={editingKey}
           editValue={input}
-          onSelect={(nextAnchor, nextFocus) => { setAnchor(nextAnchor); setSelected(nextFocus); gridFocusRef.current?.focus(); }}
+          onSelect={(nextAnchor, nextFocus) => { applyPaintedFormat(nextAnchor, nextFocus); setAnchor(nextAnchor); setSelected(nextFocus); gridFocusRef.current?.focus(); }}
           onBeginEdit={begin}
           onEditValueChange={setInput}
           onCommitEdit={finish}
           onCancelEdit={cancelEdit}
           onContextMenu={(key, x, y) => setContextMenu({ x, y, key })}
+          onColumnWidthChange={onColumnWidthChange}
+          onRowHeightChange={onRowHeightChange}
+          onAutoFitColumn={onAutoFitColumn}
           formatCell={formatCell}
         />
       </div>
