@@ -1,12 +1,24 @@
-import test from "node:test";
+﻿import test from "node:test";
 import assert from "node:assert/strict";
-import { readBrowserAccessToken, readCookieAccessToken, shouldEndImkanSession } from "./auth-gate-logic.ts";
+import {
+  buildAuthLoginNextPath,
+  readBrowserAccessToken,
+  readCookieAccessToken,
+  shouldEndImkanSession,
+} from "./auth-gate-logic.ts";
 
-test("OAuth return keeps the IMKAN session unless /auth/me is 401", () => {
+test("401 ends the IMKAN session but transient failures do not", () => {
   assert.equal(shouldEndImkanSession(401), true);
-  assert.equal(shouldEndImkanSession(403), false);
   assert.equal(shouldEndImkanSession(502), false);
+  assert.equal(shouldEndImkanSession(503), false);
   assert.equal(shouldEndImkanSession(0), false);
+});
+
+test("login next path preserves oauth return query until auth is restored", () => {
+  assert.equal(
+    buildAuthLoginNextPath("/files/connections", "?oauth=success&provider=google"),
+    "/files/connections?oauth=success&provider=google",
+  );
 });
 
 test("browser session is restored from the first-party cookie when localStorage was not visible", () => {

@@ -10,7 +10,7 @@ import { ConnectionProviderAdapterService } from './connection-provider-adapter.
 import { URL } from 'node:url';
 import { isIP } from 'node:net';
 import { lookup } from 'node:dns/promises';
-import { buildOAuthBrowserUrl, oauthFailurePreservesActive, resolveOAuthFrontendOrigin, safeOAuthErrorCode, safeOrigin } from './oauth-flow';
+import { buildOAuthBrowserUrl, normalizeOAuthReturnPath, oauthFailurePreservesActive, resolveOAuthFrontendOrigin, safeOAuthErrorCode, safeOrigin } from './oauth-flow';
 
 const OAUTH_STATE_TTL_MS = 10 * 60 * 1000;
 const SECRET_FIELDS = ['accessToken', 'refreshToken', 'apiKey', 'bearerToken', 'username', 'password', 'customHeaders'] as const;
@@ -749,7 +749,7 @@ export class ConnectionsService {
       await this.prisma.connection.update({ where: { id: connection.id }, data: { status: ConnectionStatus.PENDING_AUTH, errorCode: null, errorMessage: null } });
       connection.status = ConnectionStatus.PENDING_AUTH;
     }
-    const safeReturnPath = this.normalizeOAuthReturnPath(returnPath);
+    const safeReturnPath = normalizeOAuthReturnPath(returnPath);
     const state = randomBytes(32).toString('base64url');
     const codeVerifier = definition.oauthPkce ? randomBytes(48).toString('base64url') : null;
     const codeChallenge = codeVerifier ? createHash('sha256').update(codeVerifier).digest('base64url') : null;
@@ -1094,19 +1094,6 @@ export class ConnectionsService {
     return buildOAuthBrowserUrl(frontend, pathAndQuery);
   }
   private hash(value: string) { return createHash('sha256').update(value).digest('hex'); }
-  private normalizeOAuthReturnPath(value: string | null | undefined) {
-    const raw = String(value ?? '').trim();
-    if (!raw) return '/files/connections';
-    if (!raw.startsWith('/') || raw.startsWith('//') || raw.includes('\\')) return '/files/connections';
-    try {
-      const parsed = new URL(raw, 'https://imkan.invalid');
-      if (parsed.origin !== 'https://imkan.invalid') return '/files/connections';
-      return `${parsed.pathname}${parsed.search}${parsed.hash}`.slice(0, 2000);
-    } catch {
-      return '/files/connections';
-    }
-  }
-
   private async readJson(response: Response): Promise<any> { const text = await response.text(); try { return JSON.parse(text); } catch { return { raw: text.slice(0, 1000) }; } }
   private validateSecretInput(authType: ConnectionAuthType | string, input: SecretInput) {
     const normalized = String(authType);

@@ -18,6 +18,20 @@ export function resolveOAuthFrontendOrigin(
   return value.replace(/\/$/, '');
 }
 
+/** Internal path only — rejects open redirects and absolute external URLs. */
+export function normalizeOAuthReturnPath(value: string | null | undefined): string {
+  const raw = String(value ?? '').trim();
+  if (!raw) return '/files/connections';
+  if (!raw.startsWith('/') || raw.startsWith('//') || raw.includes('\\')) return '/files/connections';
+  try {
+    const parsed = new URL(raw, 'https://imkan.invalid');
+    if (parsed.origin !== 'https://imkan.invalid') return '/files/connections';
+    return `${parsed.pathname}${parsed.search}${parsed.hash}`.slice(0, 2000);
+  } catch {
+    return '/files/connections';
+  }
+}
+
 export function buildOAuthBrowserUrl(frontend: string, pathAndQuery: string): string {
   const base = frontend.replace(/\/$/, '');
   const path = pathAndQuery.startsWith('/') ? pathAndQuery : `/${pathAndQuery}`;

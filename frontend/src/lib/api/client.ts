@@ -83,9 +83,6 @@ export async function apiRequest<T>(path: string, init: RequestInit = {}): Promi
   const token = await getAccessToken();
 
   if (!token) {
-    if (typeof window !== "undefined" && !window.location.pathname.startsWith("/auth")) {
-      window.location.href = "/auth/login";
-    }
     throw new ApiError(401, "UNAUTHENTICATED");
   }
 
