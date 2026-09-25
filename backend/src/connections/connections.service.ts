@@ -12,7 +12,7 @@ import { isIP } from 'node:net';
 import { lookup } from 'node:dns/promises';
 import { AuthService } from '../auth.service';
 import { buildOAuthBrowserUrl, normalizeOAuthReturnPath, oauthFailurePreservesActive, resolveOAuthFrontendOrigin, safeOAuthErrorCode, safeOrigin } from './oauth-flow';
-import { googleDriveScopeGranted, providerBrowseErrorCode } from './connection-browse-logic';
+import { buildConnectionCapabilitySummary, googleDriveActivationError, googleDriveScopeGranted, mapGoogleDriveApiError, providerBrowseErrorCode } from './connection-browse-logic';
 
 const OAUTH_STATE_TTL_MS = 10 * 60 * 1000;
 const SECRET_FIELDS = ['accessToken', 'refreshToken', 'apiKey', 'bearerToken', 'username', 'password', 'customHeaders'] as const;
@@ -276,7 +276,8 @@ export class ConnectionsService {
 
   private serialize(row: any, userId?: string) {
     const metadata = row.metadata && typeof row.metadata === 'object' ? row.metadata as Record<string, unknown> : {};
-    return { canManage: userId ? row.ownerId === userId : false, id: row.id, orgId: row.orgId, ownerId: row.ownerId, name: row.name, linkName: row.linkName, connectionType: row.connectionType, provider: row.provider, authType: row.authType, visibility: row.visibility, status: row.status, baseUrl: row.baseUrl, metadata, authorizedAccount: metadata.authorizedAccount ?? null, expiresAt: row.expiresAt, scope: row.scope, lastTestedAt: row.lastTestedAt, lastUsedAt: row.lastUsedAt, errorCode: row.errorCode, errorMessage: row.errorMessage, createdAt: row.createdAt, updatedAt: row.updatedAt };
+    const capabilities = buildConnectionCapabilitySummary({ provider: row.provider, authType: row.authType, scope: row.scope, errorCode: row.errorCode });
+    return { canManage: userId ? row.ownerId === userId : false, id: row.id, orgId: row.orgId, ownerId: row.ownerId, name: row.name, linkName: row.linkName, connectionType: row.connectionType, provider: row.provider, authType: row.authType, visibility: row.visibility, status: row.status, baseUrl: row.baseUrl, metadata, authorizedAccount: metadata.authorizedAccount ?? null, expiresAt: row.expiresAt, scope: row.scope, capabilities, lastTestedAt: row.lastTestedAt, lastUsedAt: row.lastUsedAt, errorCode: row.errorCode, errorMessage: row.errorMessage, createdAt: row.createdAt, updatedAt: row.updatedAt };
   }
 
   async list(user: AccessTokenPayload, query?: { provider?: string; status?: string; search?: string }) {
@@ -682,7 +683,7 @@ export class ConnectionsService {
     if (row.authType === ConnectionAuthType.OAUTH2 && providerConfig && providerConfig.lastTestOk === false) issues.push({ code: 'PROVIDER_CONFIG_FAILED', severity: 'WARNING', message: providerConfig.lastTestMessage || 'Provider configuration test failed.' });
     if (missingConfiguredScopes.length) issues.push({ code: 'SCOPE_CONFIGURATION_DRIFT', severity: 'BLOCKING', message: `Connection scopes are not enabled in provider configuration: ${missingConfiguredScopes.slice(0, 10).join(', ')}` });
     if (row.provider === 'google' && row.authType === ConnectionAuthType.OAUTH2 && !googleDriveScopeGranted(row.scope)) {
-      issues.push({ code: 'INSUFFICIENT_SCOPE', severity: 'BLOCKING', message: 'Reconnect to grant Google Drive file access.' });
+      issues.push({ code: 'INSUFFICIENT_SCOPE', severity: 'BLOCKING', message: 'Google Drive file access is not authorized for this connection.' });
     }
     if (activeWorkflowIds.length && row.visibility === ConnectionVisibility.PRIVATE && row.ownerId !== user.sub) issues.push({ code: 'PRIVATE_CONNECTION_RUNTIME', severity: 'BLOCKING', message: 'A private connection is referenced by an active workflow that may run outside the connection owner context.' });
     if (failures > 0) issues.push({ code: 'RECENT_USAGE_FAILURES', severity: 'WARNING', message: `${failures} recorded connection usage failure(s).` });
@@ -821,19 +822,25 @@ export class ConnectionsService {
       if (existing) await this.prisma.connection.update({ where: { id: existing.id }, data: { status: ConnectionStatus.REAUTH_REQUIRED, errorCode: 'PROVIDER_PROBE_FAILED', errorMessage: message } }).catch(() => undefined);
       throw new BadRequestException(`OAuth authorization succeeded but provider verification failed: ${message}`);
     }
-    const metadata = {
+    const metadata: Record<string, unknown> = {
       ...(existing?.metadata && typeof existing.metadata === 'object' ? existing.metadata as Record<string, unknown> : {}),
       oauthProvider: provider,
       oauthConnectedAt: new Date().toISOString(),
       ...(authorizedAccount ? { authorizedAccount } : {}),
     };
+    const grantedScope = typeof payload.scope === 'string' ? payload.scope.slice(0, 4000) : (existing?.scope ?? null);
+    const capabilitySummary = buildConnectionCapabilitySummary({ provider, authType: ConnectionAuthType.OAUTH2, scope: grantedScope, errorCode: null });
+    if (provider === 'google') {
+      metadata.capabilities = Object.fromEntries(capabilitySummary.items.map((item) => [item.key, item.state]));
+    }
+    const driveActivationError = provider === 'google' ? googleDriveActivationError(grantedScope) : null;
     const accessToken = this.crypto.encrypt(payload.access_token);
     const newRefreshToken = typeof payload.refresh_token === 'string' ? this.crypto.encrypt(payload.refresh_token) : undefined;
     let connection: { id: string };
     try {
       connection = existing
-        ? await this.prisma.connection.update({ where: { id: existing.id }, data: { status: ConnectionStatus.ACTIVE, metadata: metadata as Prisma.InputJsonValue, expiresAt, ...(providerPayloadBaseUrl ? { baseUrl: providerPayloadBaseUrl } : {}), scope: typeof payload.scope === 'string' ? payload.scope.slice(0, 4000) : existing.scope, errorCode: null, errorMessage: null, secret: { upsert: { create: { id: randomUUID(), ownerId: row.userId, accessToken, ...(newRefreshToken ? { refreshToken: newRefreshToken } : {}) }, update: { accessToken, ...(newRefreshToken ? { refreshToken: newRefreshToken } : {}) } } } } })
-        : await this.prisma.connection.create({ data: { id: randomUUID(), orgId: row.orgId, ownerId: row.userId, name, linkName: await this.uniqueLinkName(row.orgId, `${provider}_${name}`), connectionType: ConnectionType.USER, provider, authType: ConnectionAuthType.OAUTH2, visibility: ConnectionVisibility.PRIVATE, status: ConnectionStatus.ACTIVE, metadata: metadata as Prisma.InputJsonValue, expiresAt, ...(providerPayloadBaseUrl ? { baseUrl: providerPayloadBaseUrl } : {}), scope: typeof payload.scope === 'string' ? payload.scope.slice(0, 4000) : null, secret: { create: { id: randomUUID(), ownerId: row.userId, accessToken, ...(newRefreshToken ? { refreshToken: newRefreshToken } : {}) } } } });
+        ? await this.prisma.connection.update({ where: { id: existing.id }, data: { status: ConnectionStatus.ACTIVE, metadata: metadata as Prisma.InputJsonValue, expiresAt, ...(providerPayloadBaseUrl ? { baseUrl: providerPayloadBaseUrl } : {}), scope: grantedScope, errorCode: driveActivationError?.errorCode ?? null, errorMessage: driveActivationError?.errorMessage ?? null, secret: { upsert: { create: { id: randomUUID(), ownerId: row.userId, accessToken, ...(newRefreshToken ? { refreshToken: newRefreshToken } : {}) }, update: { accessToken, ...(newRefreshToken ? { refreshToken: newRefreshToken } : {}) } } } } })
+        : await this.prisma.connection.create({ data: { id: randomUUID(), orgId: row.orgId, ownerId: row.userId, name, linkName: await this.uniqueLinkName(row.orgId, `${provider}_${name}`), connectionType: ConnectionType.USER, provider, authType: ConnectionAuthType.OAUTH2, visibility: ConnectionVisibility.PRIVATE, status: ConnectionStatus.ACTIVE, metadata: metadata as Prisma.InputJsonValue, expiresAt, ...(providerPayloadBaseUrl ? { baseUrl: providerPayloadBaseUrl } : {}), scope: grantedScope, errorCode: driveActivationError?.errorCode ?? null, errorMessage: driveActivationError?.errorMessage ?? null, secret: { create: { id: randomUUID(), ownerId: row.userId, accessToken, ...(newRefreshToken ? { refreshToken: newRefreshToken } : {}) } } } });
     } catch (error) {
       this.oauthLog('DATABASE_UPDATE_FAILED', { provider, connectionId: existing?.id ?? row.connectionId, orgId: row.orgId, userId: row.userId, error: safeOAuthErrorCode(error instanceof Error ? error.message : 'database') });
       throw error;
@@ -893,10 +900,10 @@ export class ConnectionsService {
 
   async browseResources(user: AccessTokenPayload, id: string, parent?: string | null, pageToken?: string | null) {
     const row = await this.findVisible(user, id);
-    const token = await this.resolveBrowseToken(row);
     const parentId = String(parent ?? '').trim();
     try {
-      if (row.provider === 'google') return { connectionId: row.id, provider: row.provider, parent: parentId || null, ...(await this.googleChildren(token, parentId, pageToken)) };
+      if (row.provider === 'google') return { connectionId: row.id, provider: row.provider, parent: parentId || null, ...(await this.googleChildren(row.id, parentId, pageToken)) };
+      const token = await this.resolveBrowseToken(row);
       if (row.provider === 'dropbox') return { connectionId: row.id, provider: row.provider, parent: parentId || null, ...(await this.dropboxChildren(token, parentId, pageToken)) };
       if (row.provider === 'microsoft') return { connectionId: row.id, provider: row.provider, parent: parentId || null, ...(await this.microsoftChildren(token, parentId, pageToken)) };
     } catch (error) {
@@ -907,16 +914,16 @@ export class ConnectionsService {
 
   async readResource(user: AccessTokenPayload, id: string, resourceId: string) {
     const row = await this.findVisible(user, id);
-    const token = await this.resolveBrowseToken(row);
     const target = resourceId.trim();
     if (!target) throw new BadRequestException('Choose a file first.');
     try {
       if (row.provider === 'google') {
-        const response = await fetch(`https://www.googleapis.com/drive/v3/files/${encodeURIComponent(target)}?fields=id,name,mimeType,size`, { headers: { authorization: `Bearer ${token}` } });
+        const response = await this.googleDriveRequest(row.id, `https://www.googleapis.com/drive/v3/files/${encodeURIComponent(target)}?fields=id,name,mimeType,size`);
         const payload = await this.readJson(response);
-        if (!response.ok) throw new Error(String(payload?.error?.message ?? response.status));
+        if (!response.ok) throw new Error(`${mapGoogleDriveApiError(response.status, payload).code}: ${mapGoogleDriveApiError(response.status, payload).message}`);
         return { connectionId: row.id, provider: row.provider, id: String(payload.id), name: String(payload.name ?? 'File'), kind: payload.mimeType === 'application/vnd.google-apps.folder' ? 'folder' : 'file', mimeType: payload.mimeType ?? null };
       }
+      const token = await this.resolveBrowseToken(row);
       if (row.provider === 'dropbox') {
         const response = await fetch('https://api.dropboxapi.com/2/files/get_metadata', { method: 'POST', headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' }, body: JSON.stringify({ path: target }) });
         const payload = await this.readJson(response);
@@ -988,7 +995,7 @@ export class ConnectionsService {
     if (row.status === ConnectionStatus.DISABLED) throw new ForbiddenException('Connection is disabled.');
     if (row.status === ConnectionStatus.REAUTH_REQUIRED) throw new ForbiddenException('Connection requires re-authentication.');
     if (row.provider === 'google' && row.authType === ConnectionAuthType.OAUTH2 && !googleDriveScopeGranted(row.scope)) {
-      throw new ForbiddenException('Reconnect to grant Google Drive file access.');
+      throw new ForbiddenException('INSUFFICIENT_SCOPE: Google Drive file access is not authorized for this connection.');
     }
     if (row.status !== ConnectionStatus.ACTIVE) throw new ForbiddenException('Your connection expired. Reconnect to continue.');
     const token = await this.getAccessTokenById(row.id);
@@ -1001,14 +1008,32 @@ export class ConnectionsService {
     return `${mapped.code}: ${mapped.message}`;
   }
 
-  private async googleChildren(token: string, parentId: string, pageToken?: string | null) {
+  private async googleChildren(connectionId: string, parentId: string, pageToken?: string | null) {
     const q = parentId ? `'${parentId.replace(/'/g, '')}' in parents and trashed=false` : `'root' in parents and trashed=false`;
-    const params = new URLSearchParams({ pageSize: '100', q, fields: 'files(id,name,mimeType,size),nextPageToken', orderBy: 'folder,name' });
+    const params = new URLSearchParams({ pageSize: '100', q, fields: 'files(id,name,mimeType,size,modifiedTime),nextPageToken', orderBy: 'folder,name' });
     if (pageToken) params.set('pageToken', pageToken);
-    const response = await fetch(`https://www.googleapis.com/drive/v3/files?${params.toString()}`, { headers: { authorization: `Bearer ${token}` } });
+    const response = await this.googleDriveRequest(connectionId, `https://www.googleapis.com/drive/v3/files?${params.toString()}`);
     const payload = await this.readJson(response);
-    if (!response.ok) throw new Error(String(payload?.error?.message ?? response.status));
+    if (!response.ok) {
+      const mapped = mapGoogleDriveApiError(response.status, payload);
+      throw new Error(`${mapped.code}: ${mapped.message}`);
+    }
     return { ...this.splitDriveItems(Array.isArray(payload.files) ? payload.files : [], (item) => item.mimeType === 'application/vnd.google-apps.folder'), nextPageToken: typeof payload.nextPageToken === 'string' ? payload.nextPageToken : null };
+  }
+
+  private async googleDriveRequest(connectionId: string, url: string, init?: RequestInit, retried = false): Promise<Response> {
+    await this.resolveBrowseToken(await this.prisma.connection.findUniqueOrThrow({ where: { id: connectionId } }));
+    const token = await this.getAccessTokenById(connectionId);
+    if (!token) throw new Error('TOKEN_EXPIRED: Your connection expired. Reconnect to continue.');
+    const response = await fetch(url, { ...init, headers: { ...(init?.headers ?? {}), authorization: `Bearer ${token}` } });
+    if (response.status === 401 && !retried) {
+      const row = await this.prisma.connection.findUnique({ where: { id: connectionId }, include: { secret: true } });
+      if (row?.secret?.refreshToken) {
+        await this.refreshOAuthToken(row.provider as OAuthProvider, connectionId, this.crypto.decrypt(row.secret.refreshToken), row.orgId);
+        return this.googleDriveRequest(connectionId, url, init, true);
+      }
+    }
+    return response;
   }
 
   private async dropboxChildren(token: string, parentId: string, pageToken?: string | null) {
@@ -1165,7 +1190,10 @@ export class ConnectionsService {
     }
     const accessToken = this.crypto.encrypt(payload.access_token);
     const newRefreshToken = typeof payload.refresh_token === 'string' ? this.crypto.encrypt(payload.refresh_token) : undefined;
-    await this.prisma.connection.update({ where: { id }, data: { expiresAt: typeof payload.expires_in === 'number' ? new Date(Date.now() + payload.expires_in * 1000) : null, status: ConnectionStatus.ACTIVE, errorCode: null, errorMessage: null, secret: { update: { accessToken, ...(newRefreshToken ? { refreshToken: newRefreshToken } : {}) } } } });
+    const row = await this.prisma.connection.findUnique({ where: { id }, select: { provider: true, authType: true, scope: true } });
+    const nextScope = typeof payload.scope === 'string' ? payload.scope.slice(0, 4000) : row?.scope ?? null;
+    const driveActivationError = row?.provider === 'google' ? googleDriveActivationError(nextScope) : null;
+    await this.prisma.connection.update({ where: { id }, data: { expiresAt: typeof payload.expires_in === 'number' ? new Date(Date.now() + payload.expires_in * 1000) : null, status: ConnectionStatus.ACTIVE, ...(typeof payload.scope === 'string' ? { scope: nextScope } : {}), errorCode: driveActivationError?.errorCode ?? null, errorMessage: driveActivationError?.errorMessage ?? null, secret: { update: { accessToken, ...(newRefreshToken ? { refreshToken: newRefreshToken } : {}) } } } });
     return payload.access_token as string;
   }
 

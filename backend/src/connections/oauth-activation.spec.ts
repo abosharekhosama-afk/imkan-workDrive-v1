@@ -1,4 +1,4 @@
-import { ConnectionStatus } from "@prisma/client";
+﻿import { ConnectionStatus } from "@prisma/client";
 import { ConnectionCryptoService } from "./connection-crypto.service";
 import { ConnectionProviderAdapterService } from "./connection-provider-adapter.service";
 import { ConnectionProviderRegistry } from "./provider-registry.service";
@@ -108,7 +108,7 @@ describe("Connections OAuth activation", () => {
     process.env.NODE_ENV = originalNodeEnv;
   });
 
-  it("activates Google after userinfo succeeds even when Drive about would fail", async () => {
+  it("marks Google ACTIVE with DRIVE_SCOPE_REQUIRED when Drive scope is missing", async () => {
     const { service, updates, connection } = harness("google");
     const calls: string[] = [];
     global.fetch = jest.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
@@ -132,6 +132,7 @@ describe("Connections OAuth activation", () => {
     expect(result.returnPath).toBe("/files/connections");
     expect(result.connectionId).toBe("conn-1");
     expect(connection.status).toBe(ConnectionStatus.ACTIVE);
+    expect(updates.some((item) => item.errorCode === 'DRIVE_SCOPE_REQUIRED')).toBe(true);
     expect(updates.some((item) => item.status === ConnectionStatus.ACTIVE)).toBe(true);
     expect(calls.some((url) => url.includes("userinfo"))).toBe(true);
     expect(calls.some((url) => url.includes("drive/v3/about"))).toBe(false);
@@ -185,3 +186,4 @@ describe("Connections OAuth activation", () => {
     });
   });
 });
+

@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { browseConnectionResources, startConnectionOAuth, uploadConnectionFile, type Connection, type ConnectionResource } from "@/lib/api/workflows";
 import { buildOAuthStartReturnPath } from "@/app/files/connections/connections-oauth-return-logic";
 import { readBrowserAccessToken, stashBrowserAccessTokenForOAuth } from "@/components/auth-gate-logic";
-import { connectionStatusLabel, friendlyConnectionError, providerSupports } from "@/components/connection-picker-logic";
+import { connectionBrowseReady, connectionStatusLabel, friendlyConnectionError, googleDriveReconnectRequired, parseConnectionError, providerSupports, reconnectProviderLabel } from "@/components/connection-picker-logic";
 
 function beginOAuth(provider: string, connectionId?: string) {
   const returnTo = buildOAuthStartReturnPath(window.location.pathname, window.location.search);
@@ -21,8 +21,8 @@ export function ConnectionPicker({ connections, value, onChange, provider, capab
   const selected = rows.find((item) => item.id === value) ?? null;
   const status = connectionStatusLabel(selected?.status);
   const label = provider === "google" ? "Google Drive" : provider === "dropbox" ? "Dropbox" : provider === "microsoft" ? "OneDrive" : "connection";
-  const usableRows = useMemo(() => rows.filter((item) => item.status === "ACTIVE"), [rows]);
-  const reconnectable = useMemo(() => rows.filter((item) => item.status !== "ACTIVE" && item.authType === "OAUTH2"), [rows]);
+  const usableRows = useMemo(() => rows.filter((item) => connectionBrowseReady(item)), [rows]);
+  const reconnectable = useMemo(() => rows.filter((item) => item.authType === "OAUTH2" && !connectionBrowseReady(item)), [rows]);
   useEffect(() => {
     if (value || typeof window === "undefined") return;
     const returned = new URLSearchParams(window.location.search).get("connectionId");
@@ -43,11 +43,11 @@ export function ConnectionPicker({ connections, value, onChange, provider, capab
           {reconnectable.map((item) => <option key={item.id} value="" disabled>{item.name} · Needs reconnect</option>)}
         </select>
       )}
-      {selected && status === "connected" ? <small className="mt-1 block text-[11px] text-emerald-700">Connected · credentials stay server-side</small> : null}
-      {selected && status !== "connected" ? (
+      {selected && status === "connected" && !googleDriveReconnectRequired(selected) ? <small className="mt-1 block text-[11px] text-emerald-700">Connected · credentials stay server-side</small> : null}
+      {selected && (status !== "connected" || googleDriveReconnectRequired(selected)) ? (
         <div className="mt-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-[11px] text-amber-800">
-          {selected.status === "REAUTH_REQUIRED" || selected.status === "PENDING_AUTH" ? "Connection needs reconnect." : "Connection is not available."}
-          {selected.authType === "OAUTH2" && selected.canManage ? <button type="button" className="ms-2 font-semibold underline" onClick={() => void beginOAuth(selected.provider, selected.id)}>Reconnect</button> : null}
+          {googleDriveReconnectRequired(selected) ? friendlyConnectionError("INSUFFICIENT_SCOPE: Google Drive file access is not authorized for this connection.") : selected.status === "REAUTH_REQUIRED" || selected.status === "PENDING_AUTH" ? "Connection needs reconnect." : "Connection is not available."}
+          {selected.authType === "OAUTH2" && selected.canManage ? <button type="button" className="ms-2 font-semibold underline" onClick={() => void beginOAuth(selected.provider, selected.id)}>{reconnectProviderLabel(selected.provider)}</button> : null}
         </div>
       ) : null}
       {selected?.baseUrl ? <small className="mt-1 block truncate text-[10px] text-slate-400">API base: {selected.baseUrl}</small> : null}
@@ -112,7 +112,7 @@ export function ResourcePicker({ connectionId, provider, value, label, onChange 
       </div>
       <input className="mb-2 w-full" aria-label="Filter files" placeholder="Filter this folder" value={query} onChange={(event) => setQuery(event.target.value)} />
       {loading ? <p className="text-[12px]">Loading folders...</p> : null}
-      {error ? <p className="text-[12px]">{error} <button type="button" className="underline" onClick={() => setReload((item) => item + 1)}>Retry</button></p> : null}
+      {error ? <p className="text-[12px]">{error} {(() => { const parsed = parseConnectionError(error); if (parsed.code === "INSUFFICIENT_SCOPE" || parsed.code === "DRIVE_SCOPE_REQUIRED") return <button type="button" className="ms-1 font-semibold underline" onClick={() => void beginOAuth(provider ?? "", connectionId)}>{reconnectProviderLabel(provider)}</button>; return <button type="button" className="underline" onClick={() => setReload((item) => item + 1)}>Retry</button>; })()}</p> : null}
       {!loading && !error && visibleFolders.length === 0 && visibleFiles.length === 0 ? <p className="text-[12px]">No files found</p> : null}
       <div className="max-h-52 overflow-auto rounded-lg border border-[var(--wd-line,var(--wd-border,#E0E6EC))] bg-[var(--wd-bg,#fff)]">
         {trail.length > 1 ? <button type="button" className="block w-full px-3 py-2 text-start text-[12px]" onClick={() => { const next = trail.slice(0, -1); setTrail(next); setParent(next.at(-1)?.id); }}>Back</button> : null}

@@ -18,6 +18,12 @@ export function formatGrantedScopes(scope: string | null | undefined): string[] 
   return (scope ?? "").split(/\s+/).filter(Boolean);
 }
 
+export function formatCapabilityState(state: string | undefined): string {
+  if (state === "granted") return "Granted";
+  if (state === "required") return "Reconnect required";
+  return "Not applicable";
+}
+
 export function formatConnectionAuthLabel(authType: string): string {
   if (authType === "OAUTH2") return "OAuth 2.0";
   return authType.replaceAll("_", " ");

@@ -129,7 +129,7 @@ export class CloudImportService implements OnModuleInit, OnModuleDestroy {
   async listFiles(user: AccessTokenPayload, provider: CloudProvider, connectionId: string | null = null, parentId: string | null = null, pageToken: string | null = null): Promise<{ files: RemoteFile[]; nextPageToken: string | null; parent: string | null }> {
     const connection = await this.getConnection(user, provider, connectionId);
     if (provider === 'google' && !googleDriveScopeGranted(connection.scope)) {
-      throw new ForbiddenException('INSUFFICIENT_SCOPE: Reconnect to grant Google Drive file access.');
+      throw new ForbiddenException('INSUFFICIENT_SCOPE: Google Drive file access is not authorized for this connection.');
     }
     const token = await this.ensureAccessToken(connection);
     const parent = parentId?.trim() || null;
@@ -162,7 +162,7 @@ export class CloudImportService implements OnModuleInit, OnModuleDestroy {
     const detail = payload?.error?.message ?? payload?.error_summary ?? payload?.error_description;
     if (response.status === 401) return `${label} authorization expired. Reconnect the connection.`;
     if (response.status === 403) {
-      if (label === 'Google Drive') return 'INSUFFICIENT_SCOPE: Reconnect to grant Google Drive file access.';
+      if (label === 'Google Drive') return 'INSUFFICIENT_SCOPE: Google Drive file access is not authorized for this connection.';
       return `${label} access was denied. Reconnect the connection and grant file read access.`;
     }
     if (response.status === 429) return `${label} rate limit reached. Try again shortly.`;
