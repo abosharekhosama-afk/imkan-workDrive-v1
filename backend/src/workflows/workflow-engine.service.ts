@@ -130,6 +130,54 @@ export class WorkflowEngineService implements OnModuleInit, OnModuleDestroy {
     return this.enqueue(user, workflow.id, { ...event, fileId: resourceId, resourceId, eventType: 'manual', userId: user.sub, resourceType, startInput: normalizedInput }, definition, workflow.activeVersionId ?? undefined);
   }
 
+  /**
+   * Start a real workflow execution from the builder's Test Run action.
+   * Unlike a preview, this creates a normal WorkflowRun/WorkflowJob and the
+   * regular worker executes every configured action. The caller must choose
+   * an existing WorkDrive resource so side effects are explicit.
+   */
+  async startTest(user: AccessTokenPayload, workflowId: string, input: WorkflowFileEvent) {
+    const workflow = await this.prisma.workflow.findFirst({
+      where: { id: workflowId, orgId: user.org_id, status: 'ACTIVE' },
+      include: { steps: { orderBy: { position: 'asc' } }, states: { orderBy: { position: 'asc' } }, transitions: true, activeVersion: true },
+    });
+    if (!workflow) throw new NotFoundException('Activate the workflow before starting a test run');
+
+    const resourceType = input.resourceType === 'FOLDER' ? 'FOLDER' : 'FILE';
+    if (workflow.resourceType !== resourceType) {
+      throw new BadRequestException(`This workflow is configured for ${workflow.resourceType.toLowerCase()} resources`);
+    }
+    const resourceId = String(input.resourceId ?? input.fileId ?? '').trim();
+    if (!resourceId) throw new BadRequestException('Select a WorkDrive file or folder for the test run');
+
+    if (resourceType === 'FILE') {
+      const file = await this.prisma.file.findFirst({ where: { id: resourceId, orgId: user.org_id, deletedAt: null }, include: { folder: { select: { teamFolderId: true } } } });
+      if (!file) throw new ForbiddenException('The selected WorkDrive file is not available');
+      const allowed = this.permissions.canWrite(user, { orgId: file.orgId, ownerId: file.ownerId, teamFolderId: file.folder?.teamFolderId ?? null });
+      if (!allowed) throw new ForbiddenException('You do not have write permission for the selected file');
+    } else {
+      const folder = await this.prisma.folder.findFirst({ where: { id: resourceId, orgId: user.org_id } });
+      if (!folder) throw new ForbiddenException('The selected WorkDrive folder is not available');
+      const allowed = this.permissions.canWrite(user, { orgId: folder.orgId, ownerId: folder.ownerId, teamFolderId: folder.teamFolderId ?? null });
+      if (!allowed) throw new ForbiddenException('You do not have write permission for the selected folder');
+    }
+
+    const definition = workflow.activeVersion ? this.definitionFromSnapshot(workflow.activeVersion.snapshot) : this.definitionFromWorkflow(workflow);
+    const configuredTriggers = Array.isArray(definition.trigger) ? definition.trigger.map(String).filter(Boolean) : [String(definition.trigger ?? '')].filter(Boolean);
+    const automaticTrigger = configuredTriggers.find((trigger) => trigger !== 'manual') || 'upload';
+    const eventType = workflow.mode === 'MANUAL' ? 'manual' : automaticTrigger;
+    const event: WorkflowFileEvent = {
+      ...input,
+      eventType,
+      fileId: resourceId,
+      resourceId,
+      resourceType,
+      userId: user.sub,
+    };
+
+    return this.enqueue(user, workflow.id, event, definition, workflow.activeVersionId ?? undefined, { testRun: true });
+  }
+
   private definitionFromWorkflow(workflow: { steps: Array<{ kind: string; config: unknown }>; states?: Array<{ id: string; terminal: boolean }>; transitions?: WorkflowTransitionLike[] }): WorkflowDefinition {
     const values = Object.fromEntries(workflow.steps.map((step) => [step.kind, (step.config as { value?: unknown })?.value]));
     const actions = Array.isArray(values.ACTIONS) ? values.ACTIONS as WorkflowAction[] : [];
@@ -161,11 +209,12 @@ export class WorkflowEngineService implements OnModuleInit, OnModuleDestroy {
     return { before: clean(obj.before), during: clean(obj.during), after: clean(obj.after) };
   }
 
-  private async enqueue(user: AccessTokenPayload, workflowId: string, event: WorkflowFileEvent, definition: WorkflowDefinition, versionId?: string) {
-    const eventKey = `${event.resourceType ?? 'FILE'}:${event.fileId}:${event.eventType ?? 'manual'}:${event.sourceWorkflowId ?? 'system'}`;
+  private async enqueue(user: AccessTokenPayload, workflowId: string, event: WorkflowFileEvent, definition: WorkflowDefinition, versionId?: string, metadata?: Record<string, unknown>) {
+    const baseEventKey = `${event.resourceType ?? 'FILE'}:${event.fileId}:${event.eventType ?? 'manual'}:${event.sourceWorkflowId ?? 'system'}`;
+    const eventKey = metadata?.testRun ? `${baseEventKey}:test:${randomUUID()}` : baseEventKey;
     try {
       const firstState = definition.states[0];
-      const run = await this.prisma.workflowRun.create({ data: { orgId: user.org_id, workflowId, versionId: versionId ?? null, createdById: user.sub, eventKey, status: 'QUEUED', trigger: event as unknown as Prisma.InputJsonValue, currentStateId: firstState?.id ?? null, result: { fieldValues: event.startInput?.fieldValues ?? {}, startInput: event.startInput ?? null } as unknown as Prisma.InputJsonValue } });
+      const run = await this.prisma.workflowRun.create({ data: { orgId: user.org_id, workflowId, versionId: versionId ?? null, createdById: user.sub, eventKey, status: 'QUEUED', trigger: event as unknown as Prisma.InputJsonValue, currentStateId: firstState?.id ?? null, result: { fieldValues: event.startInput?.fieldValues ?? {}, startInput: event.startInput ?? null, ...(metadata ? { metadata } : {}) } as unknown as Prisma.InputJsonValue } });
       await this.prisma.workflowJob.create({ data: { id: randomUUID(), orgId: user.org_id, workflowId, runId: run.id, status: 'QUEUED', runAt: new Date(), priority: 0, idempotencyKey: `trigger:${workflowId}:${eventKey}` } }); return run;
     } catch (error) { if ((error as { code?: string })?.code === 'P2002') return undefined; throw error; }
   }

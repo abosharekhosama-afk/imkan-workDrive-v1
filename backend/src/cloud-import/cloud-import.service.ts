@@ -1,16 +1,14 @@
-import { BadRequestException, ConflictException, Injectable, NotFoundException, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
+import { BadRequestException, ConflictException, ForbiddenException, forwardRef, Inject, Injectable, NotFoundException, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { createCipheriv, createDecipheriv, createHash, randomBytes, randomUUID } from 'node:crypto';
 import { CloudImportJobStatus } from '@prisma/client';
 import type { AccessTokenPayload } from '../auth/jwt.types';
 import { runWithTenant } from '../auth/tenant-context';
 import { PrismaService } from '../prisma/prisma.service';
-import { ForbiddenException } from '@nestjs/common';
 import { AuditAction, FileStatus, VersionStatus } from '@prisma/client';
 import { classifyFileType, extractExtension } from '../common/file-classification';
 import { WorkflowEngineService } from '../workflows/workflow-engine.service';
 import { STORAGE_SERVICE, type StorageService } from '../storage/storage.types';
-import { Inject } from '@nestjs/common';
 import { CloudProvider } from './cloud-import.schemas';
 import { parseCreateJobs } from './cloud-import.schemas';
 import { ConnectionsService } from '../connections/connections.service';
@@ -32,7 +30,7 @@ export class CloudImportService implements OnModuleInit, OnModuleDestroy {
     private readonly prisma: PrismaService,
     private readonly config: ConfigService,
     @Inject(STORAGE_SERVICE) private readonly storage: StorageService,
-    private readonly workflowEngine: WorkflowEngineService,
+    @Inject(forwardRef(() => WorkflowEngineService)) private readonly workflowEngine: WorkflowEngineService,
     private readonly connections: ConnectionsService,
   ) {}
 
@@ -127,23 +125,79 @@ export class CloudImportService implements OnModuleInit, OnModuleDestroy {
     });
   }
 
-  async listFiles(user: AccessTokenPayload, provider: CloudProvider, connectionId: string | null = null): Promise<RemoteFile[]> {
+  async listFiles(user: AccessTokenPayload, provider: CloudProvider, connectionId: string | null = null, parentId: string | null = null, pageToken: string | null = null): Promise<{ files: RemoteFile[]; nextPageToken: string | null; parent: string | null }> {
     const connection = await this.getConnection(user, provider, connectionId);
     const token = await this.ensureAccessToken(connection);
+    const parent = parentId?.trim() || null;
     if (provider === 'google') {
-      const q = encodeURIComponent("trashed = false and mimeType != 'application/vnd.google-apps.folder'");
-      const response = await fetch(`https://www.googleapis.com/drive/v3/files?pageSize=${MAX_LIST_ITEMS}&q=${q}&fields=files(id,name,size,mimeType,modifiedTime),nextPageToken`, { headers: { authorization: `Bearer ${token}` } });
-      const payload = await this.readJson(response); if (!response.ok) throw new BadRequestException('Google Drive listing failed');
-      return (Array.isArray(payload.files) ? payload.files : []).map((f: any) => ({ id: String(f.id), name: String(f.name ?? 'Untitled'), size: f.size ? Number(f.size) : null, mimeType: String(f.mimeType ?? 'application/octet-stream'), modifiedAt: f.modifiedTime ?? null, kind: 'file' }));
+      const q = parent ? `'${parent.replace(/'/g, '')}' in parents and trashed=false` : `'root' in parents and trashed=false`;
+      const params = new URLSearchParams({ pageSize: String(MAX_LIST_ITEMS), q, fields: 'files(id,name,size,mimeType,modifiedTime),nextPageToken', orderBy: 'folder,name' });
+      if (pageToken) params.set('pageToken', pageToken);
+      const response = await fetch(`https://www.googleapis.com/drive/v3/files?${params.toString()}`, { headers: { authorization: `Bearer ${token}`, accept: 'application/json' } });
+      const payload = await this.readJson(response);
+      if (!response.ok) throw new BadRequestException(this.cloudProviderError('Google Drive', response, payload));
+      return { files: (Array.isArray(payload.files) ? payload.files : []).map((f: any) => ({ id: String(f.id), name: String(f.name ?? 'Untitled'), size: f.size ? Number(f.size) : null, mimeType: String(f.mimeType ?? 'application/octet-stream'), modifiedAt: f.modifiedTime ?? null, kind: f.mimeType === 'application/vnd.google-apps.folder' ? 'folder' : 'file' })), nextPageToken: typeof payload.nextPageToken === 'string' ? payload.nextPageToken : null, parent };
     }
     if (provider === 'dropbox') {
-      const response = await fetch('https://api.dropboxapi.com/2/files/list_folder', { method: 'POST', headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' }, body: JSON.stringify({ path: '', recursive: false, limit: MAX_LIST_ITEMS }) });
-      const payload = await this.readJson(response); if (!response.ok) throw new BadRequestException('Dropbox listing failed');
-      return (Array.isArray(payload.entries) ? payload.entries : []).filter((f: any) => f['.tag'] === 'file').map((f: any) => ({ id: String(f.id ?? f.path_lower), name: String(f.name ?? 'Untitled'), size: typeof f.size === 'number' ? f.size : null, mimeType: this.mimeFromName(String(f.name ?? '')), modifiedAt: f.server_modified ?? null, kind: 'file' }));
+      const endpoint = pageToken ? 'https://api.dropboxapi.com/2/files/list_folder/continue' : 'https://api.dropboxapi.com/2/files/list_folder';
+      const body = pageToken ? { cursor: pageToken } : { path: parent || '', recursive: false, limit: MAX_LIST_ITEMS };
+      const response = await fetch(endpoint, { method: 'POST', headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json', accept: 'application/json' }, body: JSON.stringify(body) });
+      const payload = await this.readJson(response); if (!response.ok) throw new BadRequestException(this.cloudProviderError('Dropbox', response, payload));
+      const entries = Array.isArray(payload.entries) ? payload.entries : [];
+      return { files: entries.map((f: any) => ({ id: String(f.path_lower ?? f.id), name: String(f.name ?? 'Untitled'), size: typeof f.size === 'number' ? f.size : null, mimeType: f['.tag'] === 'folder' ? 'folder' : this.mimeFromName(String(f.name ?? '')), modifiedAt: f.server_modified ?? null, kind: f['.tag'] === 'folder' ? 'folder' : 'file' })), nextPageToken: payload.has_more && typeof payload.cursor === 'string' ? payload.cursor : null, parent };
     }
-    const response = await fetch('https://graph.microsoft.com/v1.0/me/drive/root/children?$top=100&$select=id,name,size,file,fileSystemInfo,@microsoft.graph.downloadUrl', { headers: { authorization: `Bearer ${token}` } });
-    const payload = await this.readJson(response); if (!response.ok) throw new BadRequestException('OneDrive listing failed');
-    return (Array.isArray(payload.value) ? payload.value : []).filter((f: any) => f.file).map((f: any) => ({ id: String(f.id), name: String(f.name ?? 'Untitled'), size: typeof f.size === 'number' ? f.size : null, mimeType: String(f.file?.mimeType ?? this.mimeFromName(String(f.name ?? ''))), modifiedAt: f.fileSystemInfo?.lastModifiedDateTime ?? null, kind: 'file' }));
+    const url = pageToken ? pageToken : (parent ? `https://graph.microsoft.com/v1.0/me/drive/items/${encodeURIComponent(parent)}/children` : 'https://graph.microsoft.com/v1.0/me/drive/root/children');
+    if (pageToken && !pageToken.startsWith('https://graph.microsoft.com/')) throw new BadRequestException('Invalid OneDrive page token');
+    const params = new URLSearchParams({ '$top': String(MAX_LIST_ITEMS), '$select': 'id,name,size,file,folder,fileSystemInfo,@microsoft.graph.downloadUrl' });
+    const response = await fetch(pageToken ? url : `${url}?${params.toString()}`, { headers: { authorization: `Bearer ${token}`, accept: 'application/json' } });
+    const payload = await this.readJson(response); if (!response.ok) throw new BadRequestException(this.cloudProviderError('OneDrive', response, payload));
+    return { files: (Array.isArray(payload.value) ? payload.value : []).map((f: any) => ({ id: String(f.id), name: String(f.name ?? 'Untitled'), size: typeof f.size === 'number' ? f.size : null, mimeType: String(f.file?.mimeType ?? (f.folder ? 'folder' : this.mimeFromName(String(f.name ?? '')))), modifiedAt: f.fileSystemInfo?.lastModifiedDateTime ?? null, kind: f.folder ? 'folder' : 'file' })), nextPageToken: typeof payload['@odata.nextLink'] === 'string' ? payload['@odata.nextLink'] : null, parent };
+  }
+
+  private cloudProviderError(label: string, response: Response, payload: any) {
+    const detail = payload?.error?.message ?? payload?.error_summary ?? payload?.error_description;
+    if (response.status === 401 || response.status === 403) return `${label} access was denied. Reconnect the connection and grant file read access.`;
+    if (typeof detail === 'string' && detail.length < 260) return `${label} listing failed: ${detail}`;
+    return `${label} listing failed (HTTP ${response.status})`;
+  }
+
+  private async remoteFileById(user: AccessTokenPayload, provider: CloudProvider, connection: Connection, id: string): Promise<RemoteFile> {
+    const token = await this.ensureAccessToken(connection);
+    if (provider === 'google') {
+      const response = await fetch(`https://www.googleapis.com/drive/v3/files/${encodeURIComponent(id)}?fields=id,name,size,mimeType,modifiedTime`, { headers: { authorization: `Bearer ${token}`, accept: 'application/json' } });
+      const payload = await this.readJson(response); if (!response.ok) throw new BadRequestException(this.cloudProviderError('Google Drive', response, payload));
+      return { id: String(payload.id), name: String(payload.name ?? 'Untitled'), size: payload.size ? Number(payload.size) : null, mimeType: String(payload.mimeType ?? 'application/octet-stream'), modifiedAt: payload.modifiedTime ?? null, kind: payload.mimeType === 'application/vnd.google-apps.folder' ? 'folder' : 'file' };
+    }
+    if (provider === 'dropbox') {
+      const response = await fetch('https://api.dropboxapi.com/2/files/get_metadata', { method: 'POST', headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json', accept: 'application/json' }, body: JSON.stringify({ path: id }) });
+      const payload = await this.readJson(response); if (!response.ok) throw new BadRequestException(this.cloudProviderError('Dropbox', response, payload));
+      return { id: String(payload.path_lower ?? payload.id ?? id), name: String(payload.name ?? 'Untitled'), size: typeof payload.size === 'number' ? payload.size : null, mimeType: payload['.tag'] === 'folder' ? 'folder' : this.mimeFromName(String(payload.name ?? '')), modifiedAt: payload.server_modified ?? null, kind: payload['.tag'] === 'folder' ? 'folder' : 'file' };
+    }
+    const response = await fetch(`https://graph.microsoft.com/v1.0/me/drive/items/${encodeURIComponent(id)}?$select=id,name,size,file,folder,fileSystemInfo`, { headers: { authorization: `Bearer ${token}`, accept: 'application/json' } });
+    const payload = await this.readJson(response); if (!response.ok) throw new BadRequestException(this.cloudProviderError('OneDrive', response, payload));
+    return { id: String(payload.id), name: String(payload.name ?? 'Untitled'), size: typeof payload.size === 'number' ? payload.size : null, mimeType: String(payload.file?.mimeType ?? (payload.folder ? 'folder' : this.mimeFromName(String(payload.name ?? '')))), modifiedAt: payload.fileSystemInfo?.lastModifiedDateTime ?? null, kind: payload.folder ? 'folder' : 'file' };
+  }
+
+  async createWorkflowImportJob(user: AccessTokenPayload, provider: CloudProvider, connectionId: string, remoteFileId: string, folderId: string | null = null) {
+    const trimmedConnectionId = String(connectionId ?? '').trim();
+    const trimmedRemoteFileId = String(remoteFileId ?? '').trim();
+    if (!trimmedConnectionId || !trimmedRemoteFileId) throw new BadRequestException('Import external file requires a connection and remote file.');
+    if (folderId) {
+      const folder = await this.prisma.folder.findFirst({ where: { id: folderId, orgId: user.org_id }, select: { id: true } });
+      if (!folder) throw new NotFoundException('Destination folder not found');
+    }
+    const connection = await this.getConnection(user, provider, trimmedConnectionId);
+    const file = await this.remoteFileById(user, provider, connection, trimmedRemoteFileId);
+    if (!file || file.kind !== 'file') throw new BadRequestException('The selected external resource is not a file.');
+    if (file.size !== null && file.size > this.maxBytes) throw new BadRequestException(`${file.name} exceeds the ${Math.floor(this.maxBytes / 1024 / 1024)} MB import limit`);
+    const existing = await this.prisma.cloudImportJob.findFirst({
+      where: { orgId: user.org_id, userId: user.sub, connectionId: connection.id, remoteFileId: file.id, folderId, status: { in: [CloudImportJobStatus.PENDING, CloudImportJobStatus.IN_PROGRESS, CloudImportJobStatus.COMPLETED] } },
+      orderBy: { createdAt: 'desc' },
+    });
+    if (existing) return this.publicJob(existing);
+    const job = await this.prisma.cloudImportJob.create({ data: { id: randomUUID(), orgId: user.org_id, userId: user.sub, connectionId: connection.id, provider, folderId, remoteFileId: file.id, remoteName: file.name, remoteMimeType: file.mimeType, totalBytes: file.size === null ? null : BigInt(file.size), status: CloudImportJobStatus.PENDING, progress: 0 } });
+    void this.processPendingJobs();
+    return this.publicJob(job);
   }
 
   async createJobs(user: AccessTokenPayload, provider: CloudProvider, body: unknown) {
@@ -153,11 +207,9 @@ export class CloudImportService implements OnModuleInit, OnModuleDestroy {
       if (!folder || folder.orgId !== user.org_id) throw new NotFoundException('Destination folder not found');
     }
     const connection = await this.getConnection(user, provider, input.connectionId ?? null);
-    const remote = await this.listFiles(user, provider, input.connectionId ?? null);
-    const byId = new Map(remote.map((file) => [file.id, file]));
     const jobs = [];
     for (const requested of input.files) {
-      const file = byId.get(requested.id);
+      const file = await this.remoteFileById(user, provider, connection, requested.id);
       if (!file || file.kind !== 'file') throw new BadRequestException('One or more selected cloud files are no longer available');
       if (file.size !== null && file.size > this.maxBytes) throw new BadRequestException(`${file.name} exceeds the ${Math.floor(this.maxBytes / 1024 / 1024)} MB import limit`);
       const existing = await this.prisma.cloudImportJob.findFirst({ where: { orgId: user.org_id, userId: user.sub, connectionId: connection.id, remoteFileId: file.id, folderId: input.folderId, status: { in: [CloudImportJobStatus.PENDING, CloudImportJobStatus.IN_PROGRESS, CloudImportJobStatus.COMPLETED] } }, orderBy: { createdAt: 'desc' } });
@@ -292,7 +344,16 @@ export class CloudImportService implements OnModuleInit, OnModuleDestroy {
     const generic = connectionId
       ? await this.prisma.connection.findFirst({ where: { id: connectionId, orgId: user.org_id, provider: genericProvider, authType: 'OAUTH2', status: 'ACTIVE', OR: [{ ownerId: user.sub }, { visibility: 'ORGANIZATION' }, { shares: { some: { userId: user.sub } } }] }, include: { secret: true } })
       : await this.prisma.connection.findFirst({ where: { orgId: user.org_id, ownerId: user.sub, provider: genericProvider, authType: 'OAUTH2', status: 'ACTIVE' }, include: { secret: true }, orderBy: { updatedAt: 'desc' } });
-    if (generic?.secret?.accessToken) return { id: generic.id, provider, accessToken: this.connections.decryptSecret(generic.secret.accessToken), refreshToken: generic.secret.refreshToken ? this.connections.decryptSecret(generic.secret.refreshToken) : null, expiresAt: generic.expiresAt };
+    if (generic?.secret?.accessToken) {
+      const accessToken = this.connections.decryptSecret(generic.secret.accessToken);
+      const refreshToken = generic.secret.refreshToken ? this.connections.decryptSecret(generic.secret.refreshToken) : null;
+      const mirror = await this.prisma.cloudConnection.upsert({
+        where: { orgId_userId_provider: { orgId: user.org_id, userId: user.sub, provider } },
+        create: { id: randomUUID(), orgId: user.org_id, userId: user.sub, provider, accessToken: this.encrypt(accessToken), refreshToken: refreshToken ? this.encrypt(refreshToken) : null, expiresAt: generic.expiresAt, scope: generic.scope },
+        update: { accessToken: this.encrypt(accessToken), ...(refreshToken ? { refreshToken: this.encrypt(refreshToken) } : {}), expiresAt: generic.expiresAt, scope: generic.scope },
+      });
+      return { id: mirror.id, provider, accessToken, refreshToken, expiresAt: generic.expiresAt };
+    }
     const row = await this.prisma.cloudConnection.findFirst({ where: { orgId: user.org_id, userId: user.sub, provider } });
     if (!row) throw new ConflictException('Connect this cloud provider first');
     return { id: row.id, provider, accessToken: this.decrypt(row.accessToken), refreshToken: row.refreshToken ? this.decrypt(row.refreshToken) : null, expiresAt: row.expiresAt };

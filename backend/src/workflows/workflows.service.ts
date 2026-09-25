@@ -933,10 +933,56 @@ export class WorkflowsService {
   async logs(user: AccessTokenPayload, runId: string) {
     const visible = await this.visibleRun(user, runId);
     if (!visible) throw new NotFoundException('Workflow run not found');
-    return this.prisma.workflowRun.findFirst({
+    const run = await this.prisma.workflowRun.findFirst({
       where: { id: runId, orgId: user.org_id },
       include: { workflow: { select: { id: true, name: true, ownerId: true } }, stepRuns: { orderBy: { stepPosition: 'asc' } }, jobs: { orderBy: { createdAt: 'desc' }, take: 10 } },
     });
+    if (!run) throw new NotFoundException('Workflow run not found');
+
+    const parseStepError = (raw: string | null) => {
+      if (!raw) return null;
+      try {
+        const parsed = JSON.parse(raw) as Record<string, unknown>;
+        if (parsed && typeof parsed === 'object' && ('type' in parsed || 'connectionId' in parsed || 'status' in parsed)) return parsed;
+      } catch { /* legacy plain-text error */ }
+      return null;
+    };
+    const diagnostics = run.stepRuns.map((step) => {
+      const connection = parseStepError(step.error);
+      if (connection) {
+        const status = Number(connection.status ?? 0);
+        const reconnectable = connection.type === 'CONNECTION' && (status === 401 || status === 403 || String(connection.code ?? '').toUpperCase().includes('AUTH'));
+        return {
+          stepId: step.id,
+          status: step.status,
+          category: reconnectable ? 'CONNECTION_AUTH' : 'CONNECTION',
+          connectionId: typeof connection.connectionId === 'string' ? connection.connectionId : null,
+          httpStatus: Number.isFinite(status) && status > 0 ? status : null,
+          code: typeof connection.code === 'string' ? connection.code : null,
+          message: typeof connection.message === 'string' ? connection.message : step.error,
+          action: reconnectable ? 'RECONNECT_CONNECTION' : 'INSPECT_CONNECTION',
+        };
+      }
+      if (step.error) {
+        const message = step.error;
+        const lower = message.toLowerCase();
+        const category = lower.includes('oauth') || lower.includes('token') || lower.includes('permission') || lower.includes('scope') ? 'AUTHORIZATION' : 'RUNTIME';
+        return { stepId: step.id, status: step.status, category, connectionId: null, httpStatus: null, code: null, message, action: category === 'AUTHORIZATION' ? 'CHECK_CONNECTION' : 'INSPECT_STEP' };
+      }
+      return { stepId: step.id, status: step.status, category: step.status === 'SUCCEEDED' ? 'SUCCESS' : 'RUNNING', connectionId: null, httpStatus: null, code: null, message: null, action: null };
+    });
+
+    const failed = diagnostics.find((item) => item.status === 'FAILED');
+    const connectionId = diagnostics.find((item) => item.connectionId)?.connectionId ?? null;
+    return {
+      ...run,
+      diagnostics: {
+        primary: failed ?? null,
+        reconnectable: diagnostics.some((item) => item.action === 'RECONNECT_CONNECTION'),
+        connectionId,
+        steps: diagnostics,
+      },
+    };
   }
 
   async reconnectRunConnection(user: AccessTokenPayload, runId: string, connectionId: string) {

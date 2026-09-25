@@ -737,7 +737,7 @@ export class ConnectionsService {
     return { count, recent, summary: { byStatus, byAction } };
   }
 
-  async beginOAuth(user: AccessTokenPayload, provider: OAuthProvider, folderId: string | null = null, connectionId: string | null = null, returnPath: string | null = null) {
+  async beginOAuth(user: AccessTokenPayload, provider: OAuthProvider, folderId: string | null = null, connectionId: string | null = null, returnPath: string | null = null, requiredScopes: string[] = []) {
     const definition = await this.resolveProviderDefinition(provider, user.org_id);
     this.assertOAuthProvider(provider, definition);
     const cfg = await this.oauthConfig(provider, definition, user?.org_id);
@@ -758,7 +758,9 @@ export class ConnectionsService {
     this.oauthLog('START', { provider, connectionId: connection?.id ?? null, orgId: user.org_id, userId: user.sub, redirectUri: cfg.callbackUrl });
     this.oauthLog('STATE_CREATED', { provider, connectionId: connection?.id ?? null, orgId: user.org_id, userId: user.sub });
     const configuredScopes = await this.configuredProviderScopes(provider, user.org_id, definition);
-    const selectedScopes = connection?.scope?.trim() || configuredScopes.join(' ');
+    const existingScopes = connection?.scope?.trim() ? connection.scope.split(/\s+/).filter(Boolean) : [];
+    const mergedScopes = [...new Set([...definition.defaultScopes, ...configuredScopes, ...existingScopes, ...requiredScopes.filter(Boolean)])];
+    const selectedScopes = mergedScopes.join(' ');
     const params = new URLSearchParams({ client_id: cfg.clientId, redirect_uri: cfg.callbackUrl, response_type: 'code', state });
     if (codeChallenge) { params.set('code_challenge', codeChallenge); params.set('code_challenge_method', 'S256'); }
     if (selectedScopes) params.set('scope', selectedScopes);

@@ -56,6 +56,7 @@ export class WorkflowsController {
   @Post(':id/duplicate') duplicate(@CurrentUser() user: AccessTokenPayload, @Param('id', new ParseUUIDPipe({ version: '4' })) id: string) { return this.service.duplicate(user, id); }
   @Post(':id/deactivate') deactivate(@CurrentUser() user: AccessTokenPayload, @Param('id', new ParseUUIDPipe({ version: '4' })) id: string) { return this.service.setStatus(user, id, 'DRAFT'); }
   @Post(':id/start') start(@CurrentUser() user: AccessTokenPayload, @Param('id', new ParseUUIDPipe({ version: '4' })) id: string, @Body() body: WorkflowFileEvent) { return this.engine.startManual(user, id, { ...body, userId: user.sub }); }
+  @Post(':id/test-run') testRun(@CurrentUser() user: AccessTokenPayload, @Param('id', new ParseUUIDPipe({ version: '4' })) id: string, @Body() body: WorkflowFileEvent) { return this.engine.startTest(user, id, { ...body, userId: user.sub }); }
   @Post('/tasks/:id/complete') completeTask(@CurrentUser() user: AccessTokenPayload, @Param('id', new ParseUUIDPipe({ version: '4' })) id: string, @Body() body: { transitionId?: string; fieldValues?: Record<string, unknown>; comment?: string }) { return this.service.completeTask(user, id, String(body.transitionId ?? ''), body.fieldValues ?? {}, body.comment); }
   @Delete(':id') remove(@CurrentUser() user: AccessTokenPayload, @Param('id', new ParseUUIDPipe({ version: '4' })) id: string) { return this.service.remove(user, id); }
 }

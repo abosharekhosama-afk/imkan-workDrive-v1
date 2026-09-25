@@ -36,7 +36,7 @@ export function ConnectionUseHint({ ar }: { ar: boolean }) {
   </div>;
 }
 
-export type WorkflowRecipe = "REVIEW_FILE" | "NOTIFY_UPLOAD" | "EXTERNAL_API" | "CUSTOM_FUNCTION";
+export type WorkflowRecipe = "REVIEW_FILE" | "NOTIFY_UPLOAD" | "EXTERNAL_API" | "CUSTOM_FUNCTION" | "IMPORT_EXTERNAL_FILE";
 
 export const WORKFLOW_RECIPES: Array<{
   id: WorkflowRecipe;
@@ -69,6 +69,14 @@ export const WORKFLOW_RECIPES: Array<{
     ar: "API خارجي",
     enDescription: "Upload → API request. You choose an ACTIVE Connection and the API path.",
     arDescription: "رفع → طلب API. تختار Connection نشطاً ومسار الـAPI.",
+  },
+  {
+    id: "IMPORT_EXTERNAL_FILE",
+    icon: "⇩",
+    en: "Import from cloud",
+    ar: "استيراد من السحابة",
+    enDescription: "Manual start → choose a real cloud connection and file → queue a real Cloud Import job into WorkDrive.",
+    arDescription: "بدء يدوي → اختر اتصالاً وملفاً حقيقياً من السحابة → أنشئ مهمة Cloud Import حقيقية إلى WorkDrive.",
   },
   {
     id: "CUSTOM_FUNCTION",
@@ -105,7 +113,7 @@ export function WorkflowRecipePicker({ ar, value, onChange }: { ar: boolean; val
 export function WorkflowNextSteps({ ar, workflowId, recipe }: { ar: boolean; workflowId: string; recipe?: WorkflowRecipe }) {
   return <div className="rounded-2xl border border-emerald-200 bg-emerald-50/50 p-4" dir={ar ? "rtl" : "ltr"}>
     <div className="text-[10.5px] font-semibold text-emerald-900">{ar ? "تم حفظ سير العمل. ما الخطوة التالية؟" : "Workflow saved. What should you do next?"}</div>
-    <p className="mt-1 text-[9.5px] leading-5 text-emerald-800">{recipe === "EXTERNAL_API" ? (ar ? "تحقق من Connection ثم نفّذ التشغيل من مورد حقيقي. ستظهر النتيجة في سجل التشغيل." : "Verify the Connection, then run the workflow from a real resource. The result will appear in run history.") : recipe === "CUSTOM_FUNCTION" ? (ar ? "تأكد من نشر الدالة الآمنة ثم استخدمها في الإجراء. راجع سجل التشغيل بعد التنفيذ." : "Make sure the safe function is published, then use it in the action. Review run history after execution.") : (ar ? "فعّل سير العمل ثم ابدأه من مورد حقيقي. راجع سجل التشغيل والمهام الناتجة." : "Activate the workflow, then start it from a real resource. Review run history and generated tasks.")}</p>
+    <p className="mt-1 text-[9.5px] leading-5 text-emerald-800">{recipe === "IMPORT_EXTERNAL_FILE" ? (ar ? "اختر Connection وملفاً خارجياً ومجلد وجهة، ثم نفّذ Workflow يدوياً لإنشاء مهمة استيراد حقيقية." : "Choose a Connection, an external file and a destination, then start the workflow manually to create a real import job.") : recipe === "EXTERNAL_API" ? (ar ? "تحقق من Connection ثم نفّذ التشغيل من مورد حقيقي. ستظهر النتيجة في سجل التشغيل." : "Verify the Connection, then run the workflow from a real resource. The result will appear in run history.") : recipe === "CUSTOM_FUNCTION" ? (ar ? "تأكد من نشر الدالة الآمنة ثم استخدمها في الإجراء. راجع سجل التشغيل بعد التنفيذ." : "Make sure the safe function is published, then use it in the action. Review run history after execution.") : (ar ? "فعّل سير العمل ثم ابدأه من مورد حقيقي. راجع سجل التشغيل والمهام الناتجة." : "Activate the workflow, then start it from a real resource. Review run history and generated tasks.")}</p>
     <div className="mt-3 flex flex-wrap gap-2">
       <a href={`/files/workflows/runs?workflowId=${encodeURIComponent(workflowId)}`} className="wd-pill wd-pill-record">{ar ? "سجل التشغيل" : "Run history"}</a>
       <a href="/files/workflows/functions" className="wd-pill wd-pill-record">{ar ? "Custom Functions" : "Custom Functions"}</a>

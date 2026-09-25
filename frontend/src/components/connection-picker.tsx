@@ -13,15 +13,16 @@ function beginOAuth(provider: string, connectionId?: string) {
 }
 
 export function ConnectionPicker({ connections, value, onChange, provider }: { connections: Connection[]; value: string; onChange: (id: string) => void; provider?: string }) {
-  const rows = connections.filter((item) => !provider || item.provider === provider);
+  const rows = useMemo(() => connections.filter((item) => !provider || item.provider === provider), [connections, provider]);
   const selected = rows.find((item) => item.id === value) ?? null;
   const status = connectionStatusLabel(selected?.status);
   const label = provider === "google" ? "Google Drive" : provider === "dropbox" ? "Dropbox" : provider === "microsoft" ? "OneDrive" : "connection";
+  const usableRows = useMemo(() => rows.filter((item) => item.status === "ACTIVE"), [rows]);
   useEffect(() => {
     if (value || typeof window === "undefined") return;
     const returned = new URLSearchParams(window.location.search).get("connectionId");
-    if (returned && rows.some((item) => item.id === returned)) onChange(returned);
-  }, [rows, value, onChange]);
+    if (returned && usableRows.some((item) => item.id === returned)) onChange(returned);
+  }, [usableRows, value, onChange]);
   return (
     <label className="workflow-action-field sm:col-span-2">
       <span>Connection</span>
@@ -33,16 +34,17 @@ export function ConnectionPicker({ connections, value, onChange, provider }: { c
       ) : (
         <select className="bg-[var(--wd-bg,#fff)] text-[var(--wd-text,#202B38)]" value={value} onChange={(event) => onChange(event.target.value)}>
           <option value="">Select a connection</option>
-          {rows.map((item) => <option key={item.id} value={item.id}>{connectionStatusLabel(item.status) === "connected" ? "Connected" : "Needs reconnect"} · {item.name}</option>)}
+          {rows.map((item) => <option key={item.id} value={item.id} disabled={item.status !== "ACTIVE"}>{item.status === "ACTIVE" ? "Connected" : "Needs reconnect"} · {item.name}</option>)}
         </select>
       )}
-      {selected && status === "connected" ? <small className="mt-1 block text-[11px] text-emerald-700">Connected</small> : null}
-      {selected && status === "expired" ? (
-        <div className="mt-2 text-[12px] text-[var(--wd-text,#202B38)]">
-          Connection expired
-          <button type="button" className="ms-2 underline" onClick={() => void beginOAuth(selected.provider, selected.id)}>Reconnect</button>
+      {selected && status === "connected" ? <small className="mt-1 block text-[11px] text-emerald-700">Connected · credentials stay server-side</small> : null}
+      {selected && status !== "connected" ? (
+        <div className="mt-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-[11px] text-amber-800">
+          Connection needs attention.
+          {selected.authType === "OAUTH2" && selected.canManage ? <button type="button" className="ms-2 font-semibold underline" onClick={() => void beginOAuth(selected.provider, selected.id)}>Reconnect</button> : null}
         </div>
       ) : null}
+      {selected?.baseUrl ? <small className="mt-1 block truncate text-[10px] text-slate-400">API base: {selected.baseUrl}</small> : null}
     </label>
   );
 }
@@ -58,6 +60,12 @@ export function ResourcePicker({ connectionId, provider, value, label, onChange 
   const [error, setError] = useState("");
   const visibleFolders = useMemo(() => folders.filter((item) => item.name.toLowerCase().includes(query.toLowerCase())), [folders, query]);
   const visibleFiles = useMemo(() => files.filter((item) => item.name.toLowerCase().includes(query.toLowerCase())), [files, query]);
+
+  useEffect(() => {
+    setParent(undefined);
+    setTrail([{ name: "My files" }]);
+    setQuery("");
+  }, [connectionId, provider]);
 
   useEffect(() => {
     if (!connectionId || !providerSupports(provider, "list")) return;

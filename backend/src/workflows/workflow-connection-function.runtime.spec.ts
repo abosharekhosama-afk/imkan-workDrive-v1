@@ -14,9 +14,10 @@ function makeEngine(overrides: AnyRecord = {}) {
   };
   const connections = { executeWorkflowRest: jest.fn().mockResolvedValue({ status: 200, ok: true, body: { ok: true, source: 'google' } }) };
   const functionExecutor = { execute: jest.fn().mockResolvedValue({ fields: { result: 'ok' } }) };
+  const cloudImport = { createWorkflowImportJob: jest.fn().mockResolvedValue({ id: 'job-1', status: 'PENDING' }) };
   const engine = Object.create(WorkflowEngineService.prototype) as AnyRecord;
-  Object.assign(engine, { prisma, connections, functionExecutor, ...overrides });
-  return { engine, prisma, connections, functionExecutor };
+  Object.assign(engine, { prisma, connections, functionExecutor, cloudImport, ...overrides });
+  return { engine, prisma, connections, functionExecutor, cloudImport };
 }
 
 const user = { sub: 'user-1', org_id: 'org-1' } as any;
@@ -29,6 +30,14 @@ describe('Workflow + Connection + Custom Function runtime contract', () => {
     expect(connections.executeWorkflowRest).toHaveBeenCalledWith(user, 'google-conn', 'GET', '/drive/v3/about', undefined, expect.any(Object), expect.objectContaining({ workflowId: 'wf-1', runId: 'run-1', responseMode: 'JSON' }));
     expect(prisma.workflowRun.update).toHaveBeenCalled();
     expect(result).toMatchObject({ action: 'http_request', connectionId: 'google-conn', statusCode: 200, outputFieldId: 'googleResult' });
+  });
+
+
+  it('queues a real Cloud Import job for the Import External File action', async () => {
+    const { engine, cloudImport } = makeEngine();
+    const result = await engine.executeAction(user, event, { type: 'import_external_file', config: { provider: 'google', connectionId: 'google-conn', resourceId: 'drive-file-1', resourceName: 'report.pdf', destinationFolderId: 'folder-1' } }, 'wf-1', 'run-1', 'step-3');
+    expect(cloudImport.createWorkflowImportJob).toHaveBeenCalledWith(user, 'google', 'google-conn', 'drive-file-1', 'folder-1');
+    expect(result).toMatchObject({ action: 'import_external_file', provider: 'google', connectionId: 'google-conn', resourceId: 'drive-file-1', jobId: 'job-1', status: 'PENDING' });
   });
 
   it('executes a published Custom Function whose runtime can consume its configured Connection', async () => {

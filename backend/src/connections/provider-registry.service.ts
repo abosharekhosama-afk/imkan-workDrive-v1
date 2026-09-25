@@ -34,7 +34,7 @@ const scope = (value: string, label: string, description: string, group?: string
 
 const DEFINITIONS: ConnectionProviderDefinition[] = [
   {
-    key: 'google', name: 'Google', category: 'Cloud', authTypes: ['OAUTH2'], oauth: true, capabilities: ['oauth', 'revoke', 'probe'], oauthPkce: true,
+    key: 'google', name: 'Google', category: 'Cloud', authTypes: ['OAUTH2'], oauth: true, capabilities: ['oauth', 'revoke', 'probe', 'request'], baseUrl: 'https://www.googleapis.com', oauthPkce: true,
     oauthEnvPrefix: 'GOOGLE', oauthAuthUrl: 'https://accounts.google.com/o/oauth2/v2/auth', oauthTokenUrl: 'https://oauth2.googleapis.com/token', oauthRevokeUrl: 'https://oauth2.googleapis.com/revoke', probeUrl: 'https://www.googleapis.com/drive/v3/about?fields=user(emailAddress)',
     scopes: [
       scope('openid', 'Sign-in identity', 'Associate the connection with the Google account.', 'Identity'),
@@ -55,10 +55,10 @@ const DEFINITIONS: ConnectionProviderDefinition[] = [
       scope('https://www.googleapis.com/auth/calendar.events', 'Calendar — Events', 'View and edit events on Google Calendars.', 'Google Calendar'),
       scope('https://www.googleapis.com/auth/gmail.readonly', 'Gmail — Read', 'Read Gmail messages and settings.', 'Gmail', 'SENSITIVE'),
       scope('https://www.googleapis.com/auth/gmail.send', 'Gmail — Send', 'Send email on your behalf.', 'Gmail', 'SENSITIVE'),
-    ], defaultScopes: ['openid', 'email', 'profile', 'https://www.googleapis.com/auth/drive.file'],
+    ], defaultScopes: ['openid', 'email', 'profile', 'https://www.googleapis.com/auth/drive.readonly'],
   },
   {
-    key: 'microsoft', name: 'Microsoft 365', category: 'Cloud', authTypes: ['OAUTH2'], oauth: true, capabilities: ['oauth', 'probe'], oauthPkce: true,
+    key: 'microsoft', name: 'Microsoft 365', category: 'Cloud', authTypes: ['OAUTH2'], oauth: true, capabilities: ['oauth', 'probe', 'request'], baseUrl: 'https://graph.microsoft.com', oauthPkce: true,
     oauthEnvPrefix: 'MICROSOFT', oauthAuthUrl: 'https://login.microsoftonline.com/common/oauth2/v2.0/authorize', oauthTokenUrl: 'https://login.microsoftonline.com/common/oauth2/v2.0/token', probeUrl: 'https://graph.microsoft.com/v1.0/me?$select=id',
     scopes: [
       scope('openid', 'OpenID identity', 'Sign the user in and return an ID token.', 'Identity'),
@@ -81,7 +81,7 @@ const DEFINITIONS: ConnectionProviderDefinition[] = [
     ], defaultScopes: ['openid', 'profile', 'email', 'offline_access', 'User.Read', 'Files.Read'],
   },
   {
-    key: 'dropbox', name: 'Dropbox', category: 'Cloud', authTypes: ['OAUTH2'], oauth: true, capabilities: ['oauth', 'revoke', 'probe'], oauthPkce: true,
+    key: 'dropbox', name: 'Dropbox', category: 'Cloud', authTypes: ['OAUTH2'], oauth: true, capabilities: ['oauth', 'revoke', 'probe', 'request'], baseUrl: 'https://api.dropboxapi.com', oauthPkce: true,
     oauthEnvPrefix: 'DROPBOX', oauthAuthUrl: 'https://www.dropbox.com/oauth2/authorize', oauthTokenUrl: 'https://api.dropboxapi.com/oauth2/token', oauthRevokeUrl: 'https://api.dropboxapi.com/2/auth/token/revoke', probeUrl: 'https://api.dropboxapi.com/2/users/get_current_account',
     scopes: [
       scope('account_info.read', 'Account — Read', 'Read basic Dropbox account information.', 'Identity'),
