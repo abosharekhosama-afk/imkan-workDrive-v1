@@ -73,7 +73,7 @@ export class ConnectionsController {
   @Post() create(@CurrentUser() user: AccessTokenPayload, @Body() body: any) { return this.service.create(user, body); }
   @Patch(':id') update(@CurrentUser() user: AccessTokenPayload, @Param('id') id: string, @Body() body: any) { return this.service.update(user, id, body); }
   @Post(':id/reconnect') reconnect(@CurrentUser() user: AccessTokenPayload, @Param('id') id: string, @Query('returnTo') returnTo?: string) { return this.service.reconnect(user, id, returnTo || null); }
-  @Get(':id/resources') resources(@CurrentUser() user: AccessTokenPayload, @Param('id') id: string, @Query('parent') parent?: string) { return this.service.browseResources(user, id, parent); }
+  @Get(':id/resources') resources(@CurrentUser() user: AccessTokenPayload, @Param('id') id: string, @Query('parent') parent?: string, @Query('pageToken') pageToken?: string) { return this.service.browseResources(user, id, parent, pageToken); }
   @Get(':id/resources/:resourceId') resource(@CurrentUser() user: AccessTokenPayload, @Param('id') id: string, @Param('resourceId') resourceId: string) { return this.service.readResource(user, id, resourceId); }
   @Post(':id/upload') upload(@CurrentUser() user: AccessTokenPayload, @Param('id') id: string, @Body() body: { parentId?: string; name?: string; contentBase64?: string }) { return this.service.uploadResource(user, id, body ?? {}); }
   @Post(':id/transfer-ownership') transferOwnership(@CurrentUser() user: AccessTokenPayload, @Param('id') id: string, @Body() body: { targetUserId?: string }) { return this.service.transferOwnership(user, id, String(body?.targetUserId ?? '')); }

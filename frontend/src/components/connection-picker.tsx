@@ -12,12 +12,17 @@ function beginOAuth(provider: string, connectionId?: string) {
   return startConnectionOAuth(provider, undefined, connectionId, returnTo).then((result) => { window.location.href = result.url; });
 }
 
-export function ConnectionPicker({ connections, value, onChange, provider }: { connections: Connection[]; value: string; onChange: (id: string) => void; provider?: string }) {
-  const rows = useMemo(() => connections.filter((item) => !provider || item.provider === provider), [connections, provider]);
+export function ConnectionPicker({ connections, value, onChange, provider, capability }: { connections: Connection[]; value: string; onChange: (id: string) => void; provider?: string; capability?: "browse" | "request" }) {
+  const rows = useMemo(() => connections.filter((item) => {
+    if (provider && item.provider !== provider) return false;
+    if (capability === "browse" && !providerSupports(item.provider, "list")) return false;
+    return true;
+  }), [connections, provider, capability]);
   const selected = rows.find((item) => item.id === value) ?? null;
   const status = connectionStatusLabel(selected?.status);
   const label = provider === "google" ? "Google Drive" : provider === "dropbox" ? "Dropbox" : provider === "microsoft" ? "OneDrive" : "connection";
   const usableRows = useMemo(() => rows.filter((item) => item.status === "ACTIVE"), [rows]);
+  const reconnectable = useMemo(() => rows.filter((item) => item.status !== "ACTIVE" && item.authType === "OAUTH2"), [rows]);
   useEffect(() => {
     if (value || typeof window === "undefined") return;
     const returned = new URLSearchParams(window.location.search).get("connectionId");
@@ -34,13 +39,14 @@ export function ConnectionPicker({ connections, value, onChange, provider }: { c
       ) : (
         <select className="bg-[var(--wd-bg,#fff)] text-[var(--wd-text,#202B38)]" value={value} onChange={(event) => onChange(event.target.value)}>
           <option value="">Select a connection</option>
-          {rows.map((item) => <option key={item.id} value={item.id} disabled={item.status !== "ACTIVE"}>{item.status === "ACTIVE" ? "Connected" : "Needs reconnect"} · {item.name}</option>)}
+          {usableRows.map((item) => <option key={item.id} value={item.id}>{item.name} · {item.provider}{item.baseUrl ? ` · ${item.baseUrl}` : ""}</option>)}
+          {reconnectable.map((item) => <option key={item.id} value="" disabled>{item.name} · Needs reconnect</option>)}
         </select>
       )}
       {selected && status === "connected" ? <small className="mt-1 block text-[11px] text-emerald-700">Connected · credentials stay server-side</small> : null}
       {selected && status !== "connected" ? (
         <div className="mt-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-[11px] text-amber-800">
-          Connection needs attention.
+          {selected.status === "REAUTH_REQUIRED" || selected.status === "PENDING_AUTH" ? "Connection needs reconnect." : "Connection is not available."}
           {selected.authType === "OAUTH2" && selected.canManage ? <button type="button" className="ms-2 font-semibold underline" onClick={() => void beginOAuth(selected.provider, selected.id)}>Reconnect</button> : null}
         </div>
       ) : null}
@@ -54,6 +60,7 @@ export function ResourcePicker({ connectionId, provider, value, label, onChange 
   const [trail, setTrail] = useState<Array<{ id?: string; name: string }>>([{ name: "My files" }]);
   const [folders, setFolders] = useState<ConnectionResource[]>([]);
   const [files, setFiles] = useState<ConnectionResource[]>([]);
+  const [nextPageToken, setNextPageToken] = useState<string | null>(null);
   const [query, setQuery] = useState("");
   const [reload, setReload] = useState(0);
   const [loading, setLoading] = useState(false);
@@ -65,6 +72,7 @@ export function ResourcePicker({ connectionId, provider, value, label, onChange 
     setParent(undefined);
     setTrail([{ name: "My files" }]);
     setQuery("");
+    setNextPageToken(null);
   }, [connectionId, provider]);
 
   useEffect(() => {
@@ -76,11 +84,22 @@ export function ResourcePicker({ connectionId, provider, value, label, onChange 
       if (cancelled) return;
       setFolders(result.folders);
       setFiles(result.files);
+      setNextPageToken(result.nextPageToken ?? null);
     }).catch((reason: unknown) => {
       if (!cancelled) setError(friendlyConnectionError(reason instanceof Error ? reason.message : "Couldn't load files"));
     }).finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
   }, [connectionId, parent, provider, reload]);
+
+  const loadMore = () => {
+    if (!connectionId || !nextPageToken || loading) return;
+    setLoading(true);
+    void browseConnectionResources(connectionId, parent, nextPageToken).then((result) => {
+      setFolders((current) => [...current, ...result.folders]);
+      setFiles((current) => [...current, ...result.files]);
+      setNextPageToken(result.nextPageToken ?? null);
+    }).catch((reason: unknown) => setError(friendlyConnectionError(reason instanceof Error ? reason.message : "Couldn't load files"))).finally(() => setLoading(false));
+  };
 
   if (!connectionId || !providerSupports(provider, "list")) return null;
   return (
@@ -100,6 +119,7 @@ export function ResourcePicker({ connectionId, provider, value, label, onChange 
         {visibleFolders.map((folder) => <button type="button" key={folder.id} className="block w-full px-3 py-2 text-start text-[12px]" onClick={() => { setTrail((current) => [...current, { id: folder.id, name: folder.name }]); setParent(folder.id); }}>{folder.name}</button>)}
         {visibleFiles.map((file) => <button type="button" key={file.id} className="block w-full px-3 py-2 text-start text-[12px]" onClick={() => onChange(file)}>{file.name}{file.id === value ? " · selected" : ""}</button>)}
       </div>
+      {nextPageToken ? <button type="button" className="mt-2 text-[11px] font-semibold text-[var(--wd-primary)] underline" onClick={() => loadMore()} disabled={loading}>Load more</button> : null}
       {value ? <details className="mt-2 text-[11px]"><summary>Advanced</summary><button type="button" className="mt-1 underline" onClick={() => void navigator.clipboard.writeText(value)}>Copy internal reference</button></details> : null}
     </div>
   );

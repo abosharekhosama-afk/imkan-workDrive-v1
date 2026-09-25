@@ -2043,6 +2043,19 @@ html[data-theme="dark"] .workflow-ui .wd-card {
 .workflow-ui .workflow-phase-tabs .workflow-segment{border-color:transparent;background:transparent}
 .workflow-ui .workflow-phase-tabs .workflow-segment.is-active{border-color:#e2e8f0;background:#fff}
 .workflow-builder-header{border:0!important;box-shadow:none!important;border-radius:0!important}
+.workflow-design-grid{display:grid;grid-template-columns:minmax(240px,280px) minmax(0,1fr) minmax(300px,360px);min-height:0}
+.workflow-palette-sidebar{min-width:0;min-height:0;overflow:hidden}
+.workflow-palette-sidebar.is-collapsed{width:56px;min-width:56px}
+.workflow-palette-sidebar.is-collapsed .workflow-node-palette,.workflow-palette-sidebar.is-collapsed .border-t{display:none}
+.workflow-canvas-column{min-width:0;min-height:0}
+.workflow-canvas-status{align-items:center}
+.workflow-inspector.is-collapsed{width:0;min-width:0;padding:0;border:0;overflow:hidden}
+@media (max-width:1279px){
+  .workflow-design-grid{grid-template-columns:minmax(0,1fr)}
+  .workflow-palette-sidebar{display:none!important}
+  .workflow-inspector{position:fixed;inset-inline:0;bottom:0;top:auto;width:100%;max-height:78vh;border-radius:18px 18px 0 0;box-shadow:0 -12px 40px rgba(15,23,42,.16);z-index:120}
+  .workflow-inspector:not(.is-open){transform:translateY(105%)}
+}
 .workflow-builder-mobile-menu{display:none}
 @media (max-width:1279px){
   .workflow-builder-mobile-menu{display:inline-flex}

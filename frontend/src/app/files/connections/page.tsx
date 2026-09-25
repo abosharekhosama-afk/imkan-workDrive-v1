@@ -216,11 +216,11 @@ export default function ConnectionsPage(){
     }catch(e){setError(e instanceof Error?e.message:"Unable to update connection")}finally{setBusy(false)}
   };
 
-  const openInspect=async(c:Connection)=>{setInspect(c);setDiag(null);setGovernance(null);setReferences([]);try{const [detail,d,s,r,g]=await Promise.all([getConnection(c.id),getConnectionDiagnostics(c.id),getConnectionShares(c.id),getConnectionReferences(c.id),getConnectionGovernance(c.id)]);setInspect(detail);setDiag(d);setShares(s.shares);setReferences(r.references);setGovernance(g)}catch{}};
+  const openInspect=async(c:Connection)=>{setInspect(c);setDiag(null);setGovernance(null);setReferences([]);setShares([]);setMembers([]);try{const [detail,d,s,r,g]=await Promise.all([getConnection(c.id),getConnectionDiagnostics(c.id),getConnectionShares(c.id),getConnectionReferences(c.id),getConnectionGovernance(c.id)]);setInspect(detail);setDiag(d);setShares(s.shares);setReferences(r.references);setGovernance(g);try{const rows=await listWorkflowParticipants();setMembers(rows.map((row:any)=>row.user??row).filter(Boolean));}catch{}}catch{}};
   const toggleConnection=async(c:Connection)=>{try{await (c.status==="DISABLED"?enableConnection(c.id):disableConnection(c.id));await reload();if(inspect?.id===c.id)setInspect({...c,status:c.status==="DISABLED"?"ACTIVE":"DISABLED"})}catch(e){setError(e instanceof Error?e.message:"Unable to update connection")}};
   const reconnect=async(c:Connection)=>{try{stashBrowserAccessTokenForOAuth(readBrowserAccessToken(localStorage,document.cookie));const r=await reconnectConnection(c.id);window.location.href=r.url}catch(e){setError(e instanceof Error?e.message:"Unable to reconnect")}};
   const addShare=async()=>{if(!inspect||!shareUser)return;try{await shareConnection(inspect.id,shareUser,shareRole);const s=await getConnectionShares(inspect.id);setShares(s.shares);setShareUser("")}catch(e){setError(e instanceof Error?e.message:"Unable to share")}};
-  const loadMembers=async()=>{try{setMembers(await listWorkflowParticipants())}catch{}};
+  const loadMembers=async()=>{try{const rows=await listWorkflowParticipants();setMembers(rows.map((row:any)=>row.user??row).filter(Boolean))}catch{}};
   const removeShare=async(uid:string)=>{if(!inspect)return;try{await unshareConnection(inspect.id,uid);setShares((s)=>s.filter(x=>x.userId!==uid))}catch(e){setError(e instanceof Error?e.message:"Unable to unshare")}};
   const transferOwnership=async()=>{if(!inspect||!transferUser)return;try{const next=await transferConnectionOwnership(inspect.id,transferUser);setInspect(next);setTransferUser("");await reload();setMessage("Connection ownership transferred successfully");}catch(e){setError(e instanceof Error?e.message:"Unable to transfer ownership")}};
 

@@ -12,13 +12,14 @@ import { STORAGE_SERVICE, type StorageService } from '../storage/storage.types';
 import { CloudProvider } from './cloud-import.schemas';
 import { parseCreateJobs } from './cloud-import.schemas';
 import { ConnectionsService } from '../connections/connections.service';
+import { googleDriveScopeGranted } from '../connections/connection-browse-logic';
 
 const MAX_IMPORT_BYTES = 250 * 1024 * 1024;
 const MAX_LIST_ITEMS = 100;
 const TOKEN_TTL_MS = 10 * 60 * 1000;
 
 type RemoteFile = { id: string; name: string; size: number | null; mimeType: string; modifiedAt?: string | null; kind?: 'file' | 'folder' };
-type Connection = { id: string; provider: CloudProvider; accessToken: string; refreshToken: string | null; expiresAt: Date | null };
+type Connection = { id: string; genericConnectionId?: string; provider: CloudProvider; accessToken: string; refreshToken: string | null; expiresAt: Date | null; scope?: string | null };
 
 @Injectable()
 export class CloudImportService implements OnModuleInit, OnModuleDestroy {
@@ -127,6 +128,9 @@ export class CloudImportService implements OnModuleInit, OnModuleDestroy {
 
   async listFiles(user: AccessTokenPayload, provider: CloudProvider, connectionId: string | null = null, parentId: string | null = null, pageToken: string | null = null): Promise<{ files: RemoteFile[]; nextPageToken: string | null; parent: string | null }> {
     const connection = await this.getConnection(user, provider, connectionId);
+    if (provider === 'google' && !googleDriveScopeGranted(connection.scope)) {
+      throw new ForbiddenException('INSUFFICIENT_SCOPE: Reconnect to grant Google Drive file access.');
+    }
     const token = await this.ensureAccessToken(connection);
     const parent = parentId?.trim() || null;
     if (provider === 'google') {
@@ -156,7 +160,12 @@ export class CloudImportService implements OnModuleInit, OnModuleDestroy {
 
   private cloudProviderError(label: string, response: Response, payload: any) {
     const detail = payload?.error?.message ?? payload?.error_summary ?? payload?.error_description;
-    if (response.status === 401 || response.status === 403) return `${label} access was denied. Reconnect the connection and grant file read access.`;
+    if (response.status === 401) return `${label} authorization expired. Reconnect the connection.`;
+    if (response.status === 403) {
+      if (label === 'Google Drive') return 'INSUFFICIENT_SCOPE: Reconnect to grant Google Drive file access.';
+      return `${label} access was denied. Reconnect the connection and grant file read access.`;
+    }
+    if (response.status === 429) return `${label} rate limit reached. Try again shortly.`;
     if (typeof detail === 'string' && detail.length < 260) return `${label} listing failed: ${detail}`;
     return `${label} listing failed (HTTP ${response.status})`;
   }
@@ -352,17 +361,20 @@ export class CloudImportService implements OnModuleInit, OnModuleDestroy {
         create: { id: randomUUID(), orgId: user.org_id, userId: user.sub, provider, accessToken: this.encrypt(accessToken), refreshToken: refreshToken ? this.encrypt(refreshToken) : null, expiresAt: generic.expiresAt, scope: generic.scope },
         update: { accessToken: this.encrypt(accessToken), ...(refreshToken ? { refreshToken: this.encrypt(refreshToken) } : {}), expiresAt: generic.expiresAt, scope: generic.scope },
       });
-      return { id: mirror.id, provider, accessToken, refreshToken, expiresAt: generic.expiresAt };
+      return { id: mirror.id, genericConnectionId: generic.id, provider, accessToken, refreshToken, expiresAt: generic.expiresAt, scope: generic.scope };
     }
     const row = await this.prisma.cloudConnection.findFirst({ where: { orgId: user.org_id, userId: user.sub, provider } });
     if (!row) throw new ConflictException('Connect this cloud provider first');
-    return { id: row.id, provider, accessToken: this.decrypt(row.accessToken), refreshToken: row.refreshToken ? this.decrypt(row.refreshToken) : null, expiresAt: row.expiresAt };
+    return { id: row.id, provider, accessToken: this.decrypt(row.accessToken), refreshToken: row.refreshToken ? this.decrypt(row.refreshToken) : null, expiresAt: row.expiresAt, scope: row.scope };
   }
 
   private async ensureAccessToken(connection: Connection): Promise<string> {
+    const genericId = connection.genericConnectionId;
+    if (genericId) {
+      const refreshed = await this.connections.getAccessTokenById(genericId);
+      if (refreshed) return refreshed;
+    }
     if (!connection.expiresAt || connection.expiresAt.getTime() > Date.now() + 60_000) return connection.accessToken;
-    const generic = await this.prisma.connection.findUnique({ where: { id: connection.id } });
-    if (generic) return (await this.connections.getAccessTokenById(generic.id)) ?? connection.accessToken;
     if (!connection.refreshToken) return connection.accessToken;
     const cfg = this.providerConfig(connection.provider);
     const body = new URLSearchParams({ client_id: cfg.clientId!, client_secret: cfg.clientSecret!, refresh_token: connection.refreshToken, grant_type: 'refresh_token' });

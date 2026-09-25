@@ -5,7 +5,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { WorkflowShell } from "@/components/workflow-shell";
 import { WorkflowHelp } from "@/components/workflow-help";
-import { WorkflowConceptGuide, WorkflowRecipePicker, type WorkflowRecipe } from "@/components/workflow-concept-guide";
+import { WorkflowConceptGuide } from "@/components/workflow-concept-guide";
 import { useLocale } from "@/components/locale-provider";
 import { activateWorkflow, deactivateWorkflow, deleteWorkflow, duplicateWorkflow, listWorkflows, updateWorkflow, type Workflow } from "@/lib/api/workflows";
 import { Icons } from "@/components/layout/icons";
@@ -29,7 +29,6 @@ export default function WorkflowsPage() {
   const [resourceType, setResourceType] = useState<ResourceType>("FILE");
   const [draftName, setDraftName] = useState("new workflow");
   const [draftDescription, setDraftDescription] = useState("");
-  const [recipe, setRecipe] = useState<WorkflowRecipe>("REVIEW_FILE");
   const [menuOpen, setMenuOpen] = useState<string | null>(null);
   const [editing, setEditing] = useState<Workflow | null>(null);
   const [editName, setEditName] = useState("");
@@ -48,7 +47,6 @@ export default function WorkflowsPage() {
       resourceType,
     });
     if (draftDescription.trim()) qs.set("description", draftDescription.trim());
-    qs.set("recipe", recipe);
     router.push(`/files/workflows/builder?${qs.toString()}`);
     setCreateOpen(false);
   };
@@ -269,10 +267,6 @@ export default function WorkflowsPage() {
               <span className="workflow-radio" />
               <div><strong>{ar ? "مجلدات" : "Folder-based"}</strong><p>{ar ? "أتمتة الأحداث المرتبطة بالمجلدات." : "Automate folder-based events."}</p><small>{ar ? "مثال: إنشاء هيكل مجلدات أو إرسال المجلد للمراجعة والموافقة." : "E.g., create a folder hierarchy or send it for review and approval."}</small></div>
             </button>
-          </div>
-
-          <div className="mt-5 rounded-xl border border-slate-200 bg-slate-50/70 p-3">
-            <WorkflowRecipePicker ar={ar} value={recipe} onChange={setRecipe} />
           </div>
         </div>
 

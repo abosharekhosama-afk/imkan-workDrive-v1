@@ -12,6 +12,7 @@ import { isIP } from 'node:net';
 import { lookup } from 'node:dns/promises';
 import { AuthService } from '../auth.service';
 import { buildOAuthBrowserUrl, normalizeOAuthReturnPath, oauthFailurePreservesActive, resolveOAuthFrontendOrigin, safeOAuthErrorCode, safeOrigin } from './oauth-flow';
+import { googleDriveScopeGranted, providerBrowseErrorCode } from './connection-browse-logic';
 
 const OAUTH_STATE_TTL_MS = 10 * 60 * 1000;
 const SECRET_FIELDS = ['accessToken', 'refreshToken', 'apiKey', 'bearerToken', 'username', 'password', 'customHeaders'] as const;
@@ -680,6 +681,9 @@ export class ConnectionsService {
     if (row.authType === ConnectionAuthType.OAUTH2 && providerConfig?.enabled === false) issues.push({ code: 'PROVIDER_DISABLED', severity: 'BLOCKING', message: 'The organization OAuth provider is disabled.' });
     if (row.authType === ConnectionAuthType.OAUTH2 && providerConfig && providerConfig.lastTestOk === false) issues.push({ code: 'PROVIDER_CONFIG_FAILED', severity: 'WARNING', message: providerConfig.lastTestMessage || 'Provider configuration test failed.' });
     if (missingConfiguredScopes.length) issues.push({ code: 'SCOPE_CONFIGURATION_DRIFT', severity: 'BLOCKING', message: `Connection scopes are not enabled in provider configuration: ${missingConfiguredScopes.slice(0, 10).join(', ')}` });
+    if (row.provider === 'google' && row.authType === ConnectionAuthType.OAUTH2 && !googleDriveScopeGranted(row.scope)) {
+      issues.push({ code: 'INSUFFICIENT_SCOPE', severity: 'BLOCKING', message: 'Reconnect to grant Google Drive file access.' });
+    }
     if (activeWorkflowIds.length && row.visibility === ConnectionVisibility.PRIVATE && row.ownerId !== user.sub) issues.push({ code: 'PRIVATE_CONNECTION_RUNTIME', severity: 'BLOCKING', message: 'A private connection is referenced by an active workflow that may run outside the connection owner context.' });
     if (failures > 0) issues.push({ code: 'RECENT_USAGE_FAILURES', severity: 'WARNING', message: `${failures} recorded connection usage failure(s).` });
     return {
@@ -887,23 +891,23 @@ export class ConnectionsService {
     return this.beginOAuth(user, row.provider as OAuthProvider, null, row.id, returnPath);
   }
 
-  async browseResources(user: AccessTokenPayload, id: string, parent?: string | null) {
-    const token = await this.providerAccessToken(user, id);
+  async browseResources(user: AccessTokenPayload, id: string, parent?: string | null, pageToken?: string | null) {
     const row = await this.findVisible(user, id);
+    const token = await this.resolveBrowseToken(row);
     const parentId = String(parent ?? '').trim();
     try {
-      if (row.provider === 'google') return { connectionId: row.id, provider: row.provider, parent: parentId || null, ...(await this.googleChildren(token, parentId)) };
-      if (row.provider === 'dropbox') return { connectionId: row.id, provider: row.provider, parent: parentId || null, ...(await this.dropboxChildren(token, parentId)) };
-      if (row.provider === 'microsoft') return { connectionId: row.id, provider: row.provider, parent: parentId || null, ...(await this.microsoftChildren(token, parentId)) };
+      if (row.provider === 'google') return { connectionId: row.id, provider: row.provider, parent: parentId || null, ...(await this.googleChildren(token, parentId, pageToken)) };
+      if (row.provider === 'dropbox') return { connectionId: row.id, provider: row.provider, parent: parentId || null, ...(await this.dropboxChildren(token, parentId, pageToken)) };
+      if (row.provider === 'microsoft') return { connectionId: row.id, provider: row.provider, parent: parentId || null, ...(await this.microsoftChildren(token, parentId, pageToken)) };
     } catch (error) {
-      throw new BadRequestException(this.providerBrowseError(error));
+      throw new BadRequestException(this.providerBrowseError(error, row.provider));
     }
     throw new BadRequestException('This connection does not support browsing files.');
   }
 
   async readResource(user: AccessTokenPayload, id: string, resourceId: string) {
-    const token = await this.providerAccessToken(user, id);
     const row = await this.findVisible(user, id);
+    const token = await this.resolveBrowseToken(row);
     const target = resourceId.trim();
     if (!target) throw new BadRequestException('Choose a file first.');
     try {
@@ -926,7 +930,7 @@ export class ConnectionsService {
         return { connectionId: row.id, provider: row.provider, id: String(payload.id), name: String(payload.name ?? 'File'), kind: payload.folder ? 'folder' : 'file', mimeType: payload.file?.mimeType ?? null };
       }
     } catch (error) {
-      throw new BadRequestException(this.providerBrowseError(error));
+      throw new BadRequestException(this.providerBrowseError(error, row.provider));
     }
     throw new BadRequestException('This connection does not support reading files.');
   }
@@ -935,15 +939,15 @@ export class ConnectionsService {
     const name = String(input.name ?? '').trim();
     const bytes = Buffer.from(String(input.contentBase64 ?? ''), 'base64');
     if (!name || !bytes.length || bytes.length > 8_000_000) throw new BadRequestException('Choose a file smaller than 8 MB.');
-    const token = await this.providerAccessToken(user, id);
     const row = await this.findVisible(user, id);
+    const token = await this.resolveBrowseToken(row);
     const parentId = String(input.parentId ?? '').trim();
     try {
       if (row.provider === 'google') return { ...(await this.googleUpload(token, parentId, name, bytes)), provider: row.provider };
       if (row.provider === 'dropbox') return { ...(await this.dropboxUpload(token, parentId, name, bytes)), provider: row.provider };
       if (row.provider === 'microsoft') return { ...(await this.microsoftUpload(token, parentId, name, bytes)), provider: row.provider };
     } catch (error) {
-      throw new BadRequestException(this.providerBrowseError(error));
+      throw new BadRequestException(this.providerBrowseError(error, row.provider));
     }
     throw new BadRequestException('This connection does not support upload.');
   }
@@ -980,44 +984,53 @@ export class ConnectionsService {
     return { id: String(payload.id), name: String(payload.name ?? name), kind: 'file' as const };
   }
 
-  private async providerAccessToken(user: AccessTokenPayload, id: string) {
-    const row = await this.findVisible(user, id);
+  private async resolveBrowseToken(row: { id: string; provider: string; status: ConnectionStatus; authType: ConnectionAuthType; scope: string | null }) {
+    if (row.status === ConnectionStatus.DISABLED) throw new ForbiddenException('Connection is disabled.');
+    if (row.status === ConnectionStatus.REAUTH_REQUIRED) throw new ForbiddenException('Connection requires re-authentication.');
+    if (row.provider === 'google' && row.authType === ConnectionAuthType.OAUTH2 && !googleDriveScopeGranted(row.scope)) {
+      throw new ForbiddenException('Reconnect to grant Google Drive file access.');
+    }
     if (row.status !== ConnectionStatus.ACTIVE) throw new ForbiddenException('Your connection expired. Reconnect to continue.');
-    const secret = await this.prisma.connectionSecret.findUnique({ where: { connectionId: row.id }, select: { accessToken: true } });
-    if (!secret?.accessToken) throw new ForbiddenException('Your connection expired. Reconnect to continue.');
-    return this.decryptSecret(secret.accessToken);
+    const token = await this.getAccessTokenById(row.id);
+    if (!token) throw new ForbiddenException('Your connection expired. Reconnect to continue.');
+    return token;
   }
 
-  private providerBrowseError(error: unknown) {
-    const message = error instanceof Error ? error.message : '';
-    if (/401|403|invalid_grant|expired/i.test(message)) return 'Your connection expired. Reconnect to continue.';
-    return "We couldn't access this folder.";
+  private providerBrowseError(error: unknown, provider?: string) {
+    const mapped = providerBrowseErrorCode(error, provider);
+    return `${mapped.code}: ${mapped.message}`;
   }
 
-  private async googleChildren(token: string, parentId: string) {
+  private async googleChildren(token: string, parentId: string, pageToken?: string | null) {
     const q = parentId ? `'${parentId.replace(/'/g, '')}' in parents and trashed=false` : `'root' in parents and trashed=false`;
-    const response = await fetch(`https://www.googleapis.com/drive/v3/files?pageSize=100&q=${encodeURIComponent(q)}&fields=files(id,name,mimeType,size)&orderBy=folder,name`, { headers: { authorization: `Bearer ${token}` } });
+    const params = new URLSearchParams({ pageSize: '100', q, fields: 'files(id,name,mimeType,size),nextPageToken', orderBy: 'folder,name' });
+    if (pageToken) params.set('pageToken', pageToken);
+    const response = await fetch(`https://www.googleapis.com/drive/v3/files?${params.toString()}`, { headers: { authorization: `Bearer ${token}` } });
     const payload = await this.readJson(response);
     if (!response.ok) throw new Error(String(payload?.error?.message ?? response.status));
-    return this.splitDriveItems(Array.isArray(payload.files) ? payload.files : [], (item) => item.mimeType === 'application/vnd.google-apps.folder');
+    return { ...this.splitDriveItems(Array.isArray(payload.files) ? payload.files : [], (item) => item.mimeType === 'application/vnd.google-apps.folder'), nextPageToken: typeof payload.nextPageToken === 'string' ? payload.nextPageToken : null };
   }
 
-  private async dropboxChildren(token: string, parentId: string) {
-    const response = await fetch('https://api.dropboxapi.com/2/files/list_folder', { method: 'POST', headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' }, body: JSON.stringify({ path: parentId || '', recursive: false, limit: 100 }) });
+  private async dropboxChildren(token: string, parentId: string, pageToken?: string | null) {
+    const endpoint = pageToken ? 'https://api.dropboxapi.com/2/files/list_folder/continue' : 'https://api.dropboxapi.com/2/files/list_folder';
+    const body = pageToken ? { cursor: pageToken } : { path: parentId || '', recursive: false, limit: 100 };
+    const response = await fetch(endpoint, { method: 'POST', headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' }, body: JSON.stringify(body) });
     const payload = await this.readJson(response);
     if (!response.ok) throw new Error(String(payload?.error_summary ?? response.status));
     const entries = Array.isArray(payload.entries) ? payload.entries : [];
-    return this.splitDriveItems(entries.map((item: any) => ({ id: String(item.path_lower ?? item.id), name: item.name, mimeType: item['.tag'] === 'folder' ? 'folder' : null, size: item.size })), (item) => item.mimeType === 'folder');
+    return { ...this.splitDriveItems(entries.map((item: any) => ({ id: String(item.path_lower ?? item.id), name: item.name, mimeType: item['.tag'] === 'folder' ? 'folder' : null, size: item.size })), (item) => item.mimeType === 'folder'), nextPageToken: payload.has_more && typeof payload.cursor === 'string' ? payload.cursor : null };
   }
 
-  private async microsoftChildren(token: string, parentId: string) {
-    const url = parentId
-      ? `https://graph.microsoft.com/v1.0/me/drive/items/${encodeURIComponent(parentId)}/children?$top=100&$select=id,name,size,folder,file`
-      : 'https://graph.microsoft.com/v1.0/me/drive/root/children?$top=100&$select=id,name,size,folder,file';
+  private async microsoftChildren(token: string, parentId: string, pageToken?: string | null) {
+    const url = pageToken && pageToken.startsWith('https://graph.microsoft.com/')
+      ? pageToken
+      : (parentId
+        ? `https://graph.microsoft.com/v1.0/me/drive/items/${encodeURIComponent(parentId)}/children?$top=100&$select=id,name,size,folder,file`
+        : 'https://graph.microsoft.com/v1.0/me/drive/root/children?$top=100&$select=id,name,size,folder,file');
     const response = await fetch(url, { headers: { authorization: `Bearer ${token}` } });
     const payload = await this.readJson(response);
     if (!response.ok) throw new Error(String(payload?.error?.message ?? response.status));
-    return this.splitDriveItems(Array.isArray(payload.value) ? payload.value : [], (item) => Boolean(item.folder));
+    return { ...this.splitDriveItems(Array.isArray(payload.value) ? payload.value : [], (item) => Boolean(item.folder)), nextPageToken: typeof payload['@odata.nextLink'] === 'string' ? payload['@odata.nextLink'] : null };
   }
 
   private splitDriveItems(items: any[], isFolder: (item: any) => boolean) {
