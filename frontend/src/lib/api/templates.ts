@@ -83,7 +83,7 @@ export function useTemplate(id: string, input: { name: string; folderId?: string
 
 
 export function createTemplateFromBlank(input: { name: string; description?: string; type: TemplateType; library?: TemplateLibrary; categoryId?: string | null }) {
-  return apiRequest<{ template: TemplatePreview; templateId: string; file_id: string; editorPath: string | null; office?: { documentId: string; type: 'WRITER'|'SHEET'|'SHOW'; nativeFormat: string; revision: number } | null }>('/templates/from-blank', { method: 'POST', body: JSON.stringify(input) });
+  return apiRequest<{ template: TemplatePreview; templateId: string; file_id: string; editorPath: string | null; office?: { documentId: string; type: 'WRITER'|'SHEET'|'SHOW'; nativeFormat: string; revision: number } | null; officeInitialization?: { status: 'READY' | 'DEFERRED'; reason?: string } }>('/templates/from-blank', { method: 'POST', body: JSON.stringify(input) });
 }
 
 export function saveFileAsTemplate(input: { fileId: string; name: string; description?: string; library?: TemplateLibrary; categoryId?: string | null }) {

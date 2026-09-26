@@ -7,6 +7,7 @@ import {
   getTeamFolder,
   listTeamFolderMembers,
   listTeamFolders,
+  joinTeamFolder,
   removeTeamFolderMember,
   renameTeamFolder,
   updateTeamFolderSettings,
@@ -40,6 +41,7 @@ test("Team Folder client follows the contract and never sends client tenant cont
 
   await createTeamFolder("Legal");
   await listTeamFolders();
+  await joinTeamFolder(TEAM_FOLDER_ID);
   await getTeamFolder(TEAM_FOLDER_ID);
   await renameTeamFolder(TEAM_FOLDER_ID, "Legal 2026");
   await updateTeamFolderSettings(TEAM_FOLDER_ID, { allowExternalSharing: false, allowViewerDownloads: true });
@@ -57,6 +59,7 @@ test("Team Folder client follows the contract and never sends client tenant cont
     [
       { path: "/team-folders", method: "POST", body: { name: "Legal" } },
       { path: "/team-folders", method: "GET", body: undefined },
+      { path: `/team-folders/${TEAM_FOLDER_ID}/join`, method: "POST", body: undefined },
       { path: `/team-folders/${TEAM_FOLDER_ID}`, method: "GET", body: undefined },
       { path: `/team-folders/${TEAM_FOLDER_ID}`, method: "PATCH", body: { name: "Legal 2026" } },
       { path: `/team-folders/${TEAM_FOLDER_ID}/settings`, method: "PATCH", body: { allowExternalSharing: false, allowViewerDownloads: true } },

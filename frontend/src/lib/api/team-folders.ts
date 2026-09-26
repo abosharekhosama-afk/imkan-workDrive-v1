@@ -22,7 +22,7 @@ export type TeamFolderListItem = {
   id: string;
   name: string;
   rootFolderId: string | null;
-  role: TeamFolderUserRole;
+  role: TeamFolderUserRole | null;
   memberCount: number;
   isMember: boolean;
   isPublicToOrg: boolean;
@@ -49,8 +49,9 @@ export function listTeamFolders(): Promise<{ teamFolders: TeamFolderListItem[] }
   return apiRequest<{ teamFolders: TeamFolderListItem[] }>("/team-folders");
 }
 
-export function joinTeamFolder(id: string): Promise<{ teamFolderId: string; userId: string; role: TeamFolderRole; joined: boolean }> {
-  return apiRequest<{ teamFolderId: string; userId: string; role: TeamFolderRole; joined: boolean }>(`/team-folders/${id}/join`, { method: "POST" });
+
+export function joinTeamFolder(id: string): Promise<{ teamFolderId: string; userId: string; role: TeamFolderRole; joined: boolean; alreadyMember: boolean }> {
+  return apiRequest<{ teamFolderId: string; userId: string; role: TeamFolderRole; joined: boolean; alreadyMember: boolean }>(`/team-folders/${id}/join`, { method: 'POST' });
 }
 
 export function getTeamFolder(id: string): Promise<TeamFolderRecord> {
