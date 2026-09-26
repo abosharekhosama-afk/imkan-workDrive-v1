@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { usePathname } from "next/navigation";
 import { useLocale } from "../../../components/locale-provider";
 import { ApiError } from "../../../lib/api/client";
 import { deleteTeamFolder, joinTeamFolder, listTeamFolders, renameTeamFolder, type TeamFolderListItem } from "../../../lib/api/team-folders";
@@ -38,6 +39,9 @@ function MoreIcon() {
 
 export default function TeamFoldersPage() {
   const { label, locale } = useLocale();
+  const pathname = usePathname();
+  const isAdminConsole = pathname.startsWith("/admin/team-folders");
+  const adminTeamFoldersBase = "/admin/team-folders";
   const [teamFolders, setTeamFolders] = useState<TeamFolderListItem[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -110,7 +114,7 @@ export default function TeamFoldersPage() {
       .sort((a, b) => Number(pinnedIds.has(b.id)) - Number(pinnedIds.has(a.id)) || a.name.localeCompare(b.name));
   }, [teamFolders, search, pinnedIds, scopeFilter]);
 
-  const createHref = "/files/team-folders/create";
+  const createHref = isAdminConsole ? `${adminTeamFoldersBase}/create` : "/files/team-folders/create";
 
   const openRename = (tf: TeamFolderListItem) => {
     setMenuId(null);
@@ -229,7 +233,7 @@ export default function TeamFoldersPage() {
               return (
                 <div key={tf.id} className={`team-folder-row group ${index === 0 && pinned ? "is-pinned" : ""}`} data-selected={detailsTf?.id === tf.id || undefined}>
                   {tf.isMember ? (
-                    <Link href={tf.rootFolderId ? `/files/${tf.rootFolderId}` : createHref} className="team-folder-main">
+                    <Link href={tf.rootFolderId ? (isAdminConsole ? `${adminTeamFoldersBase}/${encodeURIComponent(tf.id)}/manage` : `/files/${encodeURIComponent(tf.rootFolderId)}`) : createHref} className="team-folder-main">
                       <span className="team-folder-glyph"><FolderGlyph /></span>
                       <span className="team-folder-copy">
                         <span className="team-folder-name">
