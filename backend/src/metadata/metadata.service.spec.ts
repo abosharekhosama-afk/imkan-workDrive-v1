@@ -6,10 +6,11 @@ const USER = '00000000-0000-4000-8000-000000000011';
 
 describe('MetadataService Phase 27', () => {
   const prisma = {
-    fileDataTemplate: { findMany: jest.fn(), findFirst: jest.fn(), create: jest.fn(), update: jest.fn() },
+    fileDataTemplate: { findMany: jest.fn(), findFirst: jest.fn(), count: jest.fn(() => 0), create: jest.fn(), update: jest.fn(), delete: jest.fn() },
+    fileDataTemplateBinding: { count: jest.fn(() => 0), findFirst: jest.fn(), findMany: jest.fn(), upsert: jest.fn(), delete: jest.fn() },
     folder: { findFirst: jest.fn(), update: jest.fn() },
     file: { findFirst: jest.fn() },
-    fileMetadata: { upsert: jest.fn() },
+    fileMetadata: { upsert: jest.fn(), findUnique: jest.fn() },
   };
   const permissions = {
     isOrgAdminOrSuperAdmin: jest.fn(() => true),
@@ -34,12 +35,14 @@ describe('MetadataService Phase 27', () => {
   it('rejects custom fields that are not in the bound template', async () => {
     prisma.file.findFirst.mockResolvedValue({ id: 'f1', orgId: ORG, ownerId: USER, folder: { teamFolderId: null, dataTemplateId: 't1' }, metadata: null });
     prisma.fileDataTemplate.findFirst.mockResolvedValue({ id: 't1', orgId: ORG, active: true, schema: [{ key: 'status', label: 'Status', type: 'select', options: ['draft'] }] });
+    prisma.fileMetadata.findUnique.mockResolvedValue({ dataTemplateId: 't1', dataTemplate: { id: 't1', schema: [{ key: 'status', label: 'Status', type: 'select', options: ['draft'] }] } });
     await expect(service.updateFileMetadata(user, 'f1', { customFields: { secret: 'x' } })).rejects.toBeInstanceOf(BadRequestException);
   });
 
   it('accepts valid typed custom fields', async () => {
     prisma.file.findFirst.mockResolvedValue({ id: 'f1', orgId: ORG, ownerId: USER, folder: { teamFolderId: null, dataTemplateId: 't1' }, metadata: null });
     prisma.fileDataTemplate.findFirst.mockResolvedValue({ id: 't1', orgId: ORG, active: true, schema: [{ key: 'status', label: 'Status', type: 'select', options: ['draft', 'signed'], required: true }] });
+    prisma.fileMetadata.findUnique.mockResolvedValue({ dataTemplateId: 't1', dataTemplate: { id: 't1', schema: [{ key: 'status', label: 'Status', type: 'select', options: ['draft', 'signed'], required: true }] } });
     prisma.fileMetadata.upsert.mockResolvedValue({ id: 'm1' });
     await service.updateFileMetadata(user, 'f1', { customFields: { status: 'signed' } });
     expect(prisma.fileMetadata.upsert).toHaveBeenCalled();
