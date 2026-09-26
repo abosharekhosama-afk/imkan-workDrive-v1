@@ -473,7 +473,7 @@ export class ConnectionsService {
     const current = await this.findVisible(user, id);
     if (current.ownerId !== user.sub) throw new ForbiddenException('Only the connection owner can manage sharing');
     if (!targetUserId || targetUserId === user.sub) throw new BadRequestException('Choose another organization member');
-    const target = await this.prisma.user.findFirst({ where: { id: targetUserId, memberships: { some: { organizationId: user.org_id } } }, select: { id: true } });
+    const target = await this.prisma.user.findFirst({ where: { id: targetUserId, memberships: { some: { organizationId: user.org_id, status: 'ACTIVE' } } }, select: { id: true } });
     if (!target) throw new NotFoundException('User is not a member of this organization');
     const row = await this.prisma.connectionShare.upsert({ where: { connectionId_userId: { connectionId: id, userId: targetUserId } }, create: { id: randomUUID(), connectionId: id, userId: targetUserId, role }, update: { role } , include: { user: { select: { id: true, name: true, email: true } } } });
     await this.audit(user, 'connection.shared', id, { userId: targetUserId, role });
@@ -486,7 +486,7 @@ export class ConnectionsService {
     if (current.ownerId !== user.sub && !isAdmin) throw new ForbiddenException('Only the connection owner or organization administrator can transfer ownership');
     if (!targetUserId || targetUserId === current.ownerId) throw new BadRequestException('Choose a different organization member');
     const target = await this.prisma.user.findFirst({
-      where: { id: targetUserId, memberships: { some: { organizationId: user.org_id } } },
+      where: { id: targetUserId, memberships: { some: { organizationId: user.org_id, status: 'ACTIVE' } } },
       select: { id: true, name: true, email: true },
     });
     if (!target) throw new NotFoundException('Target user is not a member of this organization');
