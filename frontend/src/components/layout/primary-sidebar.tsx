@@ -21,7 +21,7 @@ export function PrimarySidebar() {
   useEffect(() => {
     const token = typeof window !== "undefined" ? localStorage.getItem("workdrive_access_token") : null;
     if (!token) return;
-    listTeamFolders().then((r) => setTeams(r.teamFolders ?? [])).catch(() => undefined);
+    listTeamFolders().then((r) => setTeams((r.teamFolders ?? []).filter((team) => team.isMember)).catch(() => undefined);
     getStorageOverview().then(setQuota).catch(() => undefined);
     try {
       const raw = localStorage.getItem("workdrive_user");
