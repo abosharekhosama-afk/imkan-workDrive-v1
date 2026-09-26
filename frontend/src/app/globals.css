@@ -3579,6 +3579,20 @@ html[data-theme="dark"] .imkan-connections-page .connections-detail-overlay{back
   font-size: 11px;
 }
 
+.imkan-cloud-access-actions {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 18px;
+}
+
+.imkan-cloud-access-actions .imkan-cloud-footer-secondary,
+.imkan-cloud-access-actions .imkan-cloud-footer-primary {
+  height: 36px;
+}
+
+
 .imkan-cloud-illustration {
   position: relative;
   width: 138px;

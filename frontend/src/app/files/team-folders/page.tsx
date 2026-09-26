@@ -114,6 +114,9 @@ export default function TeamFoldersPage() {
   }, [teamFolders, search, pinnedIds, scopeFilter]);
 
   const createHref = `${adminBase}/create`;
+  const folderHref = (tf: TeamFolderListItem) => adminBase === "/admin/team-folders"
+    ? `/admin/team-folders/${encodeURIComponent(tf.id)}/manage?tab=details`
+    : (tf.rootFolderId ? `/files/${encodeURIComponent(tf.rootFolderId)}` : createHref);
 
   const openRename = (tf: TeamFolderListItem) => {
     setMenuId(null);
@@ -217,7 +220,7 @@ export default function TeamFoldersPage() {
               const pinned = pinnedIds.has(tf.id);
               return (
                 <div key={tf.id} className={`team-folder-row group ${index === 0 && pinned ? "is-pinned" : ""}`} data-selected={detailsTf?.id === tf.id || undefined}>
-                  <Link href={tf.rootFolderId ? `/files/${tf.rootFolderId}` : createHref} className="team-folder-main">
+                  <Link href={folderHref(tf)} className="team-folder-main">
                     <span className="team-folder-glyph"><FolderGlyph /></span>
                     <span className="team-folder-copy">
                       <span className="team-folder-name">

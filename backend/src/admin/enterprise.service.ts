@@ -178,11 +178,11 @@ export class EnterpriseService {
   }
 
   private async ensureConsoleSettings(orgId: string) {
-    // The Admin Console settings table is introduced by a later migration than
-    // the original enterprise foundation. Older Render databases can therefore
-    // legitimately reach this endpoint before that migration has been applied.
-    // Keep the endpoint self-healing so Settings does not become a 500-only dead
-    // end; the normal Prisma migration remains the source of truth for new DBs.
+    // Render environments can contain a database whose migration history says the
+    // Admin Console settings migration ran while the physical table/columns were
+    // created only partially. Repair the physical shape before every read/write.
+    // The repair is intentionally idempotent and does not depend on Prisma's
+    // generated client, so an older deployed client can recover too.
     await this.prisma.$executeRawUnsafe(`CREATE TABLE IF NOT EXISTS admin_console_settings (
       id CHAR(36) NOT NULL,
       org_id CHAR(36) NOT NULL,
@@ -219,16 +219,47 @@ export class EnterpriseService {
       created_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
       updated_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
       PRIMARY KEY (id),
-      UNIQUE KEY admin_console_settings_org_id_key (org_id),
-      CONSTRAINT admin_console_settings_org_id_fkey FOREIGN KEY (org_id) REFERENCES organizations(id) ON DELETE CASCADE
+      UNIQUE KEY admin_console_settings_org_id_key (org_id)
     ) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci`);
 
-    const id = randomUUID();
-    await this.prisma.$executeRawUnsafe(
-      `INSERT INTO admin_console_settings (id,org_id) VALUES (?,?) ON DUPLICATE KEY UPDATE org_id=VALUES(org_id)`,
-      id,
+    const expectedColumns: Array<[string, string]> = [
+      ['logo_data_url', 'LONGTEXT NULL'], ['custom_domain', 'VARCHAR(255) NULL'],
+      ['default_view', "VARCHAR(20) NOT NULL DEFAULT 'COMPACT'"], ['thumbnail_size', 'INTEGER NOT NULL DEFAULT 3'],
+      ['preview_panel', "VARCHAR(30) NOT NULL DEFAULT 'PREVIEW'"], ['convert_on_upload', 'BOOLEAN NOT NULL DEFAULT false'],
+      ['allow_non_zoho_writer', 'BOOLEAN NOT NULL DEFAULT true'], ['allow_non_zoho_sheet', 'BOOLEAN NOT NULL DEFAULT true'],
+      ['allow_non_zoho_show', 'BOOLEAN NOT NULL DEFAULT true'], ['save_new_files_as_drafts', 'BOOLEAN NOT NULL DEFAULT true'],
+      ['ocr_language', "VARCHAR(20) NOT NULL DEFAULT 'NONE'"], ['allow_direct_email_sharing', 'BOOLEAN NOT NULL DEFAULT true'],
+      ['direct_sharing_scope', "VARCHAR(30) NOT NULL DEFAULT 'ANY_EXTERNAL_USER'"], ['allow_external_share_links', 'BOOLEAN NOT NULL DEFAULT true'],
+      ['enforce_share_passwords', 'BOOLEAN NOT NULL DEFAULT false'], ['default_share_expiry_days', 'INTEGER NULL'],
+      ['collect_external_user_info', 'BOOLEAN NOT NULL DEFAULT false'], ['allow_download_links', 'BOOLEAN NOT NULL DEFAULT true'],
+      ['download_link_expiry_days', 'INTEGER NULL'], ['allow_permalink_embeds', 'BOOLEAN NOT NULL DEFAULT true'],
+      ['allow_embed_download_print', 'BOOLEAN NOT NULL DEFAULT true'], ['allow_collections', 'BOOLEAN NOT NULL DEFAULT true'],
+      ['collection_manager_scope', "VARCHAR(30) NOT NULL DEFAULT 'ANYONE_ON_TEAM'"], ['collection_external_name', "VARCHAR(30) NOT NULL DEFAULT 'COLLECTION'"],
+      ['my_folders_limit_bytes', 'BIGINT NULL'], ['version_mode', "VARCHAR(30) NOT NULL DEFAULT 'ALL'"],
+      ['version_limit', 'INTEGER NULL'], ['public_team_folder_creator', "VARCHAR(20) NOT NULL DEFAULT 'ANYONE'"],
+      ['private_team_folder_creator', "VARCHAR(20) NOT NULL DEFAULT 'ANYONE'"], ['same_domain_join_enabled', 'BOOLEAN NOT NULL DEFAULT false'],
+    ];
+    const presentRows = await this.prisma.$queryRawUnsafe<any[]>(
+      `SELECT column_name AS columnName FROM information_schema.columns WHERE table_schema = DATABASE() AND table_name = 'admin_console_settings'`,
+    );
+    const present = new Set(presentRows.map((row) => String(row.columnName)));
+    for (const [column, definition] of expectedColumns) {
+      if (!present.has(column)) {
+        await this.prisma.$executeRawUnsafe(`ALTER TABLE admin_console_settings ADD COLUMN ${column} ${definition}`);
+      }
+    }
+
+    const existing = await this.prisma.$queryRawUnsafe<any[]>(
+      `SELECT id FROM admin_console_settings WHERE org_id=? LIMIT 1`,
       orgId,
     );
+    if (!existing.length) {
+      await this.prisma.$executeRawUnsafe(
+        `INSERT INTO admin_console_settings (id,org_id) VALUES (?,?)`,
+        randomUUID(),
+        orgId,
+      );
+    }
   }
 
   async securityCenter(user: AccessTokenPayload) {

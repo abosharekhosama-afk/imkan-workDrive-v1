@@ -477,6 +477,13 @@ export function CloudImportHost() {
                 <span className="imkan-cloud-action-hint">
                   {hasConnection ? (locale === 'ar' ? 'يفتح محدد الملفات لاختيار الملفات' : 'Opens the cloud file picker for selection') : locale === 'ar' ? 'يبدأ اتصال OAuth آمن' : 'Starts a secure OAuth connection'}
                 </span>
+                <div className="imkan-cloud-access-actions">
+                  <button type="button" className="imkan-cloud-footer-secondary" disabled={busy} onClick={() => setDetail(null)}>{locale === 'ar' ? 'إغلاق' : 'Close'}</button>
+                  <button type="button" className="imkan-cloud-footer-primary" disabled={busy || !selected.length || !provider || provider === 'box' || provider === 'evernote'} onClick={() => void importSelected()}>
+                    {busy ? (locale === 'ar' ? 'جارٍ البدء…' : 'Starting…') : locale === 'ar' ? `إرفاق (${selected.length})` : `Attach (${selected.length})`}
+                    <Icons.chevR size={15} />
+                  </button>
+                </div>
               </div>
             )}
 
@@ -510,16 +517,18 @@ export function CloudImportHost() {
           </div>
         </main>
 
-        <footer className="imkan-cloud-import-footer">
-          <span>{locale === 'ar' ? 'تستمر عملية الاستيراد على الخادم حتى عند انقطاع اتصال المتصفح.' : 'Imports continue on the server if the browser connection drops.'}</span>
-          <div className="flex items-center gap-2">
-            <button type="button" className="imkan-cloud-footer-secondary" disabled={busy} onClick={() => setDetail(null)}>{locale === 'ar' ? 'إغلاق' : 'Close'}</button>
-            <button type="button" className="imkan-cloud-footer-primary" disabled={busy || !selected.length || !provider || provider === 'box' || provider === 'evernote'} onClick={() => void importSelected()}>
-              {busy ? (locale === 'ar' ? 'جارٍ البدء…' : 'Starting…') : locale === 'ar' ? `إرفاق (${selected.length})` : `Attach (${selected.length})`}
-              <Icons.chevR size={15} />
-            </button>
-          </div>
-        </footer>
+        {filesRequested && files.length > 0 ? (
+          <footer className="imkan-cloud-import-footer">
+            <span>{locale === 'ar' ? 'تستمر عملية الاستيراد على الخادم حتى عند انقطاع اتصال المتصفح.' : 'Imports continue on the server if the browser connection drops.'}</span>
+            <div className="flex items-center gap-2">
+              <button type="button" className="imkan-cloud-footer-secondary" disabled={busy} onClick={() => setDetail(null)}>{locale === 'ar' ? 'إغلاق' : 'Close'}</button>
+              <button type="button" className="imkan-cloud-footer-primary" disabled={busy || !selected.length || !provider || provider === 'box' || provider === 'evernote'} onClick={() => void importSelected()}>
+                {busy ? (locale === 'ar' ? 'جارٍ البدء…' : 'Starting…') : locale === 'ar' ? `إرفاق (${selected.length})` : `Attach (${selected.length})`}
+                <Icons.chevR size={15} />
+              </button>
+            </div>
+          </footer>
+        ) : null}
       </section>
     </div>,
     document.body,

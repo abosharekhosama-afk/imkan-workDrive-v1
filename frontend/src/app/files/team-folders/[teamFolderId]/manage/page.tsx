@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useParams, useRouter, useSearchParams } from "next/navigation";
+import { useParams, usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useLocale } from "../../../../../components/locale-provider";
 import { ApiError } from "../../../../../lib/api/client";
@@ -76,8 +76,11 @@ export default function TeamFolderManagePage() {
   const params = useParams<{ teamFolderId: string }>();
   const router = useRouter();
   const searchParams = useSearchParams();
+  const pathname = usePathname();
   const { locale } = useLocale();
   const id = params.teamFolderId;
+  const adminBase = pathname.startsWith("/admin/team-folders") ? "/admin/team-folders" : "/files/team-folders";
+  const manageBase = `${adminBase}/${encodeURIComponent(id)}/manage`;
   const initialTab = isTab(searchParams.get("tab")) ? searchParams.get("tab") as TabKey : "details";
 
   const [tab, setTab] = useState<TabKey>(initialTab);
@@ -169,7 +172,7 @@ export default function TeamFolderManagePage() {
 
   const selectTab = (next: TabKey) => {
     setTab(next);
-    router.replace(`/files/team-folders/${encodeURIComponent(id)}/manage?tab=${next}`, { scroll: false });
+    router.replace(`${manageBase}?tab=${next}`, { scroll: false });
   };
 
   const saveName = async () => {
@@ -245,7 +248,7 @@ export default function TeamFolderManagePage() {
     setBusy(true);
     try {
       await removeTeamFolderMember(id, me.userId);
-      router.push("/files/team-folders");
+      router.push(adminBase);
     } catch (cause) {
       setError(cause instanceof ApiError ? cause.message : (locale === "ar" ? "تعذر مغادرة مجلد الفريق." : "Unable to leave the Team Folder."));
     } finally {
@@ -261,7 +264,7 @@ export default function TeamFolderManagePage() {
     try {
       await deleteTeamFolder(id);
       window.dispatchEvent(new Event("workdrive:team-folders-changed"));
-      router.push("/files/team-folders");
+      router.push(adminBase);
     } catch (cause) {
       setError(cause instanceof ApiError ? cause.message : (locale === "ar" ? "تعذر حذف مجلد الفريق." : "Unable to delete the Team Folder."));
     } finally {
@@ -287,7 +290,7 @@ export default function TeamFolderManagePage() {
     return <section className="flex min-h-full items-center justify-center bg-white text-sm text-slate-500">Loading…</section>;
   }
 
-  const rootHref = folder?.rootFolderId ? `/files/${encodeURIComponent(folder.rootFolderId)}` : "/files/team-folders";
+  const rootHref = folder?.rootFolderId ? `/files/${encodeURIComponent(folder.rootFolderId)}` : adminBase;
 
   return (
     <section className="flex min-h-full min-w-0 flex-col bg-white">
