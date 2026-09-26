@@ -503,7 +503,22 @@ export class TemplatesService {
       });
       let office: Awaited<ReturnType<OfficeService['initializeFromTemplateFile']>> | null = null;
       if (latest?.versions[0]) {
-        office = await this.office.initializeFromTemplateFile(user, file.file_id, template.id, latest.versions[0].id);
+        try {
+          office = await this.office.initializeFromTemplateFile(user, file.file_id, template.id, latest.versions[0].id);
+        } catch (error) {
+          const reason = error instanceof Error ? error.message : 'Unknown Office initialization error';
+          await this.prisma.auditLog.create({
+            data: {
+              orgId: user.org_id,
+              actorId: user.sub,
+              action: 'OFFICE_TEMPLATE_INITIALIZATION_FAILED',
+              resourceType: 'FILE',
+              resourceId: file.file_id,
+              metadata: { templateId: template.id, templateVersionId: latest.versions[0].id, error: reason },
+            },
+          }).catch(() => undefined);
+          throw new ConflictException(`Unable to prepare the blank template for IMKAN Office editing: ${reason}`);
+        }
       }
       return {
         template,

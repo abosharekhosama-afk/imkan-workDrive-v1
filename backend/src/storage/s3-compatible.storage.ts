@@ -22,7 +22,7 @@ import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { Inject } from '@nestjs/common';
 import { createHash } from 'crypto';
 import { getTenantStore } from '../auth/tenant-context';
-import { buildTenantObjectKey, parseTenantObjectKey, buildPublicTemplateObjectKey, isPublicTemplateObjectKey } from './object-key';
+import { buildTenantObjectKey, parseTenantObjectKey, buildPublicTemplateObjectKey, encodeS3CopySource, isPublicTemplateObjectKey } from './object-key';
 import { contentDispositionInline } from '../common/content-disposition';
 import {
   S3_CLIENT,
@@ -118,7 +118,7 @@ export class S3CompatibleStorageAdapter implements StorageService {
     const destinationKey = destination.storageKey ?? buildTenantObjectKey(orgId, destination.fileId, destination.versionId);
     await this.client.send(new CopyObjectCommand({
       Bucket: this.bucket(),
-      CopySource: `${this.bucket()}/${sourceStorageKey}`,
+      CopySource: encodeS3CopySource(this.bucket(), sourceStorageKey),
       Key: destinationKey,
       ContentType: destination.contentType,
       MetadataDirective: 'REPLACE',

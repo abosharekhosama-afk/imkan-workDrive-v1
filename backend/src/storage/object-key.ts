@@ -40,3 +40,8 @@ const PUBLIC_TEMPLATE_KEY_RE = /^public_templates\/([0-9a-f]{8}-[0-9a-f]{4}-[1-8
 export function buildPublicTemplateObjectKey(fileId: string, versionId: string): string { assertUuid(fileId, 'fileId'); assertUuid(versionId, 'versionId'); return `public_templates/${fileId}/${versionId}`; }
 export function parsePublicTemplateObjectKey(objectKey: string): ParsedPublicTemplateObjectKey { const match = PUBLIC_TEMPLATE_KEY_RE.exec(objectKey); if (!match) throw new Error('Invalid public template object key'); return { fileId: match[1], versionId: match[2] }; }
 export function isPublicTemplateObjectKey(objectKey: string): boolean { return PUBLIC_TEMPLATE_KEY_RE.test(objectKey); }
+
+/** URL-encodes bucket/key for S3 CopyObject CopySource (slashes in keys must be encoded). */
+export function encodeS3CopySource(bucket: string, objectKey: string): string {
+  return encodeURIComponent(`${bucket}/${objectKey}`);
+}
