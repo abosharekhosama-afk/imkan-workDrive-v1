@@ -210,7 +210,7 @@ export class EffectivePermissionService {
     }
 
     if (resource.teamFolderId) {
-      const [teamFolder, teamMembership] = await Promise.all([
+      const [teamFolder, teamMembership, teamGroupMemberships] = await Promise.all([
         this.prisma.teamFolder.findFirst({
           where: { id: resource.teamFolderId, orgId: user.org_id },
           select: { archivedAt: true },
@@ -219,10 +219,18 @@ export class EffectivePermissionService {
           where: { teamFolderId: resource.teamFolderId, userId: user.sub, orgId: user.org_id },
           select: { role: true },
         }),
+        this.prisma.teamFolderGroup.findMany({
+          where: { teamFolderId: resource.teamFolderId, orgId: user.org_id, group: { members: { some: { userId: user.sub, orgId: user.org_id } } } },
+          select: { role: true },
+        }),
       ]);
       if (teamMembership) {
         level = maxLevel(level, TEAM_ROLE_LEVEL[teamMembership.role]);
         sources.push('TEAM_FOLDER_ROLE');
+      }
+      for (const groupMembership of teamGroupMemberships) {
+        level = maxLevel(level, TEAM_ROLE_LEVEL[groupMembership.role]);
+        sources.push('GROUP_TEAM_FOLDER_ROLE');
       }
       if (teamFolder?.archivedAt) sources.push('ARCHIVED_TEAM_FOLDER');
     }
