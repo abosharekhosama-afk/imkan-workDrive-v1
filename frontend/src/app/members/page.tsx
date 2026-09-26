@@ -2,10 +2,10 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
-import { useLocale } from "../../components/locale-provider";
+import { useLocale } from "@/components/locale-provider";
 import { usePathname } from "next/navigation";
-import { Icons } from "../../components/layout/icons";
-import { Toast } from "../../components/toast";
+import { Icons } from "@/components/layout/icons";
+import { Toast } from "@/components/toast";
 import {
   getMemberManagement,
   inviteOrganizationMember,
@@ -14,7 +14,7 @@ import {
   removeOrganizationMemberWithSuccessor,
   type ManagedMember,
   type OrgRole,
-} from "../../lib/api/organization";
+} from "@/lib/api/organization";
 
 type Filter = "ACTIVE" | "SUSPENDED" | "REMOVED" | "INVITED";
 

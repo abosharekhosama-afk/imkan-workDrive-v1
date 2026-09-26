@@ -28,7 +28,9 @@ export class EnterpriseController {
   @Patch('security-policy') updateSecurityPolicy(@CurrentUser() u: AccessTokenPayload, @Body() b: any) { return this.service.updateSecurityPolicy(u, b); }
   @Get('retention-policy') retentionPolicy(@CurrentUser() u: AccessTokenPayload) { return this.service.retentionPolicy(u); }
   @Patch('retention-policy') updateRetentionPolicy(@CurrentUser() u: AccessTokenPayload, @Body() b: any) { return this.service.updateRetentionPolicy(u, b); }
+  @Get('audit/scopes') auditScopes(@CurrentUser() u: AccessTokenPayload) { return this.service.auditScopes(u); }
   @Get('audit') audit(@CurrentUser() u: AccessTokenPayload, @Query('limit') limit?: string) { return this.service.audit(u, Number(limit)); }
+  @Post('audit/reports') auditReport(@CurrentUser() u: AccessTokenPayload, @Body() b: any) { return this.service.auditReport(u, b); }
   @Get('external-shares') externalShares(@CurrentUser() u: AccessTokenPayload) { return this.service.externalShares(u); }
   @Post('users/:userId/suspend') suspendUser(@CurrentUser() u: AccessTokenPayload, @Param('userId') id: string) { return this.service.suspendUser(u, id); }
 }

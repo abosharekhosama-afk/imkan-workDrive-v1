@@ -116,6 +116,117 @@ export class EnterpriseService {
     return this.prisma.auditLog.findMany({ where: { orgId: user.org_id }, orderBy: { createdAt: 'desc' }, take: safeLimit, include: { actor: { select: { id: true, name: true, email: true } } } });
   }
 
+  async auditScopes(user: AccessTokenPayload) {
+    this.assertAdmin(user);
+    const [members, teamFolders] = await Promise.all([
+      this.prisma.organizationMembership.findMany({
+        where: { organizationId: user.org_id },
+        orderBy: { user: { name: 'asc' } },
+        select: { user: { select: { id: true, name: true, email: true } }, status: true },
+      }),
+      this.prisma.teamFolder.findMany({
+        where: { orgId: user.org_id },
+        orderBy: { name: 'asc' },
+        select: { id: true, name: true, isPublicToOrg: true, archivedAt: true },
+      }),
+    ]);
+    return {
+      members: members.map((m) => ({ id: m.user.id, name: m.user.name, email: m.user.email, status: m.status })),
+      teamFolders,
+    };
+  }
+
+  async auditReport(user: AccessTokenPayload, input: any) {
+    this.assertAdmin(user);
+    const locationType = String(input?.locationType || 'ORGANIZATION').toUpperCase();
+    const locationId = typeof input?.locationId === 'string' ? input.locationId : null;
+    const actorId = typeof input?.actorId === 'string' && input.actorId ? input.actorId : null;
+    const range = String(input?.range || 'TODAY').toUpperCase();
+    const now = new Date();
+    let from = new Date(now);
+    let to = new Date(now);
+    to.setTime(now.getTime());
+    const startOfDay = (d: Date) => { const x = new Date(d); x.setHours(0, 0, 0, 0); return x; };
+    const endOfDay = (d: Date) => { const x = new Date(d); x.setHours(23, 59, 59, 999); return x; };
+    if (range === 'YESTERDAY') { const y = new Date(now); y.setDate(y.getDate() - 1); from = startOfDay(y); to = endOfDay(y); }
+    else if (range === 'LAST_7_DAYS') { const d = startOfDay(now); d.setDate(d.getDate() - 6); from = d; to = endOfDay(now); }
+    else if (range === 'LAST_30_DAYS') { const d = startOfDay(now); d.setDate(d.getDate() - 29); from = d; to = endOfDay(now); }
+    else if (range === 'CUSTOM') {
+      const parsedFrom = new Date(String(input?.from || ''));
+      const parsedTo = new Date(String(input?.to || ''));
+      if (!Number.isFinite(parsedFrom.getTime()) || !Number.isFinite(parsedTo.getTime())) throw new BadRequestException('Custom report range requires valid from/to dates');
+      from = startOfDay(parsedFrom); to = endOfDay(parsedTo);
+    } else { from = startOfDay(now); to = endOfDay(now); }
+    if (from > to) throw new BadRequestException('Invalid report range');
+
+    const ACTIONS: Record<string, string[]> = {
+      FILES_FOLDERS: ['FILE_UPLOAD_COMPLETE','FILE_VERSION_UPLOADED','FILE_CREATED','FILE_DOWNLOADED','FILE_VIEWED','FILE_MODIFIED','FILE_RENAMED','FILE_TRASHED','FILE_PERMANENTLY_DELETED','FILE_RESTORED','FILE_MOVED','FILE_COPIED','FOLDER_CREATED','FOLDER_RENAMED','FOLDER_TRASHED','FOLDER_PERMANENTLY_DELETED','FOLDER_RESTORED','FOLDER_MOVED','FOLDER_COPIED','TRASH_EMPTIED','FILE_IMPORTED_FROM_CLOUD','FILE_VERSION_RESTORED'],
+      'FILES_FOLDERS:UPLOAD': ['FILE_UPLOAD_COMPLETE','FILE_VERSION_UPLOADED'], 'FILES_FOLDERS:CREATE': ['FILE_CREATED','FOLDER_CREATED'], 'FILES_FOLDERS:DOWNLOAD': ['FILE_DOWNLOADED'], 'FILES_FOLDERS:VIEW': ['FILE_VIEWED'], 'FILES_FOLDERS:MODIFY': ['FILE_MODIFIED'], 'FILES_FOLDERS:RENAME': ['FILE_RENAMED','FOLDER_RENAMED'], 'FILES_FOLDERS:TRASH': ['FILE_TRASHED','FOLDER_TRASHED'], 'FILES_FOLDERS:DELETE': ['FILE_PERMANENTLY_DELETED','FOLDER_PERMANENTLY_DELETED'], 'FILES_FOLDERS:PERMANENT_DELETE': ['FILE_PERMANENTLY_DELETED','FOLDER_PERMANENTLY_DELETED'], 'FILES_FOLDERS:RESTORE': ['FILE_RESTORED','FOLDER_RESTORED','FILE_VERSION_RESTORED'], 'FILES_FOLDERS:MOVE': ['FILE_MOVED','FOLDER_MOVED'], 'FILES_FOLDERS:COPY': ['FILE_COPIED','FOLDER_COPIED'], 'FILES_FOLDERS:PURGED': ['TRASH_EMPTIED'], 'FILES_FOLDERS:TRANSFER_OWNERSHIP': ['ORG_OWNERSHIP_TRANSFERRED'],
+      SHARING: ['SHARE_CREATED','SHARE_ACCESS_REMOVED','SHARE_PERMISSION_CHANGED','SHARE_REVOKED','PUBLIC_SHARE_ACCESSED'], 'SHARING:SHARE': ['SHARE_CREATED'], 'SHARING:REMOVE_SHARE': ['SHARE_ACCESS_REMOVED','SHARE_REVOKED'], 'SHARING:MODIFY_SHARE': ['SHARE_PERMISSION_CHANGED'],
+      GROUPS: ['GROUP_CREATED','GROUP_RENAMED','GROUP_MEMBER_ADDED','GROUP_MEMBER_REMOVED','GROUP_MEMBER_ROLE_CHANGED','GROUP_DELETED'],
+      'GROUPS:CREATE': ['GROUP_CREATED'], 'GROUPS:RENAME': ['GROUP_RENAMED'], 'GROUPS:ADD_MEMBERS': ['GROUP_MEMBER_ADDED'], 'GROUPS:REMOVE_MEMBERS': ['GROUP_MEMBER_REMOVED'], 'GROUPS:UPDATE_MEMBER_ROLE': ['GROUP_MEMBER_ROLE_CHANGED'], 'GROUPS:DELETE': ['GROUP_DELETED'],
+      TEAM_FOLDERS: ['TEAM_FOLDER_CREATED','TEAM_FOLDER_RENAMED','TEAM_FOLDER_DUPLICATED','TEAM_FOLDER_MEMBER_ADDED','TEAM_FOLDER_MEMBER_REMOVED','TEAM_FOLDER_MEMBER_ROLE_CHANGED','TEAM_FOLDER_DELETED','TEAM_FOLDER_RESTORED','TEAM_FOLDER_ARCHIVED','TEAM_FOLDER_UNARCHIVED'],
+      'TEAM_FOLDERS:CREATE': ['TEAM_FOLDER_CREATED'], 'TEAM_FOLDERS:RENAME': ['TEAM_FOLDER_RENAMED'], 'TEAM_FOLDERS:DUPLICATE': ['TEAM_FOLDER_DUPLICATED'], 'TEAM_FOLDERS:ADD_MEMBERS': ['TEAM_FOLDER_MEMBER_ADDED'], 'TEAM_FOLDERS:REMOVE_MEMBERS': ['TEAM_FOLDER_MEMBER_REMOVED'], 'TEAM_FOLDERS:UPDATE_MEMBER_ROLE': ['TEAM_FOLDER_MEMBER_ROLE_CHANGED'], 'TEAM_FOLDERS:DELETE': ['TEAM_FOLDER_DELETED'], 'TEAM_FOLDERS:RESTORE': ['TEAM_FOLDER_RESTORED'], 'TEAM_FOLDERS:ARCHIVE': ['TEAM_FOLDER_ARCHIVED'], 'TEAM_FOLDERS:UNARCHIVE': ['TEAM_FOLDER_UNARCHIVED'],
+      TEAM: ['ORG_INVITATION_CREATED','ORG_INVITATION_ACCEPTED','ORG_INVITATION_REVOKED','ORG_MEMBER_ACTIVATED','ORG_MEMBER_ROLE_CHANGED','ORG_MEMBER_SUSPENDED','ORG_OWNERSHIP_TRANSFERRED','USER_SUSPENDED','ADMIN_CONSOLE_SETTINGS_UPDATED'],
+      DATA_TEMPLATES: ['TEMPLATE_CREATED_FROM_FILE','TEMPLATE_CREATED','TEMPLATE_UPDATED','TEMPLATE_DELETED','TEMPLATE_DUPLICATED','TEMPLATE_VERSION_CREATED','TEMPLATE_BUILDER_UPDATED','TEMPLATE_BUILDER_PUBLISHED','TEMPLATE_BUILDER_UNPUBLISHED','TEMPLATE_CERTIFIED'],
+      'DATA_TEMPLATES:CREATE': ['TEMPLATE_CREATED_FROM_FILE','TEMPLATE_CREATED'], 'DATA_TEMPLATES:MODIFY': ['TEMPLATE_UPDATED','TEMPLATE_BUILDER_UPDATED'], 'DATA_TEMPLATES:DELETE': ['TEMPLATE_DELETED'], 'DATA_TEMPLATES:ASSOCIATE': ['TEMPLATE_CREATED_FROM_FILE'], 'DATA_TEMPLATES:DISSOCIATE': [], 'DATA_TEMPLATES:MODIFY_CUSTOM_FIELDS': [], 'DATA_TEMPLATES:DELETE_CUSTOM_FIELDS': [],
+      COLLECT_FILES: ['COLLECT_FILES_CREATED','COLLECT_FILES_ENABLED','COLLECT_FILES_DELETED','COLLECT_FILES_PURGED'],
+      'COLLECT_FILES:CREATE': ['COLLECT_FILES_CREATED'], 'COLLECT_FILES:ENABLE': ['COLLECT_FILES_ENABLED'], 'COLLECT_FILES:DELETE': ['COLLECT_FILES_DELETED'], 'COLLECT_FILES:PURGED': ['COLLECT_FILES_PURGED'],
+      DLP: ['DLP_POLICY_CREATED','DLP_POLICY_UPDATED','DLP_POLICY_DELETED','DLP_POLICY_ENABLED','DLP_POLICY_DISABLED','DLP_CLASSIFICATION_LABEL_CREATED','DLP_CLASSIFICATION_LABEL_UPDATED','DLP_CLASSIFICATION_LABEL_DELETED'],
+      'DLP:CREATE_DLP_POLICY': ['DLP_POLICY_CREATED'], 'DLP:EDIT_DLP_POLICY': ['DLP_POLICY_UPDATED'], 'DLP:DELETE_DLP_POLICY': ['DLP_POLICY_DELETED'], 'DLP:ENABLE_DLP_POLICY': ['DLP_POLICY_ENABLED'], 'DLP:DISABLE_DLP_POLICY': ['DLP_POLICY_DISABLED'], 'DLP:CREATE_CLASSIFICATION_LABEL': ['DLP_CLASSIFICATION_LABEL_CREATED'], 'DLP:EDIT_CLASSIFICATION_LABEL': ['DLP_CLASSIFICATION_LABEL_UPDATED'], 'DLP:DELETE_CLASSIFICATION_LABEL': ['DLP_CLASSIFICATION_LABEL_DELETED'],
+      DEVICES: ['DEVICE_CONNECTED','DEVICE_DISCONNECTED','DEVICE_WIPED','APP_ENABLED','APP_DISABLED'],
+      'DEVICES:CONNECT_DEVICES': ['DEVICE_CONNECTED'], 'DEVICES:DISCONNECT_DEVICES': ['DEVICE_DISCONNECTED'], 'DEVICES:WIPE_DEVICES': ['DEVICE_WIPED'], 'DEVICES:APP_TOGGLE': ['APP_ENABLED','APP_DISABLED'],
+      COMMENTS: ['COMMENT_CREATED','COMMENT_EDITED','COMMENT_DELETED','COMMENT_RESOLVED','COMMENT_REOPENED','COMMENT_REPLIED'],
+      'COMMENTS:CREATE': ['COMMENT_CREATED'], 'COMMENTS:EDIT': ['COMMENT_EDITED'], 'COMMENTS:DELETE': ['COMMENT_DELETED'], 'COMMENTS:RESOLVE': ['COMMENT_RESOLVED'], 'COMMENTS:REOPEN': ['COMMENT_REOPENED'], 'COMMENTS:REPLY': ['COMMENT_REPLIED'],
+      APPS: ['APP_CREATED','APP_UPDATED','APP_DELETED'],
+      'APPS:CREATE_APP': ['APP_CREATED'], 'APPS:UPDATE_APP': ['APP_UPDATED'], 'APPS:DELETE_APP': ['APP_DELETED'],
+      WEBHOOKS: ['WEBHOOK_CREATED','WEBHOOK_UPDATED','WEBHOOK_DELETED'],
+      'WEBHOOKS:CREATE_WEBHOOK': ['WEBHOOK_CREATED'], 'WEBHOOKS:UPDATE_WEBHOOK': ['WEBHOOK_UPDATED'], 'WEBHOOKS:DELETE_WEBHOOK': ['WEBHOOK_DELETED'],
+      WORKFLOWS: ['WORKFLOW_CREATED','WORKFLOW_UPDATED','WORKFLOW_DELETED','WORKFLOW_ACTIVATED','WORKFLOW_DEACTIVATED','WORKFLOW_RUN_RETRIED','WORKFLOW_JOB_DEAD_LETTER','WORKFLOW_JOB_RECOVERED'],
+      CONNECTIONS: ['connection.reconnected','CONNECTION_CREATED','CONNECTION_UPDATED','CONNECTION_DELETED'],
+    };
+    const allKnownActions = [...new Set(Object.values(ACTIONS).flat())];
+    const actions = requestedActions.length ? [...new Set(requestedActions)] : allKnownActions;
+
+    const params: any[] = [user.org_id, from, to];
+    const where = ['a.org_id = ?', 'a.created_at >= ?', 'a.created_at <= ?'];
+    if (actorId) { where.push('a.actor_id = ?'); params.push(actorId); }
+    if (input?.includeSystemActivities !== true) where.push('a.actor_id IS NOT NULL');
+    const actionPlaceholders = actions.map(() => '?').join(',');
+    if (actions.length) { where.push(`a.action IN (${actionPlaceholders})`); params.push(...actions); } else { where.push('1 = 0'); }
+    if (locationType === 'MY_FOLDERS') {
+      where.push(`((a.resource_type = 'FILE' AND EXISTS (SELECT 1 FROM files lf JOIN folders lfd ON lfd.id=lf.folder_id WHERE lf.id=a.resource_id AND lf.org_id=? AND lf.owner_id=? AND lfd.team_folder_id IS NULL)) OR (a.resource_type = 'FOLDER' AND EXISTS (SELECT 1 FROM folders lfolder WHERE lfolder.id=a.resource_id AND lfolder.org_id=? AND lfolder.owner_id=? AND lfolder.team_folder_id IS NULL)))`);
+      params.push(user.org_id, user.sub, user.org_id, user.sub);
+    } else if (locationType === 'TEAM_FOLDER') {
+      if (!locationId) throw new BadRequestException('Team folder is required');
+      where.push(`((a.resource_type = 'TEAM_FOLDER' AND a.resource_id=?) OR (a.resource_type = 'FILE' AND EXISTS (SELECT 1 FROM files tf JOIN folders tff ON tff.id=tf.folder_id WHERE tf.id=a.resource_id AND tf.org_id=? AND tff.team_folder_id=?)) OR (a.resource_type = 'FOLDER' AND EXISTS (SELECT 1 FROM folders tfd WHERE tfd.id=a.resource_id AND tfd.org_id=? AND tfd.team_folder_id=?)) )`);
+      params.push(locationId, user.org_id, locationId, user.org_id, locationId);
+    }
+    const safeLimit = Math.min(Math.max(Number(input?.limit) || 5000, 1), 10000);
+    params.push(safeLimit);
+    const rows = await this.prisma.$queryRawUnsafe<any[]>(`SELECT a.id, a.action, a.resource_type AS resourceType, a.resource_id AS resourceId, a.ip_address AS ipAddress, a.metadata, a.created_at AS createdAt,
+      u.id AS actorId, u.name AS actorName, u.email AS actorEmail,
+      COALESCE(f.name,fd.name,tf.name) AS resourceName,
+      COALESCE(tff.name,tfd.name,tf.name) AS teamFolderName
+      FROM audit_logs a
+      LEFT JOIN users u ON u.id=a.actor_id
+      LEFT JOIN files f ON a.resource_type='FILE' AND f.id=a.resource_id
+      LEFT JOIN folders fd ON a.resource_type='FOLDER' AND fd.id=a.resource_id
+      LEFT JOIN team_folders tf ON a.resource_type='TEAM_FOLDER' AND tf.id=a.resource_id
+      LEFT JOIN team_folders tff ON a.resource_type='FILE' AND tff.id=f.team_folder_id
+      LEFT JOIN team_folders tfd ON a.resource_type='FOLDER' AND tfd.id=fd.team_folder_id
+      WHERE ${where.join(' AND ')}
+      ORDER BY a.created_at DESC LIMIT ?`, ...params);
+
+    const humanize = (action: string) => action.replaceAll('_', ' ').replace(/\bFILE /, 'File ').replace(/\bFOLDER /, 'Folder ').replace(/\bORG /, 'Organization ');
+    const reportRows = rows.map((r) => ({
+      id: r.id, actor: { id: r.actorId, name: r.actorName, email: r.actorEmail }, createdAt: r.createdAt, action: r.action,
+      actionLabel: humanize(r.action), resourceType: r.resourceType, resourceId: r.resourceId, resourceName: r.resourceName || null, teamFolderName: r.teamFolderName || null,
+      location: r.ipAddress || '—', metadata: r.metadata || null,
+    }));
+    return { generatedAt: new Date().toISOString(), criteria: { locationType, locationId, actorId, range, from: from.toISOString(), to: to.toISOString(), actions }, total: reportRows.length, rows: reportRows };
+  }
+
 
 
 

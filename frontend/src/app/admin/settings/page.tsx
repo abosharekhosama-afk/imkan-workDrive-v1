@@ -76,6 +76,7 @@ export default function AdminSettingsPage() {
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
+  const [reloadKey, setReloadKey] = useState(0);
   const logoInput = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -93,7 +94,7 @@ export default function AdminSettingsPage() {
       if (live) setError(cause instanceof Error ? cause.message : text(ar, "Unable to load organization settings.", "تعذر تحميل إعدادات المؤسسة."));
     });
     return () => { live = false; };
-  }, [ar]);
+  }, [ar, reloadKey]);
 
   useEffect(() => {
     let live = true;
@@ -134,7 +135,7 @@ export default function AdminSettingsPage() {
   };
   const navigate = (key: TabKey) => { router.push(`/admin/settings?settingtab=${key}`); };
 
-  if (!settings || !org) return <div className="flex h-full flex-col items-center justify-center gap-3 bg-[#f7f7f7] text-[13px] text-[#6b6f76]"><div>{text(ar, "Loading settings…", "جارٍ تحميل الإعدادات…")}</div>{error ? <div className="max-w-[520px] rounded-[10px] border border-[#f1c5c5] bg-white px-4 py-3 text-center text-[11px] text-[#a52a2a]">{error}</div> : null}</div>;
+  if (!settings || !org) return <div className="flex h-full flex-col items-center justify-center gap-3 bg-[#f7f7f7] text-[13px] text-[#6b6f76]"><div>{text(ar, "Loading settings…", "جارٍ تحميل الإعدادات…")}</div>{error ? <div className="flex max-w-[520px] flex-col items-center gap-3 rounded-[12px] border border-[#f1c5c5] bg-white px-5 py-4 text-center text-[11px] text-[#a52a2a]"><div>{error}</div><button type="button" onClick={() => { setError(""); setSettings(null); setOrg(null); setReloadKey((v) => v + 1); }} className="rounded-full bg-[#2f6ee5] px-4 py-2 text-[11px] font-semibold text-white">{text(ar, "Retry", "إعادة المحاولة")}</button></div> : null}</div>;
 
   return <div className="flex h-full min-h-0 bg-[#f7f7f7]" dir={ar ? "rtl" : "ltr"}>
     <aside className="hidden w-[350px] shrink-0 overflow-y-auto border-e border-[#e7e7e7] bg-white px-4 py-5 lg:block">

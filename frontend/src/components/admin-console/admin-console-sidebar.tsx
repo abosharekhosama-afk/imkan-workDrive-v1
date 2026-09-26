@@ -35,7 +35,7 @@ export function AdminConsoleSidebar() {
   const ar = locale === "ar";
 
   return (
-    <aside className="admin-console-sidebar flex h-full w-[190px] shrink-0 flex-col bg-[#252525] text-white" dir={ar ? "rtl" : "ltr"}>
+    <aside className="admin-console-sidebar flex h-full w-[255px] shrink-0 flex-col bg-[#272727] text-white" dir={ar ? "rtl" : "ltr"}>
       <div className="flex h-[54px] shrink-0 items-center border-b border-white/10 px-4">
         <Link href="/admin" className="flex min-w-0 items-center gap-2">
           <span className="flex h-7 w-7 items-center justify-center rounded-md bg-[#2f70df] text-white"><Icons.folder size={17} /></span>
