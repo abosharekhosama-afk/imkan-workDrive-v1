@@ -236,7 +236,19 @@ export class OrganizationService {
       }),
       this.prisma.groupMember.findMany({
         where: { orgId: user.org_id, userId: membership.userId },
-        include: { group: { select: { id: true, name: true, description: true } } },
+        include: {
+          group: {
+            select: {
+              id: true,
+              name: true,
+              description: true,
+              teamFolders: {
+                where: { orgId: user.org_id },
+                include: { teamFolder: { select: { id: true, name: true, isPublicToOrg: true } } },
+              },
+            },
+          },
+        },
         orderBy: { group: { name: 'asc' } },
       }),
       this.prisma.file.aggregate({
@@ -245,13 +257,56 @@ export class OrganizationService {
       }),
     ]);
 
+    // A Team Folder granted through one or more groups is real membership for the
+    // member-management UI as well. Merge it with direct membership and keep the
+    // highest applicable Team Folder role, matching effective-permission behavior.
+    const teamRoleRank: Record<string, number> = { VIEWER: 1, COMMENTER: 2, EDITOR: 3, ORGANIZER: 4, ADMIN: 5 };
+    const effectiveTeamFolders = new Map<string, {
+      id: string;
+      name: string;
+      role: string;
+      isPublicToOrg: boolean;
+      source: 'DIRECT' | 'GROUP';
+      groupNames: string[];
+    }>();
+
+    for (const membershipRow of folderMemberships) {
+      effectiveTeamFolders.set(membershipRow.teamFolderId, {
+        id: membershipRow.teamFolderId,
+        name: membershipRow.teamFolder.name,
+        role: membershipRow.role,
+        isPublicToOrg: membershipRow.teamFolder.isPublicToOrg,
+        source: 'DIRECT',
+        groupNames: [],
+      });
+    }
+
+    for (const groupMembership of groupMemberships) {
+      for (const teamFolderGroup of groupMembership.group.teamFolders) {
+        const current = effectiveTeamFolders.get(teamFolderGroup.teamFolderId);
+        const shouldReplace = !current || teamRoleRank[teamFolderGroup.role] > teamRoleRank[current.role];
+        const groupNames = current?.groupNames ?? [];
+        if (!groupNames.includes(groupMembership.group.name)) groupNames.push(groupMembership.group.name);
+        effectiveTeamFolders.set(teamFolderGroup.teamFolderId, {
+          id: teamFolderGroup.teamFolderId,
+          name: teamFolderGroup.teamFolder.name,
+          role: shouldReplace ? teamFolderGroup.role : current.role,
+          isPublicToOrg: teamFolderGroup.teamFolder.isPublicToOrg,
+          source: shouldReplace && current?.source !== 'DIRECT' ? 'GROUP' : current?.source ?? 'GROUP',
+          groupNames,
+        });
+      }
+    }
+
+    const memberTeamFolders = [...effectiveTeamFolders.values()].sort((a, b) => a.name.localeCompare(b.name));
+
     const allTeamFolders = await this.prisma.teamFolder.findMany({
       where: { orgId: user.org_id, archivedAt: null },
       select: { id: true, name: true, isPublicToOrg: true },
       orderBy: { name: 'asc' },
     });
 
-    const assignedIds = new Set(folderMemberships.map((m) => m.teamFolderId));
+    const assignedIds = new Set(memberTeamFolders.map((m) => m.id));
     const available = allTeamFolders.filter((folder) => !assignedIds.has(folder.id));
     const fileRows = available.length
       ? await this.prisma.file.findMany({
@@ -293,12 +348,7 @@ export class OrganizationService {
         lastLoginAt: membership.user.lastLoginAt,
         storageUsed: String(fileTotal._sum.size ?? 0n),
       },
-      teamFolders: folderMemberships.map((m) => ({
-        id: m.teamFolderId,
-        name: m.teamFolder.name,
-        role: m.role,
-        isPublicToOrg: m.teamFolder.isPublicToOrg,
-      })),
+      teamFolders: memberTeamFolders,
       groups: groupMemberships.map((m) => ({
         id: m.groupId,
         name: m.group.name,
