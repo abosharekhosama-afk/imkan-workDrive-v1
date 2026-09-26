@@ -3,7 +3,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
 import type { FileRecord, FolderRecord } from "../../lib/api/types";
 
-export type InspectorTab = "details" | "activity";
+export type InspectorTab = "details" | "dataTemplates" | "activity";
 export type InspectorResource =
   | { kind: "FILE"; file: FileRecord }
   | { kind: "FOLDER"; folder: FolderRecord };
@@ -53,7 +53,7 @@ function readFlag(key: string): boolean {
 
 function readTab(): InspectorTab {
   try {
-    return window.localStorage.getItem(INSPECTOR_TAB_KEY) === "activity" ? "activity" : "details";
+    const value = window.localStorage.getItem(INSPECTOR_TAB_KEY); return value === "activity" || value === "dataTemplates" ? value : "details";
   } catch {
     return "details";
   }
