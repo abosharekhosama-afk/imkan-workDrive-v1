@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { useLocale } from "../../components/locale-provider";
+import { usePathname } from "next/navigation";
 import { Icons } from "../../components/layout/icons";
 import { Toast } from "../../components/toast";
 import {
@@ -33,6 +34,8 @@ function bytes(value: string) {
 export default function MembersPage() {
   const { locale } = useLocale();
   const ar = locale === "ar";
+  const pathname = usePathname();
+  const memberBase = pathname.startsWith("/admin/members") ? "/admin/members" : "/members";
   const [filter, setFilter] = useState<Filter>("ACTIVE");
   const [filterOpen, setFilterOpen] = useState(false);
   const [query, setQuery] = useState("");
@@ -171,7 +174,7 @@ export default function MembersPage() {
               ) : members.map((m) => (
                 <div key={m.id} className={`members-table-row ${selected.includes(m.id) ? "is-selected" : ""}`}>
                   <span className="member-check"><input type="checkbox" checked={selected.includes(m.id)} onChange={() => toggleOne(m.id)} aria-label={`Select ${m.email}`} /></span>
-                  <Link href={`/members/${encodeURIComponent(m.id)}`} className="member-name-cell">
+                  <Link href={`${memberBase}/${encodeURIComponent(m.id)}`} className="member-name-cell">
                     <span className="member-avatar">{m.avatarUrl ? <img src={m.avatarUrl} alt="" /> : initials(m.name, m.email)}</span>
                     <span className="min-w-0">
                       <span className="member-name">{m.name || m.email.split("@")[0]}</span>
@@ -183,11 +186,11 @@ export default function MembersPage() {
                   </Link>
                   <span className="member-storage">{bytes(m.storageUsed)}</span>
                   <span className="relative flex items-center justify-end gap-2 pe-1">
-                    <Link href={`/members/${encodeURIComponent(m.id)}`} className="member-row-manage"><Icons.gear size={14} /> {ar ? "إدارة" : "Manage"}</Link>
+                    <Link href={`${memberBase}/${encodeURIComponent(m.id)}`} className="member-row-manage"><Icons.gear size={14} /> {ar ? "إدارة" : "Manage"}</Link>
                     <button type="button" className="member-circle-button" onClick={() => setMenuId(menuId === m.id ? null : m.id)} aria-label="More"><Icons.dots size={16} /></button>
                     {menuId === m.id ? (
                       <div className="member-popover end-0 top-10 min-w-[220px]">
-                        <Link href={`/members/${encodeURIComponent(m.id)}`}>{ar ? "إدارة العضو" : "Manage member"}</Link>
+                        <Link href={`${memberBase}/${encodeURIComponent(m.id)}`}>{ar ? "إدارة العضو" : "Manage member"}</Link>
                         {m.status === "SUSPENDED" ? <button type="button" onClick={() => void perform("activate", [m])}>{ar ? "تنشيط" : "Activate"}</button> : <button type="button" onClick={() => void perform("suspend", [m])}>{ar ? "إيقاف" : "Suspend"}</button>}
                         <button type="button" className="danger" onClick={() => void perform("remove", [m])}>{ar ? "حذف" : "Delete"}</button>
                       </div>

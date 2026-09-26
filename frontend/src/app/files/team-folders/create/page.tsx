@@ -40,10 +40,10 @@ export default function CreateTeamFolderPage() {
     setBusy(true);
     setError("");
     try {
-      // The current Team Folder API persists the name; type/description are
-      // kept in the UI because the existing backend contract intentionally
-      // accepts only { name } and this task is frontend-only.
-      await createTeamFolder(cleanName);
+      // Persist the selected Team Folder visibility in the real API.
+      // Description is currently presentation-only because the TeamFolder model
+      // has no description field.
+      await createTeamFolder(cleanName, { isPublicToOrg: type === "public" });
       window.dispatchEvent(new Event("workdrive:team-folders-changed"));
       router.push(teamFoldersBase);
     } catch (cause) {

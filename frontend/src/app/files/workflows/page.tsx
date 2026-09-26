@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { WorkflowShell } from "@/components/workflow-shell";
 import { WorkflowHelp } from "@/components/workflow-help";
 import { WorkflowConceptGuide } from "@/components/workflow-concept-guide";
@@ -18,6 +18,8 @@ export default function WorkflowsPage() {
   const { locale } = useLocale();
   const ar = locale === "ar";
   const router = useRouter();
+  const pathname = usePathname();
+  const workflowBase = pathname.startsWith("/admin/workflows") ? "/admin/workflows" : "/files/workflows";
   const access = useWorkflowAccess();
 
   const [createOpen, setCreateOpen] = useState(false);
@@ -47,7 +49,7 @@ export default function WorkflowsPage() {
       resourceType,
     });
     if (draftDescription.trim()) qs.set("description", draftDescription.trim());
-    router.push(`/files/workflows/builder?${qs.toString()}`);
+    router.push(`${workflowBase}/builder?${qs.toString()}`);
     setCreateOpen(false);
   };
 
@@ -187,7 +189,7 @@ export default function WorkflowsPage() {
                 <div className="flex min-w-0 items-center gap-2">
                   <span className="workflow-row-icon"><Icons.flow size={17} /></span>
                   {(access?.canManageWorkflows || (r.status === "DRAFT" && access?.canEditOwnedDrafts))
-                    ? <Link href={`/files/workflows/builder?id=${r.id}`} className="min-w-0 truncate text-[12px] font-semibold text-slate-900 hover:text-[var(--wd-primary)]">{r.name}</Link>
+                    ? <Link href={`${workflowBase}/builder?id=${r.id}`} className="min-w-0 truncate text-[12px] font-semibold text-slate-900 hover:text-[var(--wd-primary)]">{r.name}</Link>
                     : <span className="min-w-0 truncate text-[12px] font-semibold text-slate-900">{r.name}</span>}
                   {r.status === "ACTIVE" && <span className="workflow-status-badge">{ar ? "فعال" : "Active"}</span>}
                   {r.status === "DRAFT" && <span className="workflow-draft-badge">{ar ? "مسودة" : "Draft"}</span>}
@@ -212,8 +214,8 @@ export default function WorkflowsPage() {
                   <button type="button" className="workflow-row-menu-button" aria-label={ar ? "المزيد" : "More"} aria-expanded={menuOpen === r.id} onClick={() => setMenuOpen(menuOpen === r.id ? null : r.id)}><Icons.dots size={18} /></button>
                   {menuOpen === r.id && <div className="workflow-row-menu">
                     <button type="button" onClick={() => startEdit(r)}><Icons.pencil size={14} />{ar ? "تعديل الاسم والوصف" : "Edit name & description"}</button>
-                    <button type="button" onClick={() => { setMenuOpen(null); router.push(`/files/workflows/builder?id=${r.id}`); }}><Icons.eye size={14} />{ar ? "عرض سير العمل" : "View workflow"}</button>
-                    <button type="button" onClick={() => { setMenuOpen(null); router.push(`/files/workflows/runs?workflowId=${encodeURIComponent(r.id)}`); }}><Icons.history size={14} />{ar ? "تتبع سير العمل" : "Track workflow"}</button>
+                    <button type="button" onClick={() => { setMenuOpen(null); router.push(`${workflowBase}/builder?id=${r.id}`); }}><Icons.eye size={14} />{ar ? "عرض سير العمل" : "View workflow"}</button>
+                    <button type="button" onClick={() => { setMenuOpen(null); router.push(`${workflowBase}/runs?workflowId=${encodeURIComponent(r.id)}`); }}><Icons.history size={14} />{ar ? "تتبع سير العمل" : "Track workflow"}</button>
                     <button type="button" onClick={() => void duplicate(r)}><Icons.copy size={14} />{ar ? "نسخ سير العمل" : "Clone workflow"}</button>
                     <button type="button" data-danger="true" onClick={() => void remove(r)}><Icons.trash size={14} />{ar ? "حذف" : "Delete"}</button>
                   </div>}
@@ -244,7 +246,7 @@ export default function WorkflowsPage() {
               ? (ar ? "يجب بدء سير العمل يدوياً من ملف أو مجلد." : "This workflow must be started manually from a file/folder.")
               : (ar ? "يبدأ سير العمل تلقائياً عند حدوث حدث مطابق." : "This workflow starts automatically when a matching event occurs.")}
             {" "}
-            <Link href="/files/workflows/builder" className="text-[var(--wd-primary)] hover:underline">{ar ? "تعرف على إنشاء سير عمل مخصص" : "Learn more about creating a custom workflow"}</Link>
+            <Link href={`${workflowBase}/builder`} className="text-[var(--wd-primary)] hover:underline">{ar ? "تعرف على إنشاء سير عمل مخصص" : "Learn more about creating a custom workflow"}</Link>
           </p>
 
           <label className="workflow-form-field">

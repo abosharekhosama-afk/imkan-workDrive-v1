@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useParams, useSearchParams } from "next/navigation";
+import { useParams, usePathname, useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { useLocale } from "../../../components/locale-provider";
 import { Icons } from "../../../components/layout/icons";
@@ -32,7 +32,8 @@ function roleLabel(role: string, ar: boolean) {
 
 export default function MemberDetailsPage() {
   const { locale } = useLocale(); const ar=locale==="ar";
-  const params=useParams<{id:string}>(); const search=useSearchParams();
+  const params=useParams<{id:string}>(); const search=useSearchParams(); const pathname=usePathname();
+  const memberBase = pathname.startsWith("/admin/members") ? "/admin/members" : "/members";
   const id=decodeURIComponent(params.id);
   const [tab,setTab]=useState<Tab>((search.get("tab") as Tab) || "settings");
   const [data,setData]=useState<MemberDetails|null>(null);
@@ -46,10 +47,10 @@ export default function MemberDetailsPage() {
   const setRole=async(role:OrgRole)=>{try{await updateOrganizationMember(id,role);setToast({message:ar?"تم تحديث الدور.":"Role updated.",tone:"success"});await load()}catch{setToast({message:ar?"تعذر تغيير الدور.":"Unable to change role.",tone:"error"})}};
   const setStatus=async()=>{if(!member)return;try{if(member.status==="SUSPENDED")await activateOrganizationMember(id);else await suspendOrganizationMember(id);await load();setToast({message:ar?"تم تحديث حالة الحساب.":"Account status updated.",tone:"success"})}catch{setToast({message:ar?"تعذر تحديث الحالة.":"Unable to update status.",tone:"error"})}};
   if(loading)return <div className="members-page flex min-h-full items-center justify-center text-sm text-slate-500">{ar?"جارٍ التحميل...":"Loading..."}</div>;
-  if(error||!member)return <div className="members-page p-8"><p className="text-red-600">{error||"Member not found"}</p><Link className="member-soft-button mt-4 inline-flex" href="/members">{ar?"العودة":"Back"}</Link></div>;
+  if(error||!member)return <div className="members-page p-8"><p className="text-red-600">{error||"Member not found"}</p><Link className="member-soft-button mt-4 inline-flex" href={memberBase}>{ar?"العودة":"Back"}</Link></div>;
 
   return <div className="member-detail-page min-h-full bg-white">
-    <div className="member-detail-topbar"><Link href="/members" className="member-back"><Icons.chevR size={16} className="rotate-180"/>{ar?"رجوع":"Back"}</Link></div>
+    <div className="member-detail-topbar"><Link href={memberBase} className="member-back"><Icons.chevR size={16} className="rotate-180"/>{ar?"رجوع":"Back"}</Link></div>
     <div className="member-profile-card">
       <div className="member-profile-main">
         <span className="member-profile-avatar">{member.avatarUrl?<img src={member.avatarUrl} alt=""/>:initials(member.name,member.email)}</span>
@@ -71,7 +72,7 @@ export default function MemberDetailsPage() {
         </button>)}
       </div>
 
-      {tab==="settings"?<SettingsPanel member={member} ar={ar} onRole={setRole} onStatus={setStatus} onDelete={async()=>{try{await removeOrganizationMemberWithSuccessor(id);location.href="/members"}catch{setToast({message:ar?"تعذر حذف العضو.":"Unable to delete member.",tone:"error"})}}}/>:null}
+      {tab==="settings"?<SettingsPanel member={member} ar={ar} onRole={setRole} onStatus={setStatus} onDelete={async()=>{try{await removeOrganizationMemberWithSuccessor(id);location.href=memberBase}catch{setToast({message:ar?"تعذر حذف العضو.":"Unable to delete member.",tone:"error"})}}}/>:null}
       {tab==="team-folders"?<TeamFoldersPanel data={data} ar={ar} onRefresh={load} setToast={setToast}/>:null}
       {tab==="groups"?<GroupsPanel data={data} ar={ar} onRefresh={load} setToast={setToast}/>:null}
     </div>

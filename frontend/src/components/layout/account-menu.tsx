@@ -10,7 +10,7 @@ import { Icons } from "./icons";
 
 type AccountInfo = { id: string; name: string | null; email: string; avatarUrl?: string | null; role: string };
 
-type Props = { name: string; avatarUrl?: string | null };
+type Props = { name: string; avatarUrl?: string | null; adminMode?: boolean };
 
 function roleLabel(role: string, ar: boolean) {
   if (role === "SUPER_ADMIN") return ar ? "مسؤول عام" : "Super Admin";
@@ -30,7 +30,7 @@ function initials(name: string, email: string) {
   return source.split(/\s+/).map((p) => p[0]).join("").slice(0, 2).toUpperCase();
 }
 
-export function AccountMenu({ name, avatarUrl }: Props) {
+export function AccountMenu({ name, avatarUrl, adminMode = false }: Props) {
   const { label, locale } = useLocale();
   const ar = locale === "ar";
   const router = useRouter();
@@ -86,7 +86,7 @@ export function AccountMenu({ name, avatarUrl }: Props) {
                     <span className="account-profile-badge">{roleLabel(current.role, ar)}</span>
                     {current.email ? <div className="account-profile-line">{current.email}<button type="button" onClick={() => void navigator.clipboard?.writeText(current.email)} aria-label={ar ? "نسخ البريد" : "Copy email"}>▣</button></div> : null}
                     {current.id ? <div className="account-profile-line">{ar ? "معرف المستخدم:" : "User ID:"} {current.id}<button type="button" onClick={() => void navigator.clipboard?.writeText(current.id)} aria-label={ar ? "نسخ المعرف" : "Copy ID"}>▣</button></div> : null}
-                    <button type="button" className="account-my-account" onClick={() => { setOpen(false); router.push("/settings"); }}>{ar ? "حسابي" : "My Account"}</button>
+                    <button type="button" className="account-my-account" onClick={() => { setOpen(false); router.push(adminMode ? "/admin/settings?settingtab=profile" : "/settings"); }}>{ar ? "حسابي" : "My Account"}</button>
                   </div>
 
                   <div className="account-referral"><span className="account-referral-icon">♧</span><span>{ar ? <>ادعُ زملاءك واحصل على 15% من الاشتراك. <b>تعرّف على برنامج الإحالة.</b></> : <>Refer and earn 15% of the subscription. <b>Learn more about Zoho WorkDrive referral program</b></>}</span></div>
@@ -94,9 +94,9 @@ export function AccountMenu({ name, avatarUrl }: Props) {
                   <section className="account-section">
                     <div className="account-section-title">{ar ? "WorkDrive الخاص بي" : "My WorkDrive"}</div>
                     <div className="account-action-grid">
-                      <button type="button" className="account-action" onClick={() => { setOpen(false); router.push("/settings"); }}><span className="account-action-icon">☷</span>{ar ? "تفضيلاتي" : "My Preferences"}</button>
+                      <button type="button" className="account-action" onClick={() => { setOpen(false); router.push(adminMode ? "/admin/settings?settingtab=profile" : "/settings"); }}><span className="account-action-icon">☷</span>{ar ? "تفضيلاتي" : "My Preferences"}</button>
                       <button type="button" className="account-action" onClick={() => setAppearanceOpen(true)}><span className="account-action-icon">◉</span>{ar ? "المظهر" : "Appearance"}</button>
-                      <button type="button" className="account-action" onClick={() => { setOpen(false); router.push("/settings?tab=accessibility"); }}><span className="account-action-icon">◉</span>{ar ? "إعدادات إمكانية الوصول" : "Accessibility Controls"}</button>
+                      <button type="button" className="account-action" onClick={() => { setOpen(false); router.push(adminMode ? "/admin/settings?settingtab=profile" : "/settings?tab=accessibility"); }}><span className="account-action-icon">◉</span>{ar ? "إعدادات إمكانية الوصول" : "Accessibility Controls"}</button>
                     </div>
                   </section>
 

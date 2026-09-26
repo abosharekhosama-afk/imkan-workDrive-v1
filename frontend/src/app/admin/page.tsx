@@ -85,23 +85,7 @@ export default function AdminPage() {
 
       <section className="rounded-[18px] border border-slate-200 bg-white p-6 shadow-[0_1px_2px_rgba(0,0,0,.03)]"><div className="mb-4 flex flex-wrap items-center justify-between gap-3"><div><h2 className="text-[17px] font-semibold">{ar ? "نشاط الملفات" : "File Activity"}</h2><p className="mt-1 text-[10px] text-slate-500">{ar ? "الأحداث الفعلية من مركز التعاون خلال آخر 30 يوماً." : "Real events from the Collaboration Center over the last 30 days."}</p></div><Link href="/admin/audit" className="text-[11px] font-semibold text-[#175cd3]">{ar ? "سجلات كاملة" : "View full logs"}</Link></div><div className="mb-3 flex flex-wrap gap-5 border-b border-slate-100 text-[11px]">{["PREVIEW","UPLOAD","CREATE","UPDATE","DOWNLOAD"].map((key)=><button key={key} type="button" onClick={() => setSelectedActivity(key)} className={`border-b-2 pb-2 text-[11px] ${selectedActivity===key ? "border-[#2c66dd] font-semibold text-[#175cd3]" : "border-transparent text-slate-600"}`}>{actionLabel[key]} <b className="ms-1 text-[9px]">{actionCounts[key as keyof typeof actionCounts]}</b></button>)}</div><ActivityChart rows={filteredActivity} ar={ar}/></section>
 
-      <section className="grid gap-5 lg:grid-cols-3">
-        <Link href="/admin/team-folders" className="rounded-2xl border border-slate-200 bg-white p-5 transition hover:border-[#9bb9f5]">
-          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#edf3ff] text-[#2c66dd]"><Icons.folder size={19}/></div>
-          <h3 className="mt-4 text-[13px] font-semibold">{ar ? "مجلدات الفريق" : "Team Folders"}</h3>
-          <p className="mt-1 text-[10px] leading-5 text-slate-500">{ar ? "إنشاء وإدارة ومراجعة مجلدات الفريق مباشرة داخل وحدة الإدارة." : "Create and manage Team Folders directly inside the Admin Console."}</p>
-        </Link>
-        <Link href="/admin/members" className="rounded-2xl border border-slate-200 bg-white p-5 transition hover:border-[#9bb9f5]">
-          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#edf3ff] text-[#2c66dd]"><Icons.users size={19}/></div>
-          <h3 className="mt-4 text-[13px] font-semibold">{ar ? "الأعضاء" : "Members"}</h3>
-          <p className="mt-1 text-[10px] leading-5 text-slate-500">{ar ? "دعوة الأعضاء وإيقافهم وتنشيطهم وإدارة أدوارهم من وحدة الإدارة." : "Invite, suspend, activate, and manage member roles from the Admin Console."}</p>
-        </Link>
-        <Link href="/admin/settings?settingtab=sharing" className="rounded-2xl border border-slate-200 bg-white p-5 transition hover:border-[#9bb9f5]">
-          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#edf3ff] text-[#2c66dd]"><Icons.share size={19}/></div>
-          <h3 className="mt-4 text-[13px] font-semibold">{ar ? "المشاركة والسياسات" : "Sharing & Policies"}</h3>
-          <p className="mt-1 text-[10px] leading-5 text-slate-500">{ar ? "تعديل سياسات المشاركة والروابط والاحتفاظ من نفس وحدة الإدارة." : "Change sharing, links, and retention policies without leaving the Admin Console."}</p>
-        </Link>
-      </section>
+
     </div>
   </main>;
 }

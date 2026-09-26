@@ -11,7 +11,7 @@ import { Icons } from "./icons";
 import { AccountMenu } from "./account-menu";
 import { NotificationPanel } from "./notification-panel";
 import { OrgSwitcher } from "../org-switcher";
-export function TopHeader() {
+export function TopHeader({ adminMode = false }: { adminMode?: boolean }) {
   const { label, locale, setLocale } = useLocale();
   const router = useRouter();
   const pathname = usePathname();
@@ -112,7 +112,7 @@ export function TopHeader() {
           {notifOpen ? <NotificationPanel open={notifOpen} onClose={() => setNotifOpen(false)} /> : null}
           <ThemeToggle />
           <button type="button" className="rounded-md px-2 py-1.5 text-[12px] font-semibold text-slate-500 hover:bg-slate-100" aria-label={locale === "en" ? "العربية" : "English"} onClick={() => setLocale(locale === "en" ? "ar" : "en")}>{locale === "en" ? "ع" : "En"}</button>
-          <AccountMenu name={name} avatarUrl={avatarUrl} />
+          <AccountMenu name={name} avatarUrl={avatarUrl} adminMode={adminMode} />
           <button type="button" className="wd-icon-btn" aria-label={label("nav.appSwitcher")}><Icons.grid size={17} /></button>
         </div>
         {searchOpen ? <HeaderSearchOverlay onClose={() => setSearchOpen(false)} inputRef={searchInputRef} /> : null}
@@ -159,7 +159,7 @@ export function TopHeader() {
             {notifOpen ? <NotificationPanel open={notifOpen} onClose={() => setNotifOpen(false)} /> : null}
             <ThemeToggle />
             <button type="button" className="rounded-md px-2 py-1.5 text-[12px] font-semibold text-slate-500 hover:bg-slate-100" aria-label={locale === "en" ? "العربية" : "English"} onClick={() => setLocale(locale === "en" ? "ar" : "en")}>{locale === "en" ? "ع" : "En"}</button>
-            <AccountMenu name={name} avatarUrl={avatarUrl} />
+            <AccountMenu name={name} avatarUrl={avatarUrl} adminMode={adminMode} />
             <button type="button" className="wd-icon-btn" aria-label={label('nav.appSwitcher')}><Icons.grid size={17} /></button>
           </div>
         ) : null}
@@ -172,7 +172,7 @@ export function TopHeader() {
             {notifOpen ? <NotificationPanel open={notifOpen} onClose={() => setNotifOpen(false)} /> : null}
             <ThemeToggle />
             <button type="button" className="rounded-md px-2 py-1.5 text-[12px] font-semibold text-slate-500 hover:bg-slate-100" aria-label={locale === "en" ? "العربية" : "English"} onClick={() => setLocale(locale === "en" ? "ar" : "en")}>{locale === "en" ? "ع" : "En"}</button>
-            <AccountMenu name={name} avatarUrl={avatarUrl} />
+            <AccountMenu name={name} avatarUrl={avatarUrl} adminMode={adminMode} />
           </div>
         ) : null}
         <Link href={isTeamManageRoute ? '/files/team-folders' : '/files'} className="team-context-close" aria-label="Close">×</Link>
@@ -186,6 +186,7 @@ export function TopHeader() {
       <div className="flex min-w-0 items-center gap-2">
         <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[8px] bg-[#F0F4FF] text-[var(--wd-primary)]"><Icons.folder size={18} /></span>
         <span className="max-w-[42vw] truncate text-[15px] font-semibold text-[#212121]">{
+          adminMode ? (locale === "ar" ? "وحدة الإدارة" : "Admin Console") :
           pathname.startsWith("/members") ? (locale === "ar" ? "الأعضاء" : "Members") :
           pathname.startsWith("/organization") ? (locale === "ar" ? "المنظمة" : "Organization") :
           pathname.startsWith("/files/workflows") ? (locale === "ar" ? "سير العمل" : "Workflows") :
@@ -202,7 +203,7 @@ export function TopHeader() {
         <button type="button" className="wd-icon-btn" aria-label="Announcements"><Icons.horn size={17} /></button>
         <button type="button" className="wd-icon-btn relative" aria-label={label("nav.notifications")} onClick={() => setNotifOpen((v) => !v)}><Icons.bell size={17} />{unread > 0 ? <span className="absolute end-1 top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-[#DC2626] px-1 text-[10px] font-bold text-white">{unread > 9 ? "9+" : unread}</span> : null}</button>
         {notifOpen ? <NotificationPanel open={notifOpen} onClose={() => setNotifOpen(false)} /> : null}
-        <ThemeToggle /><button type="button" className="rounded-md px-2 py-1.5 text-[12px] font-semibold text-slate-500 hover:bg-slate-100" onClick={() => setLocale(locale === "en" ? "ar" : "en")}>{locale === "en" ? "ع" : "En"}</button><AccountMenu name={name} avatarUrl={avatarUrl} />
+        <ThemeToggle /><button type="button" className="rounded-md px-2 py-1.5 text-[12px] font-semibold text-slate-500 hover:bg-slate-100" onClick={() => setLocale(locale === "en" ? "ar" : "en")}>{locale === "en" ? "ع" : "En"}</button><AccountMenu name={name} avatarUrl={avatarUrl} adminMode={adminMode} />
       </div>
       {searchOpen ? <HeaderSearchOverlay onClose={() => setSearchOpen(false)} inputRef={searchInputRef} /> : null}
     </header>
