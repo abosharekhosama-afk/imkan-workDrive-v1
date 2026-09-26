@@ -17,6 +17,7 @@ import {
   type CloudProviderState,
   type CloudRemoteFile,
 } from '../lib/api/cloud-import';
+import { cloudFilesFromListing } from '../lib/api/cloud-import-listing-logic';
 
 type Detail = { folderId: string | null };
 type UiProvider = CloudProvider | 'box' | 'evernote';
@@ -258,7 +259,7 @@ export function CloudImportHost() {
     setLoading(true);
     try {
       const next = await listCloudFiles(provider, connectionId || connectedState.connectionId || null);
-      setFiles(next);
+      setFiles(cloudFilesFromListing(next));
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Unable to access this cloud provider');
     } finally {
@@ -294,7 +295,7 @@ export function CloudImportHost() {
       const created = await createCloudImports(
         provider,
         detail.folderId,
-        files.filter((f) => selected.includes(f.id)).map((f) => ({ id: f.id, name: f.name })),
+        cloudFilesFromListing(files).filter((f) => selected.includes(f.id)).map((f) => ({ id: f.id, name: f.name })),
         connectionId,
       );
       setJobs(created);
@@ -342,8 +343,9 @@ export function CloudImportHost() {
 
   if (!detail) return null;
 
-  const selectedFiles = files.filter((f) => selected.includes(f.id));
-  const allSelected = files.length > 0 && selected.length === files.length;
+  const fileRows = cloudFilesFromListing(files);
+  const selectedFiles = fileRows.filter((f) => selected.includes(f.id));
+  const allSelected = fileRows.length > 0 && selected.length === fileRows.length;
   const currentProvider = PROVIDERS.find((p) => p.id === provider) ?? PROVIDERS[0];
   const hasConnection = Boolean(connectedState?.connected);
   const accountName = connectedState?.connectionName || activeConnections.find((c) => c.id === connectionId)?.name || 'Google Drive';
@@ -424,14 +426,14 @@ export function CloudImportHost() {
           <div className="imkan-cloud-import-content">
             {error ? <div className="imkan-cloud-import-error">{error}</div> : null}
 
-            {filesRequested && files.length > 0 ? (
+            {filesRequested && fileRows.length > 0 ? (
               <div className="imkan-cloud-files-view">
                 <div className="imkan-cloud-files-toolbar">
                   <div className="min-w-0">
                     <div className="truncate text-[14px] font-semibold text-[#273247]">{locale === 'ar' ? 'ملفات Google Drive' : `${currentProvider.en} files`}</div>
-                    <div className="mt-0.5 text-[11px] text-[#8a93a3]">{selectedFiles.length} / {files.length} {locale === 'ar' ? 'محدد' : 'selected'}</div>
+                    <div className="mt-0.5 text-[11px] text-[#8a93a3]">{selectedFiles.length} / {fileRows.length} {locale === 'ar' ? 'محدد' : 'selected'}</div>
                   </div>
-                  <button type="button" className="imkan-cloud-select-all" onClick={() => setSelected(allSelected ? [] : files.map((f) => f.id))}>
+                  <button type="button" className="imkan-cloud-select-all" onClick={() => setSelected(allSelected ? [] : fileRows.map((f) => f.id))}>
                     {allSelected ? (locale === 'ar' ? 'إلغاء تحديد الكل' : 'Clear all') : locale === 'ar' ? 'تحديد الكل' : 'Select all'}
                   </button>
                 </div>
@@ -439,7 +441,7 @@ export function CloudImportHost() {
                   <div className="imkan-cloud-empty"><span className="imkan-cloud-spinner" />{locale === 'ar' ? 'جارٍ تحميل الملفات…' : 'Loading cloud files…'}</div>
                 ) : (
                   <div className="imkan-cloud-files-list">
-                    {files.map((file) => (
+                    {fileRows.map((file) => (
                       <label key={file.id} className="imkan-cloud-file-row">
                         <input type="checkbox" checked={selected.includes(file.id)} onChange={() => setSelected((s) => (s.includes(file.id) ? s.filter((id) => id !== file.id) : [...s, file.id]))} />
                         <span className="imkan-cloud-file-icon"><Icons.doc size={18} /></span>
@@ -487,7 +489,7 @@ export function CloudImportHost() {
               </div>
             )}
 
-            {filesRequested && !loading && files.length === 0 ? (
+            {filesRequested && !loading && fileRows.length === 0 ? (
               <div className="imkan-cloud-empty imkan-cloud-empty-large">
                 {locale === 'ar' ? 'لا توجد ملفات قابلة للاستيراد في هذا الحساب.' : 'No importable files found in this cloud account.'}
               </div>
@@ -517,7 +519,7 @@ export function CloudImportHost() {
           </div>
         </main>
 
-        {filesRequested && files.length > 0 ? (
+        {filesRequested && fileRows.length > 0 ? (
           <footer className="imkan-cloud-import-footer">
             <span>{locale === 'ar' ? 'تستمر عملية الاستيراد على الخادم حتى عند انقطاع اتصال المتصفح.' : 'Imports continue on the server if the browser connection drops.'}</span>
             <div className="flex items-center gap-2">

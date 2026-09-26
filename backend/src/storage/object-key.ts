@@ -41,7 +41,12 @@ export function buildPublicTemplateObjectKey(fileId: string, versionId: string):
 export function parsePublicTemplateObjectKey(objectKey: string): ParsedPublicTemplateObjectKey { const match = PUBLIC_TEMPLATE_KEY_RE.exec(objectKey); if (!match) throw new Error('Invalid public template object key'); return { fileId: match[1], versionId: match[2] }; }
 export function isPublicTemplateObjectKey(objectKey: string): boolean { return PUBLIC_TEMPLATE_KEY_RE.test(objectKey); }
 
-/** URL-encodes bucket/key for S3 CopyObject CopySource (slashes in keys must be encoded). */
+/**
+ * CopySource for S3-compatible CopyObject.
+ * The bucket/key separator stays a slash. Slashes inside the object key are
+ * percent-encoded so providers such as R2 do not reject tenant keys.
+ */
 export function encodeS3CopySource(bucket: string, objectKey: string): string {
-  return encodeURIComponent(`${bucket}/${objectKey}`);
+  const encodedKey = objectKey.split('/').map((part) => encodeURIComponent(part)).join('%2F');
+  return `${encodeURIComponent(bucket)}/${encodedKey}`;
 }
