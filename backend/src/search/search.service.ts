@@ -6,7 +6,7 @@ import { PrismaService } from '../prisma/prisma.service';
 
 export type SearchOptions = {
   type?: string; owner?: string; dateField?: 'created'|'modified'; dateFrom?: string; dateTo?: string;
-  page?: number; limit?: number; tags?: string[]; customField?: string; sort?: 'relevance'|'updated'|'created'|'name';
+  page?: number; limit?: number; tags?: string[]; customField?: string; dataTemplateId?: string; sort?: 'relevance'|'updated'|'created'|'name';
 };
 
 type Hit = { score: number; matchedBy: string[] };
@@ -39,7 +39,7 @@ export class SearchService {
     const [folders, files] = await Promise.all([
       this.prisma.folder.findMany({
         where: { orgId: user.org_id, name: { search: query }, OR: [{ teamFolderId: { not: null } }, { ownerId: user.sub }] },
-        include: { owner: { select: { id: true, name: true, email: true, avatarUrl: true } }, dataTemplate: { select: { id: true, name: true } } },
+        include: { owner: { select: { id: true, name: true, email: true, avatarUrl: true } }, dataTemplate: { select: { id: true, name: true } }, dataTemplateBindings: { include: { template: { select: { id: true, name: true } } } } },
         orderBy: { updatedAt: 'desc' }, take: candidateTake,
       }),
       this.prisma.file.findMany({
@@ -60,6 +60,7 @@ export class SearchService {
           owner: { select: { id: true, name: true, email: true, avatarUrl: true } },
           metadata: { include: { dataTemplate: { select: { id: true, name: true } } } },
           tags: { include: { tag: { select: { id: true, name: true } } } },
+          dataTemplateBindings: { include: { template: { select: { id: true, name: true } } } },
         },
         orderBy: { updatedAt: 'desc' }, take: candidateTake,
       }),
@@ -72,20 +73,28 @@ export class SearchService {
     for (const file of files) if (await this.canReadFile(user, file)) visibleFiles.push(file);
 
     const folderHits = visibleFolders.map((folder) => ({ item: folder, ...scoreText(query, [['name', folder.name, 10]]), updatedAt: folder.updatedAt, createdAt: folder.updatedAt }))
+      .filter((h) => !options.dataTemplateId || ((h.item as any).dataTemplateBindings || []).some((b: any) => b.templateId === options.dataTemplateId))
       .filter((h) => filter !== 'files' && (filter !== 'recent' || h.updatedAt >= recentSince));
     const fileHits = visibleFiles.map((file) => {
       const metadata = file.metadata;
       const text = scoreText(query, [['name', file.name, 10], ['originalName', file.originalName, 8], ['title', metadata?.title, 7], ['description', metadata?.description, 5], ['content', metadata?.contentText, 4], ['ocr', metadata?.ocrText, 3]]);
       const tagBoost = tagNames.length && file.tags.some((t: any) => tagNames.includes(t.tag.name.toLocaleLowerCase())) ? 4 : 0;
-      const fieldBoost = this.customFieldMatches(metadata?.customFields, options.customField) ? 6 : 0;
-      return { item: file, score: text.score + tagBoost + fieldBoost, matchedBy: [...text.matchedBy, ...(tagBoost ? ['tag'] : []), ...(fieldBoost ? ['customField'] : [])], updatedAt: file.updatedAt, createdAt: file.createdAt };
-    }).filter((h) => filter !== 'folders' && (filter !== 'recent' || h.updatedAt >= recentSince));
+      const bindings = Array.isArray((file as any).dataTemplateBindings) ? (file as any).dataTemplateBindings : [];
+      const templateBoost = options.dataTemplateId && bindings.some((b: any) => b.templateId === options.dataTemplateId) ? 8 : 0;
+      const fieldBoost = bindings.some((b: any) => this.customFieldMatches(b.customFields, options.customField)) || this.customFieldMatches(metadata?.customFields, options.customField) ? 6 : 0;
+      return { item: file, score: text.score + tagBoost + templateBoost + fieldBoost, matchedBy: [...text.matchedBy, ...(tagBoost ? ['tag'] : []), ...(templateBoost ? ['dataTemplate'] : []), ...(fieldBoost ? ['customField'] : [])], updatedAt: file.updatedAt, createdAt: file.createdAt };
+    }).filter((h) => !options.dataTemplateId || ((h.item as any).dataTemplateBindings || []).some((b: any) => b.templateId === options.dataTemplateId))
+      .filter((h) => filter !== 'folders' && (filter !== 'recent' || h.updatedAt >= recentSince));
 
     if (options.customField) {
-      const [key, rawValue] = options.customField.split(':', 2);
-      if (key && rawValue !== undefined) {
-        fileHits.splice(0, fileHits.length, ...fileHits.filter((h) => String((h.item.metadata?.customFields as any)?.[key]) === rawValue));
-      }
+      fileHits.splice(0, fileHits.length, ...fileHits.filter((h) => this.matchesFieldExpression((h.item as any).dataTemplateBindings?.map((b: any) => b.customFields) ?? [h.item.metadata?.customFields], options.customField)));
+    }
+    if (options.dataTemplateId) {
+      fileHits.splice(0, fileHits.length, ...fileHits.filter((h) => ((h.item as any).dataTemplateBindings || []).some((b: any) => b.templateId === options.dataTemplateId)));
+    }
+    if (options.customField) {
+      const [key] = options.customField.split(':');
+      if (key) folderHits.splice(0, folderHits.length, ...folderHits.filter((h) => ((h.item as any).dataTemplateBindings || []).some((b: any) => this.matchesFieldExpression([b.customFields], options.customField))));
     }
 
     const sort = options.sort ?? 'relevance';
@@ -101,6 +110,24 @@ export class SearchService {
   private customFieldMatches(value: unknown, expression?: string) {
     if (!expression) return false; const [key, expected] = expression.split(':', 2); if (!key || expected === undefined || !value || typeof value !== 'object') return false;
     return String((value as Record<string, unknown>)[key]) === expected;
+  }
+
+  private matchesFieldExpression(values: unknown[], expression?: string) {
+    if (!expression) return true;
+    const parts = expression.split(':');
+    const key = parts.shift()?.trim(); const op = parts.length > 1 ? parts.shift()?.trim() : 'eq'; const expected = parts.join(':').trim();
+    if (!key || !expected) return false;
+    return values.some((value) => {
+      if (!value || typeof value !== 'object') return false;
+      const actual = (value as Record<string, unknown>)[key];
+      if (actual === undefined || actual === null) return false;
+      const a = String(actual);
+      if (op === 'contains') return a.toLocaleLowerCase().includes(expected.toLocaleLowerCase());
+      if (op === 'neq') return a !== expected;
+      if (op === 'gt' || op === 'above') return Number(actual) > Number(expected);
+      if (op === 'lt' || op === 'below') return Number(actual) < Number(expected);
+      return a === expected;
+    });
   }
 
   private async canReadFolder(user: AccessTokenPayload, folder: { orgId: string; ownerId: string; teamFolderId?: string | null }) {
