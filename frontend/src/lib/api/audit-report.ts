@@ -13,6 +13,7 @@ export type AuditReportCriteria = {
   to?: string;
   actions: string[];
   limit?: number;
+  includeSystemActivities?: boolean;
 };
 
 export type AuditReportRow = {

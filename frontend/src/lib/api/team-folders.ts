@@ -1,6 +1,6 @@
 import { apiRequest } from "./client.ts";
 
-export type TeamFolderRole = "ADMIN" | "ORGANIZER" | "EDITOR" | "VIEWER";
+export type TeamFolderRole = "ADMIN" | "ORGANIZER" | "EDITOR" | "COMMENTER" | "VIEWER";
 export type TeamFolderUserRole = TeamFolderRole | "ORG_ADMIN";
 
 export type TeamFolderRecord = {

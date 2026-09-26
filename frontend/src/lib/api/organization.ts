@@ -24,7 +24,10 @@ export function createOrganizationAccount(input: { name: string; email: string; 
   });
 }
 export function updateOrganization(name:string){return apiRequest<{id:string;name:string;createdAt:string}>('/organization',{method:'PATCH',body:JSON.stringify({name})});}
-export function listOrganizationMembers(){return apiRequest<OrgMember[]>('/organization/members');}
+export function listOrganizationMembers(filters?: { status?: string }){
+  const status = filters?.status ? `?status=${encodeURIComponent(filters.status)}` : "";
+  return apiRequest<OrgMember[]>(`/organization/members${status}`);
+}
 export function updateOrganizationMember(id:string,role:OrgRole){return apiRequest<OrgMember>(`/organization/members/${id}`,{method:'PATCH',body:JSON.stringify({role})});}
 export function removeOrganizationMember(id:string){return apiRequest<{id:string;deleted:boolean}>(`/organization/members/${id}`,{method:'DELETE'});}
 export function listOrganizationInvitations(){return apiRequest<Invitation[]>('/organization/invitations');}
