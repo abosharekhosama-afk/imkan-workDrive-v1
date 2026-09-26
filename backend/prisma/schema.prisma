@@ -317,6 +317,7 @@ model Organization {
   memberships         OrganizationMembership[] @relation("OrganizationMemberships")
   teamFolders         TeamFolder[]
   teamFolderMembers   TeamFolderMember[]
+  teamFolderGroups    TeamFolderGroup[]
   folders             Folder[]
   files               File[]
   fileVersions        FileVersion[]
@@ -486,6 +487,7 @@ model TeamFolder {
 
   organization Organization       @relation(fields: [orgId], references: [id])
   members      TeamFolderMember[]
+  groups       TeamFolderGroup[]
   folders      Folder[]
 
   @@index([orgId])
@@ -506,6 +508,22 @@ model TeamFolderMember {
   @@index([orgId])
   @@index([userId])
   @@map("team_folder_members")
+}
+
+model TeamFolderGroup {
+  teamFolderId String         @map("team_folder_id") @db.Char(36)
+  groupId      String         @map("group_id") @db.Char(36)
+  orgId        String         @map("org_id") @db.Char(36)
+  role         TeamFolderRole
+
+  teamFolder   TeamFolder   @relation(fields: [teamFolderId], references: [id], onDelete: Cascade)
+  group        Group        @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  organization Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+
+  @@id([teamFolderId, groupId])
+  @@index([orgId])
+  @@index([groupId])
+  @@map("team_folder_groups")
 }
 
 model Folder {
@@ -1579,6 +1597,7 @@ model Group {
   createdBy    User               @relation(fields: [createdById], references: [id])
   members      GroupMember[]
   permissions  FolderPermission[]
+  teamFolders   TeamFolderGroup[]
 
   @@unique([orgId, name])
   @@index([orgId])
