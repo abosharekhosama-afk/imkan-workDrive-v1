@@ -19,6 +19,7 @@ const items: AdminItem[] = [
   { href: "/admin", en: "Dashboard", ar: "لوحة التحكم", icon: "grid", section: "Workspace" },
   { href: "/admin/team-folders", en: "Team Folders", ar: "مجلدات الفريق", icon: "folder" },
   { href: "/admin/members", en: "Members", ar: "الأعضاء", icon: "users" },
+  { href: "/admin/groups", en: "Groups", ar: "المجموعات", icon: "users" },
   { href: "/admin/client-users", en: "Client Users", ar: "مستخدمو العملاء", icon: "users" },
   { href: "/admin/workflows", en: "Workflows", ar: "سير العمل", icon: "flow", section: "Automation" },
   { href: "/admin/custom-functions", en: "Custom Functions", ar: "الدوال المخصصة", icon: "code" },
