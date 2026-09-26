@@ -178,24 +178,11 @@ export class EnterpriseService {
   }
 
   private async ensureConsoleSettings(orgId: string) {
-    const id = randomUUID();
-    try {
-      await this.prisma.$executeRawUnsafe(
-        `INSERT INTO admin_console_settings (id,org_id) VALUES (?,?) ON DUPLICATE KEY UPDATE org_id=org_id`,
-        id,
-        orgId,
-      );
-      return;
-    } catch (cause) {
-      // Older production databases can be one migration behind. The Admin
-      // Console must not become a 500-only surface in that state, so bootstrap
-      // the exact table shape required by this service and retry once.
-      const message = cause instanceof Error ? cause.message : String(cause);
-      if (!/admin_console_settings|doesn't exist|unknown table|1146/i.test(message)) {
-        throw cause;
-      }
-    }
-
+    // The Admin Console settings table is introduced by a later migration than
+    // the original enterprise foundation. Older Render databases can therefore
+    // legitimately reach this endpoint before that migration has been applied.
+    // Keep the endpoint self-healing so Settings does not become a 500-only dead
+    // end; the normal Prisma migration remains the source of truth for new DBs.
     await this.prisma.$executeRawUnsafe(`CREATE TABLE IF NOT EXISTS admin_console_settings (
       id CHAR(36) NOT NULL,
       org_id CHAR(36) NOT NULL,
@@ -233,13 +220,13 @@ export class EnterpriseService {
       updated_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
       PRIMARY KEY (id),
       UNIQUE KEY admin_console_settings_org_id_key (org_id),
-      CONSTRAINT admin_console_settings_org_id_fkey
-        FOREIGN KEY (org_id) REFERENCES organizations(id) ON DELETE CASCADE ON UPDATE CASCADE
+      CONSTRAINT admin_console_settings_org_id_fkey FOREIGN KEY (org_id) REFERENCES organizations(id) ON DELETE CASCADE
     ) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci`);
 
+    const id = randomUUID();
     await this.prisma.$executeRawUnsafe(
-      `INSERT INTO admin_console_settings (id,org_id) VALUES (?,?) ON DUPLICATE KEY UPDATE org_id=org_id`,
-      randomUUID(),
+      `INSERT INTO admin_console_settings (id,org_id) VALUES (?,?) ON DUPLICATE KEY UPDATE org_id=VALUES(org_id)`,
+      id,
       orgId,
     );
   }

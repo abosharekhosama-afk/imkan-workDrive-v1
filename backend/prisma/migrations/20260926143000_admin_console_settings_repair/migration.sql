@@ -1,0 +1,43 @@
+-- Compatibility repair for environments where the Admin Console settings
+-- migration was recorded/applied inconsistently and the table is missing.
+-- Safe for already-correct databases.
+CREATE TABLE IF NOT EXISTS `admin_console_settings` (
+  `id` CHAR(36) NOT NULL,
+  `org_id` CHAR(36) NOT NULL,
+  `logo_data_url` LONGTEXT NULL,
+  `custom_domain` VARCHAR(255) NULL,
+  `default_view` VARCHAR(20) NOT NULL DEFAULT 'COMPACT',
+  `thumbnail_size` INTEGER NOT NULL DEFAULT 3,
+  `preview_panel` VARCHAR(30) NOT NULL DEFAULT 'PREVIEW',
+  `convert_on_upload` BOOLEAN NOT NULL DEFAULT false,
+  `allow_non_zoho_writer` BOOLEAN NOT NULL DEFAULT true,
+  `allow_non_zoho_sheet` BOOLEAN NOT NULL DEFAULT true,
+  `allow_non_zoho_show` BOOLEAN NOT NULL DEFAULT true,
+  `save_new_files_as_drafts` BOOLEAN NOT NULL DEFAULT true,
+  `ocr_language` VARCHAR(20) NOT NULL DEFAULT 'NONE',
+  `allow_direct_email_sharing` BOOLEAN NOT NULL DEFAULT true,
+  `direct_sharing_scope` VARCHAR(30) NOT NULL DEFAULT 'ANY_EXTERNAL_USER',
+  `allow_external_share_links` BOOLEAN NOT NULL DEFAULT true,
+  `enforce_share_passwords` BOOLEAN NOT NULL DEFAULT false,
+  `default_share_expiry_days` INTEGER NULL,
+  `collect_external_user_info` BOOLEAN NOT NULL DEFAULT false,
+  `allow_download_links` BOOLEAN NOT NULL DEFAULT true,
+  `download_link_expiry_days` INTEGER NULL,
+  `allow_permalink_embeds` BOOLEAN NOT NULL DEFAULT true,
+  `allow_embed_download_print` BOOLEAN NOT NULL DEFAULT true,
+  `allow_collections` BOOLEAN NOT NULL DEFAULT true,
+  `collection_manager_scope` VARCHAR(30) NOT NULL DEFAULT 'ANYONE_ON_TEAM',
+  `collection_external_name` VARCHAR(30) NOT NULL DEFAULT 'COLLECTION',
+  `my_folders_limit_bytes` BIGINT NULL,
+  `version_mode` VARCHAR(30) NOT NULL DEFAULT 'ALL',
+  `version_limit` INTEGER NULL,
+  `public_team_folder_creator` VARCHAR(20) NOT NULL DEFAULT 'ANYONE',
+  `private_team_folder_creator` VARCHAR(20) NOT NULL DEFAULT 'ANYONE',
+  `same_domain_join_enabled` BOOLEAN NOT NULL DEFAULT false,
+  `created_at` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+  `updated_at` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `admin_console_settings_org_id_key` (`org_id`),
+  CONSTRAINT `admin_console_settings_org_id_fkey`
+    FOREIGN KEY (`org_id`) REFERENCES `organizations`(`id`) ON DELETE CASCADE
+) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
