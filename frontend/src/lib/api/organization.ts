@@ -5,6 +5,17 @@ export type OrgMember = { id: string; userId?: string; name: string | null; emai
 export type Invitation = { id: string; email: string; role: OrgRole; expiresAt: string; acceptedAt: string | null; revokedAt: string | null; createdAt: string; invitedBy: { id: string; name: string | null; email: string } };
 export type InvitationCreated = { id: string; email: string; role: OrgRole; expiresAt: string; inviteUrl: string };
 export type OrganizationAccount = { id: string; email: string; name: string | null; role: OrgRole };
+export type WorkspacePolicy = {
+  logoDataUrl: string | null;
+  defaultView: 'THUMBNAIL' | 'LIST' | 'COMPACT' | string;
+  thumbnailSize: number;
+  previewPanel: 'PREVIEW' | 'DETAILS' | 'COMMENTS' | 'DATA_TEMPLATE' | string;
+  allowNonZohoWriter: boolean;
+  allowNonZohoSheet: boolean;
+  allowNonZohoShow: boolean;
+  myFoldersLimitBytes: string | null;
+};
+export function getWorkspacePolicy() { return apiRequest<WorkspacePolicy>('/organization/workspace-policy'); }
 export function getOrganization(){return apiRequest<Organization>('/organization');}
 export function createOrganizationAccount(input: { name: string; email: string; password: string; role: OrgRole }): Promise<OrganizationAccount> {
   return apiRequest<OrganizationAccount>('/organization/accounts', {

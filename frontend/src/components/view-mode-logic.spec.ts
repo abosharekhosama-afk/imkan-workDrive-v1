@@ -9,6 +9,8 @@ import {
   persistViewMode,
   readStoredViewMode,
   sanitizeViewMode,
+  thumbnailMinPx,
+  viewModeFromOrgDefault,
   VIEW_MODE_STORAGE_KEY,
 } from "./view-mode-logic.ts";
 
@@ -67,4 +69,14 @@ test("parseOrgSwitchMessage validates the cross-tab switch payload", () => {
   assert.equal(parseOrgSwitchMessage({ type: "org-switched" }), null);
   assert.equal(parseOrgSwitchMessage("noise"), null);
   assert.equal(ORG_SYNC_CHANNEL.length > 0, true);
+});
+
+test("organization default view maps onto the file browser modes", () => {
+  assert.equal(viewModeFromOrgDefault("THUMBNAIL"), "grid");
+  assert.equal(viewModeFromOrgDefault("LIST"), "list");
+  assert.equal(viewModeFromOrgDefault("COMPACT"), "compact");
+  assert.equal(viewModeFromOrgDefault("unknown"), "list");
+  assert.equal(thumbnailMinPx(1), 120);
+  assert.equal(thumbnailMinPx(3), 172);
+  assert.equal(thumbnailMinPx(5), 260);
 });

@@ -20,6 +20,32 @@ export function readStoredViewMode(storage: Pick<Storage, "getItem"> | null | un
   }
 }
 
+/** Org admin defaultView values used by the file browser when the member has no personal choice. */
+export function viewModeFromOrgDefault(value: unknown): ViewMode {
+  if (value === "THUMBNAIL") return "grid";
+  if (value === "COMPACT") return "compact";
+  if (value === "LIST") return "list";
+  return "list";
+}
+
+export function hasPersonalViewMode(storage: Pick<Storage, "getItem"> | null | undefined): boolean {
+  if (!storage) return false;
+  try {
+    return storage.getItem(VIEW_MODE_STORAGE_KEY) != null;
+  } catch {
+    return false;
+  }
+}
+
+export function thumbnailMinPx(size: unknown): number {
+  const n = Number(size);
+  if (n <= 1) return 120;
+  if (n === 2) return 146;
+  if (n === 4) return 210;
+  if (n >= 5) return 260;
+  return 172;
+}
+
 export function persistViewMode(storage: Pick<Storage, "setItem"> | null | undefined, mode: ViewMode): void {
   if (!storage) return;
   try {

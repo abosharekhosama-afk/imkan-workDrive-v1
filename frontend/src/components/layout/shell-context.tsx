@@ -69,8 +69,16 @@ export function ShellProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     setSidebarCollapsedState(readFlag(SIDEBAR_KEY));
-    setInspectorOpenState(readFlag(INSPECTOR_KEY));
+    let storedInspector: string | null = null;
+    try { storedInspector = window.localStorage.getItem(INSPECTOR_KEY); } catch { storedInspector = null; }
+    setInspectorOpenState(storedInspector === "1");
     setInspectorTabState(readTab());
+    if (storedInspector != null) return;
+    import("../../lib/api/organization").then(({ getWorkspacePolicy }) => getWorkspacePolicy()).then((policy) => {
+      if (policy.previewPanel === "DETAILS" || policy.previewPanel === "DATA_TEMPLATE" || policy.previewPanel === "COMMENTS") {
+        setInspectorOpenState(true);
+      }
+    }).catch(() => undefined);
   }, []);
 
   const setSidebarCollapsed = useCallback((value: boolean) => {

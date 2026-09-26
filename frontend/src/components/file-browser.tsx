@@ -31,10 +31,14 @@ import { resolveMimeType } from "../lib/api/mime";
 import { mapFileRecords, mapFolderRecords } from "../lib/api/table-mappers";
 
 import {
+  hasPersonalViewMode,
   persistViewMode,
   readStoredViewMode,
+  thumbnailMinPx,
+  viewModeFromOrgDefault,
   type ViewMode,
 } from "./view-mode-logic";
+import { getWorkspacePolicy } from "../lib/api/organization";
 import { openInspector } from "./layout/shell-context";
 
 import { canMutateContent, canShareContent } from "../lib/permissions";
@@ -295,15 +299,25 @@ export function FileBrowser({
     return () => window.removeEventListener("workdrive:version-history", onVersion);
   }, [files]);
 
-  // Restore the persisted view preference after mount (SSR-safe).
+  // Personal view wins. Otherwise the organization default from Admin Console is applied.
   useEffect(() => {
-    setViewMode(readStoredViewMode(typeof window === "undefined" ? null : window.localStorage));
+    const storage = typeof window === "undefined" ? null : window.localStorage;
+    const applyPolicy = () => {
+      getWorkspacePolicy().then((policy) => {
+        document.documentElement.style.setProperty("--wd-thumb-min", `${thumbnailMinPx(policy.thumbnailSize)}px`);
+        if (!hasPersonalViewMode(storage)) setViewMode(viewModeFromOrgDefault(policy.defaultView));
+      }).catch(() => undefined);
+    };
+    if (hasPersonalViewMode(storage)) setViewMode(readStoredViewMode(storage));
+    applyPolicy();
     try {
       const f = window.localStorage.getItem(FILTER_STORAGE_KEY);
       if (f === "folders" || f === "documents" || f === "sheets" || f === "slides" || f === "media" || f === "audio" || f === "archives" || f === "favorites" || f === "all") {
         setFilter(f);
       }
     } catch { /* noop */ }
+    window.addEventListener("workdrive:workspace-policy", applyPolicy);
+    return () => window.removeEventListener("workdrive:workspace-policy", applyPolicy);
   }, []);
 
   function switchViewMode(mode: ViewMode) {

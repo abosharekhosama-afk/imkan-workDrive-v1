@@ -16,6 +16,42 @@ export class OrganizationService {
     if (user.role !== OrgRole.SUPER_ADMIN) throw new ForbiddenException('Super Admin access required');
   }
 
+  async workspacePolicy(user: AccessTokenPayload) {
+    const defaults = {
+      logoDataUrl: null as string | null,
+      defaultView: 'COMPACT',
+      thumbnailSize: 3,
+      previewPanel: 'PREVIEW',
+      allowNonZohoWriter: true,
+      allowNonZohoSheet: true,
+      allowNonZohoShow: true,
+      myFoldersLimitBytes: null as string | null,
+    };
+    try {
+      const rows = await this.prisma.$queryRawUnsafe<Array<Record<string, unknown>>>(
+        `SELECT logo_data_url AS logoDataUrl, default_view AS defaultView, thumbnail_size AS thumbnailSize, preview_panel AS previewPanel,
+          allow_non_zoho_writer AS allowNonZohoWriter, allow_non_zoho_sheet AS allowNonZohoSheet, allow_non_zoho_show AS allowNonZohoShow,
+          my_folders_limit_bytes AS myFoldersLimitBytes
+         FROM admin_console_settings WHERE org_id=? LIMIT 1`,
+        user.org_id,
+      );
+      const row = rows[0];
+      if (!row) return defaults;
+      return {
+        logoDataUrl: row.logoDataUrl == null ? null : String(row.logoDataUrl),
+        defaultView: String(row.defaultView || defaults.defaultView),
+        thumbnailSize: Number(row.thumbnailSize ?? defaults.thumbnailSize),
+        previewPanel: String(row.previewPanel || defaults.previewPanel),
+        allowNonZohoWriter: Boolean(row.allowNonZohoWriter),
+        allowNonZohoSheet: Boolean(row.allowNonZohoSheet),
+        allowNonZohoShow: Boolean(row.allowNonZohoShow),
+        myFoldersLimitBytes: row.myFoldersLimitBytes == null ? null : String(row.myFoldersLimitBytes),
+      };
+    } catch {
+      return defaults;
+    }
+  }
+
   async get(user: AccessTokenPayload) {
     const org = await this.prisma.organization.findUnique({ where: { id: user.org_id }, select: { id: true, name: true, createdAt: true, ownerId: true } });
     if (!org) throw new NotFoundException('Organization not found');

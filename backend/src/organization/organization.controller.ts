@@ -23,6 +23,7 @@ import { parseCreateAccount, parseInvite, parseUpdateOrganization, parseUpdateMe
 export class OrganizationController {
   constructor(private readonly service: OrganizationService, private readonly auth: AuthService) {}
   @Get() get(@CurrentUser() u: AccessTokenPayload) { return this.service.get(u); }
+  @Get('workspace-policy') workspacePolicy(@CurrentUser() u: AccessTokenPayload) { return this.service.workspacePolicy(u); }
   @Patch() update(@CurrentUser() u: AccessTokenPayload, @Body() b: unknown) { return this.service.update(u, parseUpdateOrganization(b)); }
   @Get('members') members(@CurrentUser() u: AccessTokenPayload, @Query('status') status?: string) { return this.service.members(u, status); }
   @Post('accounts') @UseGuards(SuperAdminGuard) createAccount(@CurrentUser() u: AccessTokenPayload, @Body() b: unknown) { return this.auth.createUserAccount(u, parseCreateAccount(b)); }

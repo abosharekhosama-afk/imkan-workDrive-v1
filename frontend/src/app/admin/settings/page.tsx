@@ -111,7 +111,7 @@ export default function AdminSettingsPage() {
 
   const update = async (patch: Partial<AdminConsoleSettings>) => {
     setSaving(true); setError(""); setMessage("");
-    try { const next = await updateAdminConsoleSettings(patch); setSettings(next); setMessage(text(ar, "Settings saved successfully.", "تم حفظ الإعدادات بنجاح.")); }
+    try { const next = await updateAdminConsoleSettings(patch); setSettings(next); window.dispatchEvent(new Event("workdrive:workspace-policy")); setMessage(text(ar, "Settings saved successfully.", "تم حفظ الإعدادات بنجاح.")); }
     catch (e) { setError(e instanceof Error ? e.message : text(ar, "Unable to save settings.", "تعذر حفظ الإعدادات.")); }
     finally { setSaving(false); }
   };

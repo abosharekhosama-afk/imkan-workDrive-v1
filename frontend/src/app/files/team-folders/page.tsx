@@ -225,7 +225,7 @@ export default function TeamFoldersPage() {
                     <span className="team-folder-copy">
                       <span className="team-folder-name">
                         <span className="truncate">{tf.name}</span>
-                        {!tf.isPublicToOrg ? <span className="team-folder-lock" title={locale === "ar" ? "مجلد خاص" : "Private Team Folder"} aria-label={locale === "ar" ? "خاص" : "Private"}>●</span> : null}
+                        <span className="team-folder-lock" title={tf.isPublicToOrg ? (locale === "ar" ? "مجلد فريق عام" : "Public Team Folder") : (locale === "ar" ? "مجلد فريق خاص" : "Private Team Folder")} aria-label={tf.isPublicToOrg ? (locale === "ar" ? "عام" : "Public") : (locale === "ar" ? "خاص" : "Private")}>{tf.isPublicToOrg ? (locale === "ar" ? "عام" : "Public") : "●"}</span>
                       </span>
                     </span>
                   </Link>
@@ -255,6 +255,7 @@ export default function TeamFoldersPage() {
                     <div className="team-folder-details-card">
                       <div className="flex items-center gap-2 border-b border-slate-100 pb-2"><span className="text-slate-700"><FolderGlyph /></span><strong className="truncate text-[13px]">{tf.name}</strong></div>
                       <div className="grid grid-cols-2 gap-y-2 pt-3 text-[11px] text-slate-500">
+                        <span>{locale === "ar" ? "النوع" : "Type"}</span><span className="text-end text-slate-700">{tf.isPublicToOrg ? (locale === "ar" ? "عام" : "Public") : (locale === "ar" ? "خاص" : "Private")}</span>
                         <span>{locale === "ar" ? "الدور" : "Role"}</span><span className="text-end text-slate-700">{tf.role}</span>
                         <span>{locale === "ar" ? "الأعضاء" : "Members"}</span><span className="text-end text-slate-700">{tf.memberCount}</span>
                         <span>{locale === "ar" ? "آخر تعديل" : "Modified"}</span><span className="text-end text-slate-700">{tf.updatedAt ? new Intl.DateTimeFormat(undefined, { dateStyle: "medium" }).format(new Date(tf.updatedAt)) : "—"}</span>

@@ -2,7 +2,9 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useEffect, useState } from "react";
 import { useLocale } from "@/components/locale-provider";
+import { getWorkspacePolicy } from "@/lib/api/organization";
 import { Icons, type IconName } from "@/components/layout/icons";
 
 interface AdminItem {
@@ -33,12 +35,19 @@ export function AdminConsoleSidebar() {
   const pathname = usePathname();
   const { locale } = useLocale();
   const ar = locale === "ar";
+  const [logo, setLogo] = useState<string | null>(null);
+  useEffect(() => {
+    const load = () => { getWorkspacePolicy().then((policy) => setLogo(policy.logoDataUrl)).catch(() => undefined); };
+    load();
+    window.addEventListener("workdrive:workspace-policy", load);
+    return () => window.removeEventListener("workdrive:workspace-policy", load);
+  }, []);
 
   return (
     <aside className="admin-console-sidebar flex h-full w-[255px] shrink-0 flex-col bg-[#272727] text-white" dir={ar ? "rtl" : "ltr"}>
       <div className="flex h-[54px] shrink-0 items-center border-b border-white/10 px-4">
         <Link href="/admin" className="flex min-w-0 items-center gap-2">
-          <span className="flex h-7 w-7 items-center justify-center rounded-md bg-[#2f70df] text-white"><Icons.folder size={17} /></span>
+          {logo ? <img src={logo} alt="" className="h-7 max-w-[120px] object-contain" /> : <span className="flex h-7 w-7 items-center justify-center rounded-md bg-[color:var(--wd-primary)] text-white"><Icons.folder size={17} /></span>}
           <span className="truncate text-[15px] font-semibold tracking-[-.01em]">IMKAN</span>
           <span className="text-[11px] text-white/55">Admin Console</span>
         </Link>

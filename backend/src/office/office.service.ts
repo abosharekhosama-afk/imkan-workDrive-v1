@@ -637,6 +637,28 @@ export class OfficeService implements OfficeEngine {
     };
   }
 
+  private async assertExternalOfficeFormatAllowed(user: AccessTokenPayload, extension: string) {
+    const column = extension === 'docx' || extension === 'doc'
+      ? 'allow_non_zoho_writer'
+      : extension === 'xlsx' || extension === 'xls' || extension === 'csv'
+        ? 'allow_non_zoho_sheet'
+        : extension === 'pptx' || extension === 'ppt'
+          ? 'allow_non_zoho_show'
+          : null;
+    if (!column) return;
+    try {
+      const rows = await this.prisma.$queryRawUnsafe<Array<Record<string, unknown>>>(
+        `SELECT ${column} AS allowed FROM admin_console_settings WHERE org_id=? LIMIT 1`,
+        user.org_id,
+      );
+      if (rows[0] && Number(rows[0].allowed) === 0) {
+        throw new ForbiddenException('Editing this file type in IMKAN Office is disabled by organization policy');
+      }
+    } catch (error) {
+      if (error instanceof ForbiddenException) throw error;
+    }
+  }
+
   private async canWriteFile(user: AccessTokenPayload, fileId: string) {
     const file = await this.prisma.file.findFirst({ where: { id: fileId, orgId: user.org_id, deletedAt: null, status: FileStatus.ACTIVE }, include: { folder: { select: { teamFolderId: true } } } });
     if (!file) return false;
@@ -655,6 +677,7 @@ export class OfficeService implements OfficeEngine {
     // generic "could not open" error.
     if (!document) {
       const extension = (file.extension ?? '').replace(/^\./, '').toLowerCase();
+      await this.assertExternalOfficeFormatAllowed(user, extension);
       if (!['docx', 'xlsx', 'pptx'].includes(extension)) {
         throw new NotFoundException('This file is not an IMKAN Office document yet');
       }

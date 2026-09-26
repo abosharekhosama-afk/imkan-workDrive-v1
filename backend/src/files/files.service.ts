@@ -168,6 +168,7 @@ export class FilesService {
     const folder = input.folderId ? await this.prisma.folder.findFirst({ where: { id: input.folderId } }) : null;
     if (input.folderId && (!folder || folder.orgId !== user.org_id)) throw new NotFoundException('Folder not found');
     if (folder) await this.assertCanUploadToFolder(user, folder);
+    await this.assertMyFoldersLimit(user, folder, BigInt(input.size));
 
     const cleanName = input.name.trim();
     if (!cleanName || cleanName.length > 255 || /[\x00-\x1F\x7F]/.test(cleanName)) {
@@ -272,6 +273,7 @@ export class FilesService {
     const folder = input.folderId ? await this.prisma.folder.findFirst({ where: { id: input.folderId } }) : null;
     if (input.folderId && (!folder || folder.orgId !== user.org_id)) throw new NotFoundException('Folder not found');
     if (folder) await this.assertCanUploadToFolder(user, folder);
+    await this.assertMyFoldersLimit(user, folder, size);
     const cleanName = input.name.trim();
     if (!cleanName || cleanName.length > 255 || /[\x00-\x1F\x7F]/.test(cleanName)) throw new BadRequestException('Invalid file name');
     const duplicate = await this.prisma.file.findFirst({ where: { orgId: user.org_id, folderId: folder?.id ?? null, name: cleanName, status: FileStatus.ACTIVE, deletedAt: null }, select: { id: true } });
@@ -320,6 +322,7 @@ export class FilesService {
       throw new NotFoundException('Folder not found');
     }
     if (folder) await this.assertCanUploadToFolder(user, folder);
+    await this.assertMyFoldersLimit(user, folder, input.size);
 
     const cleanName = input.name.trim();
     if (!cleanName || cleanName.length > 255 || /[\x00-\x1F\x7F]/.test(cleanName)) {
@@ -458,6 +461,7 @@ export class FilesService {
     const folder = input.folderId ? await this.prisma.folder.findFirst({ where: { id: input.folderId } }) : null;
     if (input.folderId && (!folder || folder.orgId !== user.org_id)) throw new NotFoundException('Folder not found');
     if (folder) await this.assertCanUploadToFolder(user, folder);
+    await this.assertMyFoldersLimit(user, folder, size);
     const cleanName = input.name.trim();
     if (!cleanName || cleanName.length > 255 || /[\x00-\x1F\x7F]/.test(cleanName)) throw new BadRequestException('Invalid file name');
     const duplicate = await this.prisma.file.findFirst({ where: { orgId: user.org_id, folderId: folder?.id ?? null, name: cleanName, status: FileStatus.ACTIVE, deletedAt: null }, select: { id: true } });
@@ -1582,6 +1586,37 @@ export class FilesService {
     const bucket = this.config.get<string>('S3_BUCKET') ?? 'imkan-workdrive-dev';
     const region = this.config.get<string>('S3_REGION') ?? this.config.get<string>('AWS_REGION') ?? null;
     return { bucket, region };
+  }
+
+  private async assertMyFoldersLimit(
+    user: AccessTokenPayload,
+    folder: { teamFolderId?: string | null } | null,
+    size: bigint,
+  ) {
+    if (folder?.teamFolderId) return;
+    let limit: bigint | null = null;
+    try {
+      const rows = await this.prisma.$queryRawUnsafe<Array<{ lim: bigint | number | string | null }>>(
+        `SELECT my_folders_limit_bytes AS lim FROM admin_console_settings WHERE org_id=? LIMIT 1`,
+        user.org_id,
+      );
+      if (rows[0]?.lim == null) return;
+      limit = BigInt(rows[0].lim);
+    } catch {
+      return;
+    }
+    const used = await this.prisma.file.aggregate({
+      _sum: { size: true },
+      where: {
+        orgId: user.org_id,
+        ownerId: user.sub,
+        deletedAt: null,
+        status: FileStatus.ACTIVE,
+        folder: { teamFolderId: null },
+      },
+    });
+    const current = BigInt(used._sum.size ?? 0);
+    if (current + size > limit) throw new ForbiddenException('My Folders storage limit exceeded');
   }
 
   private async assertCanUploadToFolder(user: AccessTokenPayload, folder: { id: string; orgId: string; ownerId: string; teamFolderId?: string | null }) {

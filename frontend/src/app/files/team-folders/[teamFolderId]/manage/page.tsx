@@ -273,7 +273,7 @@ export default function TeamFolderManagePage() {
   };
 
   const updateSettings = async (patch: { isPublicToOrg?: boolean; allowExternalSharing?: boolean; allowViewerDownloads?: boolean }) => {
-    if ((role !== "ORG_ADMIN" && role !== "ADMIN") || settingsBusy) return;
+    if (!canRename || settingsBusy) return;
     setSettingsBusy(true);
     setError("");
     try {
@@ -318,7 +318,7 @@ export default function TeamFolderManagePage() {
                 <h2 className="mb-3 mt-9 text-[14px] font-semibold text-slate-800">{locale === "ar" ? "الوصف" : "Description"}</h2>
                 <p className="text-[13px] leading-6 text-slate-600">{locale === "ar" ? "مساحة مشتركة للتعاون على ملفات ومجلدات الفريق." : "A shared space for collaborating on team files and folders."}</p>
                 <dl className="mt-9 grid grid-cols-[145px_1fr] gap-y-5 text-[13px]">
-                  <dt className="text-slate-500">{locale === "ar" ? "النوع" : "Type"}</dt><dd>{locale === "ar" ? "مجلد فريق خاص" : "Private Team Folder"}</dd>
+                  <dt className="text-slate-500">{locale === "ar" ? "النوع" : "Type"}</dt><dd>{folder?.isPublicToOrg ? (locale === "ar" ? "مجلد فريق عام" : "Public Team Folder") : (locale === "ar" ? "مجلد فريق خاص" : "Private Team Folder")}</dd>
                   <dt className="text-slate-500">{locale === "ar" ? "الدور" : "Role"}</dt><dd>{role === "ORG_ADMIN" ? "Admin" : role || "Member"}</dd>
                   <dt className="text-slate-500">{locale === "ar" ? "الحجم" : "Size"}</dt><dd>{formatBytes(folder?.totalSize ?? 0)}</dd>
                 </dl>
@@ -356,8 +356,8 @@ export default function TeamFolderManagePage() {
             <section className="mx-auto w-full max-w-[930px] rounded-[16px] border border-[#e5e5e5] bg-white p-7">
               <h2 className="text-[17px] font-medium text-[#2d2d2d]">{locale === "ar" ? "نوع مجلد الفريق" : "Team Folder type"}</h2>
               <div className="mt-4 flex gap-8 text-[13px]">
-                <label className="flex items-center gap-2"><input type="radio" checked={Boolean(folder?.isPublicToOrg)} disabled={role !== "ORG_ADMIN" && role !== "ADMIN" || settingsBusy} onChange={() => void updateSettings({ isPublicToOrg: true })} /> Public</label>
-                <label className="flex items-center gap-2"><input type="radio" checked={!folder?.isPublicToOrg} disabled={role !== "ORG_ADMIN" && role !== "ADMIN" || settingsBusy} onChange={() => void updateSettings({ isPublicToOrg: false })} /> Private</label>
+                <label className="flex items-center gap-2"><input type="radio" name="team-folder-visibility" checked={Boolean(folder?.isPublicToOrg)} disabled={!canRename || settingsBusy} onChange={() => void updateSettings({ isPublicToOrg: true })} /> {locale === "ar" ? "عام" : "Public"}</label>
+                <label className="flex items-center gap-2"><input type="radio" name="team-folder-visibility" checked={!folder?.isPublicToOrg} disabled={!canRename || settingsBusy} onChange={() => void updateSettings({ isPublicToOrg: false })} /> {locale === "ar" ? "خاص" : "Private"}</label>
               </div>
               <p className="mt-3 text-[13px] leading-6 text-[#666]">{locale === "ar" ? "خاص: يقتصر الوصول على الأعضاء المضافين. عام: يمكن لأعضاء المؤسسة الانضمام." : "Private limits access to added members. Public lets team members join the Team Folder."}</p>
               <div className="mt-7 divide-y divide-[#ededed] border-y border-[#ededed]">

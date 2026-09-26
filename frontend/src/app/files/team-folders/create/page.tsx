@@ -77,7 +77,9 @@ export default function CreateTeamFolderPage() {
                   <label className="inline-flex cursor-pointer items-center gap-2"><input type="radio" name="team-folder-type" checked={type === "public"} onChange={() => setType("public")} disabled={busy} />{locale === "ar" ? "عام" : "Public"}</label>
                   <label className="inline-flex cursor-pointer items-center gap-2"><input type="radio" name="team-folder-type" checked={type === "private"} onChange={() => setType("private")} disabled={busy} />{locale === "ar" ? "خاص" : "Private"}</label>
                 </div>
-                <p className="mt-3 text-[14px] leading-6 text-slate-600">{locale === "ar" ? "يمكن لأعضاء مجلد الفريق الذين تمت إضافتهم التعاون في الملفات والمجلدات." : "Only the Team Folder members who have been added can collaborate on files and folders."}</p>
+                <p className="mt-3 text-[14px] leading-6 text-slate-600">{type === "public"
+                  ? (locale === "ar" ? "عام: يمكن لأعضاء المؤسسة رؤية مجلد الفريق والانضمام إليه." : "Public: organization members can see this Team Folder and join it.")
+                  : (locale === "ar" ? "خاص: يمكن فقط للأعضاء الذين تمت إضافتهم التعاون في الملفات والمجلدات." : "Private: only members who have been added can collaborate on files and folders.")}</p>
               </fieldset>
 
               <label className="block text-[14px] font-medium text-slate-800">

@@ -101,6 +101,7 @@ export class TeamFoldersService {
         orgId: created.orgId,
         name: created.name,
         rootFolderId: root.id,
+        isPublicToOrg: created.isPublicToOrg,
       };
     });
   }
