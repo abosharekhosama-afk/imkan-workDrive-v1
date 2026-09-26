@@ -35,6 +35,7 @@ import { formatBytes } from "../../../../../lib/api/quota";
 import { permanentDeleteFile } from "../../../../../lib/api/files";
 import { restoreFile } from "../../../../../lib/api/trash";
 import { formatDateLocalized } from "../../../../../lib/localized";
+import { getTeamFolderDataTemplateMandate, listDataTemplates, setTeamFolderDataTemplateMandate, type DataTemplate } from "../../../../../lib/api/metadata";
 
 type TabKey = "details" | "members" | "settings" | "trash" | "activity" | "shared" | "templates";
 
@@ -107,6 +108,14 @@ export default function TeamFolderManagePage() {
   const [activityRows, setActivityRows] = useState<TeamFolderActivity[]>([]);
   const [trashRows, setTrashRows] = useState<TeamFolderTrashItem[]>([]);
   const [sharedRows, setSharedRows] = useState<TeamFolderSharedItem[]>([]);
+  const [dataTemplates, setDataTemplates] = useState<DataTemplate[]>([]);
+  const [mandateTemplateId, setMandateTemplateId] = useState<string | null>(null);
+  const [mandateTarget, setMandateTarget] = useState<"FILES"|"FOLDERS"|"BOTH">("BOTH");
+  const [mandateEnabled, setMandateEnabled] = useState(false);
+  const [dataTemplates, setDataTemplates] = useState<DataTemplate[]>([]);
+  const [mandateTemplateId, setMandateTemplateId] = useState<string | null>(null);
+  const [mandateTarget, setMandateTarget] = useState<"FILES"|"FOLDERS"|"BOTH">("BOTH");
+  const [mandateEnabled, setMandateEnabled] = useState(false);
 
   const canManage = role === "ORG_ADMIN" || canManageMembers(role);
   const canRename = role === "ORG_ADMIN" || role === "ADMIN";
@@ -143,6 +152,20 @@ export default function TeamFolderManagePage() {
   useEffect(() => {
     setTab(initialTab);
   }, [initialTab]);
+
+  useEffect(() => {
+    if (tab !== "templates") return;
+    let live = true;
+    setPanelLoading(true);
+    Promise.all([listDataTemplates(false), getTeamFolderDataTemplateMandate(id)]).then(([templates, mandate]) => {
+      if (!live) return;
+      setDataTemplates(templates);
+      setMandateTemplateId(mandate.template?.id ?? null);
+      setMandateTarget(mandate.target);
+      setMandateEnabled(mandate.enabled);
+    }).catch((cause) => { if (live) setError(cause instanceof ApiError ? cause.message : (locale === "ar" ? "تعذر تحميل قوالب البيانات." : "Unable to load data templates.")); }).finally(() => { if (live) setPanelLoading(false); });
+    return () => { live = false; };
+  }, [id, locale, tab]);
 
   useEffect(() => {
     if (tab !== "activity" && tab !== "trash" && tab !== "shared") return;
@@ -460,8 +483,13 @@ export default function TeamFolderManagePage() {
           ) : null}
 
           {tab === "templates" ? (
-            <section className="mx-auto w-full max-w-[930px]">
-              <div className="rounded-[16px] border border-[#e5e5e5] bg-white p-7"><div className="flex items-start justify-between gap-6"><div><h2 className="text-[17px] font-medium text-[#2d2d2d]">Mandate data template association to files and folders</h2><p className="mt-3 max-w-[760px] text-[13px] leading-6 text-[#666]">Enable this option to associate a data template automatically and require users to add custom properties whenever they add a file or folder to this Team Folder.</p></div><span className="relative h-6 w-11 shrink-0 rounded-full bg-[#d9dce0] opacity-55"><span className="absolute start-1 top-1 h-4 w-4 rounded-full bg-white" /></span></div><div className="mt-5 border-t border-slate-100 pt-5 text-[13px] text-[#444]">ⓘ {locale === "ar" ? "لا توجد قوالب بيانات نشطة في المؤسسة." : "Your organization does not have any active data templates."}</div><Link href="/files/templates" className="mt-6 inline-flex h-9 items-center rounded-full bg-[color:var(--wd-primary)] px-4 text-[13px] font-semibold text-white">{locale === "ar" ? "إنشاء قالب بيانات" : "Create Data Template"}</Link></div><div className="mt-7"><h3 className="text-[17px] font-medium text-[#333]">Data Templates</h3><p className="mt-2 text-[13px] leading-6 text-[#666]">Data Templates are used to add custom properties to files and folders.</p></div>
+            <section className="mx-auto w-full max-w-[930px] space-y-6">
+              <div className="rounded-[16px] border border-[#e5e5e5] bg-white p-7">
+                <div className="flex items-start justify-between gap-6"><div><h2 className="text-[17px] font-medium text-[#2d2d2d]">{locale === "ar" ? "فرض قالب بيانات" : "Mandate data template association"}</h2><p className="mt-3 max-w-[760px] text-[13px] leading-6 text-[#666]">{locale === "ar" ? "سيتم ربط القالب تلقائيًا بالعناصر الجديدة التي تضاف مباشرة إلى مجلد الفريق، مع طلب الخصائص المطلوبة." : "Automatically associate the template with new items added directly to this Team Folder and require the custom properties."}</p></div><button type="button" disabled={!canManage || !dataTemplates.length} onClick={() => setMandateEnabled((v) => !v)} className={`relative h-6 w-11 shrink-0 rounded-full transition ${mandateEnabled ? "bg-[#2c66dd]" : "bg-[#d9dce0]"}`}><span className={`absolute top-1 h-4 w-4 rounded-full bg-white shadow-sm transition ${mandateEnabled ? "end-1" : "start-1"}`} /></button></div>
+                <div className="mt-6 grid gap-4 md:grid-cols-2"><label><span className="mb-1.5 block text-[11px] font-medium text-[#555]">{locale === "ar" ? "قالب البيانات" : "Data Template"}</span><select disabled={!canManage || !mandateEnabled} value={mandateTemplateId ?? ""} onChange={(e) => setMandateTemplateId(e.target.value || null)} className="h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-[11px]"><option value="">{locale === "ar" ? "اختر قالبًا" : "Select a template"}</option>{dataTemplates.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}</select></label><label><span className="mb-1.5 block text-[11px] font-medium text-[#555]">{locale === "ar" ? "يطبق على" : "Apply to"}</span><select disabled={!canManage || !mandateEnabled} value={mandateTarget} onChange={(e) => setMandateTarget(e.target.value as "FILES"|"FOLDERS"|"BOTH")} className="h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-[11px]"><option value="FILES">{locale === "ar" ? "الملفات فقط" : "Files only"}</option><option value="FOLDERS">{locale === "ar" ? "المجلدات فقط" : "Folders only"}</option><option value="BOTH">{locale === "ar" ? "الملفات والمجلدات" : "Files and folders"}</option></select></label></div>
+                <div className="mt-5 flex items-center justify-between border-t border-slate-100 pt-5"><span className="text-[11px] text-slate-500">{dataTemplates.length ? `${dataTemplates.length} ${locale === "ar" ? "قالبًا نشطًا متاحًا" : "active templates available"}` : (locale === "ar" ? "لا توجد قوالب بيانات نشطة." : "No active data templates available.")}</span><button disabled={!canManage || (mandateEnabled && !mandateTemplateId) || settingsBusy} onClick={async () => { setSettingsBusy(true); try { await setTeamFolderDataTemplateMandate(id, { templateId: mandateEnabled ? mandateTemplateId : null, target: mandateTarget }); setError(""); } catch (cause) { setError(cause instanceof ApiError ? cause.message : (locale === "ar" ? "تعذر حفظ الإعداد." : "Unable to save the setting.")); } finally { setSettingsBusy(false); } }} className="h-9 rounded-lg bg-[color:var(--wd-primary)] px-4 text-[11px] font-semibold text-white disabled:opacity-50">{settingsBusy ? (locale === "ar" ? "جارٍ الحفظ..." : "Saving...") : (locale === "ar" ? "حفظ" : "Save")}</button></div>
+              </div>
+              <div className="rounded-[16px] border border-[#e5e5e5] bg-white p-7"><h3 className="text-[17px] font-medium text-[#333]">{locale === "ar" ? "قوالب المؤسسة المتاحة" : "Available Data Templates"}</h3><p className="mt-2 text-[13px] leading-6 text-[#666]">{locale === "ar" ? "يمكن لمسؤول المؤسسة إدارة القوالب والحقول من Admin Console." : "Organization admins can manage templates and custom fields from the Admin Console."}</p><Link href="/admin/data-templates" className="mt-5 inline-flex h-9 items-center rounded-full bg-[color:var(--wd-primary)] px-4 text-[13px] font-semibold text-white">{locale === "ar" ? "إدارة قوالب البيانات" : "Manage Data Templates"}</Link></div>
             </section>
           ) : null}
 
