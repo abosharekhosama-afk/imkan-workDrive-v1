@@ -2012,23 +2012,15 @@ html[data-theme="dark"] .workflow-ui .wd-card {
 }
 
 /* Workflow builder: connection handles and mobile canvas support. */
-.workflow-ui .workflow-connection-handle{position:absolute;width:12px;height:12px;border:2px solid #fff;border-radius:999px;background:#94A3B8;box-shadow:0 0 0 1px #CBD5E1,0 2px 7px rgba(15,23,42,.14);z-index:50;cursor:crosshair;transition:transform .15s ease,background-color .15s ease,box-shadow .15s ease;touch-action:none}
-.workflow-ui .workflow-connection-handle:hover{transform:scale(1.35);background:#1B66EA;box-shadow:0 0 0 4px rgba(27,102,234,.10)}
-.workflow-ui .workflow-handle-top{left:50%;top:-6px;transform:translateX(-50%)}
-.workflow-ui .workflow-handle-right{right:-6px;top:50%;transform:translateY(-50%)}
-.workflow-ui .workflow-handle-bottom{left:50%;bottom:-6px;transform:translateX(-50%)}
-.workflow-ui .workflow-handle-left{left:-6px;top:50%;transform:translateY(-50%)}
-.workflow-ui .workflow-handle-top:hover,.workflow-ui .workflow-handle-bottom:hover{transform:translateX(-50%) scale(1.35)}
-.workflow-ui .workflow-handle-left:hover,.workflow-ui .workflow-handle-right:hover{transform:translateY(-50%) scale(1.35)}
-.workflow-ui .workflow-canvas-pane{overscroll-behavior:contain}
-.workflow-ui .workflow-canvas-pane > .relative{touch-action:none}
-.workflow-ui .workflow-canvas-pane .workflow-connection-handle{opacity:.72}
-.workflow-ui .workflow-canvas-pane .workflow-connection-handle:hover{opacity:1}
+.workflow-ui .workflow-connection-handle{position:absolute;top:55px;width:12px;height:12px;border:2px solid #fff;border-radius:999px;background:#94A3B8;box-shadow:0 0 0 1px #CBD5E1,0 2px 7px rgba(15,23,42,.14);z-index:50;cursor:crosshair;transition:transform .15s ease,background-color .15s ease,box-shadow .15s ease}
+.workflow-ui .workflow-connection-handle:hover{transform:scale(1.3);background:#1B66EA;box-shadow:0 0 0 4px rgba(27,102,234,.10)}
+.workflow-ui .workflow-source-handle{right:-6px}
+.workflow-ui .workflow-target-handle{left:-6px}
 .workflow-ui .workflow-mobile-elements-toggle{box-shadow:0 8px 24px rgba(15,23,42,.12)}
 @media (max-width:900px){
   .workflow-ui .workflow-canvas-pane{min-width:0!important}
   .workflow-ui .workflow-canvas-pane>.relative{min-width:1050px!important}
-  .workflow-ui .workflow-connection-handle{width:14px;height:14px}
+  .workflow-ui .workflow-connection-handle{width:14px;height:14px;top:55px}
 }
 
 /* Workflow control language: match the secondary WorkDrive New/Record buttons while keeping controls compact. */
@@ -2043,19 +2035,6 @@ html[data-theme="dark"] .workflow-ui .wd-card {
 .workflow-ui .workflow-phase-tabs .workflow-segment{border-color:transparent;background:transparent}
 .workflow-ui .workflow-phase-tabs .workflow-segment.is-active{border-color:#e2e8f0;background:#fff}
 .workflow-builder-header{border:0!important;box-shadow:none!important;border-radius:0!important}
-.workflow-design-grid{display:grid;grid-template-columns:minmax(240px,280px) minmax(0,1fr) minmax(300px,360px);min-height:0}
-.workflow-palette-sidebar{min-width:0;min-height:0;overflow:hidden}
-.workflow-palette-sidebar.is-collapsed{width:56px;min-width:56px}
-.workflow-palette-sidebar.is-collapsed .workflow-node-palette,.workflow-palette-sidebar.is-collapsed .border-t{display:none}
-.workflow-canvas-column{min-width:0;min-height:0}
-.workflow-canvas-status{align-items:center}
-.workflow-inspector.is-collapsed{width:0;min-width:0;padding:0;border:0;overflow:hidden}
-@media (max-width:1279px){
-  .workflow-design-grid{grid-template-columns:minmax(0,1fr)}
-  .workflow-palette-sidebar{display:none!important}
-  .workflow-inspector{position:fixed;inset-inline:0;bottom:0;top:auto;width:100%;max-height:78vh;border-radius:18px 18px 0 0;box-shadow:0 -12px 40px rgba(15,23,42,.16);z-index:120}
-  .workflow-inspector:not(.is-open){transform:translateY(105%)}
-}
 .workflow-builder-mobile-menu{display:none}
 @media (max-width:1279px){
   .workflow-builder-mobile-menu{display:inline-flex}
@@ -3359,3 +3338,445 @@ body.sheet-format-painter-active * {
   background:var(--wd-bg);color:var(--wd-text);border-color:var(--wd-line)!important;
 }
 html[data-theme="dark"] .imkan-connections-page .connections-detail-overlay{background:rgba(2,6,23,.68)}
+
+/* Zoho WorkDrive-style Cloud Import picker */
+.imkan-cloud-import-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 130;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 18px;
+}
+
+.imkan-cloud-import-backdrop {
+  position: absolute;
+  inset: 0;
+  border: 0;
+  background: rgba(17, 24, 39, 0.58);
+  cursor: default;
+}
+
+.imkan-cloud-import-modal {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  width: min(740px, calc(100vw - 28px));
+  height: min(740px, calc(100vh - 28px));
+  min-height: 520px;
+  overflow: hidden;
+  border: 1px solid #e5e8ed;
+  border-radius: 8px;
+  background: #fff;
+  box-shadow: 0 18px 55px rgba(15, 23, 42, 0.24);
+}
+
+.imkan-cloud-provider-rail {
+  position: absolute;
+  z-index: 8;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: 56px;
+  overflow: hidden;
+  background: #f7f8fa;
+  border-right: 1px solid #edf0f4;
+  transition: width 170ms ease, box-shadow 170ms ease;
+}
+
+.imkan-cloud-provider-rail.is-expanded {
+  width: 148px;
+  box-shadow: 10px 0 24px rgba(31, 41, 55, 0.08);
+}
+
+.imkan-cloud-provider-rail-inner {
+  width: 148px;
+  padding: 10px 7px;
+}
+
+.imkan-cloud-import-close {
+  position: absolute;
+  z-index: 12;
+  top: 13px;
+  right: 13px;
+  display: grid;
+  width: 31px;
+  height: 31px;
+  place-items: center;
+  border: 0;
+  border-radius: 50%;
+  color: #5d6675;
+  background: #fff;
+  cursor: pointer;
+}
+
+.imkan-cloud-import-close:hover { background: #f3f5f8; color: #202a3a; }
+
+.imkan-cloud-account-chip {
+  position: absolute;
+  z-index: 11;
+  top: 13px;
+  right: 52px;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  height: 31px;
+  padding: 2px 7px 2px 3px;
+  border: 0;
+  border-radius: 18px;
+  background: transparent;
+  color: #5d6675;
+  cursor: pointer;
+}
+
+.imkan-cloud-account-chip:hover { background: #f5f7fa; }
+
+.imkan-cloud-account-avatar {
+  display: grid;
+  width: 28px;
+  height: 28px;
+  place-items: center;
+  flex: 0 0 auto;
+  border-radius: 50%;
+  background: #159b85;
+  color: #fff;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.imkan-cloud-accounts-panel {
+  position: absolute;
+  z-index: 20;
+  top: 50px;
+  right: 45px;
+  width: 315px;
+  overflow: hidden;
+  border: 1px solid #e1e5eb;
+  border-radius: 8px;
+  background: #fff;
+  box-shadow: 0 16px 38px rgba(15, 23, 42, 0.18);
+}
+
+.imkan-cloud-accounts-title {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 13px 14px;
+  border-bottom: 1px solid #eef0f4;
+  color: #465166;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.imkan-cloud-accounts-title > svg,
+.imkan-cloud-accounts-title > span:first-of-type { flex: 0 0 auto; }
+.imkan-cloud-accounts-title button { margin-left: auto; color: #778092; }
+
+.imkan-cloud-accounts-list { padding: 8px; }
+
+.imkan-cloud-account-row {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  gap: 9px;
+  padding: 9px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  cursor: pointer;
+}
+
+.imkan-cloud-account-row:hover,
+.imkan-cloud-account-row.is-active { background: #f7f9fc; }
+.imkan-cloud-account-row > svg { color: #1b9d73; }
+
+.imkan-cloud-auth-another {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  gap: 9px;
+  padding: 12px 14px;
+  border: 0;
+  border-top: 1px solid #eef0f4;
+  background: #fff;
+  color: #465166;
+  font-size: 12px;
+  cursor: pointer;
+  text-align: left;
+}
+
+.imkan-cloud-auth-another:hover { background: #f8fafc; }
+
+.imkan-cloud-import-main {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  flex-direction: column;
+  padding-left: 56px;
+  background: #fff;
+}
+
+.imkan-cloud-import-content {
+  display: flex;
+  min-height: 0;
+  flex: 1;
+  flex-direction: column;
+  overflow: auto;
+}
+
+.imkan-cloud-access-state {
+  display: flex;
+  min-height: 0;
+  flex: 1;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 84px 54px 80px;
+  text-align: center;
+}
+
+.imkan-cloud-access-state h1 {
+  margin: 16px 0 7px;
+  color: #252d3a;
+  font-size: 19px;
+  font-weight: 650;
+  letter-spacing: -0.01em;
+}
+
+.imkan-cloud-access-state p {
+  max-width: 390px;
+  margin: 0;
+  color: #677286;
+  font-size: 12px;
+  line-height: 1.65;
+}
+
+.imkan-cloud-primary-action {
+  display: inline-flex;
+  min-width: 176px;
+  height: 42px;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 25px;
+  border: 0;
+  border-radius: 4px;
+  background: #1d5bd7;
+  color: #fff;
+  font-size: 13px;
+  font-weight: 600;
+  box-shadow: 0 2px 4px rgba(29, 91, 215, 0.16);
+  cursor: pointer;
+}
+
+.imkan-cloud-primary-action:hover { background: #174fbe; }
+.imkan-cloud-primary-action:disabled { cursor: wait; opacity: .72; }
+
+.imkan-cloud-action-hint {
+  margin-top: 8px;
+  color: #7e8899;
+  font-size: 11px;
+}
+
+.imkan-cloud-illustration {
+  position: relative;
+  width: 138px;
+  height: 118px;
+  opacity: .95;
+}
+
+.imkan-cloud-illustration-person {
+  position: absolute;
+  bottom: 9px;
+  left: 30px;
+  width: 58px;
+  height: 42px;
+  border-radius: 52% 48% 25% 30%;
+  background: #dfe9ff;
+  transform: skewX(-6deg);
+}
+
+.imkan-cloud-illustration-person::before {
+  content: '';
+  position: absolute;
+  top: -20px;
+  left: 17px;
+  width: 21px;
+  height: 21px;
+  border-radius: 50%;
+  background: #b7c8e7;
+}
+
+.imkan-cloud-illustration-person::after {
+  content: '';
+  position: absolute;
+  right: -18px;
+  bottom: -4px;
+  width: 36px;
+  height: 12px;
+  border-radius: 50%;
+  background: #d6e0f1;
+}
+
+.imkan-cloud-illustration-screen {
+  position: absolute;
+  top: 9px;
+  right: 9px;
+  width: 58px;
+  height: 44px;
+  border: 4px solid #d6e2ff;
+  border-radius: 8px;
+  background: #eef4ff;
+  color: #70b997;
+  font-size: 21px;
+  font-weight: 800;
+  line-height: 36px;
+  text-align: center;
+}
+
+.imkan-cloud-illustration-folder {
+  position: absolute;
+  right: 15px;
+  bottom: 2px;
+  width: 78px;
+  height: 42px;
+  border-radius: 4px 4px 10px 10px;
+  background: linear-gradient(180deg, #d9e5ff, #b9cdf5);
+  transform: skewX(-7deg);
+}
+
+.imkan-cloud-import-error {
+  position: absolute;
+  z-index: 5;
+  top: 58px;
+  left: 50%;
+  width: min(470px, calc(100% - 120px));
+  transform: translateX(-50%);
+  padding: 9px 12px;
+  border: 1px solid #ffd5d5;
+  border-radius: 5px;
+  background: #fff7f7;
+  color: #bd3c3c;
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+.imkan-cloud-files-view {
+  width: min(640px, calc(100% - 80px));
+  margin: 82px auto 35px;
+  overflow: hidden;
+  border: 1px solid #e6e9ee;
+  border-radius: 6px;
+}
+
+.imkan-cloud-files-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 15px;
+  padding: 12px 14px;
+  border-bottom: 1px solid #e9edf2;
+  background: #fafbfc;
+}
+
+.imkan-cloud-select-all {
+  padding: 6px 9px;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: #1d5bd7;
+  font-size: 11px;
+  cursor: pointer;
+}
+.imkan-cloud-select-all:hover { background: #edf3ff; }
+
+.imkan-cloud-files-list { max-height: 475px; overflow: auto; }
+
+.imkan-cloud-file-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 11px 13px;
+  border-bottom: 1px solid #f0f2f5;
+  cursor: pointer;
+}
+.imkan-cloud-file-row:last-child { border-bottom: 0; }
+.imkan-cloud-file-row:hover { background: #fafcff; }
+.imkan-cloud-file-row input { width: 15px; height: 15px; accent-color: #1d5bd7; }
+.imkan-cloud-file-icon { display: grid; width: 30px; height: 30px; place-items: center; border-radius: 6px; background: #f1f5ff; color: #4f75d9; }
+
+.imkan-cloud-empty {
+  display: flex;
+  min-height: 220px;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+  color: #8992a1;
+  font-size: 12px;
+}
+.imkan-cloud-empty-large { min-height: 260px; }
+
+.imkan-cloud-spinner {
+  width: 15px;
+  height: 15px;
+  border: 2px solid #d9e1ef;
+  border-top-color: #1d5bd7;
+  border-radius: 50%;
+  animation: imkan-cloud-spin .7s linear infinite;
+}
+.imkan-cloud-spinner-light { border-color: rgba(255,255,255,.35); border-top-color: #fff; }
+@keyframes imkan-cloud-spin { to { transform: rotate(360deg); } }
+
+.imkan-cloud-jobs {
+  width: min(640px, calc(100% - 80px));
+  margin: 0 auto 24px;
+  display: grid;
+  gap: 7px;
+}
+.imkan-cloud-job { padding: 10px 12px; border: 1px solid #e7eaf0; border-radius: 6px; }
+
+.imkan-cloud-import-footer {
+  position: relative;
+  z-index: 4;
+  display: flex;
+  min-height: 72px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 15px;
+  padding: 12px 22px 12px 76px;
+  border-top: 1px solid #eceff3;
+  background: #fff;
+}
+.imkan-cloud-import-footer > span { max-width: 360px; color: #929baa; font-size: 10px; line-height: 1.5; }
+
+.imkan-cloud-footer-secondary,
+.imkan-cloud-footer-primary {
+  display: inline-flex;
+  height: 38px;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  border-radius: 4px;
+  padding: 0 14px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.imkan-cloud-footer-secondary { border: 1px solid #dfe4eb; background: #fff; color: #5f697a; }
+.imkan-cloud-footer-secondary:hover { background: #f7f8fa; }
+.imkan-cloud-footer-primary { min-width: 110px; border: 0; background: #1d5bd7; color: #fff; }
+.imkan-cloud-footer-primary:hover { background: #174fbe; }
+.imkan-cloud-footer-primary:disabled,
+.imkan-cloud-footer-secondary:disabled { cursor: not-allowed; opacity: .52; }
+
+@media (max-width: 640px) {
+  .imkan-cloud-import-overlay { padding: 0; }
+  .imkan-cloud-import-modal { width: 100vw; height: 100vh; min-height: 0; border-radius: 0; }
+  .imkan-cloud-import-footer { min-height: 66px; padding-left: 68px; }
+  .imkan-cloud-import-footer > span { display: none; }
+  .imkan-cloud-files-view,
+  .imkan-cloud-jobs { width: calc(100% - 36px); }
+  .imkan-cloud-access-state { padding: 72px 32px 58px; }
+  .imkan-cloud-accounts-panel { right: 10px; width: min(315px, calc(100vw - 28px)); }
+}
