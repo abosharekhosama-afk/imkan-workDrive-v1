@@ -1,7 +1,6 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useLocale } from "../../../components/locale-provider";
 import { ApiError } from "../../../lib/api/client";
@@ -39,8 +38,6 @@ function MoreIcon() {
 
 export default function TeamFoldersPage() {
   const { label, locale } = useLocale();
-  const pathname = usePathname();
-  const adminBase = pathname.startsWith("/admin/team-folders") ? "/admin/team-folders" : "/files/team-folders";
   const [teamFolders, setTeamFolders] = useState<TeamFolderListItem[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -49,7 +46,7 @@ export default function TeamFoldersPage() {
   const [menuId, setMenuId] = useState<string | null>(null);
   const [pinnedIds, setPinnedIds] = useState<Set<string>>(new Set());
   const [search, setSearch] = useState("");
-  const [scopeFilter, setScopeFilter] = useState<"joined" | "all" | "public" | "private">("all");
+  const [scopeFilter, setScopeFilter] = useState<"joined" | "all" | "public" | "private">("joined");
   const [filterOpen, setFilterOpen] = useState(false);
   const [renameTarget, setRenameTarget] = useState<TeamFolderListItem | null>(null);
   const [renameName, setRenameName] = useState("");
@@ -113,10 +110,7 @@ export default function TeamFoldersPage() {
       .sort((a, b) => Number(pinnedIds.has(b.id)) - Number(pinnedIds.has(a.id)) || a.name.localeCompare(b.name));
   }, [teamFolders, search, pinnedIds, scopeFilter]);
 
-  const createHref = `${adminBase}/create`;
-  const folderHref = (tf: TeamFolderListItem) => adminBase === "/admin/team-folders"
-    ? `/admin/team-folders/${encodeURIComponent(tf.id)}/manage?tab=details`
-    : (tf.rootFolderId ? `/files/${encodeURIComponent(tf.rootFolderId)}` : createHref);
+  const createHref = "/files/team-folders/create";
 
   const openRename = (tf: TeamFolderListItem) => {
     setMenuId(null);
@@ -142,6 +136,20 @@ export default function TeamFoldersPage() {
     })();
   };
 
+  const join = async (tf: TeamFolderListItem) => {
+    if (!tf.isPublicToOrg || tf.isMember) return;
+    setActionBusy(true);
+    setError(null);
+    try {
+      await joinTeamFolder(tf.id);
+      await load();
+    } catch (cause) {
+      setError(cause instanceof ApiError ? cause.message : label("error.generic"));
+    } finally {
+      setActionBusy(false);
+    }
+  };
+
   const togglePin = async (tf: TeamFolderListItem) => {
     const pinned = pinnedIds.has(tf.id);
     if (!tf.rootFolderId) return;
@@ -160,20 +168,6 @@ export default function TeamFoldersPage() {
         await addFavorite("FOLDER", tf.rootFolderId);
         setPinnedIds((prev) => new Set(prev).add(tf.id));
       }
-    } catch (cause) {
-      setError(cause instanceof ApiError ? cause.message : label("error.generic"));
-    } finally {
-      setActionBusy(false);
-    }
-  };
-
-  const joinPublicFolder = async (tf: TeamFolderListItem) => {
-    if (!tf.isPublicToOrg || tf.isMember) return;
-    setActionBusy(true);
-    setError(null);
-    try {
-      await joinTeamFolder(tf.id);
-      await load();
     } catch (cause) {
       setError(cause instanceof ApiError ? cause.message : label("error.generic"));
     } finally {
@@ -234,31 +228,28 @@ export default function TeamFoldersPage() {
               const pinned = pinnedIds.has(tf.id);
               return (
                 <div key={tf.id} className={`team-folder-row group ${index === 0 && pinned ? "is-pinned" : ""}`} data-selected={detailsTf?.id === tf.id || undefined}>
-                  {tf.isPublicToOrg && !tf.isMember ? (
-                    <button type="button" className="team-folder-main text-start" onClick={() => void joinPublicFolder(tf)} disabled={actionBusy}>
+                  {tf.isMember ? (
+                    <Link href={tf.rootFolderId ? `/files/${tf.rootFolderId}` : createHref} className="team-folder-main">
                       <span className="team-folder-glyph"><FolderGlyph /></span>
                       <span className="team-folder-copy">
                         <span className="team-folder-name">
                           <span className="truncate">{tf.name}</span>
-                          <span className="team-folder-lock" title={locale === "ar" ? "مجلد فريق عام" : "Public Team Folder"} aria-label={locale === "ar" ? "عام" : "Public"}>{locale === "ar" ? "عام" : "Public"}</span>
-                        </span>
-                      </span>
-                    </button>
-                  ) : (
-                    <Link href={folderHref(tf)} className="team-folder-main">
-                      <span className="team-folder-glyph"><FolderGlyph /></span>
-                      <span className="team-folder-copy">
-                        <span className="team-folder-name">
-                          <span className="truncate">{tf.name}</span>
-                          <span className="team-folder-lock" title={tf.isPublicToOrg ? (locale === "ar" ? "مجلد فريق عام" : "Public Team Folder") : (locale === "ar" ? "مجلد فريق خاص" : "Private Team Folder")} aria-label={tf.isPublicToOrg ? (locale === "ar" ? "عام" : "Public") : (locale === "ar" ? "خاص" : "Private")}>{tf.isPublicToOrg ? (locale === "ar" ? "عام" : "Public") : "●"}</span>
+                          {!tf.isPublicToOrg ? <span className="team-folder-lock" title={locale === "ar" ? "مجلد خاص" : "Private Team Folder"} aria-label={locale === "ar" ? "خاص" : "Private"}>●</span> : null}
                         </span>
                       </span>
                     </Link>
+                  ) : (
+                    <div className="team-folder-main" aria-label={locale === "ar" ? "مجلد فريق عام" : "Public Team Folder"}>
+                      <span className="team-folder-glyph"><FolderGlyph /></span>
+                      <span className="team-folder-copy">
+                        <span className="team-folder-name"><span className="truncate">{tf.name}</span><span className="text-[10px] text-slate-400">Public</span></span>
+                      </span>
+                    </div>
                   )}
 
-                  <button type="button" className="team-folder-members" onClick={() => tf.isMember ? setActiveMembersTf(tf) : void joinPublicFolder(tf)} disabled={actionBusy} title={tf.isMember ? (locale === "ar" ? "إدارة أعضاء مجلد الفريق" : "Manage Team Folder members") : (locale === "ar" ? "الانضمام إلى مجلد الفريق العام" : "Join public Team Folder")}>
-                    <MembersIcon /><span>{tf.isMember ? `${tf.memberCount} ${locale === "ar" ? "عضو" : tf.memberCount === 1 ? "Member" : "Members"}` : (locale === "ar" ? "انضمام" : "Join")}</span>
-                  </button>
+                  {tf.isMember ? <button type="button" className="team-folder-members" onClick={() => setActiveMembersTf(tf)} title={locale === "ar" ? "إدارة أعضاء مجلد الفريق" : "Manage Team Folder members"}>
+                    <MembersIcon /><span>{tf.memberCount} {locale === "ar" ? "عضو" : tf.memberCount === 1 ? "Member" : "Members"}</span>
+                  </button> : <button type="button" className="team-folder-members" disabled={actionBusy} onClick={() => void join(tf)} title={locale === "ar" ? "الانضمام إلى مجلد الفريق العام" : "Join public Team Folder"}><span className="text-[11px] font-semibold text-blue-600">{locale === "ar" ? "انضمام" : "Join"}</span></button>}
 
                   <div className="team-folder-row-actions" data-team-folder-menu>
                     <button type="button" className={`team-folder-pin ${pinned ? "is-pinned" : ""}`} aria-pressed={pinned} disabled={actionBusy || !tf.rootFolderId} onClick={(e) => { e.preventDefault(); e.stopPropagation(); void togglePin(tf); }} title={pinned ? (locale === "ar" ? "إلغاء التثبيت" : "Unpin") : (locale === "ar" ? "تثبيت" : "Pin")}>
@@ -268,10 +259,9 @@ export default function TeamFoldersPage() {
                       <button type="button" data-team-folder-menu-trigger aria-expanded={menuId === tf.id} className="team-folder-more" onClick={(e) => { e.preventDefault(); e.stopPropagation(); setMenuId((id) => id === tf.id ? null : tf.id); }} aria-label={locale === "ar" ? "المزيد" : "More"}><MoreIcon /></button>
                       {menuId === tf.id ? (
                         <div className="team-folder-menu" data-team-folder-menu role="menu">
+                          {!tf.isMember && tf.isPublicToOrg ? <button type="button" disabled={actionBusy} onClick={() => { setMenuId(null); void join(tf); }}>{locale === "ar" ? "انضمام" : "Join"}</button> : null}
                           <button type="button" onClick={() => { setDetailsTf(tf); setMenuId(null); }}>{locale === "ar" ? "التفاصيل" : "Details"}</button>
-                          {tf.isMember ? <button type="button" onClick={() => { setActiveMembersTf(tf); setMenuId(null); }}>{locale === "ar" ? "الأعضاء" : "Members"}</button> : <button type="button" onClick={() => { setMenuId(null); void joinPublicFolder(tf); }}>{locale === "ar" ? "انضمام" : "Join"}</button>}
-                          {tf.isMember ? <button type="button" onClick={() => openRename(tf)}>{label("files.rename")}</button> : null}
-                          {tf.isMember ? <button type="button" className="danger" onClick={() => remove(tf)}>{label("files.delete")}</button> : null}
+                          {tf.isMember ? <><button type="button" onClick={() => { setActiveMembersTf(tf); setMenuId(null); }}>{locale === "ar" ? "الأعضاء" : "Members"}</button><button type="button" onClick={() => openRename(tf)}>{label("files.rename")}</button><button type="button" className="danger" onClick={() => remove(tf)}>{label("files.delete")}</button></> : null}
                         </div>
                       ) : null}
                     </div>
@@ -281,7 +271,6 @@ export default function TeamFoldersPage() {
                     <div className="team-folder-details-card">
                       <div className="flex items-center gap-2 border-b border-slate-100 pb-2"><span className="text-slate-700"><FolderGlyph /></span><strong className="truncate text-[13px]">{tf.name}</strong></div>
                       <div className="grid grid-cols-2 gap-y-2 pt-3 text-[11px] text-slate-500">
-                        <span>{locale === "ar" ? "النوع" : "Type"}</span><span className="text-end text-slate-700">{tf.isPublicToOrg ? (locale === "ar" ? "عام" : "Public") : (locale === "ar" ? "خاص" : "Private")}</span>
                         <span>{locale === "ar" ? "الدور" : "Role"}</span><span className="text-end text-slate-700">{tf.role}</span>
                         <span>{locale === "ar" ? "الأعضاء" : "Members"}</span><span className="text-end text-slate-700">{tf.memberCount}</span>
                         <span>{locale === "ar" ? "آخر تعديل" : "Modified"}</span><span className="text-end text-slate-700">{tf.updatedAt ? new Intl.DateTimeFormat(undefined, { dateStyle: "medium" }).format(new Date(tf.updatedAt)) : "—"}</span>
