@@ -7,6 +7,9 @@ import { useLocale } from "../../../../../components/locale-provider";
 import { ApiError } from "../../../../../lib/api/client";
 import {
   addTeamFolderMember,
+  addTeamFolderGroup,
+  updateTeamFolderGroup,
+  removeTeamFolderGroup,
   deleteTeamFolder,
   getCurrentUserTeamFolderRole,
   getTeamFolder,
@@ -16,6 +19,7 @@ import {
   updateTeamFolderSettings,
   updateTeamFolderMember,
   type TeamFolderMember,
+  type TeamFolderGroup,
   type TeamFolderRecord,
   type TeamFolderRole,
   listTeamFolderActivity,
@@ -25,7 +29,7 @@ import {
   type TeamFolderSharedItem,
   type TeamFolderTrashItem,
 } from "../../../../../lib/api/team-folders";
-import { listOrganizationMembers, type OrgMember } from "../../../../../lib/api/organization";
+import { listOrganizationMembers, listGroups, type OrgMember, type GroupOption } from "../../../../../lib/api/organization";
 import { canManageMembers } from "../../../../../lib/permissions";
 import { formatBytes } from "../../../../../lib/api/quota";
 import { permanentDeleteFile } from "../../../../../lib/api/files";
@@ -86,6 +90,8 @@ export default function TeamFolderManagePage() {
   const [tab, setTab] = useState<TabKey>(initialTab);
   const [folder, setFolder] = useState<TeamFolderRecord | null>(null);
   const [members, setMembers] = useState<TeamFolderMember[]>([]);
+  const [groups, setGroups] = useState<TeamFolderGroup[]>([]);
+  const [groupOptions, setGroupOptions] = useState<GroupOption[]>([]);
   const [profiles, setProfiles] = useState<OrgMember[]>([]);
   const [role, setRole] = useState<string | null>(null);
   const [error, setError] = useState("");
@@ -95,6 +101,9 @@ export default function TeamFolderManagePage() {
   const [inviteSearch, setInviteSearch] = useState("");
   const [selectedUser, setSelectedUser] = useState<OrgMember | null>(null);
   const [inviteRole, setInviteRole] = useState<TeamFolderRole>("EDITOR");
+  const [groupSearch, setGroupSearch] = useState("");
+  const [selectedGroup, setSelectedGroup] = useState<GroupOption | null>(null);
+  const [groupRole, setGroupRole] = useState<TeamFolderRole>("EDITOR");
   const [settingsBusy, setSettingsBusy] = useState(false);
   const [panelLoading, setPanelLoading] = useState(false);
   const [activityRows, setActivityRows] = useState<TeamFolderActivity[]>([]);
@@ -115,12 +124,16 @@ export default function TeamFolderManagePage() {
       setFolder(details);
       setName(details.name);
       setMembers(memberRes.members);
+      setGroups(memberRes.groups ?? []);
       setRole(details.role === "ORG_ADMIN" ? "ORG_ADMIN" : currentRole);
       if (canManageMembers(details.role)) {
         try {
-          setProfiles(await listOrganizationMembers({ status: "ACTIVE" }));
+          const [profilesData, groupsData] = await Promise.all([listOrganizationMembers({ status: "ACTIVE" }), listGroups()]);
+          setProfiles(profilesData);
+          setGroupOptions(groupsData);
         } catch {
           setProfiles([]);
+          setGroupOptions([]);
         }
       }
     } catch (cause) {
@@ -206,6 +219,37 @@ export default function TeamFolderManagePage() {
     } finally {
       setBusy(false);
     }
+  };
+
+  const availableGroups = useMemo(() => {
+    const assigned = new Set(groups.map((group) => group.groupId));
+    const q = groupSearch.trim().toLocaleLowerCase();
+    return groupOptions.filter((group) => !assigned.has(group.id) && (!q || `${group.name} ${group.description || ""}`.toLocaleLowerCase().includes(q)));
+  }, [groups, groupOptions, groupSearch]);
+
+  const addGroup = async () => {
+    if (!selectedGroup || !canManage || busy) return;
+    setBusy(true); setError("");
+    try { await addTeamFolderGroup(id, selectedGroup.id, groupRole); setSelectedGroup(null); setGroupSearch(""); await load(); }
+    catch (cause) { setError(cause instanceof ApiError ? cause.message : (locale === "ar" ? "تعذر إضافة المجموعة." : "Unable to add the group.")); }
+    finally { setBusy(false); }
+  };
+
+  const changeGroupRole = async (groupId: string, next: TeamFolderRole) => {
+    if (!canManage || busy) return;
+    setBusy(true); setError("");
+    try { await updateTeamFolderGroup(id, groupId, next); await load(); }
+    catch (cause) { setError(cause instanceof ApiError ? cause.message : (locale === "ar" ? "تعذر تحديث دور المجموعة." : "Unable to update the group role.")); }
+    finally { setBusy(false); }
+  };
+
+  const removeGroup = async (groupId: string) => {
+    if (!canManage || busy) return;
+    if (!window.confirm(locale === "ar" ? "هل تريد إزالة المجموعة من مجلد الفريق؟" : "Remove this group from the Team Folder?")) return;
+    setBusy(true); setError("");
+    try { await removeTeamFolderGroup(id, groupId); await load(); }
+    catch (cause) { setError(cause instanceof ApiError ? cause.message : (locale === "ar" ? "تعذر إزالة المجموعة." : "Unable to remove the group.")); }
+    finally { setBusy(false); }
   };
 
   const changeRole = async (userId: string, next: TeamFolderRole) => {
@@ -345,6 +389,17 @@ export default function TeamFolderManagePage() {
                   <button type="button" onClick={() => void addMember()} disabled={!selectedUser || busy} className="bg-[color:var(--wd-primary)] text-[13px] font-semibold text-white disabled:opacity-50">{locale === "ar" ? "إضافة" : "Add"}</button>
                 </div>
               ) : null}
+              {canManage ? (
+                <div className="mb-7 rounded-lg border border-slate-200 p-4">
+                  <div className="mb-3 flex items-center justify-between"><div><strong className="text-[13px]">{locale === "ar" ? "إضافة مجموعة" : "Add Group"}</strong><p className="mt-1 text-[11px] text-slate-500">{locale === "ar" ? "أضف مجموعة كاملة إلى مجلد الفريق وامنح جميع أعضائها الدور نفسه." : "Add an entire group and apply one Team Folder role to all its members."}</p></div></div>
+                  <div className="grid gap-2 md:grid-cols-[1fr_130px_80px]">
+                    <div className="relative"><input value={groupSearch} onChange={(e) => { setGroupSearch(e.target.value); setSelectedGroup(null); }} placeholder={locale === "ar" ? "ابحث عن مجموعة" : "Search groups"} className="h-10 w-full rounded-md border border-slate-200 px-3 text-[12px] outline-none" />{groupSearch && !selectedGroup && availableGroups.length ? <div className="absolute start-0 top-11 z-20 w-full border border-slate-200 bg-white p-1 shadow-lg">{availableGroups.slice(0,8).map((group) => <button key={group.id} type="button" onClick={() => { setSelectedGroup(group); setGroupSearch(group.name); }} className="flex w-full items-center justify-between rounded-md px-3 py-2 text-start hover:bg-slate-50"><span><b className="block text-[12px]">{group.name}</b><small className="text-[10px] text-slate-500">{group.memberCount} {locale === "ar" ? "عضو" : "members"}</small></span><span className="text-[10px] text-slate-400">{group.description || ""}</span></button>)}</div> : null}</div>
+                    <select value={groupRole} onChange={(e) => setGroupRole(e.target.value as TeamFolderRole)} className="h-10 rounded-md border border-slate-200 px-3 text-[12px] outline-none"><option value="EDITOR">Editor</option><option value="VIEWER">Viewer</option><option value="COMMENTER">Commenter</option><option value="ORGANIZER">Organizer</option><option value="ADMIN">Admin</option></select>
+                    <button type="button" onClick={() => void addGroup()} disabled={!selectedGroup || busy} className="rounded-md bg-[color:var(--wd-primary)] text-[12px] font-semibold text-white disabled:opacity-50">{locale === "ar" ? "إضافة" : "Add"}</button>
+                  </div>
+                </div>
+              ) : null}
+              {groups.length ? <div className="mb-7 overflow-hidden rounded-lg border border-slate-200"><div className="border-b bg-slate-50 px-4 py-3 text-[12px] font-semibold">{locale === "ar" ? "المجموعات المضافة" : "Added Groups"}</div>{groups.map((group) => <div key={group.groupId} className="flex min-h-[60px] items-center gap-3 border-b border-slate-100 px-4 last:border-b-0"><span className="flex h-8 w-8 items-center justify-center rounded-full bg-[#edf3ff] text-[#315da8]">👥</span><div className="min-w-0 flex-1"><strong className="block truncate text-[12px]">{group.name}</strong><span className="text-[10px] text-slate-500">{group.memberCount} {locale === "ar" ? "عضو" : "members"}</span></div>{canManage ? <select value={group.role} onChange={(e) => void changeGroupRole(group.groupId, e.target.value as TeamFolderRole)} disabled={busy} className="h-8 rounded-full border border-slate-200 px-3 text-[11px]"><option value="ADMIN">Admin</option><option value="ORGANIZER">Organizer</option><option value="EDITOR">Editor</option><option value="COMMENTER">Commenter</option><option value="VIEWER">Viewer</option></select> : <span className="text-[11px] text-slate-500">{group.role}</span>}{canManage ? <button type="button" onClick={() => void removeGroup(group.groupId)} className="h-8 w-8 rounded-full text-slate-400 hover:bg-red-50 hover:text-red-600">×</button> : null}</div>)}</div> : null}
               <div className="mb-3 flex items-center justify-between border-b border-slate-200 pb-2"><strong className="text-[13px]">{members.length} {locale === "ar" ? "عضو" : "Member"}{members.length === 1 ? "" : "s"}</strong><input value={memberSearch} onChange={(e) => setMemberSearch(e.target.value)} placeholder={locale === "ar" ? "بحث" : "Search"} className="h-9 w-[285px] rounded-full border border-slate-200 px-3 text-[13px] outline-none focus:border-[color:var(--wd-primary)]" /></div>
               <div className="divide-y divide-slate-100 border-y border-slate-100">
                 {visibleMembers.map((member) => <div key={member.userId} className="flex min-h-[66px] items-center gap-3"><span className="flex h-9 w-9 items-center justify-center rounded-full bg-slate-100 text-[11px] font-semibold text-slate-600">{displayMemberName(member, profiles).slice(0,2).toUpperCase()}</span><div className="min-w-0 flex-1"><strong className="block text-[13px]">{displayMemberName(member, profiles)}</strong><span className="text-[12px] text-slate-500">{member.email}</span></div>{canManage ? <select value={member.role} onChange={(e) => void changeRole(member.userId, e.target.value as TeamFolderRole)} disabled={busy} className="h-8 rounded-full border border-slate-200 px-3 text-[12px]"><option value={member.role}>{member.role}</option>{ROLE_ORDER.filter((r) => r !== member.role).map((r) => <option key={r} value={r}>{r}</option>)}</select> : <span className="text-[12px] text-slate-500">{member.role}</span>}{canManage ? <button type="button" onClick={() => void removeMember(member.userId)} className="h-8 w-8 rounded-full text-slate-400 hover:bg-red-50 hover:text-red-600" title={locale === "ar" ? "إزالة" : "Remove"}>×</button> : null}</div>)}
