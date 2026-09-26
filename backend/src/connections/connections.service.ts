@@ -12,7 +12,7 @@ import { isIP } from 'node:net';
 import { lookup } from 'node:dns/promises';
 import { AuthService } from '../auth.service';
 import { buildOAuthBrowserUrl, normalizeOAuthReturnPath, oauthFailurePreservesActive, resolveOAuthFrontendOrigin, safeOAuthErrorCode, safeOrigin } from './oauth-flow';
-import { buildConnectionCapabilitySummary, googleDriveActivationError, googleDriveScopeGranted, mapGoogleDriveApiError, providerBrowseErrorCode } from './connection-browse-logic';
+import { buildConnectionCapabilitySummary, googleDriveActivationError, googleDriveAllFilesReadScopeGranted, mapGoogleDriveApiError, missingOAuthScopes, providerBrowseErrorCode } from './connection-browse-logic';
 
 const OAUTH_STATE_TTL_MS = 10 * 60 * 1000;
 const SECRET_FIELDS = ['accessToken', 'refreshToken', 'apiKey', 'bearerToken', 'username', 'password', 'customHeaders'] as const;
@@ -668,9 +668,15 @@ export class ConnectionsService {
     const configuredScopes = Array.isArray(providerConfig?.scopes)
       ? providerConfig!.scopes.map((v: unknown) => String(v).trim()).filter(Boolean)
       : definition.defaultScopes;
-    const missingConfiguredScopes = row.authType === ConnectionAuthType.OAUTH2
-      ? selectedScopes.filter((scope) => !configuredScopes.includes(scope))
-      : [];
+    const metadata = row.metadata && typeof row.metadata === 'object' ? row.metadata as Record<string, unknown> : {};
+    const scopeAudit = metadata.oauthScopeAudit && typeof metadata.oauthScopeAudit === 'object'
+      ? metadata.oauthScopeAudit as Record<string, unknown>
+      : {};
+    const requestedScopes = Array.isArray(scopeAudit.requestedScopes)
+      ? scopeAudit.requestedScopes.map((scope) => String(scope).trim()).filter(Boolean)
+      : selectedScopes;
+    const missingRequestedScopes = missingOAuthScopes(requestedScopes, row.scope);
+    const configurationOnlyScopes = configuredScopes.filter((scope) => !requestedScopes.includes(scope));
     const usageSummary = await this.prisma.connectionUsage.groupBy({
       by: ['status'],
       where: { orgId: user.org_id, connectionId: id },
@@ -681,9 +687,9 @@ export class ConnectionsService {
     if (row.status !== ConnectionStatus.ACTIVE) issues.push({ code: 'CONNECTION_NOT_ACTIVE', severity: 'BLOCKING', message: `Connection is ${String(row.status).toLowerCase()}` });
     if (row.authType === ConnectionAuthType.OAUTH2 && providerConfig?.enabled === false) issues.push({ code: 'PROVIDER_DISABLED', severity: 'BLOCKING', message: 'The organization OAuth provider is disabled.' });
     if (row.authType === ConnectionAuthType.OAUTH2 && providerConfig && providerConfig.lastTestOk === false) issues.push({ code: 'PROVIDER_CONFIG_FAILED', severity: 'WARNING', message: providerConfig.lastTestMessage || 'Provider configuration test failed.' });
-    if (missingConfiguredScopes.length) issues.push({ code: 'SCOPE_CONFIGURATION_DRIFT', severity: 'BLOCKING', message: `Connection scopes are not enabled in provider configuration: ${missingConfiguredScopes.slice(0, 10).join(', ')}` });
-    if (row.provider === 'google' && row.authType === ConnectionAuthType.OAUTH2 && !googleDriveScopeGranted(row.scope)) {
-      issues.push({ code: 'INSUFFICIENT_SCOPE', severity: 'BLOCKING', message: 'Google Drive file access is not authorized for this connection.' });
+    if (missingRequestedScopes.length) issues.push({ code: 'OAUTH_SCOPE_NOT_GRANTED', severity: 'BLOCKING', message: `The provider did not grant one or more requested scopes: ${missingRequestedScopes.slice(0, 10).join(', ')}` });
+    if (row.provider === 'google' && row.authType === ConnectionAuthType.OAUTH2 && !googleDriveAllFilesReadScopeGranted(row.scope)) {
+      issues.push({ code: 'DRIVE_FILE_READ_SCOPE_REQUIRED', severity: 'BLOCKING', message: 'Google Drive cloud import requires drive.readonly or drive scope. drive.file alone is not sufficient for arbitrary existing Drive files.' });
     }
     if (activeWorkflowIds.length && row.visibility === ConnectionVisibility.PRIVATE && row.ownerId !== user.sub) issues.push({ code: 'PRIVATE_CONNECTION_RUNTIME', severity: 'BLOCKING', message: 'A private connection is referenced by an active workflow that may run outside the connection owner context.' });
     if (failures > 0) issues.push({ code: 'RECENT_USAGE_FAILURES', severity: 'WARNING', message: `${failures} recorded connection usage failure(s).` });
@@ -703,7 +709,10 @@ export class ConnectionsService {
         enabled: providerConfig?.enabled ?? true,
         configuredScopes: configuredScopes,
         selectedScopes,
-        missingScopes: missingConfiguredScopes,
+        requestedScopes,
+        grantedScopes: String(row.scope ?? '').split(/\s+/).filter(Boolean),
+        missingScopes: missingRequestedScopes,
+        configurationOnlyScopes,
         lastTestedAt: providerConfig?.lastTestedAt ?? null,
         lastTestOk: providerConfig?.lastTestOk ?? null,
         lastTestMessage: providerConfig?.lastTestMessage ?? null,
@@ -766,6 +775,23 @@ export class ConnectionsService {
     const existingScopes = connection?.scope?.trim() ? connection.scope.split(/\s+/).filter(Boolean) : [];
     const mergedScopes = [...new Set([...definition.defaultScopes, ...configuredScopes, ...existingScopes, ...requiredScopes.filter(Boolean)])];
     const selectedScopes = mergedScopes.join(' ');
+    if (connection) {
+      const currentMetadata = connection.metadata && typeof connection.metadata === 'object' ? connection.metadata as Record<string, unknown> : {};
+      await this.prisma.connection.update({
+        where: { id: connection.id },
+        data: {
+          metadata: {
+            ...currentMetadata,
+            oauthScopeAudit: {
+              requestedScopes: mergedScopes,
+              requestedAt: new Date().toISOString(),
+              source: 'connection-oauth-start',
+            },
+          } as Prisma.InputJsonValue,
+        },
+      });
+      connection.metadata = { ...currentMetadata, oauthScopeAudit: { requestedScopes: mergedScopes, requestedAt: new Date().toISOString(), source: 'connection-oauth-start' } };
+    }
     const params = new URLSearchParams({ client_id: cfg.clientId, redirect_uri: cfg.callbackUrl, response_type: 'code', state });
     if (codeChallenge) { params.set('code_challenge', codeChallenge); params.set('code_challenge_method', 'S256'); }
     if (selectedScopes) params.set('scope', selectedScopes);
@@ -822,13 +848,32 @@ export class ConnectionsService {
       if (existing) await this.prisma.connection.update({ where: { id: existing.id }, data: { status: ConnectionStatus.REAUTH_REQUIRED, errorCode: 'PROVIDER_PROBE_FAILED', errorMessage: message } }).catch(() => undefined);
       throw new BadRequestException(`OAuth authorization succeeded but provider verification failed: ${message}`);
     }
+    const grantedScope = typeof payload.scope === 'string' ? payload.scope.slice(0, 4000) : (existing?.scope ?? null);
+    const existingMetadata = existing?.metadata && typeof existing.metadata === 'object' ? existing.metadata as Record<string, unknown> : {};
+    const previousAudit = existingMetadata.oauthScopeAudit && typeof existingMetadata.oauthScopeAudit === 'object'
+      ? existingMetadata.oauthScopeAudit as Record<string, unknown>
+      : {};
+    const requestedScopes = Array.isArray(previousAudit.requestedScopes)
+      ? previousAudit.requestedScopes.map((value) => String(value).trim()).filter(Boolean)
+      : (existing?.scope ?? '').split(/\s+/).filter(Boolean);
+    const missingScopes = missingOAuthScopes(requestedScopes, grantedScope);
+    const configuredScopes = await this.configuredProviderScopes(provider, row.orgId, definition);
+    const configurationOnlyScopes = configuredScopes.filter((scope) => !requestedScopes.includes(scope));
+    const scopeAudit = {
+      requestedScopes: [...new Set(requestedScopes)],
+      grantedScopes: [...new Set(String(grantedScope ?? '').split(/\s+/).filter(Boolean))],
+      missingScopes,
+      configuredScopes,
+      configurationOnlyScopes,
+      checkedAt: new Date().toISOString(),
+    };
     const metadata: Record<string, unknown> = {
       ...(existing?.metadata && typeof existing.metadata === 'object' ? existing.metadata as Record<string, unknown> : {}),
       oauthProvider: provider,
       oauthConnectedAt: new Date().toISOString(),
       ...(authorizedAccount ? { authorizedAccount } : {}),
+      oauthScopeAudit: scopeAudit,
     };
-    const grantedScope = typeof payload.scope === 'string' ? payload.scope.slice(0, 4000) : (existing?.scope ?? null);
     const capabilitySummary = buildConnectionCapabilitySummary({ provider, authType: ConnectionAuthType.OAUTH2, scope: grantedScope, errorCode: null });
     if (provider === 'google') {
       metadata.capabilities = Object.fromEntries(capabilitySummary.items.map((item) => [item.key, item.state]));
@@ -994,7 +1039,7 @@ export class ConnectionsService {
   private async resolveBrowseToken(row: { id: string; provider: string; status: ConnectionStatus; authType: ConnectionAuthType; scope: string | null }) {
     if (row.status === ConnectionStatus.DISABLED) throw new ForbiddenException('Connection is disabled.');
     if (row.status === ConnectionStatus.REAUTH_REQUIRED) throw new ForbiddenException('Connection requires re-authentication.');
-    if (row.provider === 'google' && row.authType === ConnectionAuthType.OAUTH2 && !googleDriveScopeGranted(row.scope)) {
+    if (row.provider === 'google' && row.authType === ConnectionAuthType.OAUTH2 && !googleDriveAllFilesReadScopeGranted(row.scope)) {
       throw new ForbiddenException('INSUFFICIENT_SCOPE: Google Drive file access is not authorized for this connection.');
     }
     if (row.status !== ConnectionStatus.ACTIVE) throw new ForbiddenException('Your connection expired. Reconnect to continue.');

@@ -1,13 +1,31 @@
+export function normalizeOAuthScopes(scope: string | null | undefined): string[] {
+  return [...new Set(String(scope ?? '').split(/\s+/).map((item) => item.trim()).filter(Boolean))];
+}
+
+export function missingOAuthScopes(requested: string[] | null | undefined, granted: string | null | undefined): string[] {
+  const grantedSet = new Set(normalizeOAuthScopes(granted));
+  return [...new Set((requested ?? []).map((item) => String(item).trim()).filter(Boolean))].filter((item) => !grantedSet.has(item));
+}
+
 export function googleDriveScopeGranted(scope: string | null | undefined): boolean {
-  const granted = String(scope ?? '')
-    .split(/\s+/)
-    .map((item) => item.trim())
-    .filter(Boolean);
+  const granted = normalizeOAuthScopes(scope);
   return granted.some((item) =>
     item === 'https://www.googleapis.com/auth/drive.readonly'
-    || item === 'https://www.googleapis.com/auth/drive'
-    || item === 'https://www.googleapis.com/auth/drive.file',
+    || item === 'https://www.googleapis.com/auth/drive',
   );
+}
+
+
+
+/** Google Drive browser/import access to arbitrary existing files requires full read access.
+ * drive.file is intentionally not treated as sufficient because it only covers files
+ * created/opened by the app and cannot guarantee that an arbitrary selected Drive file
+ * can be listed/downloaded by the cloud importer.
+ */
+export function googleDriveAllFilesReadScopeGranted(scope: string | null | undefined): boolean {
+  const granted = new Set(normalizeOAuthScopes(scope));
+  return granted.has('https://www.googleapis.com/auth/drive.readonly')
+    || granted.has('https://www.googleapis.com/auth/drive');
 }
 
 export type ConnectionCapabilityState = 'granted' | 'required' | 'not_applicable';
@@ -66,7 +84,7 @@ export function buildConnectionCapabilitySummary(input: {
 }
 
 export function googleDriveActivationError(scope: string | null | undefined): { errorCode: string; errorMessage: string } | null {
-  if (googleDriveScopeGranted(scope)) return null;
+  if (googleDriveAllFilesReadScopeGranted(scope)) return null;
   return {
     errorCode: 'DRIVE_SCOPE_REQUIRED',
     errorMessage: 'Google Drive file access is not authorized for this connection.',

@@ -12,7 +12,7 @@ import { STORAGE_SERVICE, type StorageService } from '../storage/storage.types';
 import { CloudProvider } from './cloud-import.schemas';
 import { parseCreateJobs } from './cloud-import.schemas';
 import { ConnectionsService } from '../connections/connections.service';
-import { googleDriveScopeGranted } from '../connections/connection-browse-logic';
+import { googleDriveAllFilesReadScopeGranted } from '../connections/connection-browse-logic';
 
 const MAX_IMPORT_BYTES = 250 * 1024 * 1024;
 const MAX_LIST_ITEMS = 100;
@@ -128,8 +128,8 @@ export class CloudImportService implements OnModuleInit, OnModuleDestroy {
 
   async listFiles(user: AccessTokenPayload, provider: CloudProvider, connectionId: string | null = null, parentId: string | null = null, pageToken: string | null = null): Promise<{ files: RemoteFile[]; nextPageToken: string | null; parent: string | null }> {
     const connection = await this.getConnection(user, provider, connectionId);
-    if (provider === 'google' && !googleDriveScopeGranted(connection.scope)) {
-      throw new ForbiddenException('INSUFFICIENT_SCOPE: Google Drive file access is not authorized for this connection.');
+    if (provider === 'google' && !googleDriveAllFilesReadScopeGranted(connection.scope)) {
+      throw new ForbiddenException('INSUFFICIENT_SCOPE: Google Drive cloud import requires drive.readonly or drive scope.');
     }
     const token = await this.ensureAccessToken(connection);
     const parent = parentId?.trim() || null;
@@ -264,9 +264,23 @@ export class CloudImportService implements OnModuleInit, OnModuleDestroy {
     const job = await this.prisma.cloudImportJob.findUnique({ where: { id }, include: { connection: true } });
     if (!job) return;
     try {
-      const connection: Connection = { id: job.connection.id, provider: job.connection.provider as CloudProvider, accessToken: this.decrypt(job.connection.accessToken), refreshToken: job.connection.refreshToken ? this.decrypt(job.connection.refreshToken) : null, expiresAt: job.connection.expiresAt };
+      const genericProvider = job.provider === 'onedrive' ? 'microsoft' : job.provider;
+      const genericConnection = await this.prisma.connection.findFirst({
+        where: { orgId: job.orgId, ownerId: job.userId, provider: genericProvider, authType: 'OAUTH2', status: 'ACTIVE' },
+        include: { secret: true },
+        orderBy: { updatedAt: 'desc' },
+      });
+      const connection: Connection = {
+        id: job.connection.id,
+        genericConnectionId: genericConnection?.id,
+        provider: job.connection.provider as CloudProvider,
+        accessToken: this.decrypt(job.connection.accessToken),
+        refreshToken: job.connection.refreshToken ? this.decrypt(job.connection.refreshToken) : null,
+        expiresAt: job.connection.expiresAt,
+        scope: job.connection.scope,
+      };
       const token = await this.ensureAccessToken(connection);
-      const downloaded = await this.downloadRemote(connection.provider, token, job.remoteFileId, job.remoteName, job.remoteMimeType, async (done, total) => {
+      const downloaded = await this.downloadRemote(connection, token, job.remoteFileId, job.remoteName, job.remoteMimeType, async (done, total) => {
         const progress = total > 0 ? Math.min(75, Math.max(1, Math.floor((done / total) * 75))) : Math.min(75, Math.max(1, job.progress + 1));
         if (progress !== job.progress) await this.prisma.cloudImportJob.update({ where: { id }, data: { progress, bytesDone: BigInt(done), totalBytes: total > 0 ? BigInt(total) : undefined } }).catch(() => undefined);
       });
@@ -314,7 +328,8 @@ export class CloudImportService implements OnModuleInit, OnModuleDestroy {
     }
   }
 
-  private async downloadRemote(provider: CloudProvider, token: string, id: string, name: string, mimeType: string, onProgress?: (done: number, total: number) => Promise<void>): Promise<{ bytes: Buffer; name: string; mimeType: string }> {
+  private async downloadRemote(connection: Connection, token: string, id: string, name: string, mimeType: string, onProgress?: (done: number, total: number) => Promise<void>): Promise<{ bytes: Buffer; name: string; mimeType: string }> {
+    const provider = connection.provider;
     let url = '';
     let headers: Record<string, string> = { authorization: `Bearer ${token}` };
     let outputName = name;
@@ -335,8 +350,21 @@ export class CloudImportService implements OnModuleInit, OnModuleDestroy {
       if (!meta.downloadUrl) throw new BadRequestException('OneDrive file is not downloadable');
       url = meta.downloadUrl;
     }
-    const response = await fetch(url, { headers });
-    if (!response.ok || !response.body) throw new BadRequestException('Cloud file download failed');
+    let response = await fetch(url, { headers });
+    if (response.status === 401 && connection.refreshToken) {
+      // Force the mirror/generic token refresh path and replay once.
+      connection.expiresAt = new Date(0);
+      const refreshedToken = await this.ensureAccessToken(connection);
+      headers = { ...headers, authorization: `Bearer ${refreshedToken}` };
+      response = await fetch(url, { headers });
+    }
+    if (!response.ok || !response.body) {
+      const payload = await this.readJson(response);
+      if (provider === 'google' && response.status === 403) {
+        throw new ForbiddenException('INSUFFICIENT_SCOPE: Google Drive denied cloud file download. Reconnect with drive.readonly or drive scope.');
+      }
+      throw new BadRequestException(`Cloud file download failed${payload?.error?.message ? `: ${String(payload.error.message).slice(0, 240)}` : ''}`);
+    }
     const contentLength = Number(response.headers.get('content-length') ?? 0);
     if (contentLength > this.maxBytes) throw new BadRequestException('Cloud file exceeds the server import limit');
     const reader = response.body.getReader(); const chunks: Buffer[] = []; let total = 0;

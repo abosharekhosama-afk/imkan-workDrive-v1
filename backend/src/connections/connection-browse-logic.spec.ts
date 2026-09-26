@@ -1,12 +1,24 @@
-﻿import { buildConnectionCapabilitySummary, googleDriveActivationError, googleDriveScopeGranted, mapGoogleDriveApiError, providerBrowseErrorCode } from './connection-browse-logic';
+﻿import { buildConnectionCapabilitySummary, googleDriveActivationError, googleDriveAllFilesReadScopeGranted, googleDriveScopeGranted, mapGoogleDriveApiError, missingOAuthScopes, providerBrowseErrorCode } from './connection-browse-logic';
 
 describe('connection-browse-logic', () => {
   it('accepts google drive readonly scope', () => {
     expect(googleDriveScopeGranted('openid email https://www.googleapis.com/auth/drive.readonly')).toBe(true);
+    expect(googleDriveScopeGranted('openid https://www.googleapis.com/auth/drive.file')).toBe(false);
+  });
+
+  it('requires full Drive read scope for arbitrary cloud import files', () => {
+    expect(googleDriveAllFilesReadScopeGranted('openid https://www.googleapis.com/auth/drive.file')).toBe(false);
+    expect(googleDriveAllFilesReadScopeGranted('openid https://www.googleapis.com/auth/drive.readonly')).toBe(true);
+    expect(googleDriveAllFilesReadScopeGranted('openid https://www.googleapis.com/auth/drive')).toBe(true);
   });
 
   it('rejects google connection without drive scope', () => {
     expect(googleDriveScopeGranted('openid email profile')).toBe(false);
+  });
+
+  it('calculates requested scopes missing from the granted token', () => {
+    expect(missingOAuthScopes(['openid', 'email', 'https://www.googleapis.com/auth/drive.readonly'], 'openid email')).toEqual(['https://www.googleapis.com/auth/drive.readonly']);
+    expect(missingOAuthScopes(['openid', 'email'], 'email openid openid')).toEqual([]);
   });
 
   it('maps insufficient scope messages', () => {
@@ -23,8 +35,10 @@ describe('connection-browse-logic', () => {
     expect(summary.items).toHaveLength(2);
   });
 
-  it('returns drive activation error when scope missing', () => {
+  it('returns drive activation error when arbitrary-file read scope is missing', () => {
     expect(googleDriveActivationError('openid email')?.errorCode).toBe('DRIVE_SCOPE_REQUIRED');
+    expect(googleDriveActivationError('openid https://www.googleapis.com/auth/drive.file')?.errorCode).toBe('DRIVE_SCOPE_REQUIRED');
+    expect(googleDriveActivationError('openid https://www.googleapis.com/auth/drive.readonly')).toBeNull();
   });
 
   it('maps google drive api scope errors', () => {
