@@ -319,15 +319,22 @@ export function CloudImportHost() {
   }, [detail, provider, providers, loading, files.length, filesRequested, connectionId]);
 
   useEffect(() => {
-    if (!jobs.length) return;
-    const ids = jobs.map((j) => j.id);
+    const activeJobs = jobs.filter((job) => job.status === 'PENDING' || job.status === 'IN_PROGRESS');
+    if (!activeJobs.length) return;
+    const ids = activeJobs.map((j) => j.id);
     let cancelled = false;
+    let contentRefreshSent = false;
     const tick = async () => {
       try {
         const next = await listCloudImportJobs(ids);
-        if (!cancelled) {
-          setJobs(next);
-          if (next.some((j) => j.status === 'COMPLETED')) window.dispatchEvent(new Event('workdrive:content-changed'));
+        if (cancelled) return;
+        setJobs((current) => {
+          const byId = new Map(next.map((job) => [job.id, job]));
+          return current.map((job) => byId.get(job.id) ?? job);
+        });
+        if (!contentRefreshSent && next.some((j) => j.status === 'COMPLETED')) {
+          contentRefreshSent = true;
+          window.dispatchEvent(new Event('workdrive:content-changed'));
         }
       } catch {
         // Keep the current job state while polling is temporarily unavailable.
@@ -339,7 +346,7 @@ export function CloudImportHost() {
       cancelled = true;
       window.clearInterval(timer);
     };
-  }, [jobs.map((j) => j.id).join(',')]);
+  }, [jobs.filter((j) => j.status === 'PENDING' || j.status === 'IN_PROGRESS').map((j) => j.id).join(',')]);
 
   if (!detail) return null;
 
