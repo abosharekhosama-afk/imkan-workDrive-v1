@@ -28,7 +28,7 @@ export type TeamFolderListItem = {
   id: string;
   name: string;
   rootFolderId: string | null;
-  role: TeamFolderRole | 'ORG_ADMIN';
+  role: TeamFolderRole | 'ORG_ADMIN' | null;
   memberCount: number;
   isMember: boolean;
   isPublicToOrg: boolean;
@@ -101,7 +101,6 @@ export class TeamFoldersService {
         orgId: created.orgId,
         name: created.name,
         rootFolderId: root.id,
-        isPublicToOrg: created.isPublicToOrg,
       };
     });
   }
@@ -116,20 +115,25 @@ export class TeamFoldersService {
     const visible: TeamFolderListItem[] = [];
     for (const folder of folders) {
       const role = await this.resolveCallerRole(user, folder.id);
-      const resource = this.toAccessibleResource(folder.orgId, folder.id, role, folder.isPublicToOrg);
+      const isOrgAdmin = user.role === 'ADMIN' || user.role === 'SUPER_ADMIN';
+      const isMember = role !== null || isOrgAdmin;
+      const canRead = this.permissions.canRead(
+        user,
+        this.toAccessibleResource(folder.orgId, folder.id, role, folder.isPublicToOrg),
+      );
       // Public Team Folders are discoverable by every active organization member.
-      // This intentionally does not create a membership row: the member must
-      // explicitly Join, which mirrors Zoho WorkDrive's public Team Folder flow.
-      const canDiscover = folder.isPublicToOrg === true || this.permissions.canRead(user, resource);
-      if (!canDiscover) continue;
+      // They remain read-protected until the member explicitly joins them.
+      if (!canRead && !folder.isPublicToOrg) {
+        continue;
+      }
       const stats = await this.computeTeamFolderStats(folder.id);
       visible.push({
         id: folder.id,
         name: folder.name,
         rootFolderId: await this.findRootFolderId(folder.id),
-        role: (user.role === 'ADMIN' || user.role === 'SUPER_ADMIN') ? 'ORG_ADMIN' : (role as TeamFolderRole),
+        role: isOrgAdmin ? 'ORG_ADMIN' : role,
         memberCount: folder._count.members,
-        isMember: role !== null || user.role === 'ADMIN' || user.role === 'SUPER_ADMIN',
+        isMember,
         isPublicToOrg: folder.isPublicToOrg,
         updatedAt: stats.updatedAt,
         totalSize: stats.totalSize,
@@ -169,33 +173,62 @@ export class TeamFoldersService {
     };
   }
 
+  /** Join a public Team Folder as a normal organization member. */
   async join(user: AccessTokenPayload, id: string) {
-    const folder = await this.prisma.teamFolder.findFirst({ where: { id, orgId: user.org_id } });
+    const folder = await this.prisma.teamFolder.findFirst({
+      where: { id, orgId: user.org_id },
+    });
     if (!folder) throw new NotFoundException(TEAM_FOLDER_ERRORS.FOLDER_NOT_FOUND);
-    if (!folder.isPublicToOrg) throw new ForbiddenException('Only public Team Folders can be joined without an invitation');
     if (folder.archivedAt) throw new ForbiddenException('Team Folder is archived and read-only');
 
-    const existing = await this.prisma.teamFolderMember.findUnique({
-      where: { teamFolderId_userId: { teamFolderId: folder.id, userId: user.sub } },
+    const organizationMembership = await this.prisma.organizationMembership.findFirst({
+      where: { userId: user.sub, organizationId: user.org_id, status: MembershipStatus.ACTIVE },
     });
-    if (existing) return { teamFolderId: folder.id, userId: user.sub, role: existing.role, joined: false };
+    if (!organizationMembership) {
+      throw new ForbiddenException(TEAM_FOLDER_ERRORS.USER_NOT_IN_ORGANIZATION);
+    }
 
-    const created = await this.prisma.$transaction(async (tx) => {
-      const member = await tx.teamFolderMember.create({
-        data: { teamFolderId: folder.id, userId: user.sub, orgId: folder.orgId, role: TeamFolderRole.VIEWER },
-      });
-      await tx.auditLog.create({
-        data: {
-          orgId: user.org_id,
-          actorId: user.sub,
-          action: 'TEAM_FOLDER_MEMBER_JOINED',
-          resourceType: 'TEAM_FOLDER',
-          resourceId: folder.id,
-        },
-      });
-      return member;
+    if (!folder.isPublicToOrg) {
+      throw new ForbiddenException(TEAM_FOLDER_ERRORS.PUBLIC_JOIN_DISABLED);
+    }
+
+    const existing = await this.prisma.teamFolderMember.findFirst({
+      where: { teamFolderId: folder.id, userId: user.sub },
     });
-    return { teamFolderId: created.teamFolderId, userId: created.userId, role: created.role, joined: true };
+    if (existing) {
+      return { teamFolderId: folder.id, userId: user.sub, role: existing.role, joined: false, alreadyMember: true };
+    }
+
+    try {
+      const member = await this.prisma.$transaction(async (tx) => {
+        const created = await tx.teamFolderMember.create({
+          data: {
+            teamFolderId: folder.id,
+            userId: user.sub,
+            orgId: user.org_id,
+            role: TeamFolderRole.VIEWER,
+          },
+        });
+        await tx.auditLog.create({
+          data: {
+            orgId: user.org_id,
+            actorId: user.sub,
+            action: 'TEAM_FOLDER_MEMBER_ADDED',
+            resourceType: 'TEAM_FOLDER',
+            resourceId: folder.id,
+            metadata: { source: 'public-team-folder-join', role: TeamFolderRole.VIEWER },
+          },
+        });
+        return created;
+      });
+      return { teamFolderId: folder.id, userId: member.userId, role: member.role, joined: true, alreadyMember: false };
+    } catch (error) {
+      if (isPrismaUniqueConstraintError(error)) {
+        const current = await this.prisma.teamFolderMember.findFirst({ where: { teamFolderId: folder.id, userId: user.sub } });
+        if (current) return { teamFolderId: folder.id, userId: current.userId, role: current.role, joined: false, alreadyMember: true };
+      }
+      throw error;
+    }
   }
 
   async getById(user: AccessTokenPayload, id: string) {

@@ -33,7 +33,6 @@ describe('TeamFoldersService', () => {
     teamFolderMember: {
       findFirst: jest.fn(),
       findMany: jest.fn(),
-      findUnique: jest.fn(),
       create: jest.fn(),
       update: jest.fn(),
       delete: jest.fn(),
@@ -114,6 +113,37 @@ describe('TeamFoldersService', () => {
       _max: { updatedAt: null },
       _sum: { size: null },
     });
+  });
+
+  it('allows an organization member to join a public Team Folder as VIEWER', async () => {
+    prisma.teamFolder.findFirst.mockResolvedValue({ ...teamFolder, isPublicToOrg: true, archivedAt: null });
+    prisma.organizationMembership.findFirst.mockResolvedValue({ userId: MEMBER_ID, organizationId: ORG_A, status: 'ACTIVE' });
+    prisma.teamFolderMember.findFirst.mockResolvedValue(null);
+    prisma.teamFolderMember.create.mockResolvedValue(membership(MEMBER_ID, TeamFolderRole.VIEWER));
+
+    await expect(service.join(member, TF_A)).resolves.toEqual({
+      teamFolderId: TF_A, userId: MEMBER_ID, role: TeamFolderRole.VIEWER, joined: true, alreadyMember: false,
+    });
+    expect(prisma.teamFolderMember.create).toHaveBeenCalledWith({
+      data: { teamFolderId: TF_A, userId: MEMBER_ID, orgId: ORG_A, role: TeamFolderRole.VIEWER },
+    });
+  });
+
+  it('rejects joining a private Team Folder', async () => {
+    prisma.teamFolder.findFirst.mockResolvedValue({ ...teamFolder, isPublicToOrg: false, archivedAt: null });
+    prisma.organizationMembership.findFirst.mockResolvedValue({ userId: MEMBER_ID, organizationId: ORG_A, status: 'ACTIVE' });
+    await expect(service.join(member, TF_A)).rejects.toThrow(ForbiddenException);
+  });
+
+  it('does not duplicate an existing public Team Folder membership', async () => {
+    prisma.teamFolder.findFirst.mockResolvedValue({ ...teamFolder, isPublicToOrg: true, archivedAt: null });
+    prisma.organizationMembership.findFirst.mockResolvedValue({ userId: MEMBER_ID, organizationId: ORG_A, status: 'ACTIVE' });
+    prisma.teamFolderMember.findFirst.mockResolvedValue(membership(MEMBER_ID, TeamFolderRole.EDITOR));
+
+    await expect(service.join(member, TF_A)).resolves.toEqual({
+      teamFolderId: TF_A, userId: MEMBER_ID, role: TeamFolderRole.EDITOR, joined: false, alreadyMember: true,
+    });
+    expect(prisma.teamFolderMember.create).not.toHaveBeenCalled();
   });
 
   it('forbids a MEMBER from creating a Team Folder', async () => {
@@ -223,33 +253,16 @@ describe('TeamFoldersService', () => {
     expect(result.teamFolders).toEqual([]);
   });
 
-  it('discovers a public Team Folder for a non-member without granting access yet', async () => {
+  it('discovers a public Team Folder for a same-org non-member so it can be joined', async () => {
     prisma.teamFolder.findMany.mockResolvedValue([
-      { id: TF_A, orgId: ORG_A, name: 'Company Policies', isPublicToOrg: true, _count: { members: 1 } },
+      { id: TF_A, orgId: ORG_A, name: 'Legal', isPublicToOrg: true, _count: { members: 1 } },
     ]);
     prisma.teamFolderMember.findFirst.mockResolvedValue(null);
     prisma.folder.findFirst.mockResolvedValue({ id: ROOT_A });
     const result = await service.list(member);
-    expect(result.teamFolders[0]).toMatchObject({
-      id: TF_A,
-      name: 'Company Policies',
-      isPublicToOrg: true,
-      isMember: false,
-    });
-  });
-
-  it('lets an organization member join a public Team Folder as VIEWER', async () => {
-    prisma.teamFolder.findFirst.mockResolvedValue({ id: TF_A, orgId: ORG_A, name: 'Company Policies', isPublicToOrg: true, archivedAt: null });
-    prisma.teamFolderMember.findUnique.mockResolvedValue(null);
-    prisma.teamFolderMember.create.mockResolvedValue(membership(MEMBER_ID, TeamFolderRole.VIEWER));
-    const result = await service.join(member, TF_A);
-    expect(prisma.teamFolderMember.create).toHaveBeenCalledWith({
-      data: { teamFolderId: TF_A, userId: MEMBER_ID, orgId: ORG_A, role: TeamFolderRole.VIEWER },
-    });
-    expect(result).toEqual({ teamFolderId: TF_A, userId: MEMBER_ID, role: TeamFolderRole.VIEWER, joined: true });
-    expect(prisma.auditLog.create).toHaveBeenCalledWith({
-      data: { orgId: ORG_A, actorId: MEMBER_ID, action: 'TEAM_FOLDER_MEMBER_JOINED', resourceType: 'TEAM_FOLDER', resourceId: TF_A },
-    });
+    expect(result.teamFolders[0]).toEqual(expect.objectContaining({
+      id: TF_A, name: 'Legal', rootFolderId: ROOT_A, role: null, isMember: false, isPublicToOrg: true, memberCount: 1,
+    }));
   });
 
   it('lists a Team Folder for an org ADMIN', async () => {

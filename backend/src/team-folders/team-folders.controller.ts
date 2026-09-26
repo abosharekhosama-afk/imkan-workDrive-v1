@@ -33,14 +33,6 @@ export class TeamFoldersController {
     return this.teamFolders.list(user);
   }
 
-  @Post(':id/join')
-  join(
-    @CurrentUser() user: AccessTokenPayload,
-    @Param('id', new ParseUUIDPipe({ version: '4' })) id: string,
-  ) {
-    return this.teamFolders.join(user, id);
-  }
-
   @Get(':id/activity')
   listActivity(
     @CurrentUser() user: AccessTokenPayload,
@@ -104,6 +96,14 @@ export class TeamFoldersController {
     @Param('userId', new ParseUUIDPipe({ version: '4' })) userId: string,
   ) {
     return this.teamFolders.removeMember(user, id, userId);
+  }
+
+  @Post(':id/join')
+  join(
+    @CurrentUser() user: AccessTokenPayload,
+    @Param('id', new ParseUUIDPipe({ version: '4' })) id: string,
+  ) {
+    return this.teamFolders.join(user, id);
   }
 
   @Get(':id')

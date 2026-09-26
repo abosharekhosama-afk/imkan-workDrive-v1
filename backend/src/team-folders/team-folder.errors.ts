@@ -18,6 +18,7 @@ export const TEAM_FOLDER_ERROR_CODES = {
   INSUFFICIENT_PERMISSIONS: 'INSUFFICIENT_PERMISSIONS',
   ROLE_ASSIGNMENT_FORBIDDEN: 'ROLE_ASSIGNMENT_FORBIDDEN',
   LAST_FOLDER_ADMIN: 'LAST_FOLDER_ADMIN',
+  PUBLIC_JOIN_DISABLED: 'PUBLIC_JOIN_DISABLED',
 } as const;
 
 export const TEAM_FOLDER_ERRORS: Record<
@@ -63,6 +64,11 @@ export const TEAM_FOLDER_ERRORS: Record<
     statusCode: 400,
     code: 'LAST_FOLDER_ADMIN',
     message: 'Cannot remove the last Team Folder ADMIN',
+  },
+  PUBLIC_JOIN_DISABLED: {
+    statusCode: 403,
+    code: 'PUBLIC_JOIN_DISABLED',
+    message: 'This Team Folder is private and cannot be joined',
   },
 };
 
