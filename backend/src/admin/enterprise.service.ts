@@ -3,10 +3,11 @@ import { randomUUID } from 'node:crypto';
 import type { AccessTokenPayload } from '../auth/jwt.types';
 import { PrismaService } from '../prisma/prisma.service';
 import { OrgRole, MembershipStatus } from '@prisma/client';
+import { GroupsService } from '../groups/groups.service';
 
 @Injectable()
 export class EnterpriseService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(private readonly prisma: PrismaService, private readonly groupsService?: GroupsService) {}
 
   private assertAdmin(user: AccessTokenPayload) {
     if (user.role !== OrgRole.ADMIN && user.role !== OrgRole.SUPER_ADMIN) throw new ForbiddenException('Admin access required');
@@ -45,36 +46,23 @@ export class EnterpriseService {
   }
 
   async groups(user: AccessTokenPayload) {
-    this.assertAdmin(user);
-    return this.prisma.$queryRawUnsafe<any[]>(`SELECT g.id,g.name,g.description,g.created_at AS createdAt,COUNT(gm.id) AS memberCount FROM groups g LEFT JOIN group_members gm ON gm.group_id=g.id WHERE g.org_id=? GROUP BY g.id ORDER BY g.name`, user.org_id);
+    if (!this.groupsService) throw new Error('GroupsService is unavailable');
+    return this.groupsService.list(user);
   }
 
   async createGroup(user: AccessTokenPayload, name: string, description?: string) {
-    this.assertAdmin(user);
-    if (!name?.trim()) throw new BadRequestException('Group name is required');
-    const id = randomUUID();
-    await this.prisma.$executeRawUnsafe(`INSERT INTO groups (id,org_id,name,description,created_by_id) VALUES (?,?,?,?,?)`, id, user.org_id, name.trim(), description?.trim() || null, user.sub);
-    await this.prisma.auditLog.create({ data: { orgId: user.org_id, actorId: user.sub, action: 'GROUP_CREATED', resourceType: 'GROUP', resourceId: id } });
-    return { id, name: name.trim(), description: description?.trim() || null };
+    if (!this.groupsService) throw new Error('GroupsService is unavailable');
+    return this.groupsService.create(user, name, description);
   }
 
-  async addGroupMember(user: AccessTokenPayload, groupId: string, userId: string) {
-    this.assertAdmin(user);
-    const membership = await this.prisma.organizationMembership.findFirst({ 
-      where: { userId, organizationId: user.org_id, status: MembershipStatus.ACTIVE } 
-    });
-    if (!membership) throw new NotFoundException('Member not found in this organization');
-    const group = await this.prisma.$queryRawUnsafe<any[]>(`SELECT id FROM groups WHERE id=? AND org_id=?`, groupId, user.org_id);
-    if (!group.length) throw new NotFoundException('Group not found');
-    const id = randomUUID();
-    await this.prisma.$executeRawUnsafe(`INSERT INTO group_members (id,org_id,group_id,user_id,role) VALUES (?,?,?,?, 'MEMBER') ON DUPLICATE KEY UPDATE role=role`, id, user.org_id, groupId, userId);
-    return { groupId, userId, added: true };
+  async addGroupMember(user: AccessTokenPayload, groupId: string, userId: string, role: 'ADMIN' | 'MEMBER' = 'MEMBER') {
+    if (!this.groupsService) throw new Error('GroupsService is unavailable');
+    return this.groupsService.addMember(user, groupId, userId, role);
   }
 
   async removeGroupMember(user: AccessTokenPayload, groupId: string, userId: string) {
-    this.assertAdmin(user);
-    await this.prisma.$executeRawUnsafe(`DELETE FROM group_members WHERE group_id=? AND user_id=? AND org_id=?`, groupId, userId, user.org_id);
-    return { groupId, userId, removed: true };
+    if (!this.groupsService) throw new Error('GroupsService is unavailable');
+    return this.groupsService.removeMember(user, groupId, userId);
   }
 
   async securityPolicy(user: AccessTokenPayload) {
