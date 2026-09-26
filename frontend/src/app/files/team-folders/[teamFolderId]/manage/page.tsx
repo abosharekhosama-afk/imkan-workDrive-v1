@@ -98,10 +98,8 @@ export default function TeamFolderManagePage() {
   const [busy, setBusy] = useState(false);
   const [name, setName] = useState("");
   const [memberSearch, setMemberSearch] = useState("");
-  const [inviteSearch, setInviteSearch] = useState("");
   const [selectedUser, setSelectedUser] = useState<OrgMember | null>(null);
   const [inviteRole, setInviteRole] = useState<TeamFolderRole>("EDITOR");
-  const [groupSearch, setGroupSearch] = useState("");
   const [selectedGroup, setSelectedGroup] = useState<GroupOption | null>(null);
   const [groupRole, setGroupRole] = useState<TeamFolderRole>("EDITOR");
   const [settingsBusy, setSettingsBusy] = useState(false);
@@ -175,13 +173,11 @@ export default function TeamFolderManagePage() {
 
   const availableProfiles = useMemo(() => {
     const assigned = new Set(members.map((member) => member.userId));
-    const q = inviteSearch.trim().toLocaleLowerCase();
     return profiles.filter((profile) => {
       const profileId = profile.userId || profile.id;
-      if (!profileId || assigned.has(profileId)) return false;
-      return !q || (profile.name || "").toLocaleLowerCase().includes(q) || profile.email.toLocaleLowerCase().includes(q);
+      return Boolean(profileId) && !assigned.has(profileId);
     });
-  }, [profiles, members, inviteSearch]);
+  }, [profiles, members]);
 
   const selectTab = (next: TabKey) => {
     setTab(next);
@@ -212,7 +208,6 @@ export default function TeamFolderManagePage() {
     try {
       await addTeamFolderMember(id, userId, inviteRole);
       setSelectedUser(null);
-      setInviteSearch("");
       await load();
     } catch (cause) {
       setError(cause instanceof ApiError ? cause.message : (locale === "ar" ? "تعذر إضافة العضو." : "Unable to add the member."));
@@ -223,14 +218,13 @@ export default function TeamFolderManagePage() {
 
   const availableGroups = useMemo(() => {
     const assigned = new Set(groups.map((group) => group.groupId));
-    const q = groupSearch.trim().toLocaleLowerCase();
-    return groupOptions.filter((group) => !assigned.has(group.id) && (!q || `${group.name} ${group.description || ""}`.toLocaleLowerCase().includes(q)));
-  }, [groups, groupOptions, groupSearch]);
+    return groupOptions.filter((group) => !assigned.has(group.id));
+  }, [groups, groupOptions]);
 
   const addGroup = async () => {
     if (!selectedGroup || !canManage || busy) return;
     setBusy(true); setError("");
-    try { await addTeamFolderGroup(id, selectedGroup.id, groupRole); setSelectedGroup(null); setGroupSearch(""); await load(); }
+    try { await addTeamFolderGroup(id, selectedGroup.id, groupRole); setSelectedGroup(null); await load(); }
     catch (cause) { setError(cause instanceof ApiError ? cause.message : (locale === "ar" ? "تعذر إضافة المجموعة." : "Unable to add the group.")); }
     finally { setBusy(false); }
   };
@@ -380,22 +374,44 @@ export default function TeamFolderManagePage() {
           {tab === "members" ? (
             <section>
               {canManage ? (
-                <div className="mb-7 grid grid-cols-[1fr_130px_80px] overflow-visible rounded-lg border border-slate-200">
-                  <div className="relative">
-                    <input value={inviteSearch} onChange={(e) => setInviteSearch(e.target.value)} placeholder={locale === "ar" ? "أضف أعضاء باستخدام البريد الإلكتروني أو من المجموعة" : "Add members by their email address or from a group"} className="h-12 w-full border-0 px-4 text-[13px] outline-none" />
-                    {inviteSearch && availableProfiles.length > 0 ? <div className="absolute start-0 top-12 z-20 w-full border border-slate-200 bg-white p-1 shadow-lg">{availableProfiles.slice(0, 8).map((profile) => <button key={profile.userId || profile.id} type="button" onClick={() => { setSelectedUser(profile); setInviteSearch(profile.email); }} className="flex w-full items-center gap-2 px-3 py-2 text-start text-[13px] hover:bg-slate-50"><span className="flex h-7 w-7 items-center justify-center rounded-full bg-slate-100 text-[10px] font-semibold">{(profile.name || profile.email).slice(0,2).toUpperCase()}</span><span className="min-w-0 truncate">{profile.name || profile.email}</span></button>)}</div> : null}
+                <div className="mb-7 grid gap-3 rounded-lg border border-slate-200 bg-white p-3 md:grid-cols-[minmax(0,1fr)_130px_80px]">
+                  <div>
+                    <label className="mb-1.5 block text-[11px] font-medium text-slate-500">{locale === "ar" ? "العضو المتاح" : "Available member"}</label>
+                    <select value={selectedUser ? (selectedUser.userId || selectedUser.id) : ""} onChange={(e) => {
+                      const next = availableProfiles.find((profile) => (profile.userId || profile.id) === e.target.value) || null;
+                      setSelectedUser(next);
+                    }} className="h-11 w-full rounded-md border border-slate-200 bg-white px-3 text-[13px] outline-none focus:border-[color:var(--wd-primary)]">
+                      <option value="">{locale === "ar" ? "اختر عضوًا من القائمة" : "Select a member"}</option>
+                      {availableProfiles.map((profile) => {
+                        const profileId = profile.userId || profile.id;
+                        return <option key={profileId} value={profileId}>{profile.name ? `${profile.name} — ${profile.email}` : profile.email}</option>;
+                      })}
+                    </select>
                   </div>
-                  <select value={inviteRole} onChange={(e) => setInviteRole(e.target.value as TeamFolderRole)} className="border-y-0 border-slate-200 px-3 text-[12px] outline-none"><option value="EDITOR">Editor</option><option value="VIEWER">Viewer</option><option value="ORGANIZER">Organizer</option><option value="ADMIN">Admin</option></select>
-                  <button type="button" onClick={() => void addMember()} disabled={!selectedUser || busy} className="bg-[color:var(--wd-primary)] text-[13px] font-semibold text-white disabled:opacity-50">{locale === "ar" ? "إضافة" : "Add"}</button>
+                  <select value={inviteRole} onChange={(e) => setInviteRole(e.target.value as TeamFolderRole)} className="h-11 self-end border border-slate-200 px-3 text-[12px] outline-none">
+                    <option value="EDITOR">Editor</option><option value="VIEWER">Viewer</option><option value="ORGANIZER">Organizer</option><option value="ADMIN">Admin</option>
+                  </select>
+                  <button type="button" onClick={() => void addMember()} disabled={!selectedUser || busy} className="h-11 self-end rounded-md bg-[color:var(--wd-primary)] text-[13px] font-semibold text-white disabled:opacity-50">{locale === "ar" ? "إضافة" : "Add"}</button>
                 </div>
               ) : null}
               {canManage ? (
                 <div className="mb-7 rounded-lg border border-slate-200 p-4">
                   <div className="mb-3 flex items-center justify-between"><div><strong className="text-[13px]">{locale === "ar" ? "إضافة مجموعة" : "Add Group"}</strong><p className="mt-1 text-[11px] text-slate-500">{locale === "ar" ? "أضف مجموعة كاملة إلى مجلد الفريق وامنح جميع أعضائها الدور نفسه." : "Add an entire group and apply one Team Folder role to all its members."}</p></div></div>
-                  <div className="grid gap-2 md:grid-cols-[1fr_130px_80px]">
-                    <div className="relative"><input value={groupSearch} onChange={(e) => { setGroupSearch(e.target.value); setSelectedGroup(null); }} placeholder={locale === "ar" ? "ابحث عن مجموعة" : "Search groups"} className="h-10 w-full rounded-md border border-slate-200 px-3 text-[12px] outline-none" />{groupSearch && !selectedGroup && availableGroups.length ? <div className="absolute start-0 top-11 z-20 w-full border border-slate-200 bg-white p-1 shadow-lg">{availableGroups.slice(0,8).map((group) => <button key={group.id} type="button" onClick={() => { setSelectedGroup(group); setGroupSearch(group.name); }} className="flex w-full items-center justify-between rounded-md px-3 py-2 text-start hover:bg-slate-50"><span><b className="block text-[12px]">{group.name}</b><small className="text-[10px] text-slate-500">{group.memberCount} {locale === "ar" ? "عضو" : "members"}</small></span><span className="text-[10px] text-slate-400">{group.description || ""}</span></button>)}</div> : null}</div>
-                    <select value={groupRole} onChange={(e) => setGroupRole(e.target.value as TeamFolderRole)} className="h-10 rounded-md border border-slate-200 px-3 text-[12px] outline-none"><option value="EDITOR">Editor</option><option value="VIEWER">Viewer</option><option value="COMMENTER">Commenter</option><option value="ORGANIZER">Organizer</option><option value="ADMIN">Admin</option></select>
-                    <button type="button" onClick={() => void addGroup()} disabled={!selectedGroup || busy} className="rounded-md bg-[color:var(--wd-primary)] text-[12px] font-semibold text-white disabled:opacity-50">{locale === "ar" ? "إضافة" : "Add"}</button>
+                  <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_130px_80px]">
+                    <div>
+                      <label className="mb-1.5 block text-[11px] font-medium text-slate-500">{locale === "ar" ? "المجموعة المتاحة" : "Available group"}</label>
+                      <select value={selectedGroup?.id || ""} onChange={(e) => {
+                        const next = availableGroups.find((group) => group.id === e.target.value) || null;
+                        setSelectedGroup(next);
+                      }} className="h-11 w-full rounded-md border border-slate-200 bg-white px-3 text-[13px] outline-none focus:border-[color:var(--wd-primary)]">
+                        <option value="">{locale === "ar" ? "اختر مجموعة من القائمة" : "Select a group"}</option>
+                        {availableGroups.map((group) => <option key={group.id} value={group.id}>{group.name} — {group.memberCount} {locale === "ar" ? "عضو" : "members"}</option>)}
+                      </select>
+                    </div>
+                    <select value={groupRole} onChange={(e) => setGroupRole(e.target.value as TeamFolderRole)} className="h-11 self-end rounded-md border border-slate-200 px-3 text-[12px] outline-none">
+                      <option value="EDITOR">Editor</option><option value="VIEWER">Viewer</option><option value="COMMENTER">Commenter</option><option value="ORGANIZER">Organizer</option><option value="ADMIN">Admin</option>
+                    </select>
+                    <button type="button" onClick={() => void addGroup()} disabled={!selectedGroup || busy} className="h-11 self-end rounded-md bg-[color:var(--wd-primary)] text-[12px] font-semibold text-white disabled:opacity-50">{locale === "ar" ? "إضافة" : "Add"}</button>
                   </div>
                 </div>
               ) : null}
