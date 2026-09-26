@@ -370,6 +370,7 @@ model Organization {
   templateCategories  TemplateCategory[]
   templates           Template[]
   dataTemplates       FileDataTemplate[]
+  dataTemplateBindings FileDataTemplateBinding[]
 
   workflows Workflow[]
   workflowRuns WorkflowRun[] @relation("OrganizationWorkflowRuns")
@@ -446,6 +447,7 @@ model User {
   connectionUsages       ConnectionUsage[]
   templateLibrariesOwned TemplateLibrary[] @relation("TemplateLibraryOwner")
   templatesOwned         Template[] @relation("TemplateOwner")
+  dataTemplateBindingsCreated FileDataTemplateBinding[] @relation("DataTemplateBindingCreator")
   templateVersionsCreated TemplateVersion[] @relation("TemplateVersionCreator")
   templateBuildersPublished TemplateBuilder[] @relation("TemplateBuilderPublisher")
   templateAutomationRuns TemplateAutomationRun[] @relation("TemplateAutomationRunCreator")
@@ -484,11 +486,14 @@ model TeamFolder {
   allowExternalSharing Boolean   @default(true) @map("allow_external_sharing")
   allowViewerDownloads Boolean   @default(true) @map("allow_viewer_downloads")
   archivedAt           DateTime? @map("archived_at")
+  mandateDataTemplateId String? @map("mandate_data_template_id") @db.Char(36)
+  mandateDataTemplateTarget String @default("BOTH") @map("mandate_data_template_target") @db.VarChar(10)
 
   organization Organization       @relation(fields: [orgId], references: [id])
   members      TeamFolderMember[]
   groups       TeamFolderGroup[]
   folders      Folder[]
+  mandateDataTemplate FileDataTemplate? @relation("TeamFolderMandate", fields: [mandateDataTemplateId], references: [id], onDelete: SetNull)
 
   @@index([orgId])
   @@map("team_folders")
@@ -548,6 +553,7 @@ model Folder {
   dataTemplate FileDataTemplate? @relation(fields: [dataTemplateId], references: [id], onDelete: SetNull)
   permissions  FolderPermission[]
   shares       FolderShare[]
+  dataTemplateBindings FileDataTemplateBinding[]
 
   @@index([orgId, parentId])
   @@index([orgId, teamFolderId])
@@ -598,6 +604,7 @@ model File {
   officeSessions OfficeSession[]
   officePresences OfficePresence[]
   officeOperations OfficeOperation[]
+  dataTemplateBindings FileDataTemplateBinding[]
 
   @@index([orgId, folderId])
   @@index([orgId, status])
@@ -1059,15 +1066,47 @@ model FileDataTemplate {
   schema        Json
   requiredFields Json? @map("required_fields")
   active        Boolean  @default(true)
+  associationScope String @default("ALL_EDIT") @map("association_scope") @db.VarChar(30)
+  allowedMemberIds Json? @map("allowed_member_ids")
+  allowedGroupIds  Json? @map("allowed_group_ids")
+  searchableFieldKeys Json? @map("searchable_field_keys")
   createdById   String   @map("created_by_id") @db.Char(36)
   createdAt     DateTime @default(now()) @map("created_at")
   updatedAt     DateTime @updatedAt @map("updated_at")
   organization  Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
   folders       Folder[]
   metadata      FileMetadata[]
+  bindings      FileDataTemplateBinding[]
+  mandatedTeamFolders TeamFolder[] @relation("TeamFolderMandate")
   @@unique([orgId, name])
   @@index([orgId, active])
   @@map("file_data_templates")
+}
+
+/// Association between a Data Template and a file/folder, including the values entered for its custom fields.
+model FileDataTemplateBinding {
+  id          String   @id @default(uuid()) @db.Char(36)
+  orgId       String   @map("org_id") @db.Char(36)
+  templateId  String   @map("template_id") @db.Char(36)
+  fileId      String?  @map("file_id") @db.Char(36)
+  folderId    String?  @map("folder_id") @db.Char(36)
+  customFields Json?   @map("custom_fields")
+  createdById String   @map("created_by_id") @db.Char(36)
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  organization Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  template FileDataTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
+  file File? @relation(fields: [fileId], references: [id], onDelete: Cascade)
+  folder Folder? @relation(fields: [folderId], references: [id], onDelete: Cascade)
+  createdBy User @relation("DataTemplateBindingCreator", fields: [createdById], references: [id], onDelete: Cascade)
+
+  @@unique([templateId, fileId])
+  @@unique([templateId, folderId])
+  @@index([orgId, fileId])
+  @@index([orgId, folderId])
+  @@index([orgId, templateId])
+  @@map("file_data_template_bindings")
 }
 
 /// Physical object stored in object storage (S3/MinIO/local disk).
