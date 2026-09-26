@@ -5,6 +5,7 @@ import {
   ForbiddenException,
   Injectable,
   NotFoundException,
+  Logger,
   forwardRef,
 } from '@nestjs/common';
 import {
@@ -34,6 +35,8 @@ import { NotificationsService } from '../notifications/notifications.service';
 
 @Injectable()
 export class TemplatesService {
+  private readonly logger = new Logger(TemplatesService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     @Inject(forwardRef(() => FilesService)) private readonly files: FilesService,
@@ -502,35 +505,57 @@ export class TemplatesService {
         include: { versions: { orderBy: { versionNumber: 'desc' }, take: 1 } },
       });
       let office: Awaited<ReturnType<OfficeService['initializeFromTemplateFile']>> | null = null;
+      let officeInitializationWarning: string | null = null;
       if (latest?.versions[0]) {
         try {
           office = await this.office.initializeFromTemplateFile(user, file.file_id, template.id, latest.versions[0].id);
         } catch (error) {
-          const reason = error instanceof Error ? error.message : 'Unknown Office initialization error';
+          // Template creation must not be rolled back merely because the native
+          // Office bootstrap failed. The canonical DOCX/XLSX/PPTX file and
+          // TemplateVersion already exist and Office.open() has a real bootstrap
+          // path for Office-compatible files. Keep the template usable, record
+          // the exact initialization cause, and let the first editor open retry
+          // initialization from the stored bytes.
+          officeInitializationWarning = error instanceof Error ? error.message : String(error);
+          this.logger.warn(`Blank template Office initialization deferred ${JSON.stringify({
+            templateId: template.id,
+            fileId: file.file_id,
+            type: input.type,
+            extension: definition.extension,
+            error: officeInitializationWarning,
+          })}`);
           await this.prisma.auditLog.create({
             data: {
               orgId: user.org_id,
               actorId: user.sub,
               action: 'OFFICE_TEMPLATE_INITIALIZATION_FAILED',
-              resourceType: 'FILE',
-              resourceId: file.file_id,
-              metadata: { templateId: template.id, templateVersionId: latest.versions[0].id, error: reason },
+              resourceType: 'TEMPLATE',
+              resourceId: template.id,
+              metadata: {
+                fileId: file.file_id,
+                templateVersionId: latest.versions[0].id,
+                type: input.type,
+                extension: definition.extension,
+                error: officeInitializationWarning,
+                recovery: 'Office.open bootstrap',
+              },
             },
           }).catch(() => undefined);
-          throw new ConflictException(`Unable to prepare the blank template for IMKAN Office editing: ${reason}`);
         }
       }
+      const editorPath = templateOfficeEditorPath(
+        file.file_id,
+        office?.type ?? (definition.extension === 'docx' ? 'WRITER' : definition.extension === 'xlsx' ? 'SHEET' : 'SHOW'),
+        definition.extension,
+        template.id,
+      );
       return {
         template,
         templateId: template.id,
         file_id: file.file_id,
-        editorPath: templateOfficeEditorPath(
-          file.file_id,
-          office?.type ?? null,
-          definition.extension,
-          template.id,
-        ),
+        editorPath,
         office: office ? { documentId: office.id, type: office.type, nativeFormat: office.nativeFormat, revision: office.revision } : null,
+        officeInitialization: officeInitializationWarning ? { status: 'DEFERRED', reason: officeInitializationWarning } : { status: 'READY' },
       };
     } catch (error) {
       // A failed template transaction must not leave an orphan working file.
