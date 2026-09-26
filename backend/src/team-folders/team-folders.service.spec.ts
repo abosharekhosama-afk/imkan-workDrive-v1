@@ -33,6 +33,7 @@ describe('TeamFoldersService', () => {
     teamFolderMember: {
       findFirst: jest.fn(),
       findMany: jest.fn(),
+      findUnique: jest.fn(),
       create: jest.fn(),
       update: jest.fn(),
       delete: jest.fn(),
@@ -220,6 +221,35 @@ describe('TeamFoldersService', () => {
     prisma.teamFolderMember.findFirst.mockResolvedValue(null);
     const result = await service.list(member);
     expect(result.teamFolders).toEqual([]);
+  });
+
+  it('discovers a public Team Folder for a non-member without granting access yet', async () => {
+    prisma.teamFolder.findMany.mockResolvedValue([
+      { id: TF_A, orgId: ORG_A, name: 'Company Policies', isPublicToOrg: true, _count: { members: 1 } },
+    ]);
+    prisma.teamFolderMember.findFirst.mockResolvedValue(null);
+    prisma.folder.findFirst.mockResolvedValue({ id: ROOT_A });
+    const result = await service.list(member);
+    expect(result.teamFolders[0]).toMatchObject({
+      id: TF_A,
+      name: 'Company Policies',
+      isPublicToOrg: true,
+      isMember: false,
+    });
+  });
+
+  it('lets an organization member join a public Team Folder as VIEWER', async () => {
+    prisma.teamFolder.findFirst.mockResolvedValue({ id: TF_A, orgId: ORG_A, name: 'Company Policies', isPublicToOrg: true, archivedAt: null });
+    prisma.teamFolderMember.findUnique.mockResolvedValue(null);
+    prisma.teamFolderMember.create.mockResolvedValue(membership(MEMBER_ID, TeamFolderRole.VIEWER));
+    const result = await service.join(member, TF_A);
+    expect(prisma.teamFolderMember.create).toHaveBeenCalledWith({
+      data: { teamFolderId: TF_A, userId: MEMBER_ID, orgId: ORG_A, role: TeamFolderRole.VIEWER },
+    });
+    expect(result).toEqual({ teamFolderId: TF_A, userId: MEMBER_ID, role: TeamFolderRole.VIEWER, joined: true });
+    expect(prisma.auditLog.create).toHaveBeenCalledWith({
+      data: { orgId: ORG_A, actorId: MEMBER_ID, action: 'TEAM_FOLDER_MEMBER_JOINED', resourceType: 'TEAM_FOLDER', resourceId: TF_A },
+    });
   });
 
   it('lists a Team Folder for an org ADMIN', async () => {

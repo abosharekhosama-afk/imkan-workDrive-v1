@@ -116,14 +116,12 @@ export class TeamFoldersService {
     const visible: TeamFolderListItem[] = [];
     for (const folder of folders) {
       const role = await this.resolveCallerRole(user, folder.id);
-      if (
-        !this.permissions.canRead(
-          user,
-          this.toAccessibleResource(folder.orgId, folder.id, role, folder.isPublicToOrg),
-        )
-      ) {
-        continue;
-      }
+      const resource = this.toAccessibleResource(folder.orgId, folder.id, role, folder.isPublicToOrg);
+      // Public Team Folders are discoverable by every active organization member.
+      // This intentionally does not create a membership row: the member must
+      // explicitly Join, which mirrors Zoho WorkDrive's public Team Folder flow.
+      const canDiscover = folder.isPublicToOrg === true || this.permissions.canRead(user, resource);
+      if (!canDiscover) continue;
       const stats = await this.computeTeamFolderStats(folder.id);
       visible.push({
         id: folder.id,
@@ -169,6 +167,35 @@ export class TeamFoldersService {
       updatedAt: latest ? latest.toISOString() : null,
       totalSize: summedSize === null ? null : Number(summedSize),
     };
+  }
+
+  async join(user: AccessTokenPayload, id: string) {
+    const folder = await this.prisma.teamFolder.findFirst({ where: { id, orgId: user.org_id } });
+    if (!folder) throw new NotFoundException(TEAM_FOLDER_ERRORS.FOLDER_NOT_FOUND);
+    if (!folder.isPublicToOrg) throw new ForbiddenException('Only public Team Folders can be joined without an invitation');
+    if (folder.archivedAt) throw new ForbiddenException('Team Folder is archived and read-only');
+
+    const existing = await this.prisma.teamFolderMember.findUnique({
+      where: { teamFolderId_userId: { teamFolderId: folder.id, userId: user.sub } },
+    });
+    if (existing) return { teamFolderId: folder.id, userId: user.sub, role: existing.role, joined: false };
+
+    const created = await this.prisma.$transaction(async (tx) => {
+      const member = await tx.teamFolderMember.create({
+        data: { teamFolderId: folder.id, userId: user.sub, orgId: folder.orgId, role: TeamFolderRole.VIEWER },
+      });
+      await tx.auditLog.create({
+        data: {
+          orgId: user.org_id,
+          actorId: user.sub,
+          action: 'TEAM_FOLDER_MEMBER_JOINED',
+          resourceType: 'TEAM_FOLDER',
+          resourceId: folder.id,
+        },
+      });
+      return member;
+    });
+    return { teamFolderId: created.teamFolderId, userId: created.userId, role: created.role, joined: true };
   }
 
   async getById(user: AccessTokenPayload, id: string) {
