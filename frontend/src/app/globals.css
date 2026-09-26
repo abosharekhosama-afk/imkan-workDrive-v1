@@ -3362,6 +3362,7 @@ html[data-theme="dark"] .imkan-connections-page .connections-detail-overlay{back
   position: relative;
   z-index: 1;
   display: flex;
+  flex-direction: column;
   width: min(740px, calc(100vw - 28px));
   height: min(740px, calc(100vh - 28px));
   min-height: 520px;
@@ -3752,17 +3753,37 @@ html[data-theme="dark"] .imkan-connections-page .connections-detail-overlay{back
 
 .imkan-cloud-import-footer {
   position: relative;
-  z-index: 4;
+  z-index: 12;
   display: flex;
+  width: 100%;
   min-height: 72px;
+  flex: 0 0 72px;
   align-items: center;
   justify-content: space-between;
   gap: 15px;
   padding: 12px 22px 12px 76px;
   border-top: 1px solid #eceff3;
   background: #fff;
+  box-sizing: border-box;
 }
-.imkan-cloud-import-footer > span { max-width: 360px; color: #929baa; font-size: 10px; line-height: 1.5; }
+.imkan-cloud-selection-count {
+  display: inline-flex;
+  min-height: 32px;
+  align-items: center;
+  border: 1px solid #dfe4eb;
+  border-radius: 18px;
+  background: #fff;
+  padding: 0 13px;
+  color: #687385;
+  font-size: 11px;
+  line-height: 1;
+}
+.imkan-cloud-footer-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+}
 
 .imkan-cloud-footer-secondary,
 .imkan-cloud-footer-primary {
@@ -3787,12 +3808,42 @@ html[data-theme="dark"] .imkan-connections-page .connections-detail-overlay{back
 @media (max-width: 640px) {
   .imkan-cloud-import-overlay { padding: 0; }
   .imkan-cloud-import-modal { width: 100vw; height: 100vh; min-height: 0; border-radius: 0; }
-  .imkan-cloud-import-footer { min-height: 66px; padding-left: 68px; }
-  .imkan-cloud-import-footer > span { display: none; }
+  .imkan-cloud-import-footer { min-height: 66px; flex-basis: 66px; padding-left: 68px; }
+  .imkan-cloud-selection-count { min-height: 30px; padding: 0 10px; }
   .imkan-cloud-files-view,
   .imkan-cloud-jobs { width: calc(100% - 36px); }
   .imkan-cloud-access-state { padding: 72px 32px 58px; }
   .imkan-cloud-accounts-panel { right: 10px; width: min(315px, calc(100vw - 28px)); }
+}
+
+.member-derived-access-badge {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  height: 22px;
+  border: 1px solid #dce8fb;
+  border-radius: 999px;
+  background: #f3f7ff;
+  padding: 0 8px;
+  color: #3567b8;
+  font-size: 10px;
+  font-weight: 600;
+}
+.member-derived-access-source {
+  min-width: 0;
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: #7b8493;
+  font-size: 10px;
+}
+.member-role-pill:disabled {
+  cursor: default;
+  border-color: #e4e8ee;
+  background: #f8f9fb;
+  color: #596477;
+  opacity: 1;
 }
 
 /* Admin Console / Zoho WorkDrive settings parity */
