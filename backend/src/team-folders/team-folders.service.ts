@@ -398,17 +398,70 @@ export class TeamFoldersService {
 
   async listMembers(user: AccessTokenPayload, id: string) {
     const { folder } = await this.requireReadableTeamFolder(user, id);
-    const rows = await this.prisma.teamFolderMember.findMany({
-      where: { teamFolderId: folder.id },
-      include: { user: { select: { email: true } } },
-    });
+    const [rows, groups] = await Promise.all([
+      this.prisma.teamFolderMember.findMany({
+        where: { teamFolderId: folder.id },
+        include: { user: { select: { email: true } } },
+      }),
+      this.prisma.teamFolderGroup.findMany({
+        where: { teamFolderId: folder.id },
+        include: { group: { select: { id: true, name: true, description: true, _count: { select: { members: true } } } } },
+      }),
+    ]);
     return {
-      members: rows.map((row) => ({
-        userId: row.userId,
-        email: row.user.email,
-        role: row.role,
-      })),
+      members: rows.map((row) => ({ userId: row.userId, email: row.user.email, role: row.role })),
+      groups: groups.map((row) => ({ groupId: row.groupId, name: row.group.name, description: row.group.description, memberCount: row.group._count.members, role: row.role })),
     };
+  }
+
+  async addGroup(
+    user: AccessTokenPayload,
+    id: string,
+    groupId: string,
+    role: TeamFolderRole,
+  ) {
+    const { folder, resource } = await this.requireReadableTeamFolder(user, id);
+    this.assertNotArchived(folder);
+    this.assertCanManageMembers(user, resource);
+    this.assertCanAssignRole(user, resource, role);
+    const group = await this.prisma.group.findFirst({ where: { id: groupId, orgId: folder.orgId } });
+    if (!group) throw new NotFoundException('Group not found');
+    const existing = await this.prisma.teamFolderGroup.findUnique({ where: { teamFolderId_groupId: { teamFolderId: folder.id, groupId } } });
+    if (existing) throw new ConflictException('Group is already assigned to this Team Folder');
+    const created = await this.prisma.$transaction(async (tx) => {
+      const row = await tx.teamFolderGroup.create({ data: { teamFolderId: folder.id, groupId, orgId: folder.orgId, role } });
+      await tx.auditLog.create({ data: { orgId: user.org_id, actorId: user.sub, action: 'TEAM_FOLDER_GROUP_ADDED', resourceType: 'TEAM_FOLDER', resourceId: folder.id, metadata: { groupId, role } } });
+      return row;
+    });
+    return { teamFolderId: created.teamFolderId, groupId: created.groupId, role: created.role };
+  }
+
+  async updateGroup(user: AccessTokenPayload, id: string, groupId: string, role: TeamFolderRole) {
+    const { folder, resource } = await this.requireReadableTeamFolder(user, id);
+    this.assertNotArchived(folder);
+    this.assertCanManageMembers(user, resource);
+    this.assertCanAssignRole(user, resource, role);
+    const existing = await this.prisma.teamFolderGroup.findUnique({ where: { teamFolderId_groupId: { teamFolderId: folder.id, groupId } } });
+    if (!existing) throw new NotFoundException('Team Folder group membership not found');
+    const updated = await this.prisma.$transaction(async (tx) => {
+      const row = await tx.teamFolderGroup.update({ where: { teamFolderId_groupId: { teamFolderId: folder.id, groupId } }, data: { role } });
+      await tx.auditLog.create({ data: { orgId: user.org_id, actorId: user.sub, action: 'TEAM_FOLDER_GROUP_UPDATED', resourceType: 'TEAM_FOLDER', resourceId: folder.id, metadata: { groupId, role } } });
+      return row;
+    });
+    return { teamFolderId: updated.teamFolderId, groupId: updated.groupId, role: updated.role };
+  }
+
+  async removeGroup(user: AccessTokenPayload, id: string, groupId: string) {
+    const { folder, resource } = await this.requireReadableTeamFolder(user, id);
+    this.assertNotArchived(folder);
+    this.assertCanManageMembers(user, resource);
+    const existing = await this.prisma.teamFolderGroup.findUnique({ where: { teamFolderId_groupId: { teamFolderId: folder.id, groupId } } });
+    if (!existing) throw new NotFoundException('Team Folder group membership not found');
+    await this.prisma.$transaction(async (tx) => {
+      await tx.teamFolderGroup.delete({ where: { teamFolderId_groupId: { teamFolderId: folder.id, groupId } } });
+      await tx.auditLog.create({ data: { orgId: user.org_id, actorId: user.sub, action: 'TEAM_FOLDER_GROUP_REMOVED', resourceType: 'TEAM_FOLDER', resourceId: folder.id, metadata: { groupId } } });
+    });
+    return { teamFolderId: folder.id, groupId, removed: true };
   }
 
   async addMember(
@@ -772,10 +825,15 @@ export class TeamFoldersService {
     user: AccessTokenPayload,
     teamFolderId: string,
   ): Promise<TeamFolderRole | null> {
-    const membership = await this.prisma.teamFolderMember.findFirst({
-      where: { teamFolderId, userId: user.sub },
-    });
-    return membership?.role ?? null;
+    const [membership, groupMemberships] = await Promise.all([
+      this.prisma.teamFolderMember.findFirst({ where: { teamFolderId, userId: user.sub } }),
+      this.prisma.teamFolderGroup.findMany({
+        where: { teamFolderId, group: { members: { some: { userId: user.sub, orgId: user.org_id } } } },
+        select: { role: true },
+      }),
+    ]);
+    const rank: Record<TeamFolderRole, number> = { VIEWER: 1, COMMENTER: 2, EDITOR: 3, ORGANIZER: 4, ADMIN: 5 };
+    return [...(membership ? [membership.role] : []), ...groupMemberships.map((m) => m.role)].sort((a, b) => rank[b] - rank[a])[0] ?? null;
   }
 
   private async findRootFolderId(teamFolderId: string): Promise<string | null> {

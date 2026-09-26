@@ -18,6 +18,7 @@ import {
   parseUpdateTeamFolderMember,
 } from './membership.schema';
 import { TeamFoldersService } from './team-folders.service';
+import { TeamFolderRole } from '@prisma/client';
 
 @Controller('team-folders')
 export class TeamFoldersController {
@@ -63,6 +64,21 @@ export class TeamFoldersController {
     @Param('id', new ParseUUIDPipe({ version: '4' })) id: string,
   ) {
     return this.teamFolders.listMembers(user, id);
+  }
+
+  @Post(':id/groups')
+  addGroup(@CurrentUser() user: AccessTokenPayload, @Param('id', new ParseUUIDPipe({ version: '4' })) id: string, @Body() body: { groupId: string; role: TeamFolderRole }) {
+    return this.teamFolders.addGroup(user, id, body.groupId, body.role);
+  }
+
+  @Patch(':id/groups/:groupId')
+  updateGroup(@CurrentUser() user: AccessTokenPayload, @Param('id', new ParseUUIDPipe({ version: '4' })) id: string, @Param('groupId', new ParseUUIDPipe({ version: '4' })) groupId: string, @Body() body: { role: TeamFolderRole }) {
+    return this.teamFolders.updateGroup(user, id, groupId, body.role);
+  }
+
+  @Delete(':id/groups/:groupId')
+  removeGroup(@CurrentUser() user: AccessTokenPayload, @Param('id', new ParseUUIDPipe({ version: '4' })) id: string, @Param('groupId', new ParseUUIDPipe({ version: '4' })) groupId: string) {
+    return this.teamFolders.removeGroup(user, id, groupId);
   }
 
   @Post(':id/members')
