@@ -1,5 +1,4 @@
 import { apiRequest } from "./client.ts";
-import { getCurrentUserId } from "./jwt.ts";
 
 export type TeamFolderRole = "ADMIN" | "ORGANIZER" | "EDITOR" | "VIEWER";
 export type TeamFolderUserRole = TeamFolderRole | "ORG_ADMIN";
@@ -37,6 +36,7 @@ export type TeamFolderMember = {
   email: string;
   role: TeamFolderRole;
 };
+export type TeamFolderGroup = { groupId: string; name: string; description: string | null; memberCount: number; role: TeamFolderRole };
 
 export function createTeamFolder(name: string, options?: { isPublicToOrg?: boolean }): Promise<TeamFolderRecord> {
   return apiRequest<TeamFolderRecord>("/team-folders", {
@@ -105,9 +105,12 @@ export function listTeamFolderShared(id: string): Promise<TeamFolderSharedItem[]
   return apiRequest<TeamFolderSharedItem[]>(`/team-folders/${id}/shared`);
 }
 
-export function listTeamFolderMembers(id: string): Promise<{ members: TeamFolderMember[] }> {
-  return apiRequest<{ members: TeamFolderMember[] }>(`/team-folders/${id}/members`);
+export function listTeamFolderMembers(id: string): Promise<{ members: TeamFolderMember[]; groups: TeamFolderGroup[] }> {
+  return apiRequest<{ members: TeamFolderMember[]; groups: TeamFolderGroup[] }>(`/team-folders/${id}/members`);
 }
+export function addTeamFolderGroup(id: string, groupId: string, role: TeamFolderRole) { return apiRequest<{ teamFolderId: string; groupId: string; role: TeamFolderRole }>(`/team-folders/${id}/groups`, { method: "POST", body: JSON.stringify({ groupId, role }) }); }
+export function updateTeamFolderGroup(id: string, groupId: string, role: TeamFolderRole) { return apiRequest<{ teamFolderId: string; groupId: string; role: TeamFolderRole }>(`/team-folders/${id}/groups/${groupId}`, { method: "PATCH", body: JSON.stringify({ role }) }); }
+export function removeTeamFolderGroup(id: string, groupId: string) { return apiRequest<{ teamFolderId: string; groupId: string; removed: boolean }>(`/team-folders/${id}/groups/${groupId}`, { method: "DELETE" }); }
 
 export function addTeamFolderMember(
   id: string,
@@ -150,12 +153,9 @@ export function removeTeamFolderMember(
 }
 
 export async function getCurrentUserTeamFolderRole(teamFolderId: string): Promise<TeamFolderUserRole | null> {
-  const userId = getCurrentUserId();
-  if (!userId) return null;
   try {
-    const { members } = await listTeamFolderMembers(teamFolderId);
-    const membership = members.find((m) => m.userId === userId);
-    return membership?.role ?? null;
+    const folder = await getTeamFolder(teamFolderId);
+    return folder.role ?? null;
   } catch {
     return null;
   }

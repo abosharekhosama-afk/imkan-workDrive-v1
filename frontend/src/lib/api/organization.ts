@@ -79,3 +79,13 @@ export function addGroupMember(groupId: string, userId: string, role: 'ADMIN' | 
 export function removeGroupMember(groupId: string, userId: string) {
   return apiRequest<{ groupId: string; userId: string; deleted: boolean }>(`/groups/${groupId}/members/${userId}`, { method: 'DELETE' });
 }
+
+export type GroupSummary = GroupOption & { createdAt: string; createdById: string };
+export type GroupMember = { id: string; userId: string; role: 'ADMIN' | 'MEMBER'; createdAt: string; user: { id: string; name: string | null; email: string; avatarUrl?: string | null } };
+export type GroupDetails = GroupSummary & { members: GroupMember[] };
+export function createGroup(name: string, description?: string) { return apiRequest<GroupSummary>('/groups', { method: 'POST', body: JSON.stringify({ name, description }) }); }
+export function getGroup(id: string) { return apiRequest<GroupDetails>(`/groups/${id}`); }
+export function updateGroup(id: string, body: { name?: string; description?: string | null }) { return apiRequest<GroupDetails>(`/groups/${id}`, { method: 'PATCH', body: JSON.stringify(body) }); }
+export function deleteGroup(id: string) { return apiRequest<{ id: string; deleted: boolean }>(`/groups/${id}`, { method: 'DELETE' }); }
+export function listGroupMembers(id: string) { return apiRequest<GroupMember[]>(`/groups/${id}/members`); }
+export function updateGroupMemberRole(groupId: string, userId: string, role: 'ADMIN' | 'MEMBER') { return apiRequest<GroupMember>(`/groups/${groupId}/members/${userId}`, { method: 'PATCH', body: JSON.stringify({ role }) }); }
