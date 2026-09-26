@@ -19,14 +19,40 @@ export function PrimarySidebar() {
   const [quota, setQuota] = useState<QuotaOverview | null>(null);
   const [role, setRole] = useState("");
   useEffect(() => {
-    const token = typeof window !== "undefined" ? localStorage.getItem("workdrive_access_token") : null;
-    if (!token) return;
-    listTeamFolders().then((r) => setTeams((r.teamFolders ?? []).filter((team) => team.isMember)).catch(() => undefined);
-    getStorageOverview().then(setQuota).catch(() => undefined);
-    try {
-      const raw = localStorage.getItem("workdrive_user");
-      if (raw) setRole((JSON.parse(raw) as { role?: string }).role ?? "");
-    } catch { /* noop */ }
+    let cancelled = false;
+    const loadSidebarData = async () => {
+      const token = typeof window !== "undefined"
+        ? window.localStorage.getItem("workdrive_access_token")
+        : null;
+      if (!token) return;
+
+      try {
+        const result = await listTeamFolders();
+        if (!cancelled) setTeams(result.teamFolders ?? []);
+      } catch {
+        if (!cancelled) setTeams([]);
+      }
+
+      try {
+        const result = await getStorageOverview();
+        if (!cancelled) setQuota(result);
+      } catch {
+        if (!cancelled) setQuota(null);
+      }
+
+      try {
+        const raw = window.localStorage.getItem("workdrive_user");
+        if (raw && !cancelled) {
+          const parsed = JSON.parse(raw) as { role?: string };
+          setRole(parsed.role ?? "");
+        }
+      } catch {
+        if (!cancelled) setRole("");
+      }
+    };
+
+    void loadSidebarData();
+    return () => { cancelled = true; };
   }, []);
   const c = sidebarCollapsed;
   const close = () => setMobileNavOpen(false);
