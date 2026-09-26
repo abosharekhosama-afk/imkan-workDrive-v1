@@ -46,7 +46,7 @@ export type MemberManagement = {
 };
 export type MemberDetails = {
   member: ManagedMember & { lastLoginAt?: string | null };
-  teamFolders: Array<{ id: string; name: string; role: string; isPublicToOrg: boolean }>;
+  teamFolders: Array<{ id: string; name: string; role: string; isPublicToOrg: boolean; source?: "DIRECT" | "GROUP"; groupNames?: string[] }>;
   groups: Array<{ id: string; name: string; description: string | null; role: string }>;
   availableTeamFolders: Array<{
     id: string; name: string; isPublicToOrg: boolean;
