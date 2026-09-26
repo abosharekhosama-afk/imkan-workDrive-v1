@@ -186,6 +186,15 @@ export class EnterpriseService {
       CONNECTIONS: ['connection.reconnected','CONNECTION_CREATED','CONNECTION_UPDATED','CONNECTION_DELETED'],
     };
     const allKnownActions = [...new Set(Object.values(ACTIONS).flat())];
+    // The report builder sends selected activity keys as `actions`. Keep
+    // `requestedActions` local to this method and accept the legacy field too
+    // so report generation never references an undefined variable.
+    const rawRequestedActions = Array.isArray(input?.actions)
+      ? input.actions
+      : Array.isArray(input?.requestedActions)
+        ? input.requestedActions
+        : [];
+    const requestedActions = rawRequestedActions.filter((action: unknown): action is string => typeof action === 'string' && action.trim().length > 0);
     const actions = requestedActions.length ? [...new Set(requestedActions)] : allKnownActions;
 
     const params: any[] = [user.org_id, from, to];
