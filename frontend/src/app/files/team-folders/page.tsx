@@ -5,7 +5,7 @@ import { usePathname } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useLocale } from "../../../components/locale-provider";
 import { ApiError } from "../../../lib/api/client";
-import { deleteTeamFolder, listTeamFolders, renameTeamFolder, type TeamFolderListItem } from "../../../lib/api/team-folders";
+import { deleteTeamFolder, joinTeamFolder, listTeamFolders, renameTeamFolder, type TeamFolderListItem } from "../../../lib/api/team-folders";
 import { formatBytes } from "../../../lib/api/quota";
 import { MembersModal } from "../../../components/members-modal";
 import { AlertBanner } from "../../../components/alert-banner";
@@ -49,7 +49,7 @@ export default function TeamFoldersPage() {
   const [menuId, setMenuId] = useState<string | null>(null);
   const [pinnedIds, setPinnedIds] = useState<Set<string>>(new Set());
   const [search, setSearch] = useState("");
-  const [scopeFilter, setScopeFilter] = useState<"joined" | "all" | "public" | "private">("joined");
+  const [scopeFilter, setScopeFilter] = useState<"joined" | "all" | "public" | "private">("all");
   const [filterOpen, setFilterOpen] = useState(false);
   const [renameTarget, setRenameTarget] = useState<TeamFolderListItem | null>(null);
   const [renameName, setRenameName] = useState("");
@@ -167,6 +167,20 @@ export default function TeamFoldersPage() {
     }
   };
 
+  const joinPublicFolder = async (tf: TeamFolderListItem) => {
+    if (!tf.isPublicToOrg || tf.isMember) return;
+    setActionBusy(true);
+    setError(null);
+    try {
+      await joinTeamFolder(tf.id);
+      await load();
+    } catch (cause) {
+      setError(cause instanceof ApiError ? cause.message : label("error.generic"));
+    } finally {
+      setActionBusy(false);
+    }
+  };
+
   return (
     <section className="team-folders-page flex min-h-full min-w-0 flex-col bg-white">
       <div className="team-folders-toolbar flex shrink-0 items-center border-b border-slate-100 px-5" data-team-folders-toolbar>
@@ -220,18 +234,30 @@ export default function TeamFoldersPage() {
               const pinned = pinnedIds.has(tf.id);
               return (
                 <div key={tf.id} className={`team-folder-row group ${index === 0 && pinned ? "is-pinned" : ""}`} data-selected={detailsTf?.id === tf.id || undefined}>
-                  <Link href={folderHref(tf)} className="team-folder-main">
-                    <span className="team-folder-glyph"><FolderGlyph /></span>
-                    <span className="team-folder-copy">
-                      <span className="team-folder-name">
-                        <span className="truncate">{tf.name}</span>
-                        <span className="team-folder-lock" title={tf.isPublicToOrg ? (locale === "ar" ? "مجلد فريق عام" : "Public Team Folder") : (locale === "ar" ? "مجلد فريق خاص" : "Private Team Folder")} aria-label={tf.isPublicToOrg ? (locale === "ar" ? "عام" : "Public") : (locale === "ar" ? "خاص" : "Private")}>{tf.isPublicToOrg ? (locale === "ar" ? "عام" : "Public") : "●"}</span>
+                  {tf.isPublicToOrg && !tf.isMember ? (
+                    <button type="button" className="team-folder-main text-start" onClick={() => void joinPublicFolder(tf)} disabled={actionBusy}>
+                      <span className="team-folder-glyph"><FolderGlyph /></span>
+                      <span className="team-folder-copy">
+                        <span className="team-folder-name">
+                          <span className="truncate">{tf.name}</span>
+                          <span className="team-folder-lock" title={locale === "ar" ? "مجلد فريق عام" : "Public Team Folder"} aria-label={locale === "ar" ? "عام" : "Public"}>{locale === "ar" ? "عام" : "Public"}</span>
+                        </span>
                       </span>
-                    </span>
-                  </Link>
+                    </button>
+                  ) : (
+                    <Link href={folderHref(tf)} className="team-folder-main">
+                      <span className="team-folder-glyph"><FolderGlyph /></span>
+                      <span className="team-folder-copy">
+                        <span className="team-folder-name">
+                          <span className="truncate">{tf.name}</span>
+                          <span className="team-folder-lock" title={tf.isPublicToOrg ? (locale === "ar" ? "مجلد فريق عام" : "Public Team Folder") : (locale === "ar" ? "مجلد فريق خاص" : "Private Team Folder")} aria-label={tf.isPublicToOrg ? (locale === "ar" ? "عام" : "Public") : (locale === "ar" ? "خاص" : "Private")}>{tf.isPublicToOrg ? (locale === "ar" ? "عام" : "Public") : "●"}</span>
+                        </span>
+                      </span>
+                    </Link>
+                  )}
 
-                  <button type="button" className="team-folder-members" onClick={() => setActiveMembersTf(tf)} title={locale === "ar" ? "إدارة أعضاء مجلد الفريق" : "Manage Team Folder members"}>
-                    <MembersIcon /><span>{tf.memberCount} {locale === "ar" ? "عضو" : tf.memberCount === 1 ? "Member" : "Members"}</span>
+                  <button type="button" className="team-folder-members" onClick={() => tf.isMember ? setActiveMembersTf(tf) : void joinPublicFolder(tf)} disabled={actionBusy} title={tf.isMember ? (locale === "ar" ? "إدارة أعضاء مجلد الفريق" : "Manage Team Folder members") : (locale === "ar" ? "الانضمام إلى مجلد الفريق العام" : "Join public Team Folder")}>
+                    <MembersIcon /><span>{tf.isMember ? `${tf.memberCount} ${locale === "ar" ? "عضو" : tf.memberCount === 1 ? "Member" : "Members"}` : (locale === "ar" ? "انضمام" : "Join")}</span>
                   </button>
 
                   <div className="team-folder-row-actions" data-team-folder-menu>
@@ -243,9 +269,9 @@ export default function TeamFoldersPage() {
                       {menuId === tf.id ? (
                         <div className="team-folder-menu" data-team-folder-menu role="menu">
                           <button type="button" onClick={() => { setDetailsTf(tf); setMenuId(null); }}>{locale === "ar" ? "التفاصيل" : "Details"}</button>
-                          <button type="button" onClick={() => { setActiveMembersTf(tf); setMenuId(null); }}>{locale === "ar" ? "الأعضاء" : "Members"}</button>
-                          <button type="button" onClick={() => openRename(tf)}>{label("files.rename")}</button>
-                          <button type="button" className="danger" onClick={() => remove(tf)}>{label("files.delete")}</button>
+                          {tf.isMember ? <button type="button" onClick={() => { setActiveMembersTf(tf); setMenuId(null); }}>{locale === "ar" ? "الأعضاء" : "Members"}</button> : <button type="button" onClick={() => { setMenuId(null); void joinPublicFolder(tf); }}>{locale === "ar" ? "انضمام" : "Join"}</button>}
+                          {tf.isMember ? <button type="button" onClick={() => openRename(tf)}>{label("files.rename")}</button> : null}
+                          {tf.isMember ? <button type="button" className="danger" onClick={() => remove(tf)}>{label("files.delete")}</button> : null}
                         </div>
                       ) : null}
                     </div>
