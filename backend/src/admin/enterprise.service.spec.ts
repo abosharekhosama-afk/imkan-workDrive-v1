@@ -43,7 +43,18 @@ describe('EnterpriseService admin settings', () => {
           privateTeamFolderCreator: 'ANYONE',
           sameDomainJoinEnabled: false,
         }),
-        update: jest.fn(),
+        update: jest.fn().mockResolvedValue({
+          id: 'settings-1', orgId: 'org-1', logoDataUrl: null, customDomain: null,
+          defaultView: 'COMPACT', thumbnailSize: 3, previewPanel: 'PREVIEW',
+          convertOnUpload: false, allowNonZohoWriter: true, allowNonZohoSheet: true, allowNonZohoShow: true,
+          saveNewFilesAsDrafts: true, ocrLanguage: 'NONE', allowDirectEmailSharing: true,
+          directSharingScope: 'ANY_EXTERNAL_USER', allowExternalShareLinks: true, enforceSharePasswords: false,
+          defaultShareExpiryDays: null, collectExternalUserInfo: false, allowDownloadLinks: true,
+          downloadLinkExpiryDays: null, allowPermalinkEmbeds: true, allowEmbedDownloadPrint: true,
+          allowCollections: true, collectionManagerScope: 'ANYONE_ON_TEAM', collectionExternalName: 'COLLECTION',
+          myFoldersLimitBytes: null, versionMode: 'ALL', versionLimit: null,
+          publicTeamFolderCreator: 'ANYONE', privateTeamFolderCreator: 'ANYONE', sameDomainJoinEnabled: false,
+        }),
       },
       organization: { findUnique: jest.fn().mockResolvedValue({ id: 'org-1' }) },
       auditLog: { create: jest.fn().mockResolvedValue({ id: 'audit-1' }) },
@@ -65,4 +76,26 @@ describe('EnterpriseService admin settings', () => {
     const { service } = createService();
     await expect(service.consoleSettings(memberUser as any)).rejects.toBeInstanceOf(ForbiddenException);
   });
+  it('uses the Prisma settings row atomically and serializes BigInt limits', async () => {
+    const { service, prisma } = createService();
+    (prisma.adminConsoleSetting.upsert as jest.Mock).mockResolvedValueOnce({
+      id: 'settings-1', orgId: 'org-1', myFoldersLimitBytes: BigInt(10737418240), defaultView: 'COMPACT',
+    });
+    const result = await service.consoleSettings(adminUser as any);
+    expect(prisma.adminConsoleSetting.upsert).toHaveBeenCalledWith({
+      where: { orgId: 'org-1' }, update: {}, create: { orgId: 'org-1' },
+    });
+    expect(result.myFoldersLimitBytes).toBe('10737418240');
+  });
+
+  it('builds audit report joins through Folder.team_folder_id instead of a non-existent File.team_folder_id', async () => {
+    const { service, prisma } = createService();
+    await service.auditReport(adminUser as any, { range: 'TODAY', actions: ['FILE_CREATED'] });
+    const calls = (prisma.$queryRawUnsafe as jest.Mock).mock.calls;
+    const sql = calls[calls.length - 1][0] as string;
+    expect(sql).toContain('LEFT JOIN folders ffd ON a.resource_type=\'FILE\' AND ffd.id=f.folder_id');
+    expect(sql).toContain('tff.id=ffd.team_folder_id');
+    expect(sql).not.toContain('tff.id=f.team_folder_id');
+  });
+
 });

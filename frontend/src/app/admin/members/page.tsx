@@ -1,7 +1,5 @@
 "use client";
 
-import MembersPage from "@/app/members/page";
-
-export default function AdminMembersPage() {
-  return <MembersPage />;
-}
+// Keep the Admin Console Members surface identical to the main WorkDrive
+// Members surface. Do not maintain a second admin-only implementation here.
+export { default } from "@/app/members/page";
