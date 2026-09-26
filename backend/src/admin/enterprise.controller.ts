@@ -7,6 +7,8 @@ import { DlpService } from '../dlp/dlp.service';
 @Controller('admin/enterprise')
 export class EnterpriseController {
   constructor(private readonly service: EnterpriseService, private readonly dlp: DlpService) {}
+  @Get('settings') consoleSettings(@CurrentUser() u: AccessTokenPayload) { return this.service.consoleSettings(u); }
+  @Patch('settings') updateConsoleSettings(@CurrentUser() u: AccessTokenPayload, @Body() b: Record<string, unknown>) { return this.service.updateConsoleSettings(u, b); }
   @Get('security-center') securityCenter(@CurrentUser() u: AccessTokenPayload) { return this.service.securityCenter(u); }
   @Delete('sessions/:sessionId') revokeUserSession(@CurrentUser() u: AccessTokenPayload, @Param('sessionId') id: string) { return this.service.revokeUserSession(u, id); }
 

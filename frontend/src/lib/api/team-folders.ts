@@ -38,10 +38,10 @@ export type TeamFolderMember = {
   role: TeamFolderRole;
 };
 
-export function createTeamFolder(name: string): Promise<TeamFolderRecord> {
+export function createTeamFolder(name: string, options?: { isPublicToOrg?: boolean }): Promise<TeamFolderRecord> {
   return apiRequest<TeamFolderRecord>("/team-folders", {
     method: "POST",
-    body: JSON.stringify({ name }),
+    body: JSON.stringify(options ? { name, isPublicToOrg: options.isPublicToOrg === true } : { name }),
   });
 }
 

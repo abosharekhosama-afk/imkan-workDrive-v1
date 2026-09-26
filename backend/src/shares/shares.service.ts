@@ -77,6 +77,23 @@ export class SharesService {
     const orgPolicy = await this.prisma.securityPolicy.findFirst({ where: { orgId: user.org_id }, select: { allowExternalSharing: true, allowPublicLinks: true, maxShareDays: true } });
     if (orgPolicy && !orgPolicy.allowExternalSharing) throw new ForbiddenException('External sharing is disabled by organization policy');
     if (orgPolicy && !orgPolicy.allowPublicLinks && input.recipientUserIds.length === 0) throw new ForbiddenException('Public links are disabled by organization policy');
+    // Admin Console sharing switches are additive to the core security policy.
+    // Older test fixtures/databases may not have the table yet, so absence of the
+    // optional settings falls back to the existing security-policy behavior.
+    let consolePolicy: any = null;
+    try {
+      const rows = await this.prisma.$queryRawUnsafe<any[]>(`SELECT allow_direct_email_sharing AS allowDirectEmailSharing, direct_sharing_scope AS directSharingScope, allow_external_share_links AS allowExternalShareLinks, allow_download_links AS allowDownloadLinks, enforce_share_passwords AS enforceSharePasswords, default_share_expiry_days AS defaultShareExpiryDays FROM admin_console_settings WHERE org_id=? LIMIT 1`, user.org_id);
+      consolePolicy = rows[0] ?? null;
+    } catch {
+      consolePolicy = null;
+    }
+    if (consolePolicy?.allowDirectEmailSharing === false && (input.emailRecipients?.length ?? 0) > 0) throw new ForbiddenException('Direct sharing via email is disabled by organization policy');
+    if (consolePolicy?.allowExternalShareLinks === false && input.recipientUserIds.length === 0) throw new ForbiddenException('External share links are disabled by organization policy');
+    if (consolePolicy?.allowDownloadLinks === false && input.canDownload) throw new ForbiddenException('Download links are disabled by organization policy');
+    if (consolePolicy?.enforceSharePasswords && !input.password) throw new ForbiddenException('A password is required by organization policy');
+    if (consolePolicy?.defaultShareExpiryDays && !input.expiresAt) {
+      input.expiresAt = new Date(Date.now() + Number(consolePolicy.defaultShareExpiryDays) * 86400000);
+    }
     if (orgPolicy?.maxShareDays && input.expiresAt) {
       const max = Date.now() + Number(orgPolicy.maxShareDays) * 86400000;
       if (input.expiresAt.getTime() > max) throw new ForbiddenException('Share expiration exceeds organization policy');

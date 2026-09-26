@@ -35,12 +35,12 @@ export function AdminConsoleSidebar() {
   const ar = locale === "ar";
 
   return (
-    <aside className="admin-console-sidebar flex h-full w-[255px] shrink-0 flex-col bg-[#252525] text-white" dir={ar ? "rtl" : "ltr"}>
+    <aside className="admin-console-sidebar flex h-full w-[190px] shrink-0 flex-col bg-[#252525] text-white" dir={ar ? "rtl" : "ltr"}>
       <div className="flex h-[54px] shrink-0 items-center border-b border-white/10 px-4">
-        <Link href="/admin" className="flex min-w-0 items-center gap-2.5">
+        <Link href="/admin" className="flex min-w-0 items-center gap-2">
           <span className="flex h-7 w-7 items-center justify-center rounded-md bg-[#2f70df] text-white"><Icons.folder size={17} /></span>
-          <span className="truncate text-[17px] font-semibold tracking-[-.01em]">IMKAN</span>
-          <span className="text-[14px] text-white/55">Admin Console</span>
+          <span className="truncate text-[15px] font-semibold tracking-[-.01em]">IMKAN</span>
+          <span className="text-[11px] text-white/55">Admin Console</span>
         </Link>
       </div>
 
@@ -52,9 +52,9 @@ export function AdminConsoleSidebar() {
           const Icon = Icons[item.icon];
           return (
             <div key={item.href}>
-              {showSection ? <div className="px-3 pb-2 pt-5 text-[11px] font-medium text-white/45">{item.section}</div> : null}
+              {showSection ? <div className="px-3 pb-2 pt-4 text-[10px] font-medium text-white/45">{item.section}</div> : null}
               <Link href={item.href} aria-current={active ? "page" : undefined}
-                className={`flex h-10 items-center gap-4 rounded-[15px] px-4 text-[14px] font-medium transition ${active ? "bg-[#304d82] font-semibold text-[#e6edff]" : "text-white/90 hover:bg-white/[0.07]"}`}>
+                className={`flex h-10 items-center gap-3 rounded-[10px] px-3 text-[12px] font-medium transition ${active ? "bg-[#304d82] font-semibold text-[#e6edff]" : "text-white/90 hover:bg-white/[0.07]"}`}>
                 <Icon size={18} />
                 <span className="min-w-0 flex-1 truncate">{ar ? item.ar : item.en}</span>
               </Link>

@@ -2,6 +2,7 @@ import { BadRequestException, ForbiddenException } from '@nestjs/common';
 
 export type CreateTeamFolderInput = {
   name: string;
+  isPublicToOrg?: boolean;
 };
 
 export function parseCreateTeamFolder(body: unknown): CreateTeamFolderInput {
@@ -19,5 +20,6 @@ export function parseCreateTeamFolder(body: unknown): CreateTeamFolderInput {
   if (name.length < 1 || name.length > 191) {
     throw new BadRequestException('Invalid name');
   }
-  return { name };
+  if (record.isPublicToOrg !== undefined && typeof record.isPublicToOrg !== "boolean") throw new BadRequestException('Invalid isPublicToOrg');
+  return record.isPublicToOrg === undefined ? { name } : { name, isPublicToOrg: record.isPublicToOrg === true };
 }

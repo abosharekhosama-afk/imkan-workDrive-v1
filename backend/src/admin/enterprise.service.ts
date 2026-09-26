@@ -117,6 +117,71 @@ export class EnterpriseService {
   }
 
 
+
+
+  async consoleSettings(user: AccessTokenPayload) {
+    this.assertAdmin(user);
+    await this.ensureConsoleSettings(user.org_id);
+    const rows = await this.prisma.$queryRawUnsafe<any[]>(`SELECT
+      id, org_id AS orgId, logo_data_url AS logoDataUrl, custom_domain AS customDomain,
+      default_view AS defaultView, thumbnail_size AS thumbnailSize, preview_panel AS previewPanel,
+      convert_on_upload AS convertOnUpload, allow_non_zoho_writer AS allowNonZohoWriter,
+      allow_non_zoho_sheet AS allowNonZohoSheet, allow_non_zoho_show AS allowNonZohoShow,
+      save_new_files_as_drafts AS saveNewFilesAsDrafts, ocr_language AS ocrLanguage,
+      allow_direct_email_sharing AS allowDirectEmailSharing, direct_sharing_scope AS directSharingScope,
+      allow_external_share_links AS allowExternalShareLinks, enforce_share_passwords AS enforceSharePasswords,
+      default_share_expiry_days AS defaultShareExpiryDays, collect_external_user_info AS collectExternalUserInfo,
+      allow_download_links AS allowDownloadLinks, download_link_expiry_days AS downloadLinkExpiryDays,
+      allow_permalink_embeds AS allowPermalinkEmbeds, allow_embed_download_print AS allowEmbedDownloadPrint,
+      allow_collections AS allowCollections, collection_manager_scope AS collectionManagerScope,
+      collection_external_name AS collectionExternalName, my_folders_limit_bytes AS myFoldersLimitBytes,
+      version_mode AS versionMode, version_limit AS versionLimit,
+      public_team_folder_creator AS publicTeamFolderCreator, private_team_folder_creator AS privateTeamFolderCreator,
+      same_domain_join_enabled AS sameDomainJoinEnabled
+      FROM admin_console_settings WHERE org_id=? LIMIT 1`, user.org_id);
+    const row = rows[0] ?? {};
+    return { ...row, myFoldersLimitBytes: row.myFoldersLimitBytes == null ? null : String(row.myFoldersLimitBytes) };
+  }
+
+  async updateConsoleSettings(user: AccessTokenPayload, input: Record<string, unknown>) {
+    this.assertAdmin(user);
+    await this.ensureConsoleSettings(user.org_id);
+    const current = await this.consoleSettings(user);
+    const bool = (key: string) => typeof input[key] === 'boolean' ? input[key] : current[key];
+    const str = (key: string, fallback?: string) => typeof input[key] === 'string' && String(input[key]).length ? String(input[key]) : (current[key] ?? fallback ?? null);
+    const intOrNull = (key: string) => input[key] === null ? null : Number.isFinite(Number(input[key])) ? Math.trunc(Number(input[key])) : current[key] ?? null;
+    const logo = typeof input.logoDataUrl === 'string' ? input.logoDataUrl : current.logoDataUrl ?? null;
+    const customDomain = Object.prototype.hasOwnProperty.call(input, 'customDomain') ? (input.customDomain == null || String(input.customDomain).trim() === '' ? null : String(input.customDomain).trim()) : current.customDomain ?? null;
+    if (logo && logo.length > 8_000_000) throw new BadRequestException('Logo is too large');
+    const thumbnailSize = Math.min(5, Math.max(1, Number(input.thumbnailSize ?? current.thumbnailSize ?? 3)));
+    const versionLimit = input.versionLimit === null ? null : Math.max(1, Math.trunc(Number(input.versionLimit ?? current.versionLimit ?? 1)));
+    const myFoldersLimit = input.myFoldersLimitBytes === null || input.myFoldersLimitBytes === undefined ? current.myFoldersLimitBytes ?? null : Math.max(0, Math.trunc(Number(input.myFoldersLimitBytes)));
+    await this.prisma.$executeRawUnsafe(`UPDATE admin_console_settings SET
+      logo_data_url=?, custom_domain=?, default_view=?, thumbnail_size=?, preview_panel=?,
+      convert_on_upload=?, allow_non_zoho_writer=?, allow_non_zoho_sheet=?, allow_non_zoho_show=?,
+      save_new_files_as_drafts=?, ocr_language=?, allow_direct_email_sharing=?, direct_sharing_scope=?,
+      allow_external_share_links=?, enforce_share_passwords=?, default_share_expiry_days=?, collect_external_user_info=?,
+      allow_download_links=?, download_link_expiry_days=?, allow_permalink_embeds=?, allow_embed_download_print=?,
+      allow_collections=?, collection_manager_scope=?, collection_external_name=?, my_folders_limit_bytes=?,
+      version_mode=?, version_limit=?, public_team_folder_creator=?, private_team_folder_creator=?, same_domain_join_enabled=?, updated_at=CURRENT_TIMESTAMP(3)
+      WHERE org_id=?`,
+      logo, customDomain, str('defaultView','COMPACT'), thumbnailSize, str('previewPanel','PREVIEW'),
+      bool('convertOnUpload'), bool('allowNonZohoWriter'), bool('allowNonZohoSheet'), bool('allowNonZohoShow'),
+      bool('saveNewFilesAsDrafts'), str('ocrLanguage','NONE'), bool('allowDirectEmailSharing'), str('directSharingScope','ANY_EXTERNAL_USER'),
+      bool('allowExternalShareLinks'), bool('enforceSharePasswords'), intOrNull('defaultShareExpiryDays'), bool('collectExternalUserInfo'),
+      bool('allowDownloadLinks'), intOrNull('downloadLinkExpiryDays'), bool('allowPermalinkEmbeds'), bool('allowEmbedDownloadPrint'),
+      bool('allowCollections'), str('collectionManagerScope','ANYONE_ON_TEAM'), str('collectionExternalName','COLLECTION'), myFoldersLimit,
+      str('versionMode','ALL'), versionLimit, str('publicTeamFolderCreator','ANYONE'), str('privateTeamFolderCreator','ANYONE'), bool('sameDomainJoinEnabled'),
+      user.org_id);
+    await this.prisma.auditLog.create({ data: { orgId: user.org_id, actorId: user.sub, action: 'ADMIN_CONSOLE_SETTINGS_UPDATED', resourceType: 'ORGANIZATION', resourceId: user.org_id } });
+    return this.consoleSettings(user);
+  }
+
+  private async ensureConsoleSettings(orgId: string) {
+    const id = randomUUID();
+    await this.prisma.$executeRawUnsafe(`INSERT INTO admin_console_settings (id,org_id) VALUES (?,?) ON DUPLICATE KEY UPDATE org_id=org_id`, id, orgId);
+  }
+
   async securityCenter(user: AccessTokenPayload) {
     this.assertAdmin(user);
     const [activeSessions, revokedSessions, devices, events] = await Promise.all([

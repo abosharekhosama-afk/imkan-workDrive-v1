@@ -260,6 +260,49 @@ enum StorageObjectStatus {
   CORRUPTED
 }
 
+
+
+model AdminConsoleSetting {
+  id                        String       @id @default(uuid()) @db.Char(36)
+  orgId                     String       @unique @map("org_id") @db.Char(36)
+  logoDataUrl               String?      @map("logo_data_url") @db.LongText
+  customDomain              String?      @map("custom_domain") @db.VarChar(255)
+  defaultView               String       @default("COMPACT") @map("default_view") @db.VarChar(20)
+  thumbnailSize             Int          @default(3) @map("thumbnail_size")
+  previewPanel              String       @default("PREVIEW") @map("preview_panel") @db.VarChar(30)
+  convertOnUpload           Boolean      @default(false) @map("convert_on_upload")
+  allowNonZohoWriter       Boolean      @default(true) @map("allow_non_zoho_writer")
+  allowNonZohoSheet         Boolean      @default(true) @map("allow_non_zoho_sheet")
+  allowNonZohoShow          Boolean      @default(true) @map("allow_non_zoho_show")
+  saveNewFilesAsDrafts      Boolean      @default(true) @map("save_new_files_as_drafts")
+  ocrLanguage               String       @default("NONE") @map("ocr_language") @db.VarChar(20)
+  allowDirectEmailSharing   Boolean      @default(true) @map("allow_direct_email_sharing")
+  directSharingScope        String       @default("ANY_EXTERNAL_USER") @map("direct_sharing_scope") @db.VarChar(30)
+  allowExternalShareLinks   Boolean      @default(true) @map("allow_external_share_links")
+  enforceSharePasswords     Boolean      @default(false) @map("enforce_share_passwords")
+  defaultShareExpiryDays    Int?         @map("default_share_expiry_days")
+  collectExternalUserInfo   Boolean      @default(false) @map("collect_external_user_info")
+  allowDownloadLinks        Boolean      @default(true) @map("allow_download_links")
+  downloadLinkExpiryDays    Int?         @map("download_link_expiry_days")
+  allowPermalinkEmbeds      Boolean      @default(true) @map("allow_permalink_embeds")
+  allowEmbedDownloadPrint   Boolean      @default(true) @map("allow_embed_download_print")
+  allowCollections          Boolean      @default(true) @map("allow_collections")
+  collectionManagerScope    String       @default("ANYONE_ON_TEAM") @map("collection_manager_scope") @db.VarChar(30)
+  collectionExternalName    String       @default("COLLECTION") @map("collection_external_name") @db.VarChar(30)
+  myFoldersLimitBytes       BigInt?      @map("my_folders_limit_bytes")
+  versionMode               String       @default("ALL") @map("version_mode") @db.VarChar(30)
+  versionLimit              Int?         @map("version_limit")
+  publicTeamFolderCreator   String       @default("ANYONE") @map("public_team_folder_creator") @db.VarChar(20)
+  privateTeamFolderCreator  String       @default("ANYONE") @map("private_team_folder_creator") @db.VarChar(20)
+  sameDomainJoinEnabled     Boolean      @default(false) @map("same_domain_join_enabled")
+  createdAt                 DateTime     @default(now()) @map("created_at")
+  updatedAt                 DateTime     @updatedAt @map("updated_at")
+
+  organization Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+
+  @@map("admin_console_settings")
+}
+
 model Organization {
   id        String   @id @default(uuid()) @db.Char(36)
   name      String
@@ -304,6 +347,7 @@ model Organization {
   dlpPolicies         DlpPolicy[]
   dlpFileLabels       FileDlpLabel[]
   retentionPolicy     RetentionPolicy?
+  adminConsoleSetting AdminConsoleSetting?
   malwareScans        MalwareScan[]
   securityEvents      SecurityEvent[]
   connections         Connection[]

@@ -3780,3 +3780,6 @@ html[data-theme="dark"] .imkan-connections-page .connections-detail-overlay{back
   .imkan-cloud-access-state { padding: 72px 32px 58px; }
   .imkan-cloud-accounts-panel { right: 10px; width: min(315px, calc(100vw - 28px)); }
 }
+
+/* Admin Console / Zoho WorkDrive settings parity */
+.zoho-admin-input{display:block;width:100%;height:38px;border:1px solid #d8dadd;border-radius:8px;background:#fff;padding:0 12px;font-size:12px;color:#202124;outline:none;transition:border-color .15s,box-shadow .15s}.zoho-admin-input:focus{border-color:#5c8fe8;box-shadow:0 0 0 3px rgba(47,110,229,.10)}.zoho-admin-input:disabled{background:#f7f7f7;color:#777}.zoho-admin-primary{display:inline-flex;height:36px;align-items:center;justify-content:center;border-radius:7px;background:#2f6ee5;padding:0 17px;font-size:11px;font-weight:600;color:#fff}.zoho-admin-primary:disabled{opacity:.5;cursor:not-allowed}

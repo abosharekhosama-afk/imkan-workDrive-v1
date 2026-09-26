@@ -55,13 +55,19 @@ export class TeamFoldersService {
 
   async create(user: AccessTokenPayload, input: CreateTeamFolderInput) {
     if (!this.permissions.canCreateTeamFolder(user)) {
-      throw new ForbiddenException('Not allowed to create a Team Folder');
+      let creatorPolicy = 'ADMINS_ONLY';
+      try {
+        const rows = await this.prisma.$queryRawUnsafe<any[]>(`SELECT ${input.isPublicToOrg === true ? 'public_team_folder_creator' : 'private_team_folder_creator'} AS creatorPolicy FROM admin_console_settings WHERE org_id=? LIMIT 1`, user.org_id);
+        creatorPolicy = rows[0]?.creatorPolicy ?? 'ADMINS_ONLY';
+      } catch { /* legacy databases fall back to the original admin-only rule */ }
+      if (creatorPolicy !== 'ANYONE') throw new ForbiddenException('Not allowed to create this Team Folder');
     }
     return this.prisma.$transaction(async (tx) => {
       const created = await tx.teamFolder.create({
         data: {
           name: input.name,
           orgId: user.org_id,
+          ...(input.isPublicToOrg === true ? { isPublicToOrg: true } : {}),
         },
       });
       const root = await tx.folder.create({
