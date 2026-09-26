@@ -21,7 +21,6 @@ export function WorkflowShell({ children, title, subtitle, active }: { children:
     ["mine", "/files/workflows?scope=mine", ar ? "سير العمل الخاص بي" : "My workflows", "canViewMy"],
     ["drafts", "/files/workflows?scope=drafts", ar ? "المسودات" : "Drafts", "canViewDrafts"],
     ["templates", "/files/workflows/templates", ar ? "قوالب البيانات" : "Data templates", "canViewTemplates"],
-    ["functions", "/files/workflows/functions", ar ? "الدوال الآمنة" : "Safe functions", "canViewFunctions"],
     ["connections", "/files/workflows/connections", ar ? "الاتصالات" : "Connections", "canViewFunctions"],
     ["waiting", "/files/workflows/tasks", ar ? "بانتظار إجراءاتي" : "Waiting for my action", "canViewWaiting"],
     ["runs", "/files/workflows/runs", ar ? "سجل التشغيل" : "Run history", "canViewRuns"],

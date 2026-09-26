@@ -20,9 +20,15 @@ export function SidebarFooter({ quota, role, onNav }: { quota: QuotaOverview | n
         <Link href="/settings" onClick={onNav} className="mt-1 flex h-[42px] items-center justify-between rounded-[16px] bg-[#3E3E3E] px-3 text-[13px] font-bold text-white hover:bg-[#4A4A4A]">
           <span className="inline-flex items-center gap-1.5"><Icons.spark size={16} /> {label("nav.getStarted")}</span> <Icons.chevR size={16} />
         </Link>
-        <Link href={admin ? "/admin" : "/settings"} onClick={onNav} className="mb-2 flex h-[42px] items-center justify-between rounded-[16px] bg-[#3E3E3E] px-3 text-[13px] font-bold text-white hover:bg-[#4A4A4A]">
-          <span className="min-w-0 truncate">{label("nav.adminConsole")}</span> <Icons.ext size={16} />
-        </Link>
+        {admin ? (
+          <button type="button" onClick={() => { onNav(); window.open("/admin", "_blank", "noopener,noreferrer"); }} className="mb-2 flex h-[42px] w-full items-center justify-between rounded-[16px] bg-[#3E3E3E] px-3 text-[13px] font-bold text-white hover:bg-[#4A4A4A]">
+            <span className="min-w-0 truncate">{label("nav.adminConsole")}</span> <Icons.ext size={16} />
+          </button>
+        ) : (
+          <Link href="/settings" onClick={onNav} className="mb-2 flex h-[42px] items-center justify-between rounded-[16px] bg-[#3E3E3E] px-3 text-[13px] font-bold text-white hover:bg-[#4A4A4A]">
+            <span className="min-w-0 truncate">{label("nav.adminConsole")}</span> <Icons.ext size={16} />
+          </Link>
+        )}
       </div>
       <div className="mt-2 rounded-md bg-white/[0.04] p-2">
         <div className="flex items-center justify-between text-[11px] text-[#9CA3AF]">
