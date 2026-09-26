@@ -71,6 +71,9 @@ export function friendlyConnectionError(message: string): string {
   if (parsed.code === "INSUFFICIENT_SCOPE" || parsed.code === "DRIVE_SCOPE_REQUIRED") {
     return "Google Drive file access is not authorized for this connection.";
   }
+  if (parsed.code === "GOOGLE_DRIVE_API_NOT_ENABLED") {
+    return "Google Drive API is not enabled for the Google Cloud project used by this OAuth connection.";
+  }
   if (parsed.code === "TOKEN_EXPIRED" || parsed.code === "AUTH_REQUIRED") return "Your connection expired. Reconnect to continue.";
   if (parsed.code === "ACCESS_DENIED") return parsed.message;
   if (parsed.code === "RATE_LIMITED") return "Provider rate limit reached. Try again shortly.";

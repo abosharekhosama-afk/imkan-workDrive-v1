@@ -18,10 +18,19 @@ export function formatGrantedScopes(scope: string | null | undefined): string[] 
   return (scope ?? "").split(/\s+/).filter(Boolean);
 }
 
-export function formatCapabilityState(state: string | undefined): string {
+export function formatCapabilityState(state: string | undefined, key?: string): string {
   if (state === "granted") return "Granted";
+  if (key === "google.drive.api" && state === "required") return "Not enabled";
+  if (key === "google.cloud_import" && state === "required") return "Blocked";
   if (state === "required") return "Reconnect required";
   return "Not applicable";
+}
+
+export function formatGoogleDriveApiAdminAction(errorCode?: string | null): string | null {
+  if (errorCode === "GOOGLE_DRIVE_API_NOT_ENABLED") {
+    return "Enable the Google Drive API in Google Cloud Console for the same project as your OAuth client, then reconnect or retry Cloud Import.";
+  }
+  return null;
 }
 
 export function formatConnectionAuthLabel(authType: string): string {

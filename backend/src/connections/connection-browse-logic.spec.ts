@@ -32,7 +32,7 @@ describe('connection-browse-logic', () => {
   it('builds google capability summary', () => {
     const summary = buildConnectionCapabilitySummary({ provider: 'google', authType: 'OAUTH2', scope: 'openid email', errorCode: 'DRIVE_SCOPE_REQUIRED' });
     expect(summary.driveReconnectRequired).toBe(true);
-    expect(summary.items).toHaveLength(2);
+    expect(summary.items).toHaveLength(4);
   });
 
   it('returns drive activation error when arbitrary-file read scope is missing', () => {
@@ -45,3 +45,4 @@ describe('connection-browse-logic', () => {
     expect(mapGoogleDriveApiError(403, { error: { errors: [{ reason: 'insufficientPermissions' }], message: 'Insufficient Permission' } }).code).toBe('ACCESS_DENIED');
   });
 });
+

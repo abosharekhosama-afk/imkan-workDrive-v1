@@ -100,8 +100,14 @@ export async function apiRequest<T>(path: string, init: RequestInit = {}): Promi
     let message = rawBody;
     let code: string | undefined;
     try {
-      const parsed = JSON.parse(rawBody) as { message?: unknown; code?: unknown };
-      if (typeof parsed.message === "string" && parsed.message.length > 0) message = parsed.message;
+      const parsed = JSON.parse(rawBody) as { message?: unknown; code?: unknown; error?: unknown };
+      if (parsed && typeof parsed.message === "object" && parsed.message && !Array.isArray(parsed.message)) {
+        const nested = parsed.message as { message?: unknown; code?: unknown };
+        if (typeof nested.message === "string" && nested.message.length > 0) message = nested.message;
+        if (typeof nested.code === "string" && nested.code.length > 0) code = nested.code;
+      } else if (typeof parsed.message === "string" && parsed.message.length > 0) {
+        message = parsed.message;
+      }
       if (typeof parsed.code === "string" && parsed.code.length > 0) code = parsed.code;
     } catch {
       // Preserve the original plain-text response body.

@@ -12,7 +12,8 @@ import { STORAGE_SERVICE, type StorageService } from '../storage/storage.types';
 import { CloudProvider } from './cloud-import.schemas';
 import { parseCreateJobs } from './cloud-import.schemas';
 import { ConnectionsService } from '../connections/connections.service';
-import { googleDriveScopeGranted } from '../connections/connection-browse-logic';
+import { googleDriveAllFilesReadScopeGranted } from '../connections/connection-browse-logic';
+import { buildGoogleDriveApiStatus, classifyGoogleDriveApiError, type StructuredCloudImportError } from '../connections/google-drive-api-logic';
 
 const MAX_IMPORT_BYTES = 250 * 1024 * 1024;
 const MAX_LIST_ITEMS = 100;
@@ -129,10 +130,15 @@ export class CloudImportService implements OnModuleInit, OnModuleDestroy {
 
   async listFiles(user: AccessTokenPayload, provider: CloudProvider, connectionId: string | null = null, parentId: string | null = null, pageToken: string | null = null): Promise<{ files: RemoteFile[]; nextPageToken: string | null; parent: string | null }> {
     const connection = await this.getConnection(user, provider, connectionId);
-    if (provider === 'google' && !googleDriveScopeGranted(connection.scope)) {
-      throw new ForbiddenException('INSUFFICIENT_SCOPE: Google Drive file access is not authorized for this connection.');
+    if (provider === 'google' && !googleDriveAllFilesReadScopeGranted(connection.scope)) {
+      throw this.structuredCloudImportError({
+        code: 'INSUFFICIENT_SCOPE',
+        message: 'Google Drive file access is not authorized for this connection.',
+        connectionId: connection.genericConnectionId ?? connectionId ?? undefined,
+        retryable: false,
+        action: 'RECONNECT_GOOGLE_DRIVE',
+      });
     }
-    const token = await this.ensureAccessToken(connection);
     const parent = parentId?.trim() || null;
     if (provider === 'google') {
       const q = parent ? `'${parent.replace(/'/g, '')}' in parents and trashed=false` : `'root' in parents and trashed=false`;
@@ -140,9 +146,10 @@ export class CloudImportService implements OnModuleInit, OnModuleDestroy {
       if (pageToken) params.set('pageToken', pageToken);
       const response = await this.googleCloudFetch(connection, `https://www.googleapis.com/drive/v3/files?${params.toString()}`);
       const payload = await this.readJson(response);
-      if (!response.ok) throw new BadRequestException(this.cloudProviderError('Google Drive', response, payload));
+      if (!response.ok) throw this.handleGoogleDriveFailure(connection, response.status, payload, connectionId);
       return { files: (Array.isArray(payload.files) ? payload.files : []).map((f: any) => ({ id: String(f.id), name: String(f.name ?? 'Untitled'), size: f.size ? Number(f.size) : null, mimeType: String(f.mimeType ?? 'application/octet-stream'), modifiedAt: f.modifiedTime ?? null, kind: f.mimeType === 'application/vnd.google-apps.folder' ? 'folder' : 'file' })), nextPageToken: typeof payload.nextPageToken === 'string' ? payload.nextPageToken : null, parent };
     }
+    const token = await this.ensureAccessToken(connection);
     if (provider === 'dropbox') {
       const endpoint = pageToken ? 'https://api.dropboxapi.com/2/files/list_folder/continue' : 'https://api.dropboxapi.com/2/files/list_folder';
       const body = pageToken ? { cursor: pageToken } : { path: parent || '', recursive: false, limit: MAX_LIST_ITEMS };
@@ -159,21 +166,45 @@ export class CloudImportService implements OnModuleInit, OnModuleDestroy {
     return { files: (Array.isArray(payload.value) ? payload.value : []).map((f: any) => ({ id: String(f.id), name: String(f.name ?? 'Untitled'), size: typeof f.size === 'number' ? f.size : null, mimeType: String(f.file?.mimeType ?? (f.folder ? 'folder' : this.mimeFromName(String(f.name ?? '')))), modifiedAt: f.fileSystemInfo?.lastModifiedDateTime ?? null, kind: f.folder ? 'folder' : 'file' })), nextPageToken: typeof payload['@odata.nextLink'] === 'string' ? payload['@odata.nextLink'] : null, parent };
   }
 
+  private structuredCloudImportError(error: StructuredCloudImportError): BadRequestException | ForbiddenException {
+    const body = {
+      code: error.code,
+      message: error.message,
+      connectionId: error.connectionId ?? null,
+      retryable: error.retryable,
+      action: error.action ?? null,
+      googleReason: error.googleReason ?? null,
+      googleProject: error.googleProject ?? null,
+    };
+    if (error.code === 'INSUFFICIENT_SCOPE' || error.code === 'TOKEN_EXPIRED') {
+      return new ForbiddenException(body);
+    }
+    return new BadRequestException(body);
+  }
+
+  private async handleGoogleDriveFailure(connection: Connection, status: number, payload: unknown, connectionId: string | null) {
+    const classified = classifyGoogleDriveApiError(status, payload);
+    const genericId = connection.genericConnectionId;
+    if (genericId) {
+      await this.connections.recordGoogleDriveApiStatus(genericId, buildGoogleDriveApiStatus(false, classified));
+    }
+    throw this.structuredCloudImportError({
+      ...classified,
+      connectionId: genericId ?? connectionId ?? undefined,
+    });
+  }
+
   private cloudProviderError(label: string, response: Response, payload: any) {
+    if (label === 'Google Drive') {
+      const classified = classifyGoogleDriveApiError(response.status, payload);
+      return `${classified.code}: ${classified.message}`;
+    }
     const detail = payload?.error?.message ?? payload?.error_summary ?? payload?.error_description;
     if (response.status === 401) return `${label} authorization expired. Reconnect the connection.`;
     if (response.status === 403) {
       if (label === 'Google Drive') {
-        const reason = String(payload?.error?.errors?.[0]?.reason ?? '').toLowerCase();
-        const message = String(payload?.error?.message ?? '').toLowerCase();
-        const detailText = `${reason} ${message}`;
-        if (/insufficient.*scope|insufficientpermissions.*scope|autherror/.test(detailText)) {
-          return 'INSUFFICIENT_SCOPE: Google Drive file access is not authorized for this connection.';
-        }
-        if (/accessnotconfigured/.test(detailText)) {
-          return 'Google Drive API is not enabled for this OAuth project.';
-        }
-        return 'ACCESS_DENIED: Google Drive denied access to this resource.';
+        const classified = classifyGoogleDriveApiError(response.status, payload);
+        return `${classified.code}: ${classified.message}`;
       }
       return `${label} access was denied. Reconnect the connection and grant file read access.`;
     }
@@ -186,7 +217,8 @@ export class CloudImportService implements OnModuleInit, OnModuleDestroy {
     const token = await this.ensureAccessToken(connection);
     if (provider === 'google') {
       const response = await this.googleCloudFetch(connection, `https://www.googleapis.com/drive/v3/files/${encodeURIComponent(id)}?fields=id,name,size,mimeType,modifiedTime`);
-      const payload = await this.readJson(response); if (!response.ok) throw new BadRequestException(this.cloudProviderError('Google Drive', response, payload));
+      const payload = await this.readJson(response);
+      if (!response.ok) throw this.handleGoogleDriveFailure(connection, response.status, payload, connection.genericConnectionId ?? null);
       return { id: String(payload.id), name: String(payload.name ?? 'Untitled'), size: payload.size ? Number(payload.size) : null, mimeType: String(payload.mimeType ?? 'application/octet-stream'), modifiedAt: payload.modifiedTime ?? null, kind: payload.mimeType === 'application/vnd.google-apps.folder' ? 'folder' : 'file' };
     }
     if (provider === 'dropbox') {
@@ -359,16 +391,8 @@ export class CloudImportService implements OnModuleInit, OnModuleDestroy {
     }
     if (!response.ok || !response.body) {
       const payload = await this.readJson(response);
-      if (provider === 'google' && response.status === 403) {
-        const reason = String(payload?.error?.errors?.[0]?.reason ?? '').toLowerCase();
-        const message = String(payload?.error?.message ?? '').toLowerCase();
-        if (/insufficient.*scope|insufficientpermissions.*scope|autherror/.test(reason + ' ' + message)) {
-          throw new ForbiddenException('INSUFFICIENT_SCOPE: Google Drive file access is not authorized for this connection.');
-        }
-        if (/accessnotconfigured/.test(reason + ' ' + message)) {
-          throw new BadRequestException('Google Drive API is not enabled for this OAuth project.');
-        }
-        throw new ForbiddenException('ACCESS_DENIED: Google Drive denied access to this file.');
+      if (provider === 'google') {
+        throw this.handleGoogleDriveFailure(connection, response.status, payload, connection.genericConnectionId ?? null);
       }
       if (response.status === 401) throw new ForbiddenException('TOKEN_EXPIRED: Your connection expired. Reconnect to continue.');
       throw new BadRequestException('Cloud file download failed');
@@ -419,26 +443,32 @@ export class CloudImportService implements OnModuleInit, OnModuleDestroy {
 
   private async ensureAccessToken(connection: Connection): Promise<string> {
     const genericId = connection.genericConnectionId;
-    if (genericId) {
-      const refreshed = await this.connections.getAccessTokenById(genericId);
-      if (refreshed) {
-        const source = await this.prisma.connection.findUnique({ where: { id: genericId }, select: { scope: true, expiresAt: true } });
-        if (source) {
-          await this.prisma.cloudConnection.update({ where: { id: connection.id }, data: { scope: source.scope, expiresAt: source.expiresAt } }).catch(() => undefined);
-        }
-        return refreshed;
-      }
+    if (!genericId) {
+      throw new BadRequestException({
+        code: 'CONNECTION_LINK_MISSING',
+        message: 'This cloud connection is not linked to a reusable OAuth connection. Reconnect Google Drive from Connections.',
+        connectionId: connection.id,
+        retryable: false,
+        action: 'RECONNECT_GOOGLE_DRIVE',
+      });
     }
-    if (!connection.expiresAt || connection.expiresAt.getTime() > Date.now() + 60_000) return connection.accessToken;
-    if (!connection.refreshToken) return connection.accessToken;
-    const cfg = this.providerConfig(connection.provider);
-    const body = new URLSearchParams({ client_id: cfg.clientId!, client_secret: cfg.clientSecret!, refresh_token: connection.refreshToken, grant_type: 'refresh_token' });
-    const tokenUrl = connection.provider === 'google' ? 'https://oauth2.googleapis.com/token' : connection.provider === 'dropbox' ? 'https://api.dropboxapi.com/oauth2/token' : 'https://login.microsoftonline.com/common/oauth2/v2.0/token';
-    const response = await fetch(tokenUrl, { method: 'POST', headers: { 'content-type': 'application/x-www-form-urlencoded' }, body });
-    const payload = await this.readJson(response);
-    if (!response.ok || typeof payload.access_token !== 'string') throw new BadRequestException('Cloud authorization expired; reconnect the provider');
-    await this.prisma.cloudConnection.update({ where: { id: connection.id }, data: { accessToken: this.encrypt(payload.access_token), ...(typeof payload.refresh_token === 'string' ? { refreshToken: this.encrypt(payload.refresh_token) } : {}), expiresAt: typeof payload.expires_in === 'number' ? new Date(Date.now() + payload.expires_in * 1000) : null } });
-    return payload.access_token;
+    const refreshed = await this.connections.getAccessTokenById(genericId);
+    if (!refreshed) {
+      throw new ForbiddenException({
+        code: 'TOKEN_EXPIRED',
+        message: 'Your connection expired. Reconnect to continue.',
+        connectionId: genericId,
+        retryable: false,
+        action: 'RECONNECT_GOOGLE_DRIVE',
+      });
+    }
+    const source = await this.prisma.connection.findUnique({ where: { id: genericId }, select: { scope: true, expiresAt: true } });
+    if (source) {
+      await this.prisma.cloudConnection.update({ where: { id: connection.id }, data: { scope: source.scope, expiresAt: source.expiresAt } }).catch(() => undefined);
+      connection.scope = source.scope;
+      connection.expiresAt = source.expiresAt;
+    }
+    return refreshed;
   }
 
   private async readJson(response: Response): Promise<any> { const text = await response.text(); try { return text ? JSON.parse(text) : {}; } catch { return {}; } }

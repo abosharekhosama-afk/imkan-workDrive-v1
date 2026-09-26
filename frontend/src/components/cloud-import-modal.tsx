@@ -65,7 +65,8 @@ export function CloudImportHost() {
       setFiles(current => append ? [...current, ...result.files] : result.files);
       setNextPageToken(result.nextPageToken);
     } catch (e) {
-      setError(e instanceof Error ? e.message : (ar ? 'تعذر الوصول إلى الملفات السحابية.' : 'Unable to access cloud files.'));
+      const message = e instanceof Error ? e.message : (ar ? 'تعذر الوصول إلى الملفات السحابية.' : 'Unable to access cloud files.');
+      setError(message);
       setFiles([]); setNextPageToken(null);
     } finally { setLoading(false); }
   };

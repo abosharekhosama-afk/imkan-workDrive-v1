@@ -1,10 +1,19 @@
+import { classifyGoogleDriveApiError, resolveCloudImportReady, resolveDriveApiOperationalState, type GoogleDriveApiStatus } from './google-drive-api-logic';
+
 export function normalizeOAuthScopes(scope: string | null | undefined): string[] {
   return [...new Set(String(scope ?? '').split(/\s+/).map((item) => item.trim()).filter(Boolean))];
 }
 
 export function missingOAuthScopes(requested: string[] | null | undefined, granted: string | null | undefined): string[] {
   const grantedSet = new Set(normalizeOAuthScopes(granted));
-  return [...new Set((requested ?? []).map((item) => String(item).trim()).filter(Boolean))].filter((item) => !grantedSet.has(item));
+  return [...new Set((requested ?? []).map((item) => String(item).trim()).filter(Boolean))].filter((item) => !googleScopeSatisfied(item, grantedSet));
+}
+
+function googleScopeSatisfied(requested: string, grantedSet: Set<string>): boolean {
+  if (grantedSet.has(requested)) return true;
+  if (requested === 'email') return grantedSet.has('https://www.googleapis.com/auth/userinfo.email');
+  if (requested === 'profile') return grantedSet.has('https://www.googleapis.com/auth/userinfo.profile');
+  return false;
 }
 
 export function googleDriveScopeGranted(scope: string | null | undefined): boolean {
@@ -66,54 +75,68 @@ export function buildConnectionCapabilitySummary(input: {
   authType: string;
   scope: string | null | undefined;
   errorCode?: string | null;
+  googleDriveApi?: GoogleDriveApiStatus | null;
 }) {
   const identity = resolveGoogleIdentityCapability(input.provider, input.authType, input.scope);
-  const driveRead = resolveGoogleDriveCapability(input.provider, input.authType, input.scope);
-  const driveReconnectRequired = input.errorCode === 'DRIVE_SCOPE_REQUIRED' || driveRead === 'required';
+  const driveOAuthScope = resolveGoogleDriveCapability(input.provider, input.authType, input.scope);
+  const driveApiOperational = resolveDriveApiOperationalState(input.googleDriveApi ?? null);
+  const driveScopeGranted = driveOAuthScope === 'granted';
+  const driveApiBlocked = driveApiOperational === 'not_enabled' || input.errorCode === 'GOOGLE_DRIVE_API_NOT_ENABLED';
+  const driveReconnectRequired = input.errorCode === 'DRIVE_SCOPE_REQUIRED' || driveOAuthScope === 'required';
+  const cloudImportReady = resolveCloudImportReady({ driveScopeGranted, driveApiOperational: driveApiBlocked ? 'not_enabled' : driveApiOperational });
+  const driveApiState: ConnectionCapabilityState = input.provider !== 'google' || input.authType !== 'OAUTH2'
+    ? 'not_applicable'
+    : driveApiOperational === 'unknown'
+      ? 'required'
+      : driveApiBlocked
+        ? 'required'
+        : 'granted';
+  const cloudImportState: ConnectionCapabilityState = input.provider !== 'google' || input.authType !== 'OAUTH2'
+    ? 'not_applicable'
+    : cloudImportReady === 'ready' ? 'granted' : 'required';
   return {
     identity,
-    driveRead: driveReconnectRequired && driveRead !== 'not_applicable' ? 'required' as const : driveRead,
+    driveRead: driveReconnectRequired ? 'required' as const : driveOAuthScope,
+    driveOAuthScope,
+    driveApiOperational,
+    driveApiState,
+    cloudImportReady,
+    cloudImportState,
     driveReconnectRequired,
+    driveApiBlocked,
     items: input.provider === 'google' && input.authType === 'OAUTH2'
       ? [
           { key: 'google.identity', label: 'Identity', state: identity },
-          { key: 'google.drive.read', label: 'Drive file access', state: driveReconnectRequired ? 'required' as const : driveRead },
+          { key: 'google.drive.oauth', label: 'Drive OAuth scope', state: driveReconnectRequired ? 'required' as const : driveOAuthScope },
+          { key: 'google.drive.api', label: 'Google Drive API', state: driveApiState },
+          { key: 'google.cloud_import', label: 'Cloud Import', state: cloudImportState },
         ]
       : [],
   };
 }
 
-export function googleDriveActivationError(scope: string | null | undefined): { errorCode: string; errorMessage: string } | null {
-  if (googleDriveAllFilesReadScopeGranted(scope)) return null;
-  return {
-    errorCode: 'DRIVE_SCOPE_REQUIRED',
-    errorMessage: 'Google Drive file access is not authorized for this connection.',
-  };
+export function googleDriveActivationError(
+  scope: string | null | undefined,
+  googleDriveApi?: GoogleDriveApiStatus | null,
+): { errorCode: string; errorMessage: string } | null {
+  if (!googleDriveAllFilesReadScopeGranted(scope)) {
+    return {
+      errorCode: 'DRIVE_SCOPE_REQUIRED',
+      errorMessage: 'Google Drive file access is not authorized for this connection.',
+    };
+  }
+  if (googleDriveApi && !googleDriveApi.operational && googleDriveApi.errorCode === 'GOOGLE_DRIVE_API_NOT_ENABLED') {
+    return {
+      errorCode: 'GOOGLE_DRIVE_API_NOT_ENABLED',
+      errorMessage: 'Google Drive API is not enabled for the Google Cloud project used by this OAuth connection.',
+    };
+  }
+  return null;
 }
 
 export function mapGoogleDriveApiError(status: number, payload: unknown): { code: string; message: string } {
-  const record = payload && typeof payload === 'object' ? payload as Record<string, any> : {};
-  const reason = String(record?.error?.errors?.[0]?.reason ?? record?.error?.message ?? '').toLowerCase();
-  if (status === 401) {
-    return { code: 'TOKEN_EXPIRED', message: 'Your connection expired. Reconnect to continue.' };
-  }
-  if (status === 404) {
-    return { code: 'NOT_FOUND', message: 'The requested folder or file was not found.' };
-  }
-  if (status === 403) {
-    if (/insufficientfilepermissions|cannotmodify|cannotshare|filenotshareable|sharing/.test(reason)) {
-      return { code: 'ACCESS_DENIED', message: 'Google Drive access was denied for this resource.' };
-    }
-    if (/insufficientpermissions|forbidden/.test(reason)) {
-      return { code: 'ACCESS_DENIED', message: 'Google Drive access was denied for this resource.' };
-    }
-    if (/insufficient.*scope|accessnotconfigured|autherror/.test(reason) && /scope|auth/.test(reason)) {
-      return { code: 'INSUFFICIENT_SCOPE', message: 'Google Drive file access is not authorized for this connection.' };
-    }
-    return { code: 'ACCESS_DENIED', message: 'Google Drive access was denied for this resource.' };
-  }
-  const message = String(record?.error?.message ?? status).trim();
-  return { code: 'PROVIDER_ERROR', message: message || 'We could not access this folder.' };
+  const mapped = classifyGoogleDriveApiError(status, payload);
+  return { code: mapped.code, message: mapped.message };
 }
 
 export function providerBrowseErrorCode(error: unknown, provider?: string): { code: string; message: string } {

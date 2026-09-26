@@ -13,6 +13,7 @@ import { lookup } from 'node:dns/promises';
 import { AuthService } from '../auth.service';
 import { buildOAuthBrowserUrl, normalizeOAuthReturnPath, oauthFailurePreservesActive, resolveOAuthFrontendOrigin, safeOAuthErrorCode, safeOrigin } from './oauth-flow';
 import { buildConnectionCapabilitySummary, googleDriveActivationError, googleDriveAllFilesReadScopeGranted, mapGoogleDriveApiError, missingOAuthScopes, providerBrowseErrorCode } from './connection-browse-logic';
+import { buildGoogleDriveApiStatus, classifyGoogleDriveApiError, oauthClientIdFingerprint, type GoogleDriveApiStatus } from './google-drive-api-logic';
 
 const OAUTH_STATE_TTL_MS = 10 * 60 * 1000;
 const SECRET_FIELDS = ['accessToken', 'refreshToken', 'apiKey', 'bearerToken', 'username', 'password', 'customHeaders'] as const;
@@ -276,7 +277,10 @@ export class ConnectionsService {
 
   private serialize(row: any, userId?: string) {
     const metadata = row.metadata && typeof row.metadata === 'object' ? row.metadata as Record<string, unknown> : {};
-    const capabilities = buildConnectionCapabilitySummary({ provider: row.provider, authType: row.authType, scope: row.scope, errorCode: row.errorCode });
+    const googleDriveApi = metadata.googleDriveApi && typeof metadata.googleDriveApi === 'object'
+      ? metadata.googleDriveApi as GoogleDriveApiStatus
+      : null;
+    const capabilities = buildConnectionCapabilitySummary({ provider: row.provider, authType: row.authType, scope: row.scope, errorCode: row.errorCode, googleDriveApi });
     return { canManage: userId ? row.ownerId === userId : false, id: row.id, orgId: row.orgId, ownerId: row.ownerId, name: row.name, linkName: row.linkName, connectionType: row.connectionType, provider: row.provider, authType: row.authType, visibility: row.visibility, status: row.status, baseUrl: row.baseUrl, metadata, authorizedAccount: metadata.authorizedAccount ?? null, expiresAt: row.expiresAt, scope: row.scope, capabilities, lastTestedAt: row.lastTestedAt, lastUsedAt: row.lastUsedAt, errorCode: row.errorCode, errorMessage: row.errorMessage, createdAt: row.createdAt, updatedAt: row.updatedAt };
   }
 
@@ -691,6 +695,12 @@ export class ConnectionsService {
     if (row.provider === 'google' && row.authType === ConnectionAuthType.OAUTH2 && !googleDriveAllFilesReadScopeGranted(row.scope)) {
       issues.push({ code: 'DRIVE_FILE_READ_SCOPE_REQUIRED', severity: 'BLOCKING', message: 'Google Drive cloud import requires drive.readonly or drive scope. drive.file alone is not sufficient for arbitrary existing Drive files.' });
     }
+    const googleDriveApi = metadata.googleDriveApi && typeof metadata.googleDriveApi === 'object'
+      ? metadata.googleDriveApi as GoogleDriveApiStatus
+      : null;
+    if (row.provider === 'google' && googleDriveApi && !googleDriveApi.operational && googleDriveApi.errorCode === 'GOOGLE_DRIVE_API_NOT_ENABLED') {
+      issues.push({ code: 'GOOGLE_DRIVE_API_NOT_ENABLED', severity: 'BLOCKING', message: 'Google Drive API is not enabled for the Google Cloud project used by this OAuth connection.' });
+    }
     if (activeWorkflowIds.length && row.visibility === ConnectionVisibility.PRIVATE && row.ownerId !== user.sub) issues.push({ code: 'PRIVATE_CONNECTION_RUNTIME', severity: 'BLOCKING', message: 'A private connection is referenced by an active workflow that may run outside the connection owner context.' });
     if (failures > 0) issues.push({ code: 'RECENT_USAGE_FAILURES', severity: 'WARNING', message: `${failures} recorded connection usage failure(s).` });
     return {
@@ -729,14 +739,76 @@ export class ConnectionsService {
     const secret = await this.prisma.connectionSecret.findUnique({ where: { connectionId: id }, select: { accessToken: true, refreshToken: true, apiKey: true, bearerToken: true, username: true, password: true, customHeaders: true } });
     const usage = await this.prisma.connectionUsage.aggregate({ where: { connectionId: id, orgId: user.org_id }, _count: { _all: true }, _avg: { durationMs: true } });
     const providerDefinition = await this.resolveProviderDefinition(row.provider, row.orgId);
+    const metadata = row.metadata && typeof row.metadata === 'object' ? row.metadata as Record<string, unknown> : {};
+    const googleDriveApi = metadata.googleDriveApi && typeof metadata.googleDriveApi === 'object'
+      ? metadata.googleDriveApi as GoogleDriveApiStatus
+      : null;
+    const oauthDiagnostics = row.provider === 'google' && row.authType === ConnectionAuthType.OAUTH2
+      ? await this.googleOAuthDiagnostics(row.orgId)
+      : null;
     const checks = {
       organizationAccess: row.orgId === user.org_id,
       enabled: row.status === ConnectionStatus.ACTIVE,
       credentialsPresent: !!secret && Object.values(secret).some(Boolean),
       baseUrl: !providerDefinition.capabilities.includes('request') || !!row.baseUrl || !!providerDefinition.baseUrl,
       oauthExpiry: row.authType !== ConnectionAuthType.OAUTH2 || !row.expiresAt || row.expiresAt.getTime() > Date.now(),
+      driveReadScopeGranted: row.provider !== 'google' || googleDriveAllFilesReadScopeGranted(row.scope),
+      driveApiOperational: row.provider !== 'google' ? true : googleDriveApi?.operational ?? null,
     };
-    return { id: row.id, provider: row.provider, authType: row.authType, status: row.status, checks, lastTestedAt: row.lastTestedAt, lastUsedAt: row.lastUsedAt, errorCode: row.errorCode, errorMessage: row.errorMessage, usageCount: usage._count._all, averageDurationMs: usage._avg.durationMs };
+    return {
+      id: row.id,
+      provider: row.provider,
+      authType: row.authType,
+      status: row.status,
+      checks,
+      oauthDiagnostics,
+      googleDriveApi,
+      lastTestedAt: row.lastTestedAt,
+      lastUsedAt: row.lastUsedAt,
+      errorCode: row.errorCode,
+      errorMessage: row.errorMessage,
+      usageCount: usage._count._all,
+      averageDurationMs: usage._avg.durationMs,
+    };
+  }
+
+  async recordGoogleDriveApiStatus(connectionId: string, status: GoogleDriveApiStatus) {
+    const row = await this.prisma.connection.findUnique({ where: { id: connectionId }, select: { id: true, metadata: true, scope: true } });
+    if (!row) return;
+    const metadata = row.metadata && typeof row.metadata === 'object' ? row.metadata as Record<string, unknown> : {};
+    const activationError = googleDriveActivationError(row.scope, status);
+    await this.prisma.connection.update({
+      where: { id: connectionId },
+      data: {
+        metadata: { ...metadata, googleDriveApi: status } as Prisma.InputJsonValue,
+        errorCode: activationError?.errorCode ?? null,
+        errorMessage: activationError?.errorMessage ?? null,
+      },
+    });
+  }
+
+  private async googleOAuthDiagnostics(orgId: string) {
+    const definition = this.registry.get('google');
+    const cfg = await this.oauthConfig('google', definition, orgId);
+    const dbRow = await this.prisma.connectionProviderConfig.findUnique({ where: { orgId_providerKey: { orgId, providerKey: 'google' } }, select: { id: true, clientId: true } });
+    return {
+      oauthClientConfigured: Boolean(cfg.clientId && cfg.clientSecret),
+      oauthClientIdFingerprint: oauthClientIdFingerprint(cfg.clientId),
+      oauthConfigSource: dbRow?.clientId ? 'DATABASE' : (cfg.clientId ? 'ENVIRONMENT' : 'NONE'),
+      callbackUrl: cfg.callbackUrl,
+      driveApiBaseUrl: 'https://www.googleapis.com/drive/v3',
+    };
+  }
+
+  private async probeGoogleDriveApi(accessToken: string): Promise<GoogleDriveApiStatus> {
+    const response = await fetch('https://www.googleapis.com/drive/v3/about?fields=user', {
+      headers: { authorization: `Bearer ${accessToken}`, accept: 'application/json' },
+      signal: AbortSignal.timeout(10000),
+    });
+    if (response.ok) return buildGoogleDriveApiStatus(true);
+    const payload = await this.readJson(response);
+    const classified = classifyGoogleDriveApiError(response.status, payload);
+    return buildGoogleDriveApiStatus(false, classified);
   }
 
   async usage(user: AccessTokenPayload, id: string) {
@@ -867,18 +939,23 @@ export class ConnectionsService {
       configurationOnlyScopes,
       checkedAt: new Date().toISOString(),
     };
+    let googleDriveApi: GoogleDriveApiStatus | null = null;
+    if (provider === 'google' && googleDriveAllFilesReadScopeGranted(grantedScope)) {
+      googleDriveApi = await this.probeGoogleDriveApi(payload.access_token);
+    }
     const metadata: Record<string, unknown> = {
       ...(existing?.metadata && typeof existing.metadata === 'object' ? existing.metadata as Record<string, unknown> : {}),
       oauthProvider: provider,
       oauthConnectedAt: new Date().toISOString(),
       ...(authorizedAccount ? { authorizedAccount } : {}),
       oauthScopeAudit: scopeAudit,
+      ...(googleDriveApi ? { googleDriveApi } : {}),
     };
-    const capabilitySummary = buildConnectionCapabilitySummary({ provider, authType: ConnectionAuthType.OAUTH2, scope: grantedScope, errorCode: null });
+    const capabilitySummary = buildConnectionCapabilitySummary({ provider, authType: ConnectionAuthType.OAUTH2, scope: grantedScope, errorCode: null, googleDriveApi });
     if (provider === 'google') {
       metadata.capabilities = Object.fromEntries(capabilitySummary.items.map((item) => [item.key, item.state]));
     }
-    const driveActivationError = provider === 'google' ? googleDriveActivationError(grantedScope) : null;
+    const driveActivationError = provider === 'google' ? googleDriveActivationError(grantedScope, googleDriveApi) : null;
     const accessToken = this.crypto.encrypt(payload.access_token);
     const newRefreshToken = typeof payload.refresh_token === 'string' ? this.crypto.encrypt(payload.refresh_token) : undefined;
     let connection: { id: string };
