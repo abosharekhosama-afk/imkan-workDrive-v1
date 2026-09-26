@@ -23,6 +23,7 @@ export type PermissionSource =
   | 'OWNER'
   | 'ORG_ADMIN'
   | 'TEAM_FOLDER_ROLE'
+  | 'GROUP_TEAM_FOLDER_ROLE'
   | 'DIRECT_FOLDER_ACL'
   | 'GROUP_FOLDER_ACL'
   | 'INHERITED_FOLDER_ACL'
