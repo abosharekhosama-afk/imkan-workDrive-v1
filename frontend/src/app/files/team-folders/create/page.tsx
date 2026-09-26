@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { useState } from "react";
 import { useLocale } from "../../../../components/locale-provider";
 import { createTeamFolder } from "../../../../lib/api/team-folders";
@@ -26,6 +26,8 @@ function CreateFolderIllustration() {
 export default function CreateTeamFolderPage() {
   const { locale } = useLocale();
   const router = useRouter();
+  const pathname = usePathname();
+  const teamFoldersBase = pathname.startsWith("/admin/team-folders") ? "/admin/team-folders" : "/files/team-folders";
   const [name, setName] = useState("");
   const [type, setType] = useState<"public" | "private">("private");
   const [description, setDescription] = useState("");
@@ -43,7 +45,7 @@ export default function CreateTeamFolderPage() {
       // accepts only { name } and this task is frontend-only.
       await createTeamFolder(cleanName);
       window.dispatchEvent(new Event("workdrive:team-folders-changed"));
-      router.push("/files/team-folders");
+      router.push(teamFoldersBase);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : (locale === "ar" ? "تعذر إنشاء مجلد الفريق." : "Unable to create the Team Folder."));
     } finally {
@@ -54,7 +56,7 @@ export default function CreateTeamFolderPage() {
   return (
     <section className="flex min-h-full min-w-0 flex-col bg-white">
       <header className="flex h-[68px] shrink-0 items-center justify-end border-b border-slate-100 px-6">
-        <Link href="/files/team-folders" className="text-[16px] font-medium text-slate-600 hover:text-slate-900">Esc&nbsp; ×</Link>
+        <Link href={teamFoldersBase} className="text-[16px] font-medium text-slate-600 hover:text-slate-900">Esc&nbsp; ×</Link>
       </header>
       <div className="grid min-h-0 flex-1 grid-cols-[300px_minmax(0,1fr)] overflow-auto max-[760px]:grid-cols-1">
         <div className="flex min-h-[250px] items-start justify-center border-e border-slate-100 bg-gradient-to-br from-emerald-50/80 via-white to-white pt-12 max-[760px]:hidden"><CreateFolderIllustration /></div>
@@ -86,7 +88,7 @@ export default function CreateTeamFolderPage() {
               {error ? <div className="rounded-lg bg-red-50 px-3 py-2 text-[13px] text-red-700">{error}</div> : null}
 
               <div className="flex justify-end gap-2 pt-1">
-                <Link href="/files/team-folders" className="inline-flex h-[34px] items-center rounded-full border border-slate-300 bg-white px-4 text-[13px] font-medium text-slate-700 hover:bg-slate-50">{locale === "ar" ? "إلغاء" : "Cancel"}</Link>
+                <Link href={teamFoldersBase} className="inline-flex h-[34px] items-center rounded-full border border-slate-300 bg-white px-4 text-[13px] font-medium text-slate-700 hover:bg-slate-50">{locale === "ar" ? "إلغاء" : "Cancel"}</Link>
                 <button type="button" disabled={busy || !name.trim()} onClick={() => void submit()} className="inline-flex h-[34px] items-center rounded-full bg-[color:var(--wd-primary)] px-4 text-[13px] font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50">{busy ? (locale === "ar" ? "جارٍ الإنشاء…" : "Creating…") : (locale === "ar" ? "إنشاء" : "Create")}</button>
               </div>
             </div>

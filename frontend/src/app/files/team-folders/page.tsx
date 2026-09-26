@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useLocale } from "../../../components/locale-provider";
 import { ApiError } from "../../../lib/api/client";
@@ -38,6 +39,8 @@ function MoreIcon() {
 
 export default function TeamFoldersPage() {
   const { label, locale } = useLocale();
+  const pathname = usePathname();
+  const adminBase = pathname.startsWith("/admin/team-folders") ? "/admin/team-folders" : "/files/team-folders";
   const [teamFolders, setTeamFolders] = useState<TeamFolderListItem[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -110,7 +113,7 @@ export default function TeamFoldersPage() {
       .sort((a, b) => Number(pinnedIds.has(b.id)) - Number(pinnedIds.has(a.id)) || a.name.localeCompare(b.name));
   }, [teamFolders, search, pinnedIds, scopeFilter]);
 
-  const createHref = "/files/team-folders/create";
+  const createHref = `${adminBase}/create`;
 
   const openRename = (tf: TeamFolderListItem) => {
     setMenuId(null);

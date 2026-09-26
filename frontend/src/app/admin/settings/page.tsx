@@ -68,6 +68,8 @@ export default function AdminSettingsPage() {
   const [settings, setSettings] = useState<AdminConsoleSettings | null>(null);
   const [policy, setPolicy] = useState<any>(null);
   const [retention, setRetention] = useState<any>(null);
+  const [policyLoading, setPolicyLoading] = useState(false);
+  const [retentionLoading, setRetentionLoading] = useState(false);
   const [org, setOrg] = useState<any>(null);
   const [profileName, setProfileName] = useState("");
   const [ownerEmail, setOwnerEmail] = useState("");
@@ -80,12 +82,31 @@ export default function AdminSettingsPage() {
     let live = true;
     (async () => {
       const token = getToken();
-      const [s, p, r, o, u] = await Promise.all([getAdminConsoleSettings(), getSecurityPolicy(), getRetentionPolicy(), getOrganization(), token ? me(token) : Promise.reject(new Error("Missing token"))]);
+      if (!token) throw new Error("Missing token");
+      const [s, o, u] = await Promise.all([getAdminConsoleSettings(), getOrganization(), me(token)]);
       if (!live) return;
-      setSettings(s); setPolicy(p); setRetention(r); setOrg(o); setProfileName(o.name); setOwnerEmail(u.email);
-    })().catch(() => { if (live) setError(text(ar, "Unable to load organization settings.", "تعذر تحميل إعدادات المؤسسة.")); });
+      setSettings(s);
+      setOrg(o);
+      setProfileName(o.name);
+      setOwnerEmail(u.email);
+    })().catch((cause) => {
+      if (live) setError(cause instanceof Error ? cause.message : text(ar, "Unable to load organization settings.", "تعذر تحميل إعدادات المؤسسة."));
+    });
     return () => { live = false; };
   }, [ar]);
+
+  useEffect(() => {
+    let live = true;
+    if (tab === "sharing" && !policy && !policyLoading) {
+      setPolicyLoading(true);
+      getSecurityPolicy().then((value) => { if (live) setPolicy(value); }).catch((cause) => { if (live) setError(cause instanceof Error ? cause.message : text(ar, "Unable to load sharing policy.", "تعذر تحميل سياسة المشاركة.")); }).finally(() => { if (live) setPolicyLoading(false); });
+    }
+    if ((tab === "storage" || tab === "dataretention") && !retention && !retentionLoading) {
+      setRetentionLoading(true);
+      getRetentionPolicy().then((value) => { if (live) setRetention(value); }).catch((cause) => { if (live) setError(cause instanceof Error ? cause.message : text(ar, "Unable to load retention policy.", "تعذر تحميل سياسة الاحتفاظ.")); }).finally(() => { if (live) setRetentionLoading(false); });
+    }
+    return () => { live = false; };
+  }, [tab, policy, retention, ar]);
 
   const update = async (patch: Partial<AdminConsoleSettings>) => {
     setSaving(true); setError(""); setMessage("");
@@ -113,10 +134,10 @@ export default function AdminSettingsPage() {
   };
   const navigate = (key: TabKey) => { router.push(`/admin/settings?settingtab=${key}`); };
 
-  if (!settings || !policy || !retention || !org) return <div className="flex h-full items-center justify-center bg-[#f7f7f7] text-[13px] text-[#6b6f76]">{text(ar, "Loading settings…", "جارٍ تحميل الإعدادات…")}</div>;
+  if (!settings || !org) return <div className="flex h-full flex-col items-center justify-center gap-3 bg-[#f7f7f7] text-[13px] text-[#6b6f76]"><div>{text(ar, "Loading settings…", "جارٍ تحميل الإعدادات…")}</div>{error ? <div className="max-w-[520px] rounded-[10px] border border-[#f1c5c5] bg-white px-4 py-3 text-center text-[11px] text-[#a52a2a]">{error}</div> : null}</div>;
 
   return <div className="flex h-full min-h-0 bg-[#f7f7f7]" dir={ar ? "rtl" : "ltr"}>
-    <aside className="hidden w-[300px] shrink-0 overflow-y-auto border-e border-[#e7e7e7] bg-white px-4 py-5 lg:block">
+    <aside className="hidden w-[350px] shrink-0 overflow-y-auto border-e border-[#e7e7e7] bg-white px-4 py-5 lg:block">
       <div className="px-2 pb-3 text-[12px] font-semibold text-[#202124]">{text(ar, "Settings", "الإعدادات")}</div>
       {[["Identity & Appearance", ["profile", "branding", "custom-domain", "viewpreferences"]], ["Files & Sharing", ["content", "sharing", "storage", "dataretention"]], ["Access & Apps", ["roles", "workdrive-apps"]], ["Automation & AI", ["workflows", "zia", "file-suggestions"]]].map(([section, keys]) => <div key={section as string} className="mb-5"><div className="px-3 pb-2 text-[10px] font-semibold text-[#8b8f95]">{text(ar, section as string, section === "Identity & Appearance" ? "الهوية والمظهر" : section === "Files & Sharing" ? "الملفات والمشاركة" : section === "Access & Apps" ? "الوصول والتطبيقات" : "الأتمتة والذكاء الاصطناعي")}</div>{(keys as string[]).map((key) => { const item = TABS.find((x) => x[0] === key)!; const active = tab === key; const Icon = (Icons as any)[item[3]]; return <button key={key} type="button" onClick={() => navigate(key as TabKey)} className={`mb-0.5 flex w-full items-center gap-3 rounded-[12px] px-3 py-2.5 text-start text-[12px] font-medium ${active ? "bg-[#e8efff] text-[#2f61b7]" : "text-[#33373c] hover:bg-[#f5f6f7]"}`}><Icon size={15} /><span>{text(ar, item[1], item[2])}</span></button>; })}</div>)}
     </aside>
@@ -126,16 +147,16 @@ export default function AdminSettingsPage() {
       <div className="mx-auto w-full max-w-[1050px] px-6 py-7 lg:px-8">
         {message ? <div className="mb-4 rounded-[10px] border border-[#b8e2d6] bg-[#effaf6] px-4 py-3 text-[12px] text-[#176a55]">{message}</div> : null}
         {error ? <div className="mb-4 rounded-[10px] border border-[#f1c5c5] bg-[#fff5f5] px-4 py-3 text-[12px] text-[#a52a2a]">{error}</div> : null}
-        <div className="mb-5 rounded-[14px] bg-white px-6 py-4 shadow-[0_1px_2px_rgba(0,0,0,.02)]"><h1 className="text-[18px] font-semibold text-[#202124]">{text(ar, TABS.find((x) => x[0] === tab)?.[1] ?? "Settings", TABS.find((x) => x[0] === tab)?.[2] ?? "الإعدادات")}</h1></div>
+        <div className="mb-5 rounded-[16px] border border-[#e8e8e8] bg-white px-6 py-5 shadow-[0_1px_2px_rgba(0,0,0,.03)]"><h1 className="text-[20px] font-semibold text-[#202124]">{text(ar, TABS.find((x) => x[0] === tab)?.[1] ?? "Settings", TABS.find((x) => x[0] === tab)?.[2] ?? "الإعدادات")}</h1></div>
 
         {tab === "profile" ? <ProfileTab ar={ar} org={org} profileName={profileName} setProfileName={setProfileName} ownerEmail={ownerEmail} saving={saving} save={saveProfile} /> : null}
         {tab === "branding" ? <BrandingTab ar={ar} settings={settings} inputRef={logoInput} onUpload={(logoDataUrl) => void update({ logoDataUrl })} saving={saving} /> : null}
         {tab === "custom-domain" ? <CustomDomainTab ar={ar} settings={settings} saving={saving} onSave={(customDomain) => void update({ customDomain })} /> : null}
         {tab === "viewpreferences" ? <ViewPreferencesTab ar={ar} settings={settings} saving={saving} onUpdate={update} /> : null}
         {tab === "content" ? <ContentTab ar={ar} settings={settings} saving={saving} onUpdate={update} /> : null}
-        {tab === "sharing" ? <SharingTab ar={ar} settings={settings} policy={policy} saving={saving} onUpdate={update} onPolicy={updatePolicy} /> : null}
-        {tab === "storage" ? <StorageTab ar={ar} settings={settings} retention={retention} saving={saving} onUpdate={update} onRetention={updateRetention} /> : null}
-        {tab === "dataretention" ? <RetentionTab ar={ar} retention={retention} saving={saving} onSave={updateRetention} /> : null}
+        {tab === "sharing" ? (policy ? <SharingTab ar={ar} settings={settings} policy={policy} saving={saving} onUpdate={update} onPolicy={updatePolicy} /> : <InfoTab ar title="Sharing" body={policyLoading ? "Loading the real organization sharing policy…" : (error || "The organization sharing policy could not be loaded.")} />) : null}
+        {tab === "storage" ? (retention ? <StorageTab ar={ar} settings={settings} retention={retention} saving={saving} onUpdate={update} onRetention={updateRetention} /> : <InfoTab ar title="Storage" body={retentionLoading ? "Loading the real organization retention policy…" : (error || "The organization retention policy could not be loaded.")} />) : null}
+        {tab === "dataretention" ? (retention ? <RetentionTab ar={ar} retention={retention} saving={saving} onSave={updateRetention} /> : <InfoTab ar title="Data Retention" body={retentionLoading ? "Loading the real organization retention policy…" : (error || "The organization retention policy could not be loaded.")} />) : null}
         {tab === "roles" ? <RolesTab ar={ar} settings={settings} saving={saving} onUpdate={update} /> : null}
         {tab === "workdrive-apps" ? <InfoTab ar title="WorkDrive Apps" body="Administer the applications exposed to this organization. Existing application surfaces remain available from the Admin Console sidebar." /> : null}
         {tab === "workflows" ? <InfoTab ar title="Workflows" body="Workflow administration remains available from the dedicated Admin Console page and uses the existing runtime." href="/admin/workflows" /> : null}
@@ -151,7 +172,7 @@ function ProfileTab({ ar, org, profileName, setProfileName, ownerEmail, saving, 
 }
 
 function BrandingTab({ ar, settings, inputRef, onUpload, saving }: any) {
-  return <SettingCard title={text(ar, "Team logo", "شعار الفريق")}><div className="grid gap-6 px-6 pb-6 pt-3 lg:grid-cols-[1fr_1fr]"><div><button type="button" disabled={saving} onClick={() => inputRef.current?.click()} className="flex h-[110px] w-full items-center justify-center rounded-[4px] border border-dashed border-[#cfd2d6] bg-white hover:bg-[#fafafa]">{settings.logoDataUrl ? <img src={settings.logoDataUrl} alt="" className="max-h-[70px] max-w-[260px] object-contain" /> : <div className="grid place-items-center text-[#2f78c9]"><Icons.upload size={28} /><span className="mt-2 text-[11px]">{text(ar, "Upload logo", "رفع الشعار")}</span></div>}</button><input ref={inputRef} hidden type="file" accept="image/png,image/jpeg,image/jpg" onChange={(e) => { const file = e.target.files?.[0]; if (!file) return; if (file.size > 5 * 1024 * 1024) { window.alert(text(ar, "Maximum logo size is 5 MB.", "الحد الأقصى للشعار 5 ميجابايت.")); return; } const reader = new FileReader(); reader.onload = () => onUpload(String(reader.result)); reader.readAsDataURL(file); e.currentTarget.value = ""; }} /><div className="mt-3 rounded-[10px] bg-[#f6f6f6] px-3 py-3 text-[10px] leading-5 text-[#666b72]"><b>{text(ar, "Specifications", "المواصفات")}</b><br />• PNG, JPEG, JPG<br />• {text(ar, "Recommended: 256 × 48 px", "المقاس الموصى به: 256 × 48 بكسل")}<br />• {text(ar, "Maximum size: 5 MB", "الحد الأقصى: 5 ميجابايت")}</div></div><div><div className="text-[12px] font-semibold text-[#33373c]">{text(ar, "Preview", "المعاينة")}</div><div className="mt-3 overflow-hidden rounded-[12px] border border-[#dedfe1]"><div className="h-[18px] bg-[#f5f5f5] px-2"><span className="me-1 inline-block h-2 w-2 rounded-full bg-[#aaa]" /><span className="me-1 inline-block h-2 w-2 rounded-full bg-[#bbb]" /><span className="inline-block h-2 w-2 rounded-full bg-[#ccc]" /></div><div className="flex h-[125px]"><div className="w-[38%] bg-[#252525] p-4">{settings.logoDataUrl ? <img src={settings.logoDataUrl} alt="" className="max-h-8 max-w-full object-contain object-left" /> : <div className="text-[11px] font-semibold text-white">IMKAN WorkDrive</div>}<div className="mt-5 h-1.5 w-4/5 bg-white/20" /><div className="mt-3 h-1.5 w-3/5 bg-white/20" /></div><div className="flex-1 bg-[#fafafa]" /></div></div><div className="mt-3 rounded-[10px] bg-[#edf4ff] px-3 py-3 text-[10px] leading-5 text-[#315da8]">{text(ar, "The saved logo is organization-scoped and can be reused by the Admin Console shell.", "يُحفظ الشعار على مستوى المؤسسة ويمكن استخدامه في واجهة وحدة الإدارة.")}</div></div></div></SettingCard>;
+  return <SettingCard title={text(ar, "Team logo", "شعار الفريق")}><div className="grid gap-6 px-6 pb-6 pt-3 lg:grid-cols-[1fr_1fr]"><div><button type="button" disabled={saving} onClick={() => inputRef.current?.click()} className="flex h-[110px] w-full items-center justify-center rounded-[4px] border border-dashed border-[#cfd2d6] bg-white hover:bg-[#fafafa]">{settings.logoDataUrl ? <img src={settings.logoDataUrl} alt="" className="max-h-[70px] max-w-[260px] object-contain" /> : <div className="grid place-items-center text-[#2f78c9]"><Icons.upload size={28} /><span className="mt-2 text-[11px]">{text(ar, "Upload logo", "رفع الشعار")}</span></div>}</button><input ref={inputRef} hidden type="file" accept="image/png,image/jpeg,image/jpg" onChange={(e) => { const file = e.target.files?.[0]; if (!file) return; if (file.size > 5 * 1024 * 1024) { window.alert(text(ar, "Maximum logo size is 5 MB.", "الحد الأقصى للشعار 5 ميجابايت.")); return; } const reader = new FileReader(); reader.onload = () => onUpload(String(reader.result)); reader.readAsDataURL(file); e.currentTarget.value = ""; }} /><div className="mt-3 rounded-[10px] bg-[#f6f6f6] px-3 py-3 text-[10px] leading-5 text-[#666b72]"><b>{text(ar, "Specifications", "المواصفات")}</b><br />• PNG, JPEG, JPG<br />• {text(ar, "Recommended: 256 × 48 px", "المقاس الموصى به: 256 × 48 بكسل")}<br />• {text(ar, "Maximum size: 5 MB", "الحد الأقصى: 5 ميجابايت")}</div></div><div><div className="text-[12px] font-semibold text-[#33373c]">{text(ar, "Preview", "المعاينة")}</div><div className="mt-3 overflow-hidden rounded-[12px] border border-[#dedfe1]"><div className="h-[18px] bg-[#f5f5f5] px-2"><span className="me-1 inline-block h-2 w-2 rounded-full bg-[#aaa]" /><span className="me-1 inline-block h-2 w-2 rounded-full bg-[#bbb]" /><span className="inline-block h-2 w-2 rounded-full bg-[#ccc]" /></div><div className="flex h-[125px]"><div className="w-[38%] bg-[#252525] p-4">{settings.logoDataUrl ? <img src={settings.logoDataUrl} alt="" className="max-h-8 max-w-full object-contain object-left" /> : <div className="text-[11px] font-semibold text-white">IMKAN WorkDrive</div>}<div className="mt-5 h-1.5 w-4/5 bg-white/20" /><div className="mt-3 h-1.5 w-3/5 bg-white/20" /></div><div className="flex-1 bg-[#fafafa]" /></div></div><div className="mt-3 rounded-[10px] bg-[#edf4ff] px-3 py-3 text-[10px] leading-5 text-[#315da8]">{text(ar, "This logo will appear on user accounts, externally shared files and folders, and WorkDrive emails.", "سيظهر هذا الشعار في حسابات المستخدمين والملفات والمجلدات المشتركة خارجياً ورسائل WorkDrive البريدية.")}</div></div></div></SettingCard>;
 }
 
 function CustomDomainTab({ ar, settings, saving, onSave }: any) {
@@ -159,8 +180,55 @@ function CustomDomainTab({ ar, settings, saving, onSave }: any) {
   return <SettingCard title={text(ar, "Custom Domain", "النطاق المخصص")}><div className="px-6 pb-6 pt-3"><p className="text-[12px] leading-6 text-[#6b6f76]">{text(ar, "Configure the organization domain used for future WorkDrive entry points. Saving stores the domain in the organization configuration; DNS/TLS activation still depends on the deployment infrastructure.", "قم بإعداد نطاق المؤسسة لنقاط دخول WorkDrive المستقبلية. حفظ النطاق يتم فعلياً في إعدادات المؤسسة، بينما تفعيل DNS/TLS يعتمد على بنية النشر.")}</p><div className="mt-5 flex max-w-[720px]"><input className="zoho-admin-input rounded-e-none" value={domain} onChange={(e) => setDomain(e.target.value)} placeholder="drive.example.com" /><button type="button" disabled={saving} onClick={() => void onSave(domain.trim() || null)} className="zoho-admin-primary rounded-s-none">{text(ar, "Save", "حفظ")}</button></div>{domain ? <div className="mt-3 text-[11px] text-[#2b6e58]">● {text(ar, "Configured", "مُكوّن")}</div> : null}</div></SettingCard>;
 }
 
-function ViewPreferencesTab({ ar, settings, saving, onUpdate }: any) {
-  return <div className="space-y-5"><SettingCard title={text(ar, "Set a default view for your Team", "تعيين العرض الافتراضي للفريق")}><div className="px-6 pb-6 pt-3"><p className="mb-4 text-[11px] leading-5 text-[#6b6f76]">{text(ar, "This default applies to Team Folders and their views. Members can still change their personal view.", "يطبق هذا الافتراضي على مجلدات الفريق وعروضها، ويمكن للأعضاء تغيير عرضهم الشخصي.")}</p><div className="grid gap-2 md:grid-cols-3">{([["THUMBNAIL", "Thumbnail"], ["LIST", "List"], ["COMPACT", "Compact"]] as const).map(([v, label]) => <Choice key={v} checked={settings.defaultView === v} label={text(ar, label, v === "THUMBNAIL" ? "مصغرات" : v === "LIST" ? "قائمة" : "مضغوط")} onClick={() => void onUpdate({ defaultView: v })} />)}</div><div className="mt-6 flex items-center gap-4"><span className="text-[12px] font-medium">{text(ar, "Default thumbnail size", "حجم المصغرات الافتراضي")}</span><input type="range" min="1" max="5" value={settings.thumbnailSize} onChange={(e) => void onUpdate({ thumbnailSize: Number(e.target.value) })} className="w-full max-w-[520px] accent-[#2f6ee5]" /><span className="text-[11px] text-[#6b6f76]">{settings.thumbnailSize}/5</span></div></div></SettingCard><SettingCard title={text(ar, "Default right panel view for file preview", "العرض الافتراضي للوحة الجانبية")}><div className="px-6 pb-6 pt-3">{([["PREVIEW", "Only Preview"], ["DETAILS", "File Details"], ["COMMENTS", "Comments"], ["DATA_TEMPLATE", "Data Template"]] as const).map(([v, label]) => <Choice key={v} checked={settings.previewPanel === v} label={text(ar, label, v === "PREVIEW" ? "المعاينة فقط" : v === "DETAILS" ? "تفاصيل الملف" : v === "COMMENTS" ? "التعليقات" : "قالب البيانات")} onClick={() => void onUpdate({ previewPanel: v })} />)}</div></SettingCard></div>;
+function ViewPreferencesTab({ ar, settings, onUpdate }: any) {
+  const viewOptions = ([
+    ["THUMBNAIL", "Thumbnail", "مصغرات"],
+    ["LIST", "List", "قائمة"],
+    ["COMPACT", "Compact", "مضغوط"],
+  ] as const);
+  const panelOptions = ([
+    ["PREVIEW", "Only Preview", "المعاينة فقط"],
+    ["DETAILS", "File Details", "تفاصيل الملف"],
+    ["COMMENTS", "Comments", "التعليقات"],
+    ["DATA_TEMPLATE", "Data Template", "قالب البيانات"],
+  ] as const);
+  return <div className="space-y-5">
+    <SettingCard>
+      <div className="px-6 pb-6 pt-5">
+        <h2 className="text-[15px] font-semibold text-[#202124]">{text(ar, "Set a default view for your Team", "تعيين العرض الافتراضي لفريقك")}</h2>
+        <p className="mt-2 max-w-[760px] text-[11px] leading-5 text-[#6b6f76]">{text(ar, "This default applies to all Team Folders and views for team members. Members can still change their personal view or a specific folder view.", "يطبق هذا الإعداد افتراضياً على مجلدات الفريق وعروضها. ويمكن للأعضاء تغيير العرض الشخصي أو عرض مجلد محدد.")}</p>
+        <div className="mt-6 grid gap-6 lg:grid-cols-[minmax(0,1fr)_210px]">
+          <div>
+            <div className="mb-3 text-[12px] font-semibold text-[#33373c]">{text(ar, "Choose a default view", "اختر العرض الافتراضي")}</div>
+            <div className="space-y-1">{viewOptions.map(([v, label, arLabel]) => <Choice key={v} checked={settings.defaultView === v} label={text(ar, label, arLabel)} onClick={() => void onUpdate({ defaultView: v })} />)}</div>
+          </div>
+          <ViewPreview mode={settings.defaultView} />
+        </div>
+        <div className="mt-6 border-t border-[#ededed] pt-5">
+          <div className="mb-2 text-[12px] font-semibold text-[#33373c]">{text(ar, "Set a default thumbnail size for your Team", "تعيين حجم المصغرات الافتراضي لفريقك")}</div>
+          <p className="mb-4 text-[11px] leading-5 text-[#6b6f76]">{text(ar, "This default applies to Team Folders and views for all team members.", "يطبق هذا الحجم افتراضياً على مجلدات الفريق وعروضها لجميع أعضاء الفريق.")}</p>
+          <div className="flex items-center gap-3">
+            <span className="grid h-7 w-7 place-items-center rounded-full border border-[#d7d9dc] text-[#7b7f85]">−</span>
+            <input aria-label={text(ar, "Thumbnail size", "حجم المصغرات")} type="range" min="1" max="5" value={settings.thumbnailSize} onChange={(e) => void onUpdate({ thumbnailSize: Number(e.target.value) })} className="w-full accent-[#2f6ee5]" />
+            <span className="grid h-7 w-7 place-items-center rounded-full border border-[#d7d9dc] text-[#7b7f85]">+</span>
+          </div>
+        </div>
+      </div>
+    </SettingCard>
+    <SettingCard>
+      <div className="px-6 pb-6 pt-5">
+        <h2 className="text-[15px] font-semibold text-[#202124]">{text(ar, "Default right panel view for file preview", "العرض الافتراضي للوحة الجانبية لمعاينة الملفات")}</h2>
+        <p className="mt-2 text-[11px] leading-5 text-[#6b6f76]">{text(ar, "Choose what the right panel should display by default when team members preview files.", "حدد ما الذي يجب أن تعرضه اللوحة الجانبية افتراضياً عند معاينة أعضاء الفريق للملفات.")}</p>
+        <div className="mt-4 space-y-1">{panelOptions.map(([v, label, arLabel]) => <Choice key={v} checked={settings.previewPanel === v} label={text(ar, label, arLabel)} onClick={() => void onUpdate({ previewPanel: v })} />)}</div>
+      </div>
+    </SettingCard>
+  </div>;
+}
+
+function ViewPreview({ mode }: { mode: "THUMBNAIL" | "LIST" | "COMPACT" }) {
+  if (mode === "THUMBNAIL") return <div className="rounded-[14px] border border-[#dfe2e6] bg-white p-3"><div className="mb-3 h-2 w-20 rounded bg-[#d9dce0]" /><div className="grid grid-cols-3 gap-2">{Array.from({ length: 6 }).map((_, i) => <div key={i} className="h-10 rounded border border-[#e2e4e7] bg-[#f6f7f8]" />)}</div></div>;
+  if (mode === "LIST") return <div className="rounded-[14px] border border-[#dfe2e6] bg-white p-3"><div className="mb-3 h-2 w-20 rounded bg-[#d9dce0]" />{Array.from({ length: 4 }).map((_, i) => <div key={i} className="mb-2 flex items-center gap-2"><span className="h-4 w-4 rounded bg-[#e7e9ec]" /><span className="h-2 flex-1 rounded bg-[#e7e9ec]" /></div>)}</div>;
+  return <div className="rounded-[14px] border border-[#dfe2e6] bg-white p-3"><div className="mb-3 h-2 w-20 rounded bg-[#d9dce0]" />{Array.from({ length: 4 }).map((_, i) => <div key={i} className="mb-2 flex items-center gap-2"><span className="h-3 w-3 rounded bg-[#e7e9ec]" /><span className="h-1.5 flex-1 rounded bg-[#e7e9ec]" /></div>)}</div>;
 }
 
 function ContentTab({ ar, settings, onUpdate }: any) {
