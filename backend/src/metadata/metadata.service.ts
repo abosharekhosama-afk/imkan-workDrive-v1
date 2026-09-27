@@ -12,57 +12,28 @@ export type DataTemplateField = {
   searchable?: boolean;
   options?: string[];
   description?: string;
-  maxLength?: number;
-  min?: number;
-  max?: number;
-  defaultValue?: string | number | boolean | null;
-  choiceType?: 'dropdown' | 'radio';
 };
 
 type AssociationScope = 'ALL_EDIT' | 'SPECIFIC';
 type MandateTarget = 'FILES' | 'FOLDERS' | 'BOTH';
-
-function normalizeFieldKey(rawKey: unknown, label: string, index: number, seen: Set<string>): string {
-  const supplied = typeof rawKey === 'string' ? rawKey.trim() : '';
-  const baseSource = supplied || label;
-  const base = baseSource
-    .normalize('NFKD')
-    .replace(/[^A-Za-z0-9]+/g, '_')
-    .replace(/^_+|_+$/g, '')
-    .replace(/^[0-9]+/, '');
-  let key = (base || `field_${index + 1}`).slice(0, 50);
-  if (!/^[A-Za-z]/.test(key)) key = `field_${index + 1}_${key}`.slice(0, 50);
-  const stem = key;
-  let suffix = 2;
-  while (seen.has(key)) {
-    const tail = `_${suffix++}`;
-    key = `${stem.slice(0, 50 - tail.length)}${tail}`;
-  }
-  seen.add(key);
-  return key;
-}
 
 function normalizeFields(value: unknown): DataTemplateField[] {
   if (!Array.isArray(value) || value.length > 150) throw new BadRequestException('schema must contain between 0 and 150 fields');
   const seen = new Set<string>();
   let multiLine = 0;
   let searchable = 0;
-  return value.map((raw, index) => {
+  return value.map((raw) => {
     if (!raw || typeof raw !== 'object') throw new BadRequestException('Invalid data template field');
     const r = raw as Record<string, unknown>;
-    const rawLabel = typeof r.label === 'string' ? r.label.trim() : '';
-    const label = rawLabel || (typeof r.key === 'string' ? r.key.trim() : '');
-    const key = normalizeFieldKey(r.key, label, index, seen);
+    const key = typeof r.key === 'string' ? r.key.trim() : '';
+    const label = typeof r.label === 'string' ? r.label.trim() : key;
     const type = String(r.type ?? 'text');
+    if (!/^[A-Za-z][A-Za-z0-9_.-]{0,49}$/.test(key) || seen.has(key)) throw new BadRequestException('Invalid or duplicate field key');
     if (!['text','multiline','email','number','date','datetime','boolean','select','radio'].includes(type)) throw new BadRequestException(`Unsupported field type: ${type}`);
+    if (!label || label.length > 50) throw new BadRequestException('Custom field name must be 1-50 characters');
     const description = typeof r.description === 'string' ? r.description.trim() : undefined;
     if (description && description.length > 200) throw new BadRequestException('Custom field description must be at most 200 characters');
     if (type === 'multiline') { multiLine += 1; if (multiLine > 5) throw new BadRequestException('A data template can contain at most 5 multi-line fields'); }
-    const maxLength = type === 'text' ? Math.min(200, Math.max(1, Number.isFinite(Number(r.maxLength)) ? Number(r.maxLength) : 200)) : undefined;
-    const min = type === 'number' && r.min !== undefined && r.min !== null && r.min !== '' ? Number(r.min) : undefined;
-    const max = type === 'number' && r.max !== undefined && r.max !== null && r.max !== '' ? Number(r.max) : undefined;
-    if (type === 'number' && (min !== undefined && !Number.isFinite(min) || max !== undefined && !Number.isFinite(max) || min !== undefined && max !== undefined && min > max)) throw new BadRequestException(`${label} has invalid number limits`);
-    const defaultValue = r.defaultValue === undefined ? undefined : r.defaultValue as string | number | boolean | null;
     const options = ['select','radio'].includes(type)
       ? (Array.isArray(r.options) ? r.options.map(String).map((x) => x.trim()).filter(Boolean).slice(0, 100) : [])
       : undefined;
@@ -79,11 +50,7 @@ function normalizeFields(value: unknown): DataTemplateField[] {
       required: r.required === true,
       searchable: isSearchable,
       ...(description ? { description } : {}),
-      ...(options ? { options, choiceType: type === 'radio' ? 'radio' : 'dropdown' } : {}),
-      ...(maxLength !== undefined ? { maxLength } : {}),
-      ...(min !== undefined ? { min } : {}),
-      ...(max !== undefined ? { max } : {}),
-      ...(defaultValue !== undefined ? { defaultValue } : {}),
+      ...(options ? { options } : {}),
     };
   });
 }
@@ -95,18 +62,13 @@ function validateFields(schema: DataTemplateField[], value: unknown): Record<str
   for (const key of Object.keys(input)) if (!allowed.has(key)) throw new BadRequestException(`Unknown custom field: ${key}`);
   const output: Record<string, unknown> = {};
   for (const field of schema) {
-    let v = input[field.key];
-    if (v === undefined || v === null || v === '') {
-      if (field.defaultValue !== undefined && field.defaultValue !== null && field.defaultValue !== '') v = field.defaultValue;
-      else { if (field.required) throw new BadRequestException(`Required custom field missing: ${field.key}`); continue; }
-    }
+    const v = input[field.key];
+    if (v === undefined || v === null || v === '') { if (field.required) throw new BadRequestException(`Required custom field missing: ${field.key}`); continue; }
     if ((field.type === 'text' || field.type === 'multiline' || field.type === 'email') && typeof v !== 'string') throw new BadRequestException(`${field.key} must be text`);
     if (field.type === 'email' && !/^\S+@\S+\.\S+$/.test(String(v))) throw new BadRequestException(`${field.key} must be a valid email`);
     if (field.type === 'multiline' && String(v).length > 2048) throw new BadRequestException(`${field.key} is too long`);
-    if (field.type === 'text' && String(v).length > (field.maxLength ?? 200)) throw new BadRequestException(`${field.key} is too long`);
+    if (field.type === 'text' && String(v).length > 200) throw new BadRequestException(`${field.key} is too long`);
     if (field.type === 'number' && (typeof v !== 'number' || !Number.isFinite(v))) throw new BadRequestException(`${field.key} must be a number`);
-    if (field.type === 'number' && field.min !== undefined && Number(v) < field.min) throw new BadRequestException(`${field.key} is below the minimum`);
-    if (field.type === 'number' && field.max !== undefined && Number(v) > field.max) throw new BadRequestException(`${field.key} is above the maximum`);
     if (field.type === 'boolean' && typeof v !== 'boolean') throw new BadRequestException(`${field.key} must be boolean`);
     if ((field.type === 'date' || field.type === 'datetime') && (typeof v !== 'string' || Number.isNaN(Date.parse(v)))) throw new BadRequestException(`${field.key} must be a valid date`);
     if ((field.type === 'select' || field.type === 'radio') && (typeof v !== 'string' || !field.options?.includes(v))) throw new BadRequestException(`${field.key} has an invalid option`);
@@ -181,15 +143,6 @@ export class MetadataService {
     const existing = await this.prisma.fileDataTemplate.findFirst({ where: { id, orgId: user.org_id } }); if (!existing) throw new NotFoundException('Data template not found');
     if (existing.active === false && body.schema !== undefined) throw new BadRequestException('Enable the template before editing its fields');
     const schema = body.schema === undefined ? this.templateFields(existing) : normalizeFields(body.schema);
-    if (body.schema !== undefined) {
-      const previousByKey = new Map(this.templateFields(existing).map((field) => [field.key, field]));
-      for (const field of schema) {
-        const previous = previousByKey.get(field.key);
-        if (previous && previous.type !== field.type) {
-          throw new BadRequestException(`Custom field type cannot be changed after creation: ${field.label}`);
-        }
-      }
-    }
     const data: any = {
       ...(body.name !== undefined ? { name: body.name.trim().slice(0, 50) } : {}),
       ...(body.description !== undefined ? { description: body.description.trim().slice(0, 200) || null } : {}),
@@ -241,6 +194,7 @@ export class MetadataService {
     const values = validateFields(this.templateFields(template), customFields);
     const binding = await this.prisma.fileDataTemplateBinding.upsert({ where: { templateId_folderId: { templateId, folderId } }, create: { orgId: user.org_id, templateId, folderId, customFields: values as never, createdById: user.sub }, update: { customFields: values as never }, include: { template: true } });
     await this.prisma.folder.update({ where: { id: folderId }, data: { dataTemplateId: templateId } });
+    this.dispatchFolderTemplatePropertyEvent(user, folder, templateId, values);
     return binding;
   }
 
@@ -298,22 +252,6 @@ export class MetadataService {
     return { folderId, templateId, deleted: true };
   }
 
-  async getFolderMandate(user: AccessTokenPayload, folderId: string) {
-    const folder = await this.prisma.folder.findFirst({ where: { id: folderId, orgId: user.org_id }, include: { mandateDataTemplate: true } });
-    if (!folder) throw new NotFoundException('Folder not found');
-    return { enabled: Boolean(folder.mandateDataTemplateId), target: folder.mandateDataTemplateTarget as MandateTarget, template: folder.mandateDataTemplate };
-  }
-
-  async setFolderMandate(user: AccessTokenPayload, folderId: string, input: { templateId?: string | null; target?: MandateTarget }) {
-    const folder = await this.prisma.folder.findFirst({ where: { id: folderId, orgId: user.org_id } });
-    if (!folder) throw new NotFoundException('Folder not found');
-    if (!(await this.permissions.canWrite(user, { orgId: folder.orgId, ownerId: folder.ownerId, teamFolderId: folder.teamFolderId ?? null }))) throw new ForbiddenException('Edit permission required');
-    if (!input.templateId) return this.prisma.folder.update({ where: { id: folderId }, data: { mandateDataTemplateId: null } });
-    const template = await this.prisma.fileDataTemplate.findFirst({ where: { id: input.templateId, orgId: user.org_id, active: true } });
-    if (!template) throw new NotFoundException('Data template not found');
-    return this.prisma.folder.update({ where: { id: folderId }, data: { mandateDataTemplateId: template.id, mandateDataTemplateTarget: input.target === 'FILES' || input.target === 'FOLDERS' ? input.target : 'BOTH' }, include: { mandateDataTemplate: true } });
-  }
-
   async setTeamFolderMandate(user: AccessTokenPayload, teamFolderId: string, input: { templateId?: string | null; target?: MandateTarget }) {
     if (!this.isOrgAdmin(user)) {
       const member = await this.prisma.teamFolderMember.findFirst({ where: { teamFolderId, userId: user.sub, orgId: user.org_id, role: 'ADMIN' } });
@@ -327,19 +265,22 @@ export class MetadataService {
 
   async getMandatedTemplateForDestination(user: AccessTokenPayload, folderId: string | null, target: MandateTarget = 'FILES') {
     if (!folderId) return { enabled: false, target, template: null };
-    const folder = await this.prisma.folder.findFirst({ where: { id: folderId, orgId: user.org_id }, select: { id: true, parentId: true, teamFolderId: true, mandateDataTemplateId: true, mandateDataTemplateTarget: true } });
+    const folder = await this.prisma.folder.findFirst({ where: { id: folderId, orgId: user.org_id }, select: { id: true, parentId: true, teamFolderId: true } });
     if (!folder) throw new NotFoundException('Destination folder not found');
-    const applies = (value: string | null | undefined) => value === 'BOTH' || value === target;
-    if (folder.mandateDataTemplateId && applies(folder.mandateDataTemplateTarget)) {
-      const template = await this.prisma.fileDataTemplate.findFirst({ where: { id: folder.mandateDataTemplateId, orgId: user.org_id, active: true } });
-      if (template) return { enabled: true, target, template };
+    // Zoho mandates configured on a Team Folder apply to items added directly
+    // to that Team Folder root, not to arbitrary descendants.
+    if (!folder.teamFolderId || folder.parentId !== null) return { enabled: false, target, template: null };
+    // Zoho applies a mandate only to items added directly to the assigned root.
+    // Folder-level settings take precedence over the parent Team Folder setting.
+    if (folder.parentId === null && folder.mandateDataTemplateId && folder.mandateDataTemplate) {
+      const applies = folder.mandateDataTemplateTarget === 'BOTH' || folder.mandateDataTemplateTarget === target;
+      return { enabled: applies, target, template: applies ? folder.mandateDataTemplate : null };
     }
     if (folder.parentId !== null) return { enabled: false, target, template: null };
-    if (!folder.teamFolderId) return { enabled: false, target, template: null };
-    const teamFolder = await this.prisma.teamFolder.findFirst({ where: { id: folder.teamFolderId, orgId: user.org_id }, select: { mandateDataTemplateId: true, mandateDataTemplateTarget: true } });
-    if (!teamFolder?.mandateDataTemplateId || !applies(teamFolder.mandateDataTemplateTarget)) return { enabled: false, target, template: null };
-    const template = await this.prisma.fileDataTemplate.findFirst({ where: { id: teamFolder.mandateDataTemplateId, orgId: user.org_id, active: true } });
-    return template ? { enabled: true, target, template } : { enabled: false, target, template: null };
+    const teamFolder = await this.prisma.teamFolder.findFirst({ where: { id: folder.teamFolderId, orgId: user.org_id }, include: { mandateDataTemplate: true } });
+    if (!teamFolder?.mandateDataTemplateId || !teamFolder.mandateDataTemplate) return { enabled: false, target, template: null };
+    const applies = teamFolder.mandateDataTemplateTarget === 'BOTH' || teamFolder.mandateDataTemplateTarget === target;
+    return { enabled: applies, target, template: applies ? teamFolder.mandateDataTemplate : null };
   }
 
   async validateMandatedTemplateForDestination(
@@ -377,6 +318,25 @@ export class MetadataService {
     return this.associateFile(user, fileId, mandate.template.id, customFields);
   }
 
+
+  async getFolderMandate(user: AccessTokenPayload, folderId: string) {
+    const folder = await this.prisma.folder.findFirst({ where: { id: folderId, orgId: user.org_id }, include: { mandateDataTemplate: true } });
+    if (!folder) throw new NotFoundException('Folder not found');
+    return { template: folder.mandateDataTemplate, target: folder.mandateDataTemplateTarget as MandateTarget, enabled: Boolean(folder.mandateDataTemplateId) };
+  }
+
+  async setFolderMandate(user: AccessTokenPayload, folderId: string, input: { templateId: string | null; target?: string }) {
+    const folder = await this.prisma.folder.findFirst({ where: { id: folderId, orgId: user.org_id } });
+    if (!folder) throw new NotFoundException('Folder not found');
+    if (input.templateId) {
+      const template = await this.getTemplate(user, input.templateId);
+      if (!template.active) throw new BadRequestException('Disabled data template cannot be mandated');
+      const target = input.target === 'FILES' || input.target === 'FOLDERS' ? input.target : 'BOTH';
+      await this.canAssociate(user, template, { orgId: folder.orgId, ownerId: folder.ownerId, teamFolderId: folder.teamFolderId ?? null });
+      return this.prisma.folder.update({ where: { id: folderId }, data: { mandateDataTemplateId: template.id, mandateDataTemplateTarget: target }, include: { mandateDataTemplate: true } }).then((row) => ({ template: row.mandateDataTemplate, target: row.mandateDataTemplateTarget as MandateTarget, enabled: Boolean(row.mandateDataTemplateId) }));
+    }
+    return this.prisma.folder.update({ where: { id: folderId }, data: { mandateDataTemplateId: null }, include: { mandateDataTemplate: true } }).then((row) => ({ template: row.mandateDataTemplate, target: row.mandateDataTemplateTarget as MandateTarget, enabled: false }));
+  }
 
   async getTeamFolderMandate(user: AccessTokenPayload, teamFolderId: string) {
     const teamFolder = await this.prisma.teamFolder.findFirst({ where: { id: teamFolderId, orgId: user.org_id }, include: { mandateDataTemplate: true } }); if (!teamFolder) throw new NotFoundException('Team Folder not found');
