@@ -4,9 +4,11 @@ import type { AccessTokenPayload } from '../auth/jwt.types';
 import { PermissionService, type AccessibleResource } from '../permissions/permission.service';
 import { PrismaService } from '../prisma/prisma.service';
 
+export type SearchFieldCriterion = { key: string; op: 'contains'|'not_contains'|'eq'|'neq'|'before'|'after'|'lt'|'gt'; value: string; join: 'AND'|'OR' };
+
 export type SearchOptions = {
   type?: string; owner?: string; dateField?: 'created'|'modified'; dateFrom?: string; dateTo?: string;
-  page?: number; limit?: number; tags?: string[]; customField?: string; dataTemplateId?: string; sort?: 'relevance'|'updated'|'created'|'name';
+  page?: number; limit?: number; tags?: string[]; customField?: string; fieldCriteria?: SearchFieldCriterion[]; dataTemplateId?: string; sort?: 'relevance'|'updated'|'created'|'name';
 };
 
 type Hit = { score: number; matchedBy: string[] };
@@ -89,6 +91,10 @@ export class SearchService {
     if (options.customField) {
       fileHits.splice(0, fileHits.length, ...fileHits.filter((h) => this.matchesFieldExpression((h.item as any).dataTemplateBindings?.map((b: any) => b.customFields) ?? [h.item.metadata?.customFields], options.customField)));
     }
+    if (options.fieldCriteria?.length) {
+      fileHits.splice(0, fileHits.length, ...fileHits.filter((h) => this.matchesCriteria((h.item as any).dataTemplateBindings?.map((b: any) => b.customFields) ?? [h.item.metadata?.customFields], options.fieldCriteria!)));
+      folderHits.splice(0, folderHits.length, ...folderHits.filter((h) => this.matchesCriteria((h.item as any).dataTemplateBindings?.map((b: any) => b.customFields) ?? [], options.fieldCriteria!)));
+    }
     if (options.dataTemplateId) {
       fileHits.splice(0, fileHits.length, ...fileHits.filter((h) => ((h.item as any).dataTemplateBindings || []).some((b: any) => b.templateId === options.dataTemplateId)));
     }
@@ -110,6 +116,27 @@ export class SearchService {
   private customFieldMatches(value: unknown, expression?: string) {
     if (!expression) return false; const [key, expected] = expression.split(':', 2); if (!key || expected === undefined || !value || typeof value !== 'object') return false;
     return String((value as Record<string, unknown>)[key]) === expected;
+  }
+
+  private matchesCriteria(values: unknown[], criteria: SearchFieldCriterion[]) {
+    const tests = criteria.map((criterion) => values.some((value) => {
+      if (!value || typeof value !== 'object') return false;
+      const actual = (value as Record<string, unknown>)[criterion.key];
+      if (actual === undefined || actual === null) return false;
+      const a = String(actual); const expected = criterion.value;
+      if (criterion.op === 'contains') return a.toLocaleLowerCase().includes(expected.toLocaleLowerCase());
+      if (criterion.op === 'not_contains') return !a.toLocaleLowerCase().includes(expected.toLocaleLowerCase());
+      if (criterion.op === 'neq') return a !== expected;
+      if (criterion.op === 'before') return new Date(a).getTime() < new Date(expected).getTime();
+      if (criterion.op === 'after') return new Date(a).getTime() > new Date(expected).getTime();
+      if (criterion.op === 'lt') return Number(a) < Number(expected);
+      if (criterion.op === 'gt') return Number(a) > Number(expected);
+      return a === expected;
+    }));
+    if (!tests.length) return true;
+    let result = tests[0];
+    for (let i = 1; i < tests.length; i += 1) result = criteria[i].join === 'OR' ? result || tests[i] : result && tests[i];
+    return result;
   }
 
   private matchesFieldExpression(values: unknown[], expression?: string) {
