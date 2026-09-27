@@ -80,10 +80,7 @@ export class FoldersService {
     for (const objectId of objectIds) {
       const externalRefs = await this.prisma.fileVersion.count({ where: { storageObjectId: objectId, fileId: { notIn: doomedIds } } });
       if (externalRefs > 0) continue;
-      const object = await this.prisma.storageObject.findFirst({
-        where: { id: objectId, orgId: user.org_id },
-        select: { storageKey: true },
-      });
+      const object = await this.prisma.storageObject.findUnique({ where: { id: objectId }, select: { storageKey: true } });
       if (object) await this.storage.deleteStoredObject(object.storageKey);
     }
     for (const file of descendants) { await this.prisma.file.delete({where:{id:file.id}}); }
@@ -139,7 +136,12 @@ export class FoldersService {
 
   async create(user: AccessTokenPayload, input: CreateFolderInput) {
     const teamFolderId = await this.resolveCreateTeamFolderId(user, input);
-    const mandate = await this.metadata.validateMandatedTemplateForDestination(user, input.parentId ?? null, 'FOLDERS', input.templateId, input.customFields ?? {});
+    let mandateDestination = input.parentId ?? null;
+    if (!mandateDestination && teamFolderId) {
+      const root = await this.prisma.folder.findFirst({ where: { teamFolderId, orgId: user.org_id, parentId: null }, select: { id: true } });
+      mandateDestination = root?.id ?? null;
+    }
+    const mandate = await this.metadata.validateMandatedTemplateForDestination(user, mandateDestination, 'FOLDERS', input.templateId, input.customFields ?? {});
     const created = await this.prisma.folder.create({
       data: {
         name: input.name,
