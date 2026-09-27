@@ -551,6 +551,9 @@ model Folder {
   trashEntries TrashEntry[]
   dataTemplateId String? @map("data_template_id") @db.Char(36)
   dataTemplate FileDataTemplate? @relation(fields: [dataTemplateId], references: [id], onDelete: SetNull)
+  mandateDataTemplateId String? @map("mandate_data_template_id") @db.Char(36)
+  mandateDataTemplateTarget String @default("BOTH") @map("mandate_data_template_target") @db.VarChar(10)
+  mandateDataTemplate FileDataTemplate? @relation("FolderMandate", fields: [mandateDataTemplateId], references: [id], onDelete: SetNull)
   permissions  FolderPermission[]
   shares       FolderShare[]
   dataTemplateBindings FileDataTemplateBinding[]
@@ -1078,6 +1081,7 @@ model FileDataTemplate {
   metadata      FileMetadata[]
   bindings      FileDataTemplateBinding[]
   mandatedTeamFolders TeamFolder[] @relation("TeamFolderMandate")
+  mandatedFolders Folder[] @relation("FolderMandate")
   @@unique([orgId, name])
   @@index([orgId, active])
   @@map("file_data_templates")
