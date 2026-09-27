@@ -265,18 +265,28 @@ export class MetadataService {
 
   async getMandatedTemplateForDestination(user: AccessTokenPayload, folderId: string | null, target: MandateTarget = 'FILES') {
     if (!folderId) return { enabled: false, target, template: null };
-    const folder = await this.prisma.folder.findFirst({ where: { id: folderId, orgId: user.org_id }, select: { id: true, parentId: true, teamFolderId: true } });
+    const folder = await this.prisma.folder.findFirst({
+      where: { id: folderId, orgId: user.org_id },
+      select: {
+        id: true,
+        parentId: true,
+        teamFolderId: true,
+        mandateDataTemplateId: true,
+        mandateDataTemplateTarget: true,
+        mandateDataTemplate: true,
+      },
+    });
     if (!folder) throw new NotFoundException('Destination folder not found');
-    // Zoho mandates configured on a Team Folder apply to items added directly
-    // to that Team Folder root, not to arbitrary descendants.
-    if (!folder.teamFolderId || folder.parentId !== null) return { enabled: false, target, template: null };
-    // Zoho applies a mandate only to items added directly to the assigned root.
-    // Folder-level settings take precedence over the parent Team Folder setting.
-    if (folder.parentId === null && folder.mandateDataTemplateId && folder.mandateDataTemplate) {
+
+    // A Folder-level mandate takes precedence over the Team Folder mandate.
+    // It applies to items directly created/copied/moved into this folder.
+    if (folder.mandateDataTemplateId && folder.mandateDataTemplate) {
       const applies = folder.mandateDataTemplateTarget === 'BOTH' || folder.mandateDataTemplateTarget === target;
       return { enabled: applies, target, template: applies ? folder.mandateDataTemplate : null };
     }
-    if (folder.parentId !== null) return { enabled: false, target, template: null };
+
+    // Team Folder mandates apply only to items added directly to its root.
+    if (!folder.teamFolderId || folder.parentId !== null) return { enabled: false, target, template: null };
     const teamFolder = await this.prisma.teamFolder.findFirst({ where: { id: folder.teamFolderId, orgId: user.org_id }, include: { mandateDataTemplate: true } });
     if (!teamFolder?.mandateDataTemplateId || !teamFolder.mandateDataTemplate) return { enabled: false, target, template: null };
     const applies = teamFolder.mandateDataTemplateTarget === 'BOTH' || teamFolder.mandateDataTemplateTarget === target;
