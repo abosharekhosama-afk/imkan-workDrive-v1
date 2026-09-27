@@ -28,3 +28,6 @@ export function setTeamFolderDataTemplateMandate(teamFolderId: string, body: { t
 export function getUploadDataTemplateMandate(folderId: string | null) { return apiRequest<{ enabled: boolean; target: "FILES"; template: DataTemplate | null }>(`/metadata/upload-mandate${folderId ? `?folderId=${encodeURIComponent(folderId)}` : ""}`); }
 
 export function getTransferDataTemplateMandate(folderId: string | null, target: "FILES" | "FOLDERS") { return apiRequest<{ enabled: boolean; target: "FILES" | "FOLDERS"; template: DataTemplate | null }>(`/metadata/transfer-mandate?target=${target}${folderId ? `&folderId=${encodeURIComponent(folderId)}` : ""}`); }
+
+export function getFolderDataTemplateMandate(folderId: string) { return apiRequest<{ enabled: boolean; target: "FILES"|"FOLDERS"|"BOTH"; template: DataTemplate | null }>(`/metadata/folders/${encodeURIComponent(folderId)}/mandate`); }
+export function setFolderDataTemplateMandate(folderId: string, body: { templateId: string | null; target?: "FILES"|"FOLDERS"|"BOTH" }) { return apiRequest(`/metadata/folders/${encodeURIComponent(folderId)}/mandate`, { method: "PUT", body: JSON.stringify(body) }); }
