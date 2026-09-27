@@ -254,6 +254,7 @@ export function FileTable({
             <tr key={folder.id} draggable={Boolean(canMutate)} onDoubleClick={() => onOpen?.("FOLDER", folder.id, folder.name)} onContextMenu={(e) => { e.preventDefault(); setCtxMenu({ x: e.clientX, y: e.clientY, node: (<FileContextMenu
               handlers={{
                 onOpen: onOpen ? () => onOpen("FOLDER", folder.id, folder.name) : undefined,
+                onInspect: onInspect ? () => onInspect("FOLDER", folder.id, folder.name) : undefined,
                 onShare: undefined,
                 onRename: canMutate ? () => onRename("FOLDER", folder.id, folder.name) : undefined,
                 onMove: onMove && canMutate ? () => onMove("FOLDER", folder.id, folder.name) : undefined,
@@ -299,6 +300,7 @@ export function FileTable({
                   }}
                   handlers={{
                     onOpen: onOpen ? () => onOpen("FOLDER", folder.id, folder.name) : undefined,
+                    onInspect: onInspect ? () => onInspect("FOLDER", folder.id, folder.name) : undefined,
                     onShare: undefined,
                     onRename: canMutate ? () => onRename("FOLDER", folder.id, folder.name) : undefined,
                     onMove: onMove && canMutate ? () => onMove("FOLDER", folder.id, folder.name) : undefined,
@@ -313,7 +315,7 @@ export function FileTable({
           {sortedFiles.map((file) => (
             <tr key={file.id} draggable={Boolean(canMutate)} onDragStart={(e) => { e.dataTransfer.effectAllowed="move"; e.dataTransfer.setData("application/x-workdrive", JSON.stringify({type:"FILE",id:file.id,name:file.name})); }} onContextMenu={(e) => { e.preventDefault(); setCtxMenu({ x: e.clientX, y: e.clientY, node: (<FileContextMenu
               onToast={onToast}
-              handlers={{ onOpen: onOpen ? () => onOpen("FILE", file.id, file.name) : undefined, onPreview: onPreview ? () => onPreview("FILE", file.id, file.name, file.mimeType ?? undefined, file.size ?? undefined) : undefined, onDownload: () => onDownload(file.id), onShare: canShare ? () => onShare("FILE", file.id) : undefined, onRename: canMutate ? () => onRename("FILE", file.id, file.name) : undefined, onMove: onMove && canMutate ? () => onMove("FILE", file.id, file.name) : undefined,
+              handlers={{ onOpen: onOpen ? () => onOpen("FILE", file.id, file.name) : undefined, onInspect: onInspect ? () => onInspect("FILE", file.id, file.name) : undefined, onPreview: onPreview ? () => onPreview("FILE", file.id, file.name, file.mimeType ?? undefined, file.size ?? undefined) : undefined, onDownload: () => onDownload(file.id), onShare: canShare ? () => onShare("FILE", file.id) : undefined, onRename: canMutate ? () => onRename("FILE", file.id, file.name) : undefined, onMove: onMove && canMutate ? () => onMove("FILE", file.id, file.name) : undefined,
                     onCopy: onCopy && canMutate ? () => onCopy("FILE", file.id, file.name) : undefined, onFavoriteToggle: onFavorite ? () => onFavorite("FILE", file.id) : undefined, onVersionHistory: onVersionHistory ? () => onVersionHistory("FILE", file.id, file.name, file.mimeType ?? undefined, file.size ?? undefined) : undefined, onDelete: canMutate ? () => onDelete("FILE", file.id) : undefined, onAssignWorkflow: onAssignWorkflow && canMutate ? () => onAssignWorkflow("FILE", file.id, file.name) : undefined }}
               onCopyLink={onCopyLink ? () => onCopyLink(file.id) : undefined}
               x={e.clientX} y={e.clientY} onClose={() => setCtxMenu(null)}
@@ -352,6 +354,7 @@ export function FileTable({
                   }}
                   handlers={{
                     onOpen: onOpen ? () => onOpen("FILE", file.id, file.name) : undefined,
+                    onInspect: onInspect ? () => onInspect("FILE", file.id, file.name) : undefined,
                     onPreview: onPreview ? () => onPreview("FILE", file.id, file.name, file.mimeType ?? undefined, file.size ?? undefined) : undefined,
                     onDownload: () => onDownload(file.id),
                     onShare: canShare ? () => onShare("FILE", file.id) : undefined,

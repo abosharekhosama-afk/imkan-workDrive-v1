@@ -89,6 +89,7 @@ export function FileGridView({
         const folderContext = buildFolderContext(canMutate, false);
         const folderHandlers: FileActionHandlers = {
           onOpen: () => onOpenFolder(folder.id),
+          onInspect: onInspect ? () => onInspect("FOLDER", folder.id, folder.name) : undefined,
           onShare: undefined,
           onRename: canMutate && onRename ? () => onRename("FOLDER", folder.id, folder.name) : undefined,
           onMove: canMutate && onMove ? () => onMove("FOLDER", folder.id, folder.name) : undefined,
@@ -116,6 +117,7 @@ export function FileGridView({
         const fileContext = buildFileContext(file.id, canMutate, canShare, canFavorite, favoriteIds);
         const fileHandlers: FileActionHandlers = {
           onOpen: onPreview ? () => onPreview(file) : undefined,
+          onInspect: onInspect ? () => onInspect("FILE", file.id, file.name) : undefined,
           onPreview: onPreview ? () => onPreview(file) : undefined,
           onDownload: onDownload ? () => onDownload(file.id) : undefined,
           onShare: onShare ? () => onShare("FILE", file.id) : undefined,

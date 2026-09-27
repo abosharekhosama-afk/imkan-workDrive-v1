@@ -8,6 +8,7 @@ import type { RowActionContext } from "./file-row-actions-logic";
 export interface FileActionHandlers {
   onOpen?: () => void;
   onPreview?: () => void;
+  onInspect?: () => void;
   onDownload?: () => void;
   onShare?: () => void;
   onCopyLink?: () => void;
@@ -47,6 +48,7 @@ export function FileActionsMenu({ context, handlers, onCopyLink }: FileActionsMe
   if (handlers.onPreview && handlers.onPreview !== handlers.onOpen) {
     push({ label: label("files.preview"), onSelect: handlers.onPreview });
   }
+  if (handlers.onInspect) push({ label: label("menu.properties"), onSelect: handlers.onInspect });
   if (handlers.onShare) {
     push({ label: label("menu.shareMenu"), onSelect: handlers.onShare, dividerBefore: items.length > 0 });
   }

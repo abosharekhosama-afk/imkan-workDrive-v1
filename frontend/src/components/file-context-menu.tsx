@@ -55,6 +55,7 @@ export function FileContextMenu({
   const sections: Item[][] = [
     [
       { key: "openNewTab", label: D("openNewTab"), onSelect: open ?? (() => toast("openNewTab")) },
+      { key: "properties", label: D("properties"), onSelect: handlers.onInspect ?? (() => toast("properties")) },
     ],
     [
       {
