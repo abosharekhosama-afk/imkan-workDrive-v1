@@ -3899,3 +3899,18 @@ html[data-theme="dark"] .zoho-admin-input{background:var(--wd-bg);color:var(--wd
 .workflow-ui .workflow-dynamic-handle,.workflow-ui .workflow-dynamic-target{width:10px!important;height:10px!important}
 .workflow-ui .workflow-dynamic-handle{margin:0}
 @media(max-width:1100px){.workflow-ui .workflow-palette-sidebar{width:210px;min-width:210px;flex-basis:210px}.workflow-ui .workflow-palette-sidebar.is-collapsed{width:46px;min-width:46px;flex-basis:46px}}
+
+/* Data Template transfer surfaces: give Move/Copy enough room to show destination and required properties together. */
+.imkan-modal-surface.imkan-transfer-modal{
+  width:min(1180px,calc(100vw - 32px));
+  max-width:none;
+  max-height:min(86vh,900px);
+  overflow:hidden;
+}
+.imkan-transfer-modal > .p-4{min-height:0;overflow:hidden}
+@media (max-width:900px){
+  .imkan-modal-surface.imkan-transfer-modal{width:min(96vw,760px)}
+}
+@media (max-width:680px){
+  .imkan-modal-surface.imkan-transfer-modal{width:calc(100vw - 16px);max-height:94vh}
+}

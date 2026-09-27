@@ -1,6 +1,6 @@
 import { apiRequest } from "./client";
 
-export type DataTemplateField = { key: string; label: string; type: "text"|"multiline"|"email"|"number"|"date"|"datetime"|"boolean"|"select"|"radio"; required?: boolean; searchable?: boolean; options?: string[]; description?: string };
+export type DataTemplateField = { key: string; label: string; type: "text"|"multiline"|"email"|"number"|"date"|"datetime"|"boolean"|"select"|"radio"; required?: boolean; searchable?: boolean; options?: string[]; description?: string; maxLength?: number; min?: number; max?: number; defaultValue?: string | number | boolean | null; choiceType?: "dropdown"|"radio" };
 export type DataTemplate = {
   id: string; name: string; description?: string | null; schema: DataTemplateField[]; fields?: DataTemplateField[];
   requiredFields?: string[]; active: boolean; associationScope: "ALL_EDIT"|"SPECIFIC";

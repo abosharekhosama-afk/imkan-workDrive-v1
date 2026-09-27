@@ -12,28 +12,57 @@ export type DataTemplateField = {
   searchable?: boolean;
   options?: string[];
   description?: string;
+  maxLength?: number;
+  min?: number;
+  max?: number;
+  defaultValue?: string | number | boolean | null;
+  choiceType?: 'dropdown' | 'radio';
 };
 
 type AssociationScope = 'ALL_EDIT' | 'SPECIFIC';
 type MandateTarget = 'FILES' | 'FOLDERS' | 'BOTH';
+
+function normalizeFieldKey(rawKey: unknown, label: string, index: number, seen: Set<string>): string {
+  const supplied = typeof rawKey === 'string' ? rawKey.trim() : '';
+  const baseSource = supplied || label;
+  const base = baseSource
+    .normalize('NFKD')
+    .replace(/[^A-Za-z0-9]+/g, '_')
+    .replace(/^_+|_+$/g, '')
+    .replace(/^[0-9]+/, '');
+  let key = (base || `field_${index + 1}`).slice(0, 50);
+  if (!/^[A-Za-z]/.test(key)) key = `field_${index + 1}_${key}`.slice(0, 50);
+  const stem = key;
+  let suffix = 2;
+  while (seen.has(key)) {
+    const tail = `_${suffix++}`;
+    key = `${stem.slice(0, 50 - tail.length)}${tail}`;
+  }
+  seen.add(key);
+  return key;
+}
 
 function normalizeFields(value: unknown): DataTemplateField[] {
   if (!Array.isArray(value) || value.length > 150) throw new BadRequestException('schema must contain between 0 and 150 fields');
   const seen = new Set<string>();
   let multiLine = 0;
   let searchable = 0;
-  return value.map((raw) => {
+  return value.map((raw, index) => {
     if (!raw || typeof raw !== 'object') throw new BadRequestException('Invalid data template field');
     const r = raw as Record<string, unknown>;
-    const key = typeof r.key === 'string' ? r.key.trim() : '';
-    const label = typeof r.label === 'string' ? r.label.trim() : key;
+    const rawLabel = typeof r.label === 'string' ? r.label.trim() : '';
+    const label = rawLabel || (typeof r.key === 'string' ? r.key.trim() : '');
+    const key = normalizeFieldKey(r.key, label, index, seen);
     const type = String(r.type ?? 'text');
-    if (!/^[A-Za-z][A-Za-z0-9_.-]{0,49}$/.test(key) || seen.has(key)) throw new BadRequestException('Invalid or duplicate field key');
     if (!['text','multiline','email','number','date','datetime','boolean','select','radio'].includes(type)) throw new BadRequestException(`Unsupported field type: ${type}`);
-    if (!label || label.length > 50) throw new BadRequestException('Custom field name must be 1-50 characters');
     const description = typeof r.description === 'string' ? r.description.trim() : undefined;
     if (description && description.length > 200) throw new BadRequestException('Custom field description must be at most 200 characters');
     if (type === 'multiline') { multiLine += 1; if (multiLine > 5) throw new BadRequestException('A data template can contain at most 5 multi-line fields'); }
+    const maxLength = type === 'text' ? Math.min(200, Math.max(1, Number.isFinite(Number(r.maxLength)) ? Number(r.maxLength) : 200)) : undefined;
+    const min = type === 'number' && r.min !== undefined && r.min !== null && r.min !== '' ? Number(r.min) : undefined;
+    const max = type === 'number' && r.max !== undefined && r.max !== null && r.max !== '' ? Number(r.max) : undefined;
+    if (type === 'number' && (min !== undefined && !Number.isFinite(min) || max !== undefined && !Number.isFinite(max) || min !== undefined && max !== undefined && min > max)) throw new BadRequestException(`${label} has invalid number limits`);
+    const defaultValue = r.defaultValue === undefined ? undefined : r.defaultValue as string | number | boolean | null;
     const options = ['select','radio'].includes(type)
       ? (Array.isArray(r.options) ? r.options.map(String).map((x) => x.trim()).filter(Boolean).slice(0, 100) : [])
       : undefined;
@@ -50,7 +79,11 @@ function normalizeFields(value: unknown): DataTemplateField[] {
       required: r.required === true,
       searchable: isSearchable,
       ...(description ? { description } : {}),
-      ...(options ? { options } : {}),
+      ...(options ? { options, choiceType: type === 'radio' ? 'radio' : 'dropdown' } : {}),
+      ...(maxLength !== undefined ? { maxLength } : {}),
+      ...(min !== undefined ? { min } : {}),
+      ...(max !== undefined ? { max } : {}),
+      ...(defaultValue !== undefined ? { defaultValue } : {}),
     };
   });
 }
@@ -62,13 +95,18 @@ function validateFields(schema: DataTemplateField[], value: unknown): Record<str
   for (const key of Object.keys(input)) if (!allowed.has(key)) throw new BadRequestException(`Unknown custom field: ${key}`);
   const output: Record<string, unknown> = {};
   for (const field of schema) {
-    const v = input[field.key];
-    if (v === undefined || v === null || v === '') { if (field.required) throw new BadRequestException(`Required custom field missing: ${field.key}`); continue; }
+    let v = input[field.key];
+    if (v === undefined || v === null || v === '') {
+      if (field.defaultValue !== undefined && field.defaultValue !== null && field.defaultValue !== '') v = field.defaultValue;
+      else { if (field.required) throw new BadRequestException(`Required custom field missing: ${field.key}`); continue; }
+    }
     if ((field.type === 'text' || field.type === 'multiline' || field.type === 'email') && typeof v !== 'string') throw new BadRequestException(`${field.key} must be text`);
     if (field.type === 'email' && !/^\S+@\S+\.\S+$/.test(String(v))) throw new BadRequestException(`${field.key} must be a valid email`);
     if (field.type === 'multiline' && String(v).length > 2048) throw new BadRequestException(`${field.key} is too long`);
-    if (field.type === 'text' && String(v).length > 200) throw new BadRequestException(`${field.key} is too long`);
+    if (field.type === 'text' && String(v).length > (field.maxLength ?? 200)) throw new BadRequestException(`${field.key} is too long`);
     if (field.type === 'number' && (typeof v !== 'number' || !Number.isFinite(v))) throw new BadRequestException(`${field.key} must be a number`);
+    if (field.type === 'number' && field.min !== undefined && Number(v) < field.min) throw new BadRequestException(`${field.key} is below the minimum`);
+    if (field.type === 'number' && field.max !== undefined && Number(v) > field.max) throw new BadRequestException(`${field.key} is above the maximum`);
     if (field.type === 'boolean' && typeof v !== 'boolean') throw new BadRequestException(`${field.key} must be boolean`);
     if ((field.type === 'date' || field.type === 'datetime') && (typeof v !== 'string' || Number.isNaN(Date.parse(v)))) throw new BadRequestException(`${field.key} must be a valid date`);
     if ((field.type === 'select' || field.type === 'radio') && (typeof v !== 'string' || !field.options?.includes(v))) throw new BadRequestException(`${field.key} has an invalid option`);
@@ -139,6 +177,15 @@ export class MetadataService {
     const existing = await this.prisma.fileDataTemplate.findFirst({ where: { id, orgId: user.org_id } }); if (!existing) throw new NotFoundException('Data template not found');
     if (existing.active === false && body.schema !== undefined) throw new BadRequestException('Enable the template before editing its fields');
     const schema = body.schema === undefined ? this.templateFields(existing) : normalizeFields(body.schema);
+    if (body.schema !== undefined) {
+      const previousByKey = new Map(this.templateFields(existing).map((field) => [field.key, field]));
+      for (const field of schema) {
+        const previous = previousByKey.get(field.key);
+        if (previous && previous.type !== field.type) {
+          throw new BadRequestException(`Custom field type cannot be changed after creation: ${field.label}`);
+        }
+      }
+    }
     const data: any = {
       ...(body.name !== undefined ? { name: body.name.trim().slice(0, 50) } : {}),
       ...(body.description !== undefined ? { description: body.description.trim().slice(0, 200) || null } : {}),

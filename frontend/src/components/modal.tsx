@@ -9,9 +9,10 @@ interface ModalProps {
   children: ReactNode;
   footer?: ReactNode;
   closeLabel?: string;
+  className?: string;
 }
 
-export function Modal({ title, onClose, children, footer, closeLabel }: ModalProps) {
+export function Modal({ title, onClose, children, footer, closeLabel, className = "" }: ModalProps) {
   const titleId = useId();
   const surfaceRef = useRef<HTMLDivElement>(null);
   const onCloseRef = useRef(onClose);
@@ -74,7 +75,7 @@ export function Modal({ title, onClose, children, footer, closeLabel }: ModalPro
         role="dialog" 
         aria-modal="true" 
         aria-labelledby={titleId} 
-        className="imkan-modal-surface max-h-[90vh] overflow-y-auto rounded-sm flex flex-col"
+        className={`imkan-modal-surface max-h-[90vh] overflow-y-auto rounded-sm flex flex-col ${className}`.trim()}
       >
         <div className="flex items-center justify-between border-b border-[color:var(--imkan-color-border)] px-4 py-3">
           <h2 id={titleId} className="imkan-heading text-base font-semibold">{title}</h2>
