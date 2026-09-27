@@ -4,6 +4,7 @@ import type { AccessTokenPayload } from '../auth/jwt.types';
 import { PrismaService } from '../prisma/prisma.service';
 import { OrgRole, MembershipStatus } from '@prisma/client';
 import { GroupsService } from '../groups/groups.service';
+import { resolveAuditReportActions } from './audit-report-logic';
 
 @Injectable()
 export class EnterpriseService {
@@ -183,7 +184,7 @@ export class EnterpriseService {
         ? input.requestedActions
         : [];
     const requestedActions = rawRequestedActions.filter((action: unknown): action is string => typeof action === 'string' && action.trim().length > 0);
-    const actions = requestedActions.length ? [...new Set(requestedActions)] : allKnownActions;
+    const actions = resolveAuditReportActions(requestedActions, ACTIONS, allKnownActions);
 
     const params: any[] = [user.org_id, from, to];
     const where = ['a.org_id = ?', 'a.created_at >= ?', 'a.created_at <= ?'];
@@ -192,8 +193,9 @@ export class EnterpriseService {
     const actionPlaceholders = actions.map(() => '?').join(',');
     if (actions.length) { where.push(`a.action IN (${actionPlaceholders})`); params.push(...actions); } else { where.push('1 = 0'); }
     if (locationType === 'MY_FOLDERS') {
+      const personalOwnerId = actorId ?? user.sub;
       where.push(`((a.resource_type = 'FILE' AND EXISTS (SELECT 1 FROM files lf JOIN folders lfd ON lfd.id=lf.folder_id WHERE lf.id=a.resource_id AND lf.org_id=? AND lf.owner_id=? AND lfd.team_folder_id IS NULL)) OR (a.resource_type = 'FOLDER' AND EXISTS (SELECT 1 FROM folders lfolder WHERE lfolder.id=a.resource_id AND lfolder.org_id=? AND lfolder.owner_id=? AND lfolder.team_folder_id IS NULL)))`);
-      params.push(user.org_id, user.sub, user.org_id, user.sub);
+      params.push(user.org_id, personalOwnerId, user.org_id, personalOwnerId);
     } else if (locationType === 'TEAM_FOLDER') {
       if (!locationId) throw new BadRequestException('Team folder is required');
       where.push(`((a.resource_type = 'TEAM_FOLDER' AND a.resource_id=?) OR (a.resource_type = 'FILE' AND EXISTS (SELECT 1 FROM files tf JOIN folders tff ON tff.id=tf.folder_id WHERE tf.id=a.resource_id AND tf.org_id=? AND tff.team_folder_id=?)) OR (a.resource_type = 'FOLDER' AND EXISTS (SELECT 1 FROM folders tfd WHERE tfd.id=a.resource_id AND tfd.org_id=? AND tfd.team_folder_id=?)) )`);
