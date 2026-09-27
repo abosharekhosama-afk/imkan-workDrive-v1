@@ -12,6 +12,11 @@
       {
         "include": "templates/blank-assets/**/*",
         "watchAssets": false
+      },
+      {
+        "include": "templates/blank-assets/**/*",
+        "outDir": "dist/src/templates/blank-assets",
+        "watchAssets": false
       }
     ]
   }

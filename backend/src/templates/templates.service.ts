@@ -1,6 +1,7 @@
 import {
   BadRequestException,
   ConflictException,
+  HttpException,
   InternalServerErrorException,
   ForbiddenException,
   Injectable,
@@ -17,7 +18,6 @@ import {
   Prisma,
 } from '@prisma/client';
 import { createHash, randomUUID } from 'node:crypto';
-import { readFile } from 'node:fs/promises';
 import type { AccessTokenPayload } from '../auth/jwt.types';
 import { FilesService } from '../files/files.service';
 import { PrismaService } from '../prisma/prisma.service';
@@ -28,7 +28,7 @@ import { extractExtension } from '../common/file-classification';
 import type { parseCategory, parseTemplateCreate, parseTemplateFromFile, parseTemplateUpdate, parseTemplateUse, parseTemplateVariable, parseTemplateBuilder, TemplateBuilderConfig } from './templates.schemas';
 import { defaultTemplateBuilderConfig } from './templates.schemas';
 import { PublicTemplateSeedService } from './public-template-seed.service';
-import { blankTemplateAssetCandidates, templateOfficeEditorPath } from './template-blank-assets';
+import { blankTemplateAssetCandidates, readBlankTemplateAssetBytes, templateOfficeEditorPath } from './template-blank-assets';
 import { OfficeService } from '../office/office.service';
 import { OfficeConversionService } from '../office/office-conversion.service';
 import { NotificationsService } from '../notifications/notifications.service';
@@ -245,7 +245,52 @@ export class TemplatesService {
     const version = template.versions[0];
     if (!version) throw new NotFoundException('Template content not found');
     const signed = await this.storage.createDownloadUrl({ fileId: template.id, versionId: version.id, ownerOrgId: user.org_id, storageKey: version.storageKey, publicAccess: template.library.type === TemplateLibraryType.PUBLIC, contentType: version.mimeType, disposition: 'inline', fileName: `${template.name}${version.extension ? `.${version.extension}` : ''}` });
-    return { id: template.id, name: template.name, description: template.description, type: template.type, library: template.library.type, category: template.category, owner: template.owner, version: version.versionNumber, mimeType: version.mimeType, extension: version.extension, preview_url: signed.url, expires_in_seconds: signed.expiresInSeconds, permissions: this.templatePermissions(user, template) };
+    return this.mapTemplatePreview(user, template, version, signed.url, signed.expiresInSeconds);
+  }
+
+  private mapTemplatePreview(
+    user: AccessTokenPayload,
+    template: {
+      id: string;
+      name: string;
+      description: string | null;
+      type: TemplateType;
+      library: { type: TemplateLibraryType; ownerId: string | null };
+      category: { id: string; name: string } | null;
+      owner: { id: string; name: string | null; email: string } | null;
+      ownerId: string | null;
+      status: TemplateStatus;
+    },
+    version: { versionNumber: number; mimeType: string; extension: string | null },
+    previewUrl: string,
+    expiresInSeconds: number,
+  ) {
+    return {
+      id: template.id,
+      name: template.name,
+      description: template.description,
+      type: template.type,
+      library: template.library.type,
+      category: template.category,
+      owner: template.owner,
+      version: version.versionNumber,
+      mimeType: version.mimeType,
+      extension: version.extension,
+      preview_url: previewUrl,
+      expires_in_seconds: expiresInSeconds,
+      permissions: this.templatePermissions(user, template),
+    };
+  }
+
+  private async getTemplateSummary(user: AccessTokenPayload, id: string) {
+    const template = await this.prisma.template.findFirst({
+      where: { id, deletedAt: null, OR: [{ orgId: user.org_id }, { orgId: null, library: { type: TemplateLibraryType.PUBLIC } }] },
+      include: { category: true, library: true, owner: { select: { id: true, name: true, email: true } }, versions: { orderBy: { versionNumber: 'desc' }, take: 1 } },
+    });
+    if (!template || !this.canUseTemplate(user, template)) throw new NotFoundException('Template not found');
+    const version = template.versions[0];
+    if (!version) throw new NotFoundException('Template content not found');
+    return this.mapTemplatePreview(user, template, version, '', 0);
   }
 
   private async getManagedTemplate(user: AccessTokenPayload, id: string) {
@@ -462,35 +507,39 @@ export class TemplatesService {
     const library = await this.ensureLibrary(user, input.library);
     if (!this.canManageLibrary(user, library)) throw new ForbiddenException('You cannot manage this template library');
     const category = await this.assertCategory(user, input.categoryId, library.id);
-    const definitions: Record<TemplateType, { file: string; extension: string; mimeType: string }> = {
-      [TemplateType.DOCUMENT]: { file: 'blank-document.docx', extension: 'docx', mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' },
-      [TemplateType.SPREADSHEET]: { file: 'blank-spreadsheet.xlsx', extension: 'xlsx', mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' },
-      [TemplateType.PRESENTATION]: { file: 'blank-presentation.pptx', extension: 'pptx', mimeType: 'application/vnd.openxmlformats-officedocument.presentationml.presentation' },
+    const definitions: Record<TemplateType, { extension: string; mimeType: string }> = {
+      [TemplateType.DOCUMENT]: { extension: 'docx', mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' },
+      [TemplateType.SPREADSHEET]: { extension: 'xlsx', mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' },
+      [TemplateType.PRESENTATION]: { extension: 'pptx', mimeType: 'application/vnd.openxmlformats-officedocument.presentationml.presentation' },
     };
     const definition = definitions[input.type];
 
-    const assetCandidates = blankTemplateAssetCandidates(definition.file, __dirname);
-    let bytes: Buffer | null = null;
-    for (const assetPath of assetCandidates) {
-      try {
-        bytes = await readFile(assetPath);
-        break;
-      } catch {
-        // Try the next deployment layout.
-      }
-    }
-    if (!bytes) {
-      throw new InternalServerErrorException(
-        `Blank ${input.type.toLowerCase()} template asset is not available on the server`,
-      );
+    let bytes: Buffer;
+    try {
+      bytes = await readBlankTemplateAssetBytes(input.type, __dirname);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : `Blank ${input.type.toLowerCase()} template asset is not available on the server`;
+      this.logger.error(`Blank template asset missing ${JSON.stringify({ type: input.type, candidates: blankTemplateAssetCandidates(
+        input.type === TemplateType.SPREADSHEET ? 'blank-spreadsheet.xlsx' : input.type === TemplateType.PRESENTATION ? 'blank-presentation.pptx' : 'blank-document.docx',
+        __dirname,
+      ) })}`);
+      throw new InternalServerErrorException(message);
     }
 
-    const file = await this.files.createFileFromBytes(user, {
-      name: `${input.name}.${definition.extension}`,
-      mimeType: definition.mimeType,
-      extension: definition.extension,
-      bytes,
-    });
+    let file: Awaited<ReturnType<FilesService['createFileFromBytes']>>;
+    try {
+      file = await this.files.createFileFromBytes(user, {
+        name: `${input.name}.${definition.extension}`,
+        mimeType: definition.mimeType,
+        extension: definition.extension,
+        bytes,
+      });
+    } catch (error) {
+      if (error instanceof HttpException) throw error;
+      const message = error instanceof Error ? error.message : 'Unable to store blank template file';
+      this.logger.error(`createFromBlank createFileFromBytes failed: ${message}`);
+      throw new InternalServerErrorException(message);
+    }
 
     try {
       const template = await this.saveFromFile(user, {
@@ -499,7 +548,7 @@ export class TemplatesService {
         description: input.description,
         library: input.library,
         categoryId: category?.id ?? null,
-      });
+      }, { skipPreview: true });
       const latest = await this.prisma.template.findUnique({
         where: { id: template.id },
         include: { versions: { orderBy: { versionNumber: 'desc' }, take: 1 } },
@@ -560,11 +609,18 @@ export class TemplatesService {
     } catch (error) {
       // A failed template transaction must not leave an orphan working file.
       await this.files.trash(user, file.file_id).catch(() => undefined);
-      throw error;
+      if (error instanceof HttpException) throw error;
+      const message = error instanceof Error ? error.message : 'Unable to create blank template';
+      this.logger.error(`createFromBlank failed: ${message}`, error instanceof Error ? error.stack : undefined);
+      throw new InternalServerErrorException(message);
     }
   }
 
-  async saveFromFile(user: AccessTokenPayload, input: ReturnType<typeof parseTemplateFromFile>) {
+  async saveFromFile(
+    user: AccessTokenPayload,
+    input: ReturnType<typeof parseTemplateFromFile>,
+    opts?: { skipPreview?: boolean },
+  ) {
     if (input.library === TemplateLibraryType.PUBLIC) throw new ForbiddenException('Public templates cannot be created directly');
     const library = await this.ensureLibrary(user, input.library);
     if (!this.canManageLibrary(user, library)) throw new ForbiddenException('You cannot manage this template library');
@@ -587,10 +643,13 @@ export class TemplatesService {
     } catch (error) {
       if (snapshotKey) await this.storage.deleteStoredObject(snapshotKey).catch(() => undefined);
       await this.prisma.template.delete({ where: { id: templateId } }).catch(() => undefined);
-      throw error;
+      if (error instanceof HttpException) throw error;
+      const message = error instanceof Error ? error.message : 'Unable to persist template from file';
+      this.logger.error(`saveFromFile failed: ${message}`, error instanceof Error ? error.stack : undefined);
+      throw new InternalServerErrorException(message);
     }
 
-    return this.get(user, templateId);
+    return opts?.skipPreview ? this.getTemplateSummary(user, templateId) : this.get(user, templateId);
   }
 
   async use(user: AccessTokenPayload, id: string, input: ReturnType<typeof parseTemplateUse>) {
