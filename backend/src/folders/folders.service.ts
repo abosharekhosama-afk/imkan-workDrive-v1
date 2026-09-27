@@ -18,6 +18,7 @@ import { CreateFolderInput } from './create-folder.schema';
 import type { BulkFolderOperationInput, FolderMoveCopyInput } from './operation.schema';
 import { randomUUID } from 'node:crypto';
 import { WorkflowEngineService } from '../workflows/workflow-engine.service';
+import { MetadataService } from '../metadata/metadata.service';
 
 @Injectable()
 export class FoldersService {
@@ -27,6 +28,7 @@ export class FoldersService {
     private readonly effective: EffectivePermissionService,
     @Inject(STORAGE_SERVICE) private readonly storage: StorageService,
     private readonly workflowEngine: WorkflowEngineService,
+    private readonly metadata: MetadataService,
   ) {}
 
 
@@ -39,7 +41,9 @@ export class FoldersService {
     const folder = await this.requireMutableFolder(user, id);
     if (input.destinationFolderId === id) throw new BadRequestException('A folder cannot be moved into itself');
     if (input.destinationFolderId) await this.assertDestination(user, input.destinationFolderId, id);
+    const mandate = await this.metadata.validateMandatedTemplateForDestination(user, input.destinationFolderId, 'FOLDERS', input.templateId, input.customFields ?? {});
     const updated = await this.prisma.folder.update({ where: { id }, data: { parentId: input.destinationFolderId } });
+    if (mandate) await this.metadata.associateFolder(user, id, mandate.templateId, mandate.values);
     await this.prisma.auditLog.create({ data: { orgId: user.org_id, actorId: user.sub, action: 'FOLDER_MOVED', resourceType: 'FOLDER', resourceId: id } });
     this.dispatchWorkflowFolderEvent(user, 'move', updated);
     return updated;
@@ -48,6 +52,7 @@ export class FoldersService {
   async copy(user: AccessTokenPayload, id: string, input: FolderMoveCopyInput) {
     const folder = await this.requireMutableFolder(user, id);
     if (input.destinationFolderId) await this.assertDestination(user, input.destinationFolderId, id);
+    const mandate = await this.metadata.validateMandatedTemplateForDestination(user, input.destinationFolderId, 'FOLDERS', input.templateId, input.customFields ?? {});
     const destination = input.destinationFolderId ? await this.prisma.folder.findFirst({ where: { id: input.destinationFolderId }, select: { teamFolderId: true } }) : null;
     const targetTeamFolderId = destination?.teamFolderId ?? null;
     const copyTree = async (sourceId: string, parentId: string | null): Promise<string> => {
@@ -60,6 +65,7 @@ export class FoldersService {
       return newId;
     };
     const copiedId=await copyTree(folder.id,input.destinationFolderId);
+    if (mandate) await this.metadata.associateFolder(user, copiedId, mandate.templateId, mandate.values);
     await this.prisma.auditLog.create({ data: { orgId: user.org_id, actorId: user.sub, action: 'FOLDER_COPIED', resourceType: 'FOLDER', resourceId: copiedId } });
     const copied = await this.prisma.folder.findUnique({where:{id:copiedId}});
     if (copied) this.dispatchWorkflowFolderEvent(user, 'copy', copied);

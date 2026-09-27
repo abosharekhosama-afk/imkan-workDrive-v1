@@ -1,7 +1,8 @@
-import { BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, ForbiddenException, forwardRef, Inject, Injectable, NotFoundException } from '@nestjs/common';
 import type { AccessTokenPayload } from '../auth/jwt.types';
 import { PermissionService } from '../permissions/permission.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { WorkflowEngineService } from '../workflows/workflow-engine.service';
 
 export type DataTemplateField = {
   key: string;
@@ -82,7 +83,7 @@ function jsonArray(value: unknown): string[] {
 
 @Injectable()
 export class MetadataService {
-  constructor(private readonly prisma: PrismaService, private readonly permissions: PermissionService) {}
+  constructor(private readonly prisma: PrismaService, private readonly permissions: PermissionService, @Inject(forwardRef(() => WorkflowEngineService)) private readonly workflowEngine: WorkflowEngineService) {}
 
   private isOrgAdmin(user: AccessTokenPayload) { return this.permissions.isOrgAdminOrSuperAdmin(user); }
 
@@ -100,6 +101,11 @@ export class MetadataService {
   }
 
   private templateFields(template: any): DataTemplateField[] { return Array.isArray(template?.schema) ? template.schema as DataTemplateField[] : []; }
+
+  private dispatchTemplatePropertyEvent(user: AccessTokenPayload, file: { id: string; name: string; mimeType?: string | null; fileType?: string | null; size?: bigint | number | null; folderId?: string | null }, templateId: string, customFields: Record<string, unknown>) {
+    void this.workflowEngine.executeTrigger(user, { eventType: 'properties_updated', fileId: file.id, resourceId: file.id, resourceType: 'FILE', name: file.name, mimeType: file.mimeType ?? null, fileType: file.fileType ?? null, size: file.size == null ? '0' : String(file.size), folderId: file.folderId ?? null, userId: user.sub, dataTemplateId: templateId, customFields }).catch(() => undefined);
+  }
+
 
   async listTemplates(user: AccessTokenPayload, includeDisabled = false) {
     const where: any = { orgId: user.org_id, ...(includeDisabled && this.isOrgAdmin(user) ? {} : { active: true }) };
@@ -170,6 +176,7 @@ export class MetadataService {
     const values = validateFields(this.templateFields(template), customFields);
     const binding = await this.prisma.fileDataTemplateBinding.upsert({ where: { templateId_fileId: { templateId, fileId } }, create: { orgId: user.org_id, templateId, fileId, customFields: values as never, createdById: user.sub }, update: { customFields: values as never } });
     await this.prisma.fileMetadata.upsert({ where: { fileId }, create: { fileId, dataTemplateId: templateId, customFields: values as never }, update: { ...(existing ? {} : { dataTemplateId: templateId }), customFields: values as never } });
+    this.dispatchTemplatePropertyEvent(user, file, templateId, values);
     return binding;
   }
 
@@ -205,6 +212,7 @@ export class MetadataService {
     const values = validateFields(this.templateFields(binding.template), customFields);
     const updated = await this.prisma.fileDataTemplateBinding.update({ where: { id: binding.id }, data: { customFields: values as never } });
     await this.prisma.fileMetadata.updateMany({ where: { fileId, dataTemplateId: templateId }, data: { customFields: values as never } });
+    this.dispatchTemplatePropertyEvent(user, file, templateId, values);
     return { ...updated, template: binding.template };
   }
 
@@ -248,6 +256,55 @@ export class MetadataService {
     const template = await this.prisma.fileDataTemplate.findFirst({ where: { id: input.templateId, orgId: user.org_id, active: true } }); if (!template) throw new NotFoundException('Data template not found');
     return this.prisma.teamFolder.update({ where: { id: teamFolderId }, data: { mandateDataTemplateId: template.id, mandateDataTemplateTarget: input.target === 'FILES' || input.target === 'FOLDERS' ? input.target : 'BOTH' } });
   }
+
+  async getMandatedTemplateForDestination(user: AccessTokenPayload, folderId: string | null, target: MandateTarget = 'FILES') {
+    if (!folderId) return { enabled: false, target, template: null };
+    const folder = await this.prisma.folder.findFirst({ where: { id: folderId, orgId: user.org_id }, select: { id: true, parentId: true, teamFolderId: true } });
+    if (!folder) throw new NotFoundException('Destination folder not found');
+    // Zoho mandates configured on a Team Folder apply to items added directly
+    // to that Team Folder root, not to arbitrary descendants.
+    if (!folder.teamFolderId || folder.parentId !== null) return { enabled: false, target, template: null };
+    const teamFolder = await this.prisma.teamFolder.findFirst({ where: { id: folder.teamFolderId, orgId: user.org_id }, include: { mandateDataTemplate: true } });
+    if (!teamFolder?.mandateDataTemplateId || !teamFolder.mandateDataTemplate) return { enabled: false, target, template: null };
+    const applies = teamFolder.mandateDataTemplateTarget === 'BOTH' || teamFolder.mandateDataTemplateTarget === target;
+    return { enabled: applies, target, template: applies ? teamFolder.mandateDataTemplate : null };
+  }
+
+  async validateMandatedTemplateForDestination(
+    user: AccessTokenPayload,
+    folderId: string | null,
+    target: MandateTarget,
+    templateId?: string,
+    customFields: Record<string, unknown> = {},
+  ) {
+    const mandate = await this.getMandatedTemplateForDestination(user, folderId, target);
+    if (!mandate.enabled || !mandate.template) return null;
+    if (templateId && templateId !== mandate.template.id) {
+      throw new BadRequestException('The destination requires its mandated Data Template');
+    }
+    return { templateId: mandate.template.id, values: validateFields(this.templateFields(mandate.template), customFields) };
+  }
+
+  async assertFileMandateSatisfied(user: AccessTokenPayload, fileId: string) {
+    const file = await this.prisma.file.findFirst({ where: { id: fileId, orgId: user.org_id, deletedAt: null }, include: { folder: true } });
+    if (!file) throw new NotFoundException('File not found');
+    const mandate = await this.getMandatedTemplateForDestination(user, file.folderId, 'FILES');
+    if (!mandate.enabled || !mandate.template) return;
+    const binding = await this.prisma.fileDataTemplateBinding.findFirst({ where: { orgId: user.org_id, fileId, templateId: mandate.template.id } });
+    if (!binding) throw new BadRequestException(`Required data template must be completed before upload: ${mandate.template.name}`);
+    validateFields(this.templateFields(mandate.template), binding.customFields ?? {});
+  }
+
+  async enforceFileMandate(user: AccessTokenPayload, fileId: string, customFields: unknown = {}) {
+    const file = await this.prisma.file.findFirst({ where: { id: fileId, orgId: user.org_id, deletedAt: null }, include: { folder: true } });
+    if (!file) throw new NotFoundException('File not found');
+    const mandate = await this.getMandatedTemplateForDestination(user, file.folderId, 'FILES');
+    if (!mandate.enabled || !mandate.template) return null;
+    const existing = await this.prisma.fileDataTemplateBinding.findFirst({ where: { orgId: user.org_id, fileId, templateId: mandate.template.id } });
+    if (existing) return existing;
+    return this.associateFile(user, fileId, mandate.template.id, customFields);
+  }
+
 
   async getTeamFolderMandate(user: AccessTokenPayload, teamFolderId: string) {
     const teamFolder = await this.prisma.teamFolder.findFirst({ where: { id: teamFolderId, orgId: user.org_id }, include: { mandateDataTemplate: true } }); if (!teamFolder) throw new NotFoundException('Team Folder not found');

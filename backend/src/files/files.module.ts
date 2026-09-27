@@ -6,9 +6,10 @@ import { WorkflowsModule } from '../workflows/workflows.module';
 import { FilesController } from './files.controller';
 import { FilesService } from './files.service';
 import { DlpModule } from '../dlp/dlp.module';
+import { MetadataModule } from '../metadata/metadata.module';
 
 @Module({
-  imports: [StorageModule, QuotaModule, RecentModule, forwardRef(() => WorkflowsModule), DlpModule],
+  imports: [StorageModule, QuotaModule, RecentModule, forwardRef(() => WorkflowsModule), DlpModule, MetadataModule],
   controllers: [FilesController],
   providers: [FilesService],
   exports: [FilesService],

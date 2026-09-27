@@ -42,6 +42,7 @@ import {
 import { QuotaService } from '../quota/quota.service';
 import { classifyFileType, extractExtension } from '../common/file-classification';
 import { WorkflowEngineService } from '../workflows/workflow-engine.service';
+import { MetadataService } from '../metadata/metadata.service';
 import { DlpService } from '../dlp/dlp.service';
 
 export type UploadRequestResponse = {
@@ -158,6 +159,7 @@ export class FilesService {
     private readonly config: ConfigService,
     @Inject(forwardRef(() => WorkflowEngineService)) private readonly workflowEngine: WorkflowEngineService,
     private readonly dlp: DlpService,
+    private readonly metadata: MetadataService,
   ) {}
 
   async requestUpload(
@@ -525,6 +527,8 @@ export class FilesService {
     const totalSize = session.parts.reduce((sum, p) => sum + p.size, 0);
     if (BigInt(totalSize) !== session.expectedSize) throw new BadRequestException('Uploaded parts do not match the expected file size');
 
+    await this.metadata.assertFileMandateSatisfied(user, session.fileId);
+
     if (!session.storageCompletedAt) {
       try {
         await this.storage.completeMultipartUpload({ fileId: session.fileId, versionId: session.versionId, ownerOrgId: user.org_id, contentType: session.version.mimeType, storageKey: session.objectKey }, session.storageUploadId, session.parts.map(p => ({ partNumber: p.partNumber, etag: p.etag! })));
@@ -580,6 +584,7 @@ export class FilesService {
       }
       throw error;
     }
+    await this.metadata.assertFileMandateSatisfied(user, session.fileId);
     void this.dlp.classifyFile(user, session.fileId).catch(() => undefined);
     return { file_id: session.fileId, upload_id: session.versionId, status: 'complete' };
   }
@@ -636,6 +641,8 @@ export class FilesService {
     if (version.uploadStatus !== UploadStatus.PENDING) {
       throw new BadRequestException('Upload is no longer completable');
     }
+
+    await this.metadata.assertFileMandateSatisfied(user, version.fileId);
 
     let inspected: { size: number; checksum: string | null };
     try {
@@ -1515,7 +1522,9 @@ export class FilesService {
   async move(user: AccessTokenPayload, id: string, input: MoveCopyInput) {
     const file = await this.requireMutableFile(user, await this.prisma.file.findFirst({ where: { id, deletedAt: null }, include: { folder: { select: { teamFolderId: true } } } }), 'Not allowed to move this file');
     await this.assertDestination(user, input.destinationFolderId);
+    const mandate = await this.metadata.validateMandatedTemplateForDestination(user, input.destinationFolderId, 'FILES', input.templateId, input.customFields ?? {});
     const updated = await this.prisma.file.update({ where: { id }, data: { folderId: input.destinationFolderId } });
+    if (mandate) await this.metadata.associateFile(user, id, mandate.templateId, mandate.values);
     await this.recordActivity(user.org_id, id, user.sub, AuditAction.MOVE, { destinationFolderId: input.destinationFolderId });
     await this.prisma.auditLog.create({ data: { orgId: user.org_id, actorId: user.sub, action: 'FILE_MOVED', resourceType: 'FILE', resourceId: id } });
     this.dispatchWorkflowFileEvent(user, 'move', updated);
@@ -1525,6 +1534,7 @@ export class FilesService {
   async copy(user: AccessTokenPayload, id: string, input: MoveCopyInput) {
     const file = await this.requireMutableFile(user, await this.prisma.file.findFirst({ where: { id, deletedAt: null }, include: { folder: { select: { teamFolderId: true } }, versions: { where: { uploadStatus: UploadStatus.COMPLETE }, orderBy: { versionNumber: 'desc' }, take: 1 } } }), 'Not allowed to copy this file');
     await this.assertDestination(user, input.destinationFolderId);
+    const mandate = await this.metadata.validateMandatedTemplateForDestination(user, input.destinationFolderId, 'FILES', input.templateId, input.customFields ?? {});
     const version = file.versions[0];
     if (!version) throw new NotFoundException('File version not found');
     const newFileId = randomUUID();
@@ -1535,6 +1545,7 @@ export class FilesService {
       await tx.auditLog.create({ data: { orgId: user.org_id, actorId: user.sub, action: 'FILE_COPIED', resourceType: 'FILE', resourceId: newFileId } });
       return newFile;
     });
+    if (mandate) await this.metadata.associateFile(user, copied.id, mandate.templateId, mandate.values);
     this.dispatchWorkflowFileEvent(user, 'copy', copied);
     // Do not return the Prisma model directly: File.size is a BigInt and
     // Express JSON serialization would throw after the transaction has already

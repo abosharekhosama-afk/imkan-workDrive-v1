@@ -12,7 +12,7 @@ import type { FolderRecord } from "../../lib/api/types";
 
 export type SortDir = "asc" | "desc";
 export type FilterKey = "all" | "folders" | "documents" | "sheets" | "slides" | "media" | "audio" | "archives" | "favorites";
-export type AdvancedFileFilter = { type: "all" | "document" | "spreadsheet" | "presentation" | "image" | "pdf"; status: "all" | "ACTIVE" | "ARCHIVED" | "PENDING_APPROVAL"; dateField: "modified" | "created"; dateFrom: string; dateTo: string; owner: string };
+export type AdvancedFileFilter = { type: "all" | "document" | "spreadsheet" | "presentation" | "image" | "pdf"; status: "all" | "ACTIVE" | "ARCHIVED" | "PENDING_APPROVAL"; dateField: "modified" | "created"; dateFrom: string; dateTo: string; owner: string; dataTemplateId: string };
 
 export const FILTER_STORAGE_KEY = "zoho.filter";
 
@@ -48,7 +48,7 @@ const COLUMN_DEFS: Array<[ColumnKey, string, boolean]> = [
 export function ActionToolbar({
   view, onView, sortField, onSortField, sortDir, onSortDir,
   filter, onFilter, columns, onColumns, folders = [], currentFolderId, onOpenFolder,
-  advancedFilter, onAdvancedFilter, owners = [], context = "files", recordDisabled = false,
+  advancedFilter, onAdvancedFilter, owners = [], dataTemplates = [], context = "files", recordDisabled = false,
 }: {
   view: ViewMode; onView: (v: ViewMode) => void;
   sortField: ColumnKey; onSortField: (k: ColumnKey) => void;
@@ -61,6 +61,7 @@ export function ActionToolbar({
   advancedFilter?: AdvancedFileFilter;
   onAdvancedFilter?: (value: AdvancedFileFilter) => void;
   owners?: Array<{ id: string; name: string | null; email: string }>;
+  dataTemplates?: Array<{ id: string; name: string; active: boolean }>;
   /** Direct navigation callback (replaces the old workdrive:tree-open CustomEvent). */
   onOpenFolder?: (folderId: string) => void;
   /** Toolbar target surface. Team folders use the team-folder creation flow. */
@@ -87,7 +88,7 @@ export function ActionToolbar({
   const treeFetchingRef = useRef<Set<string>>(new Set());
 
   const cols = columns ?? {};
-  const af: AdvancedFileFilter = advancedFilter ?? { type: "all", status: "all", dateField: "modified", dateFrom: "", dateTo: "", owner: "" };
+  const af: AdvancedFileFilter = advancedFilter ?? { type: "all", status: "all", dateField: "modified", dateFrom: "", dateTo: "", owner: "", dataTemplateId: "" };
   const rootRef = useRef<HTMLDivElement | null>(null);
 
   // Guarded child fetch: skip when already fetching OR already loaded - the
@@ -331,11 +332,11 @@ export function ActionToolbar({
               <label className="text-[11px] text-slate-500">File type<select value={af.type} onChange={e=>onAdvancedFilter({...af,type:e.target.value as AdvancedFileFilter['type']})} className="mt-1 w-full rounded-md border border-slate-200 bg-white px-2 py-1.5 text-[12px] text-slate-700"><option value="all">All types</option><option value="document">Document</option><option value="spreadsheet">Spreadsheet</option><option value="presentation">Presentation</option><option value="image">Image</option><option value="pdf">PDF</option></select></label>
               <label className="text-[11px] text-slate-500">Status<select value={af.status} onChange={e=>onAdvancedFilter({...af,status:e.target.value as AdvancedFileFilter['status']})} className="mt-1 w-full rounded-md border border-slate-200 bg-white px-2 py-1.5 text-[12px] text-slate-700"><option value="all">All</option><option value="ACTIVE">Active</option><option value="ARCHIVED">Archived</option><option value="PENDING_APPROVAL">Pending approval</option></select></label>
               <label className="text-[11px] text-slate-500">Date field<select value={af.dateField} onChange={e=>onAdvancedFilter({...af,dateField:e.target.value as AdvancedFileFilter['dateField']})} className="mt-1 w-full rounded-md border border-slate-200 bg-white px-2 py-1.5 text-[12px] text-slate-700"><option value="modified">Date modified</option><option value="created">Date created</option></select></label>
-              <label className="text-[11px] text-slate-500">Owner/author<select value={af.owner} onChange={e=>onAdvancedFilter({...af,owner:e.target.value})} className="mt-1 w-full rounded-md border border-slate-200 bg-white px-2 py-1.5 text-[12px] text-slate-700"><option value="">All owners</option>{(owners??[]).map(o=><option key={o.id} value={o.id}>{o.name??o.email}</option>)}</select></label>
+              <label className="text-[11px] text-slate-500">Data Template<select value={af.dataTemplateId} onChange={e=>onAdvancedFilter({...af,dataTemplateId:e.target.value})} className="mt-1 w-full rounded-md border border-slate-200 bg-white px-2 py-1.5 text-[12px] text-slate-700"><option value="">All Data Templates</option>{(dataTemplates??[]).filter(t=>t.active).map(t=><option key={t.id} value={t.id}>{t.name}</option>)}</select></label><label className="text-[11px] text-slate-500">Owner/author<select value={af.owner} onChange={e=>onAdvancedFilter({...af,owner:e.target.value})} className="mt-1 w-full rounded-md border border-slate-200 bg-white px-2 py-1.5 text-[12px] text-slate-700"><option value="">All owners</option>{(owners??[]).map(o=><option key={o.id} value={o.id}>{o.name??o.email}</option>)}</select></label>
               <label className="col-span-2 text-[11px] text-slate-500">From<input type="date" value={af.dateFrom} onChange={e=>onAdvancedFilter({...af,dateFrom:e.target.value})} className="mt-1 w-full rounded-md border border-slate-200 px-2 py-1.5 text-[12px]" /></label>
               <label className="col-span-2 text-[11px] text-slate-500">To<input type="date" value={af.dateTo} onChange={e=>onAdvancedFilter({...af,dateTo:e.target.value})} className="mt-1 w-full rounded-md border border-slate-200 px-2 py-1.5 text-[12px]" /></label>
             </div>
-            <div className="mt-3 flex justify-between border-t border-slate-100 pt-2"><button type="button" className="text-[12px] text-slate-500" onClick={()=>onAdvancedFilter({type:"all",status:"all",dateField:"modified",dateFrom:"",dateTo:"",owner:""})}>Clear</button><button type="button" className="rounded-md bg-[#1B66EA] px-3 py-1.5 text-[12px] font-medium text-white" onClick={close}>Done</button></div>
+            <div className="mt-3 flex justify-between border-t border-slate-100 pt-2"><button type="button" className="text-[12px] text-slate-500" onClick={()=>onAdvancedFilter({type:"all",status:"all",dateField:"modified",dateFrom:"",dateTo:"",owner:"",dataTemplateId:""})}>Clear</button><button type="button" className="rounded-md bg-[#1B66EA] px-3 py-1.5 text-[12px] font-medium text-white" onClick={close}>Done</button></div>
           </div>
         ) : null}
 

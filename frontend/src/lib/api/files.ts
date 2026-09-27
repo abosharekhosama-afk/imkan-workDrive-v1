@@ -91,8 +91,8 @@ export async function sha256Hex(file: File): Promise<string> {
     .join("");
 }
 
-export function moveFile(id: string, destinationFolderId: string | null) { return apiRequest(`/files/${id}/move`, { method: "PATCH", body: JSON.stringify({ destinationFolderId }) }); }
-export function copyFile(id: string, destinationFolderId: string | null) { return apiRequest(`/files/${id}/copy`, { method: "POST", body: JSON.stringify({ destinationFolderId }) }); }
+export function moveFile(id: string, destinationFolderId: string | null, templateId?: string, customFields?: Record<string, unknown>) { return apiRequest(`/files/${id}/move`, { method: "PATCH", body: JSON.stringify({ destinationFolderId, ...(templateId ? { templateId } : {}), ...(customFields ? { customFields } : {}) }) }); }
+export function copyFile(id: string, destinationFolderId: string | null, templateId?: string, customFields?: Record<string, unknown>) { return apiRequest(`/files/${id}/copy`, { method: "POST", body: JSON.stringify({ destinationFolderId, ...(templateId ? { templateId } : {}), ...(customFields ? { customFields } : {}) }) }); }
 export function permanentDeleteFile(id: string) { return apiRequest(`/files/${id}/permanent`, { method: "DELETE" }); }
 export function bulkMoveFiles(ids: string[], destinationFolderId: string | null) { return apiRequest(`/files/bulk/move`, { method: "POST", body: JSON.stringify({ ids, destinationFolderId }) }); }
 export function bulkTrashFiles(ids: string[]) { return apiRequest(`/files/bulk/trash`, { method: "POST", body: JSON.stringify({ ids }) }); }

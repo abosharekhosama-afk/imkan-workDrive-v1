@@ -16,6 +16,7 @@ export type WorkflowFileEvent = {
   eventType?: string; fileId: string; resourceId?: string; name: string; mimeType?: string | null; fileType?: string | null; size?: string;
   userId: string; folderId?: string | null; extension?: string | null; sourceWorkflowId?: string; resourceType?: 'FILE' | 'FOLDER';
   startInput?: { fieldValues?: Record<string, unknown>; participantRules?: ParticipantRule[]; comment?: string };
+  dataTemplateId?: string; customFields?: Record<string, unknown>;
 };
 type WorkflowAction = { type: string; config?: Record<string, unknown> };
 type PhaseActions = { before: WorkflowAction[]; during: WorkflowAction[]; after: WorkflowAction[] };
@@ -196,7 +197,7 @@ export class WorkflowEngineService implements OnModuleInit, OnModuleDestroy {
 
   private triggerMatches(configured: string[], eventType: string) {
     if (configured.includes('manual')) return eventType === 'manual';
-    const aliases: Record<string, string[]> = { upload: ['upload', 'FILE_UPLOADED'], create: ['create', 'created', 'FILE_CREATED', 'FOLDER_CREATED'], move: ['move', 'FILE_MOVED', 'FOLDER_MOVED'], copy: ['copy', 'FILE_COPIED', 'FOLDER_COPIED'], rename: ['rename', 'FILE_RENAMED'], delete: ['delete', 'FILE_DELETED'], properties_updated: ['properties_updated', 'FILE_PROPERTIES_UPDATED'], ready: ['ready', 'FILE_READY'] };
+    const aliases: Record<string, string[]> = { upload: ['upload', 'FILE_UPLOADED'], create: ['create', 'created', 'FILE_CREATED', 'FOLDER_CREATED'], move: ['move', 'FILE_MOVED', 'FOLDER_MOVED'], copy: ['copy', 'FILE_COPIED', 'FOLDER_COPIED'], rename: ['rename', 'FILE_RENAMED'], delete: ['delete', 'FILE_DELETED'], properties_updated: ['properties_updated', 'FILE_PROPERTIES_UPDATED', 'DATA_TEMPLATE_UPDATED'], ready: ['ready', 'FILE_READY'] };
     return configured.some((x) => (aliases[x] ?? [x]).includes(eventType));
   }
 

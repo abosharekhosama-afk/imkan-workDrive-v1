@@ -24,3 +24,7 @@ export function updateFolderDataTemplateBinding(folderId: string, templateId: st
 export function disassociateFolderDataTemplate(folderId: string, templateId: string) { return apiRequest(`/metadata/folders/${encodeURIComponent(folderId)}/associations/${encodeURIComponent(templateId)}`, { method: "DELETE" }); }
 export function getTeamFolderDataTemplateMandate(teamFolderId: string) { return apiRequest<{ enabled: boolean; target: "FILES"|"FOLDERS"|"BOTH"; template: DataTemplate | null }>(`/metadata/team-folders/${encodeURIComponent(teamFolderId)}/mandate`); }
 export function setTeamFolderDataTemplateMandate(teamFolderId: string, body: { templateId: string | null; target?: "FILES"|"FOLDERS"|"BOTH" }) { return apiRequest(`/metadata/team-folders/${encodeURIComponent(teamFolderId)}/mandate`, { method: "PUT", body: JSON.stringify(body) }); }
+
+export function getUploadDataTemplateMandate(folderId: string | null) { return apiRequest<{ enabled: boolean; target: "FILES"; template: DataTemplate | null }>(`/metadata/upload-mandate${folderId ? `?folderId=${encodeURIComponent(folderId)}` : ""}`); }
+
+export function getTransferDataTemplateMandate(folderId: string | null, target: "FILES" | "FOLDERS") { return apiRequest<{ enabled: boolean; target: "FILES" | "FOLDERS"; template: DataTemplate | null }>(`/metadata/transfer-mandate?target=${target}${folderId ? `&folderId=${encodeURIComponent(folderId)}` : ""}`); }

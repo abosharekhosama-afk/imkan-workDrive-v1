@@ -7,6 +7,7 @@ import {
   sha256Hex,
   startResumableUpload,
 } from "./files";
+import { associateFileDataTemplate } from "./metadata";
 import { getAccessToken, getApiBaseUrl } from "./client";
 import { filesFromDrop } from "./drop-files";
 import { resolveMimeType } from "./mime";
@@ -48,7 +49,7 @@ async function uploadResumablePart(sessionId: string, partNumber: number, file: 
   throw lastError instanceof Error ? lastError : new Error("Upload part failed");
 }
 
-async function uploadLargeFile(folderId: string | null, file: File, mimeType: string, sha256: string, onProgress?: (progress: number) => void): Promise<void> {
+async function uploadLargeFile(folderId: string | null, file: File, mimeType: string, sha256: string, customFields: Record<string, unknown> | undefined, templateId: string | undefined, onProgress?: (progress: number) => void): Promise<void> {
   if (typeof window === "undefined") throw new Error("Resumable uploads require a browser");
   const storageKey = `${RESUME_STORAGE_PREFIX}${folderId ?? "root"}:${sha256}`;
   let sessionId: string | null = window.localStorage.getItem(storageKey);
@@ -83,17 +84,18 @@ async function uploadLargeFile(folderId: string | null, file: File, mimeType: st
     onProgress?.(Math.min(99, Math.round((uploadedBytes / file.size) * 100)));
   }
 
+  if (templateId) await associateFileDataTemplate(state.file_id, templateId, customFields ?? {});
   await completeResumableUpload(sessionId);
   window.localStorage.removeItem(storageKey);
   onProgress?.(100);
 }
 
-export async function uploadFileToFolder(folderId: string | null, file: File, onProgress?: (progress: number) => void): Promise<void> {
+export async function uploadFileToFolder(folderId: string | null, file: File, onProgress?: (progress: number) => void, customFields?: Record<string, unknown>, templateId?: string): Promise<void> {
   const sha256 = await sha256Hex(file);
   const mimeType = resolveMimeType(file.type || "", file.name);
 
   if (file.size >= RESUMABLE_THRESHOLD) {
-    await uploadLargeFile(folderId, file, mimeType, sha256, onProgress);
+    await uploadLargeFile(folderId, file, mimeType, sha256, customFields, templateId, onProgress);
     return;
   }
 
@@ -107,5 +109,6 @@ export async function uploadFileToFolder(folderId: string | null, file: File, on
     xhr.onerror = () => reject(new Error("Upload failed"));
     xhr.send(file);
   });
+  if (templateId) await associateFileDataTemplate(request.file_id, templateId, customFields ?? {});
   await completeUpload(request.upload_id);
 }

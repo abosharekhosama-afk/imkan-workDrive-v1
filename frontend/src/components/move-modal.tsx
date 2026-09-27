@@ -5,6 +5,7 @@ import { Modal } from "./modal";
 import { createFolder, getFolder, listRootContents } from "../lib/api/folders";
 import { friendlyErrorMessageKey } from "../lib/friendly-error";
 import { Icons } from "./layout/icons";
+import { getTransferDataTemplateMandate, type DataTemplate } from "../lib/api/metadata";
 
 type FlatFolder = { id: string; name: string; depth: number };
 
@@ -16,9 +17,9 @@ const SIDE_SECTIONS: Array<{ key: string; labelKey: string; icon: React.ReactNod
 ];
 
 export function MoveModal({ resourceName, resourceType = "FILE", resourceId, mode = "move", onClose, onMove }: {
-  resourceName: string; resourceType?: "FILE" | "FOLDER"; resourceId?: string; mode?: "move" | "copy"; onClose: () => void; onMove: (destinationFolderId: string | null) => Promise<void>;
+  resourceName: string; resourceType?: "FILE" | "FOLDER"; resourceId?: string; mode?: "move" | "copy"; onClose: () => void; onMove: (destinationFolderId: string | null, templateId?: string, customFields?: Record<string, unknown>) => Promise<void>;
 }) {
-  const { label } = useLocale();
+  const { label, locale } = useLocale();
   const [folders, setFolders] = useState<FlatFolder[]>([]);
   const [destination, setDestination] = useState<string | null>(null);
   const [activeSection, setActiveSection] = useState("myFolders");
@@ -28,6 +29,9 @@ export function MoveModal({ resourceName, resourceType = "FILE", resourceId, mod
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [mandate, setMandate] = useState<DataTemplate | null>(null);
+  const [mandateFields, setMandateFields] = useState<Record<string, unknown>>({});
+  const [mandateLoading, setMandateLoading] = useState(false);
 
   const loadTree = async () => {
     setLoading(true); setError(null);
@@ -51,6 +55,21 @@ export function MoveModal({ resourceName, resourceType = "FILE", resourceId, mod
       setLoading(false);
     }
   };
+  useEffect(() => {
+    let active = true;
+    setMandate(null); setMandateFields({});
+    if (destination === null) return () => { active = false; };
+    setMandateLoading(true);
+    void getTransferDataTemplateMandate(destination, resourceType === "FOLDER" ? "FOLDERS" : "FILES").then((result) => {
+      if (!active) return;
+      setMandate(result.enabled ? result.template : null);
+      const initial: Record<string, unknown> = {};
+      (result.template?.schema ?? []).forEach((field) => { if (field.type === "boolean") initial[field.key] = false; });
+      setMandateFields(initial);
+    }).catch(() => { if (active) setMandate(null); }).finally(() => { if (active) setMandateLoading(false); });
+    return () => { active = false; };
+  }, [destination, resourceType]);
+
   useEffect(() => { void loadTree(); }, [label]);
 
   const invalidDestinationIds = new Set(resourceType === "FOLDER" && resourceId ? [resourceId] : []);
@@ -75,7 +94,13 @@ export function MoveModal({ resourceName, resourceType = "FILE", resourceId, mod
 
   async function submit() {
     setSubmitting(true); setError(null);
-    try { await onMove(destination); onClose(); }
+    try {
+      if (mandate) {
+        const missing = (mandate.schema ?? []).filter((field) => field.required && (mandateFields[field.key] === undefined || mandateFields[field.key] === null || String(mandateFields[field.key]).trim() === ""));
+        if (missing.length) throw new Error(`Required Data Template fields: ${missing.map((field) => field.label).join(", ")}`);
+      }
+      await onMove(destination, mandate?.id, mandate ? mandateFields : undefined); onClose();
+    }
     catch (cause) { setError(label(friendlyErrorMessageKey(cause))); }
     finally { setSubmitting(false); }
   }
@@ -83,7 +108,7 @@ export function MoveModal({ resourceName, resourceType = "FILE", resourceId, mod
   const title = mode === "copy" ? `${label("menu.copyTo")} ${resourceName}` : `${label("files.moveTitle")} ${resourceName}`;
 return (
     <Modal title={title} onClose={onClose}>
-      <div className="flex flex-col gap-3" style={{ width: "min(94vw, 760px)" }}>
+      <div className="flex flex-col gap-3" style={{ width: "min(96vw, 960px)" }}>
         <div className="relative">
           <Icons.search size={14} className="pointer-events-none absolute start-3 top-1/2 -translate-y-1/2 text-slate-400" />
           <input
@@ -149,6 +174,13 @@ return (
             {creating ? "..." : label("files.newFolder")}
           </button>
         </div>
+    {mandateLoading ? <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-[12px] text-slate-500">{locale === "ar" ? "جارٍ التحميل…" : "Loading…"}</div> : null}
+    {mandate ? <section className="rounded-xl border border-[color:var(--wd-primary)]/20 bg-[var(--wd-primary-light)] p-4">
+      <div className="flex items-start justify-between gap-3"><div><h3 className="text-[13px] font-semibold text-slate-900">{locale === "ar" ? "الخصائص المطلوبة" : "Required properties"}</h3><p className="mt-1 text-[11px] text-slate-500">{mandate.name}</p></div><span className="rounded-full bg-white px-2 py-1 text-[10px] font-medium text-slate-500">{mandate.schema.length} {locale === "ar" ? "حقول" : "fields"}</span></div>
+      <div className="mt-3 grid gap-3 md:grid-cols-2">{mandate.schema.map((field) => <label key={field.key} className="text-[11px] text-slate-600">{field.label}{field.required ? <span className="ms-1 text-red-500">*</span> : null}
+        {field.type === "boolean" ? <input type="checkbox" checked={Boolean(mandateFields[field.key])} onChange={(e) => setMandateFields((v) => ({ ...v, [field.key]: e.target.checked }))} className="ms-2" /> : field.type === "select" || field.type === "radio" ? <select value={String(mandateFields[field.key] ?? "")} onChange={(e) => setMandateFields((v) => ({ ...v, [field.key]: e.target.value }))} className="mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-[12px]"> <option value="">—</option>{(field.options ?? []).map((option) => <option key={option} value={option}>{option}</option>)}</select> : <input type={field.type === "number" ? "number" : field.type === "date" ? "date" : field.type === "datetime" ? "datetime-local" : field.type === "email" ? "email" : "text"} value={String(mandateFields[field.key] ?? "")} onChange={(e) => setMandateFields((v) => ({ ...v, [field.key]: e.target.value }))} className="mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-[12px]" />}
+      </label>)}</div>
+    </section> : null}
     {error ? <p className="text-[13px] text-red-600">{error}</p> : null}
     <div className="flex items-center justify-center gap-2 border-t border-slate-100 pt-3">
       <button type="button" className="rounded-full border border-slate-200 px-4 py-1.5 text-[13px] font-medium text-slate-600 transition-colors hover:bg-slate-50" onClick={onClose} disabled={submitting}>{label("share.cancel")}</button>

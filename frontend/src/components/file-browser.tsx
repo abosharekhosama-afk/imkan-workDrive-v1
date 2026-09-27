@@ -39,6 +39,7 @@ import {
   type ViewMode,
 } from "./view-mode-logic";
 import { getWorkspacePolicy } from "../lib/api/organization";
+import { listDataTemplates, type DataTemplate } from "../lib/api/metadata";
 import { openInspector } from "./layout/shell-context";
 
 import { canMutateContent, canShareContent } from "../lib/permissions";
@@ -67,6 +68,7 @@ export function FileBrowser({
   const [files, setFiles] = useState<FileRecord[]>([]);
   const [folderName, setFolderName] = useState<string | undefined>();
   const [teamFolderId, setTeamFolderId] = useState<string | null>(null);
+  const [dataTemplates, setDataTemplates] = useState<DataTemplate[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [newFolderName, setNewFolderName] = useState("");
   const [newFolderOpen, setNewFolderOpen] = useState(false);
@@ -125,11 +127,13 @@ export function FileBrowser({
     type: (searchParams.get("type") as AdvancedFileFilter["type"]) || "all",
     status: (searchParams.get("status") as AdvancedFileFilter["status"]) || "all",
     dateField: (searchParams.get("dateField") as AdvancedFileFilter["dateField"]) || "modified",
-    dateFrom: searchParams.get("dateFrom") || "", dateTo: searchParams.get("dateTo") || "", owner: searchParams.get("owner") || "",
+    dateFrom: searchParams.get("dateFrom") || "", dateTo: searchParams.get("dateTo") || "", owner: searchParams.get("owner") || "", dataTemplateId: searchParams.get("dataTemplate") || "",
   });
   // Folder aggregate metadata surfaced by the API (size / latest file update).
   const [folderSizes, setFolderSizes] = useState<ReadonlyMap<string, number>>(new Map());
   const [folderUpdatedAt, setFolderUpdatedAt] = useState<ReadonlyMap<string, string | null>>(new Map());
+  useEffect(() => { void listDataTemplates(false).then(setDataTemplates).catch(() => setDataTemplates([])); }, []);
+  useEffect(() => { const value = searchParams.get("dataTemplate") || ""; setAdvancedFilter((current) => current.dataTemplateId === value ? current : { ...current, dataTemplateId: value }); }, [searchParams]);
   const owners = useMemo(() => { const map = new Map<string,{id:string;name:string|null;email:string}>(); for (const f of files) if (f.ownerId && !map.has(f.ownerId)) map.set(f.ownerId,{id:f.ownerId,name:f.ownerName??null,email:f.ownerEmail??""}); return [...map.values()]; }, [files]);
 
   const applyContents = (contents: { folders: FolderRecord[]; files: FileRecord[]; folderSizes?: Record<string, number> | null; folderUpdatedAt?: Record<string, string | null> | null }) => {
@@ -213,7 +217,7 @@ export function FileBrowser({
     const setOrDelete = (key: string, value: string) => value ? q.set(key, value) : q.delete(key);
     setOrDelete("filter", filter === "all" ? "" : filter); setOrDelete("type", advancedFilter.type === "all" ? "" : advancedFilter.type);
     setOrDelete("status", advancedFilter.status === "all" ? "" : advancedFilter.status); setOrDelete("owner", advancedFilter.owner);
-    setOrDelete("dateField", advancedFilter.dateField === "modified" ? "" : advancedFilter.dateField); setOrDelete("dateFrom", advancedFilter.dateFrom); setOrDelete("dateTo", advancedFilter.dateTo);
+    setOrDelete("dateField", advancedFilter.dateField === "modified" ? "" : advancedFilter.dateField); setOrDelete("dateFrom", advancedFilter.dateFrom); setOrDelete("dateTo", advancedFilter.dateTo); setOrDelete("dataTemplate", advancedFilter.dataTemplateId);
     const next = q.toString();
     const current = searchParams.toString();
     if (next !== current) router.replace(`${window.location.pathname}${next ? `?${next}` : ""}`, { scroll: false });
@@ -241,6 +245,7 @@ export function FileBrowser({
           dateField: advancedFilter.dateField,
           dateFrom: advancedFilter.dateFrom || undefined,
           dateTo: advancedFilter.dateTo || undefined,
+          dataTemplateId: advancedFilter.dataTemplateId || undefined,
         });
         setFolderName(undefined);
         setTeamFolderId(null);
@@ -503,7 +508,7 @@ export function FileBrowser({
       <ShellScopeSync folderId={folderId} folderName={folderName} />
       <div className="flex min-w-0 flex-1 flex-col bg-white">
         {selectedIds.size === 0 ? (
-          <ActionToolbar context={teamFolderId ? "teamFolder" : "files"} view={viewMode} onView={(v) => switchViewMode(v)} sortField={sortField} onSortField={setSortField} sortDir={sortDir} onSortDir={setSortDir} filter={filter} onFilter={setFilter} advancedFilter={advancedFilter} onAdvancedFilter={setAdvancedFilter} owners={owners} columns={columns} onColumns={setColumns} folders={folders} currentFolderId={folderId} onOpenFolder={handleOpenFolder} />
+          <ActionToolbar context={teamFolderId ? "teamFolder" : "files"} view={viewMode} onView={(v) => switchViewMode(v)} sortField={sortField} onSortField={setSortField} sortDir={sortDir} onSortDir={setSortDir} filter={filter} onFilter={setFilter} advancedFilter={advancedFilter} onAdvancedFilter={setAdvancedFilter} owners={owners} dataTemplates={dataTemplates} columns={columns} onColumns={setColumns} folders={folders} currentFolderId={folderId} onOpenFolder={handleOpenFolder} />
         ) : (
           <SelectionBar
             folderCount={folders.filter((f) => selectedIds.has(f.id)).length}
@@ -639,11 +644,11 @@ export function FileBrowser({
           resourceType={moveTarget.type}
           resourceId={moveTarget.id}
           onClose={() => setMoveTarget(null)}
-          onMove={async (destinationFolderId) => {
+          onMove={async (destinationFolderId, templateId, customFields) => {
             if (moveTarget.type === "FOLDER") {
-              await moveFolder(moveTarget.id, destinationFolderId);
+              await moveFolder(moveTarget.id, destinationFolderId, templateId, customFields);
             } else {
-              await moveFile(moveTarget.id, destinationFolderId);
+              await moveFile(moveTarget.id, destinationFolderId, templateId, customFields);
             }
             await load();
           }}
@@ -656,11 +661,11 @@ export function FileBrowser({
           resourceId={copyTarget.id}
           mode="copy"
           onClose={() => setCopyTarget(null)}
-          onMove={async (destinationFolderId) => {
+          onMove={async (destinationFolderId, templateId, customFields) => {
             if (copyTarget.type === "FOLDER") {
-              await copyFolder(copyTarget.id, destinationFolderId);
+              await copyFolder(copyTarget.id, destinationFolderId, templateId, customFields);
             } else {
-              await copyFile(copyTarget.id, destinationFolderId);
+              await copyFile(copyTarget.id, destinationFolderId, templateId, customFields);
             }
             // Copy is a successful content mutation; refresh the current view
             // before closing the modal so the new item is visible immediately.

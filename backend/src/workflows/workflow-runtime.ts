@@ -123,7 +123,7 @@ export function evaluateCondition(condition: unknown, event: WorkflowRuntimeEven
   }
   const field = typeof c.field === 'string' ? c.field : typeof c.fieldId === 'string' ? c.fieldId : null;
   if (!field) return true;
-  const aliases: Record<string, unknown> = { fileType: event.fileType, extension: event.extension ?? '', name: event.name, nameContains: event.name, folderId: event.folderId ?? '', mimeType: event.mimeType ?? '', size: event.size ?? '' };
+  const aliases: Record<string, unknown> = { fileType: event.fileType, extension: event.extension ?? '', name: event.name, nameContains: event.name, folderId: event.folderId ?? '', mimeType: event.mimeType ?? '', size: event.size ?? '', dataTemplateId: (event as any).dataTemplateId ?? '', ...Object.fromEntries(Object.entries((event as any).customFields ?? {}).map(([k, v]) => [`customFields.${k}`, v])) };
   const actual = Object.prototype.hasOwnProperty.call(aliases, field) ? aliases[field] : resolveDynamicValue(field, event, fields);
   const operator = String(c.operator ?? 'equals').toLowerCase();
   const expected = c.value;
