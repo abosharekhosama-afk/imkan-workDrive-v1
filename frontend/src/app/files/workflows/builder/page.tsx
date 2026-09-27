@@ -18,8 +18,7 @@ type StateDraft = { name: string; description: string; terminal: boolean };
 type TransitionDraft = { from: number; to: number; name: string; description: string; trigger: string; condition: unknown; execution: "AUTOMATIC" | "MANUAL"; before: Action[]; during: Action[]; after: Action[]; sourceSide?: ConnectionSide; targetSide?: ConnectionSide };
 type Position = { x: number; y: number };
 type ConnectionSide = "top" | "right" | "bottom" | "left";
-type ConnectionDraft = { from: number; sourceSide: ConnectionSide; x: number; y: number; sourcePoint: Position };
-type HoverPort = { index: number; x: number; y: number; side: ConnectionSide };
+type ConnectionDraft = { from: number; sourceSide: ConnectionSide; x: number; y: number; startX: number; startY: number };
 type WorkflowNodeTemplate = WorkflowPaletteNode;
 type GraphSnapshot = { states: StateDraft[]; transitions: TransitionDraft[]; positions: Position[] };
 type Phase = "before" | "during" | "after";
@@ -371,15 +370,12 @@ function WorkflowCanvas({ states, transitions, positions, setPositions, selected
   const canvasRef = canvasMountRef;
   const [drag, setDrag] = useState<{ index: number; dx: number; dy: number; group: Array<{ index: number; x: number; y: number }> } | null>(null);
   const [connection, setConnection] = useState<ConnectionDraft | null>(null);
-  const [hoverNode, setHoverNode] = useState<number | null>(null);
-  const [pan, setPan] = useState<{ x: number; y: number; scrollLeft: number; scrollTop: number } | null>(null);
+  const [hoveredNode, setHoveredNode] = useState<{ index: number; x: number; y: number } | null>(null);
+  const [pan, setPan] = useState<{ x: number; y: number } | null>(null);
   const [spaceDown, setSpaceDown] = useState(false);
-  const movedRef = useRef(false);
-  const CARD_W = 230;
-  const CARD_H = 96;
-  const HANDLE_SIZE = 10;
+  const CARD_W = 218;
+  const CARD_H = 82;
   const SNAP = 10;
-
   const pointerPoint = (e: PointerEvent | ReactPointerEvent) => {
     const rect = canvasRef.current?.getBoundingClientRect();
     const el = canvasRef.current;
@@ -393,40 +389,36 @@ function WorkflowCanvas({ states, transitions, positions, setPositions, selected
     if (side === "bottom") return { x: p.x + CARD_W / 2, y: p.y + CARD_H };
     return { x: p.x, y: p.y + CARD_H / 2 };
   };
+  const pointSide = (i: number, point: { x: number; y: number }): ConnectionSide => {
+    const p = positions[i] ?? { x: 100, y: 100 };
+    const localX = Math.max(0, Math.min(CARD_W, point.x - p.x));
+    const localY = Math.max(0, Math.min(CARD_H, point.y - p.y));
+    const distances: Array<[ConnectionSide, number]> = [["top", localY], ["right", CARD_W-localX], ["bottom", CARD_H-localY], ["left", localX]];
+    return distances.sort((a,b)=>a[1]-b[1])[0][0];
+  };
+  const pointOnCard = (i: number, point: { x: number; y: number }) => {
+    const p = positions[i] ?? { x: 100, y: 100 };
+    return { x: Math.max(p.x+2, Math.min(p.x+CARD_W-2, point.x)), y: Math.max(p.y+2, Math.min(p.y+CARD_H-2, point.y)) };
+  };
   const opposite = (side: ConnectionSide): ConnectionSide => side === "top" ? "bottom" : side === "right" ? "left" : side === "bottom" ? "top" : "right";
-
   useEffect(() => {
-    const key = (e: KeyboardEvent) => {
-      if (e.code === "Space" && !e.repeat) {
-        const target = e.target as HTMLElement;
-        if (!target.matches("input,textarea,select,[contenteditable=true]")) { e.preventDefault(); setSpaceDown(true); }
-      }
-    };
+    const key = (e: KeyboardEvent) => { if (e.code === "Space" && !e.repeat) { const target = e.target as HTMLElement; if (!target.matches("input,textarea,select,[contenteditable=true]")) { e.preventDefault(); setSpaceDown(true); } } };
     const up = (e: KeyboardEvent) => { if (e.code === "Space") setSpaceDown(false); };
     window.addEventListener("keydown", key); window.addEventListener("keyup", up);
     return () => { window.removeEventListener("keydown", key); window.removeEventListener("keyup", up); };
   }, []);
-
   useEffect(() => {
     const key = (e: KeyboardEvent) => {
       const target = e.target as HTMLElement | null;
-      if (target?.matches("input,textarea,select,[contenteditable=true]")) return;
+      const editing = !!target?.matches("input,textarea,select,[contenteditable=true]");
       const mod = e.ctrlKey || e.metaKey;
-      if (e.key === "Delete" || e.key === "Backspace") {
-        e.preventDefault();
-        if (selected.startsWith("transition-")) onDeleteTransition(Number(selected.split("-")[1]));
-        else if (selectedNodes.length) onDeleteStates(selectedNodes);
-        return;
-      }
+      if (editing) return;
+      if (e.key === "Delete" || e.key === "Backspace") { e.preventDefault(); if (selected.startsWith("transition-")) { onDeleteTransition(Number(selected.split("-")[1])); } else if (selectedNodes.length) { onDeleteStates(selectedNodes); } return; }
       if (mod && e.key.toLowerCase() === "c" && selectedNodes.length) {
         e.preventDefault();
         const ids = [...selectedNodes].sort((a,b)=>a-b);
         const map = new Map(ids.map((id,i)=>[id,i]));
-        workflowCanvasClipboard = {
-          states: ids.map(i=>({ ...states[i] })),
-          transitions: transitions.filter(t=>map.has(t.from)&&map.has(t.to)).map(t=>({ ...t, from: map.get(t.from)!, to: map.get(t.to)! })),
-          positions: ids.map(i=>({ ...positions[i] }))
-        };
+        workflowCanvasClipboard = { states: ids.map(i=>({ ...states[i] })), transitions: transitions.filter(t=>map.has(t.from)&&map.has(t.to)).map(t=>({ ...t, from: map.get(t.from)!, to: map.get(t.to)! })), positions: ids.map(i=>({ ...positions[i] })) };
         return;
       }
       if (mod && e.key.toLowerCase() === "v" && workflowCanvasClipboard) { e.preventDefault(); onPasteClipboard(); return; }
@@ -435,64 +427,41 @@ function WorkflowCanvas({ states, transitions, positions, setPositions, selected
     };
     window.addEventListener("keydown", key);
     return () => window.removeEventListener("keydown", key);
-  }, [selected, selectedNodes, states, transitions, positions, onDeleteStates, onDeleteTransition, onPasteClipboard, onUndo, onRedo]);
+  }, [selected, selectedNodes, states, transitions, positions, onDeleteStates, onDeleteTransition, onDuplicateStates, onPasteClipboard, onUndo, onRedo]);
 
   useEffect(() => {
     if (!drag && !connection && !pan) return;
     const move = (e: PointerEvent) => {
-      if (pan) {
-        const el = canvasRef.current;
-        if (el) {
-          el.scrollLeft = pan.scrollLeft - (e.clientX - pan.x);
-          el.scrollTop = pan.scrollTop - (e.clientY - pan.y);
-        }
-        return;
-      }
+      if (pan) { const el=canvasRef.current; if (el) { el.scrollLeft = pan.scrollLeft - (e.clientX-pan.x); el.scrollTop = pan.scrollTop - (e.clientY-pan.y); } return; }
       if (drag) {
-        movedRef.current = true;
         const point = pointerPoint(e);
+        let x = point.x - drag.dx, y = point.y - drag.dy;
         const base = positions[drag.index] ?? { x: 20, y: 30 };
-        let dx = point.x - drag.dx - base.x;
-        let dy = point.y - drag.dy - base.y;
-        if (snap) { dx = Math.round(dx / SNAP) * SNAP; dy = Math.round(dy / SNAP) * SNAP; }
+        let dx = x - base.x, dy = y - base.y;
+        if (snap) { dx = Math.round(dx/SNAP)*SNAP; dy = Math.round(dy/SNAP)*SNAP; }
         const next = [...positions];
-        drag.group.forEach((g) => {
-          next[g.index] = { x: Math.max(20, g.x + dx), y: Math.max(30, g.y + dy) };
-        });
+        drag.group.forEach((g) => { next[g.index] = { x: Math.max(20, g.x + dx), y: Math.max(30, g.y + dy) }; });
         setPositions(next);
-        return;
       }
-      if (connection) {
-        const point = pointerPoint(e);
-        setConnection((current) => current ? { ...current, x: point.x, y: point.y } : null);
-      }
+      if (connection) { const point = pointerPoint(e); setConnection(c => c ? { ...c, x: point.x, y: point.y } : c); }
     };
     const up = (e: PointerEvent) => {
       if (pan) { setPan(null); return; }
-      if (drag) {
-        setDrag(null);
-        window.setTimeout(() => { movedRef.current = false; }, 0);
-        return;
-      }
       if (connection) {
-        const target = document.elementFromPoint(e.clientX, e.clientY)?.closest<HTMLElement>('[data-workflow-state-target="true"]');
-        const targetIndex = target ? Number(target.dataset.stateIndex) : NaN;
-        if (Number.isInteger(targetIndex) && targetIndex >= 0 && targetIndex < states.length && targetIndex !== connection.from) {
-          const rect = target.getBoundingClientRect();
-          const localX = (e.clientX - rect.left) / zoom;
-          const localY = (e.clientY - rect.top) / zoom;
-          const targetSide: ConnectionSide = Math.min(localX, CARD_W-localX, localY, CARD_H-localY) === localX ? "left" : Math.min(localX, CARD_W-localX, localY, CARD_H-localY) === CARD_W-localX ? "right" : Math.min(localX, CARD_W-localX, localY, CARD_H-localY) === localY ? "top" : "bottom";
-          onConnect(connection.from, targetIndex, connection.sourceSide, targetSide);
-          onSelect(`transition-${Math.max(0, transitions.length)}`);
+        const el = document.elementFromPoint(e.clientX,e.clientY) as HTMLElement | null;
+        const node = el?.closest<HTMLElement>('[data-workflow-node="true"]');
+        const to = node ? Number(node.dataset.stateIndex) : -1;
+        if (to >= 0 && to !== connection.from) {
+          const targetPoint = pointOnCard(to, pointerPoint(e));
+          onConnect(connection.from,to,connection.sourceSide,pointSide(to,targetPoint));
         }
         setConnection(null);
       }
+      setDrag(null);
     };
-    window.addEventListener("pointermove", move);
-    window.addEventListener("pointerup", up);
+    window.addEventListener("pointermove", move); window.addEventListener("pointerup", up);
     return () => { window.removeEventListener("pointermove", move); window.removeEventListener("pointerup", up); };
-  }, [drag, connection, pan, positions, setPositions, zoom, snap, states.length, onConnect, transitions.length, onSelect]);
-
+  }, [drag, connection, pan, positions, setPositions, zoom, snap]);
   const width = Math.max(1800, ...positions.map((p) => p.x + CARD_W + 180), 1800);
   const height = Math.max(1100, ...positions.map((p) => p.y + CARD_H + 180), 1100);
   const curve = (a:{x:number;y:number}, b:{x:number;y:number}, as:ConnectionSide, bs:ConnectionSide) => {
@@ -501,28 +470,6 @@ function WorkflowCanvas({ states, transitions, positions, setPositions, selected
     const av=vector(as), bv=vector(bs);
     return `M ${a.x} ${a.y} C ${a.x+av.x} ${a.y+av.y}, ${b.x+bv.x} ${b.y+bv.y}, ${b.x} ${b.y}`;
   };
-
-  const beginNodeDrag = (e: ReactPointerEvent, i: number) => {
-    const target = e.target as HTMLElement;
-    if (target.closest(".workflow-connection-handle") || target.closest("button[data-node-action]")) return;
-    if (e.button !== 0) return;
-    e.preventDefault();
-    const point = pointerPoint(e);
-    const group = selectedNodes.includes(i) ? selectedNodes : [i];
-    if (!selectedNodes.includes(i)) onSelectNodes([i]);
-    onSelect(`state-${i}`);
-    onHistoryStart();
-    movedRef.current = false;
-    setDrag({ index:i, dx:point.x-(positions[i]?.x??0), dy:point.y-(positions[i]?.y??0), group:group.map(index=>({index,x:positions[index]?.x??0,y:positions[index]?.y??0})) });
-  };
-
-  const beginConnection = (e: ReactPointerEvent, i: number, side: ConnectionSide) => {
-    e.preventDefault();
-    e.stopPropagation();
-    const point = sidePoint(i, side);
-    setConnection({ from:i, sourceSide:side, x:point.x, y:point.y, sourcePoint:point });
-  };
-
   return <div ref={canvasRef} className={`workflow-canvas-pane relative h-full min-h-0 overflow-auto bg-[#F8FAFC] ${spaceDown ? "cursor-grab" : ""}`} dir="ltr"
     onPointerDown={(e) => { if ((spaceDown || e.button === 1) && e.target === e.currentTarget) { const el=canvasRef.current; if(el) setPan({x:e.clientX,y:e.clientY,scrollLeft:el.scrollLeft,scrollTop:el.scrollTop}); } }}
     onDoubleClick={(e) => { const target = e.target as HTMLElement; if (target.closest(".workflow-state-node,button,.workflow-connection-handle")) return; onAddStateAt(pointerPoint(e)); }}
@@ -531,50 +478,30 @@ function WorkflowCanvas({ states, transitions, positions, setPositions, selected
     <div className="pointer-events-none absolute inset-0 opacity-60" style={{ backgroundImage: "radial-gradient(#CBD5E1 1px, transparent 1px)", backgroundSize: `${18 * zoom}px ${18 * zoom}px` }} />
     <div className="relative" style={{ width: width * zoom, height: height * zoom }}>
       <svg className="pointer-events-none absolute inset-0 z-10" width={width * zoom} height={height * zoom} viewBox={`0 0 ${width} ${height}`}>
-        <defs>
-          <marker id="wf-arrow" markerWidth="9" markerHeight="9" refX="8" refY="4.5" orient="auto"><path d="M0,0 L9,4.5 L0,9 z" fill="#94A3B8"/></marker>
-          <marker id="wf-arrow-active" markerWidth="9" markerHeight="9" refX="8" refY="4.5" orient="auto"><path d="M0,0 L9,4.5 L0,9 z" fill={BLUE}/></marker>
-        </defs>
-        {transitions.map((t,i)=>{
-          const as=t.sourceSide??"right", bs=t.targetSide??"left";
-          const a=sidePoint(t.from,as), b=sidePoint(t.to,bs);
-          const active=selected===`transition-${i}`;
-          const d=curve(a,b,as,bs);
-          return <g key={i}>
-            <path d={d} fill="none" stroke={active?BLUE:"#64748B"} strokeWidth={active?3:2} strokeLinecap="round" markerEnd={`url(#${active?"wf-arrow-active":"wf-arrow"})`}/>
-            <foreignObject x={(a.x+b.x)/2-78} y={(a.y+b.y)/2-15} width="156" height="30">
-              <button type="button" onClick={()=>onSelect(`transition-${i}`)} className={`pointer-events-auto mx-auto block max-w-[150px] truncate rounded-md border bg-white px-3 py-1.5 text-[9.5px] font-semibold shadow-md transition hover:-translate-y-0.5 hover:border-[var(--wd-primary)] hover:text-[var(--wd-primary)] ${active ? "border-[var(--wd-primary)] text-[var(--wd-primary)] ring-2 ring-[var(--wd-primary)]/10" : "border-slate-300 text-slate-700"}`}>{t.name||txt(ar,"Transition","انتقال")}</button>
-            </foreignObject>
-          </g>;
-        })}
-        {connection && <path d={curve(connection.sourcePoint,{x:connection.x,y:connection.y},connection.sourceSide,opposite(connection.sourceSide))} fill="none" stroke={BLUE} strokeWidth="2.5" strokeDasharray="6 5" strokeLinecap="round"/>}
+        <defs><marker id="wf-arrow" markerWidth="9" markerHeight="9" refX="8" refY="4.5" orient="auto"><path d="M0,0 L9,4.5 L0,9 z" fill="#94A3B8"/></marker><marker id="wf-arrow-active" markerWidth="9" markerHeight="9" refX="8" refY="4.5" orient="auto"><path d="M0,0 L9,4.5 L0,9 z" fill={BLUE}/></marker></defs>
+        {transitions.map((t,i)=>{ const as=t.sourceSide??"right", bs=t.targetSide??"left"; const a=sidePoint(t.from,as), b=sidePoint(t.to,bs); const active=selected===`transition-${i}`; const d=active ? curve(a,b,as,bs) : `M ${a.x} ${a.y} L ${b.x} ${b.y}`; return <g key={i}><path d={d} fill="none" stroke={active?BLUE:"#64748B"} strokeWidth={active?3:2} strokeLinecap="round" markerEnd={`url(#${active?"wf-arrow-active":"wf-arrow"})`}/><foreignObject x={(a.x+b.x)/2-78} y={(a.y+b.y)/2-15} width="156" height="30"><button type="button" onClick={()=>onSelect(`transition-${i}`)} className={`pointer-events-auto mx-auto block max-w-[150px] truncate rounded-md border bg-white px-3 py-1.5 text-[9.5px] font-semibold shadow-md hover:border-[var(--wd-primary)] hover:text-[var(--wd-primary)] ${active ? "border-[var(--wd-primary)] text-[var(--wd-primary)] ring-2 ring-[var(--wd-primary)]/10" : "border-slate-300 text-slate-700"}`}>{t.name||txt(ar,"Transition","انتقال")}</button></foreignObject></g>; })}
+        {connection && <path d={curve({x:connection.startX,y:connection.startY},{x:connection.x,y:connection.y},connection.sourceSide,opposite(connection.sourceSide))} fill="none" stroke={BLUE} strokeWidth="2.5" strokeDasharray="6 5" strokeLinecap="round"/>}
       </svg>
-
       {states.map((s,i)=>{
-        const hovered = hoverNode === i || selectedNodes.includes(i) || selected === `state-${i}`;
-        return <div key={i} data-workflow-state-node={i} data-workflow-state-target="true" data-state-index={i}
-          onPointerEnter={()=>setHoverNode(i)} onPointerLeave={()=>setHoverNode((current)=>current===i?null:current)}
-          onPointerDown={(e)=>beginNodeDrag(e,i)}
-          style={{left:positions[i].x*zoom,top:positions[i].y*zoom,transform:`scale(${zoom})`,transformOrigin:"top left"}}
-          className="workflow-state-node absolute z-20 w-[230px] select-none overflow-visible">
-          <div className={`relative w-full rounded-lg border bg-white p-3 text-start shadow-[0_7px_20px_rgba(15,23,42,.07)] transition ${selectedNodes.includes(i)||selected===`state-${i}`?"border-[var(--wd-primary)] ring-4 ring-[var(--wd-primary)]/10":"border-slate-200 hover:border-slate-300"}`} dir={ar?"rtl":"ltr"}>
-            <button data-node-action="true" type="button" onClick={(e)=>{ if(movedRef.current){e.preventDefault();return;} if(e.ctrlKey||e.metaKey||e.shiftKey){e.preventDefault();onSelectNodes(selectedNodes.includes(i)?selectedNodes.filter(x=>x!==i):[...selectedNodes,i]);}else{onSelectNodes([i]);onSelect(`state-${i}`);} }} className="w-full text-start">
-              <div className="flex items-start gap-2.5"><span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-[11px] font-semibold ${i===0?"bg-[var(--wd-primary-light)] text-[var(--wd-primary)]":s.terminal?"bg-emerald-50 text-emerald-700":"bg-slate-100 text-slate-600"}`}>{i+1}</span><span className="min-w-0 flex-1"><span className="block text-[8px] font-semibold uppercase tracking-[.14em] text-slate-400">{txt(ar,"State","حالة")}</span><span className="mt-0.5 block truncate text-[12px] font-semibold text-slate-900">{s.name||txt(ar,"Untitled state","حالة بلا اسم")}</span><span className="mt-0.5 block line-clamp-1 text-[9.5px] leading-4 text-slate-500">{s.description||txt(ar,"Add a description","أضف وصفاً")}</span></span>{s.terminal&&<span className="rounded-full bg-emerald-50 px-1.5 py-0.5 text-[7px] font-bold text-emerald-700">{txt(ar,"FINAL","نهائي")}</span>}</div>
-            </button>
-
-            {/* n8n-style connection handles: fixed to the node edges and shown only while the node is hovered/active. */}
-            {hovered && <>
-              <button type="button" aria-label={txt(ar,"Connect from left","الربط من اليسار")} className="workflow-connection-handle workflow-n8n-handle workflow-n8n-handle-left" onPointerDown={(e)=>beginConnection(e,i,"left")} />
-              <button type="button" aria-label={txt(ar,"Connect from right","الربط من اليمين")} className="workflow-connection-handle workflow-n8n-handle workflow-n8n-handle-right" onPointerDown={(e)=>beginConnection(e,i,"right")} />
-            </>}
-            <button data-node-action="true" type="button" onPointerDown={(e)=>e.stopPropagation()} onClick={(e)=>{e.stopPropagation();onAddTransition(i)}} className="absolute -bottom-3 left-1/2 z-30 flex h-6 w-6 -translate-x-1/2 items-center justify-center rounded-full border border-slate-200 bg-white text-[13px] text-slate-500 shadow-sm transition hover:scale-110 hover:border-[var(--wd-primary)] hover:text-[var(--wd-primary)]">＋</button>
+        const hp = hoveredNode?.index === i ? pointOnCard(i, hoveredNode) : null;
+        return <div key={i} data-workflow-node="true" data-state-index={i}
+          onPointerMove={(e)=>{ const point=pointerPoint(e); setHoveredNode({index:i,x:point.x,y:point.y}); }}
+          onPointerLeave={()=>setHoveredNode((current)=>current?.index===i ? null : current)}
+          onPointerDown={(e)=>{ const target=e.target as HTMLElement; if(target.closest(".workflow-dynamic-handle")) return; const point=pointerPoint(e); const group=selectedNodes.includes(i)?selectedNodes:[i]; if(!selectedNodes.includes(i)) onSelectNodes([i]); onHistoryStart(); setDrag({index:i,dx:point.x-positions[i].x,dy:point.y-positions[i].y,group:group.map(index=>({index,x:positions[index]?.x??0,y:positions[index]?.y??0}))}); }}
+          style={{left:positions[i].x*zoom,top:positions[i].y*zoom,transform:`scale(${zoom})`,transformOrigin:"top left",willChange:"left, top"}}
+          className="workflow-state-node absolute z-20 w-[218px] select-none overflow-visible">
+          <div onClick={(e)=>{ if(e.ctrlKey||e.metaKey||e.shiftKey){e.preventDefault();onSelectNodes(selectedNodes.includes(i)?selectedNodes.filter(x=>x!==i):[...selectedNodes,i]);}else{onSelectNodes([i]);onSelect(`state-${i}`);} }} className={`w-full rounded-lg border bg-white p-3 text-start shadow-[0_5px_16px_rgba(15,23,42,.07)] ${selectedNodes.includes(i)||selected===`state-${i}`?"border-[var(--wd-primary)] ring-4 ring-[var(--wd-primary)]/10":"border-slate-200"}`} dir={ar?"rtl":"ltr"}>
+            <div className="flex items-center gap-2"><span className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-[10px] font-semibold ${i===0?"bg-[var(--wd-primary-light)] text-[var(--wd-primary)]":s.terminal?"bg-emerald-50 text-emerald-700":"bg-slate-100 text-slate-600"}`}>{i+1}</span><span className="min-w-0 flex-1"><span className="block text-[8px] font-semibold uppercase tracking-[.14em] text-slate-400">{txt(ar,"State","حالة")}</span><span className="mt-0.5 block truncate text-[11.5px] font-semibold text-slate-900">{s.name||txt(ar,"Untitled state","حالة بلا اسم")}</span></span>{s.terminal&&<span className="rounded-full bg-emerald-50 px-1.5 py-0.5 text-[7px] font-bold text-emerald-700">{txt(ar,"FINAL","نهائي")}</span>}</div>
+            {s.description && <div className="mt-1.5 line-clamp-1 text-[9px] leading-3.5 text-slate-500">{s.description}</div>}
           </div>
+          {hp && <span data-workflow-dynamic-handle="true" className="workflow-dynamic-handle" style={{left:(hp.x-positions[i].x)-6,top:(hp.y-positions[i].y)-6}} title={txt(ar,"Drag to connect","اسحب للربط")} onPointerDown={(e)=>{e.stopPropagation();e.preventDefault();setConnection({from:i,sourceSide:pointSide(i,hp),x:hp.x,y:hp.y,startX:hp.x,startY:hp.y});}} />}
+          {connection && connection.from !== i && hp && <span className="workflow-dynamic-target" style={{left:(hp.x-positions[i].x)-5,top:(hp.y-positions[i].y)-5}} />}
+          <button type="button" onClick={(e)=>{e.stopPropagation();onAddTransition(i)}} className="absolute -bottom-3 left-1/2 z-30 flex h-6 w-6 -translate-x-1/2 items-center justify-center rounded-full border border-slate-200 bg-white text-[13px] text-slate-500 shadow-sm hover:border-[var(--wd-primary)] hover:text-[var(--wd-primary)]">＋</button>
         </div>;
       })}
     </div>
   </div>;
 }
-
 export default function WorkflowBuilderPage() {
   const { locale } = useLocale();
   const access = useWorkflowAccess(); const ar = locale === "ar"; const router = useRouter(); const pathname = usePathname(); const workflowBase = pathname.startsWith("/admin/workflows") ? "/admin/workflows" : "/files/workflows"; const params = useSearchParams(); const urlId = params.get("id");
@@ -682,7 +609,7 @@ export default function WorkflowBuilderPage() {
 
   if (loading) return <div className="flex h-full items-center justify-center bg-[#F7F9FC] text-[12px] text-slate-500">{txt(ar,"Loading workflow…","جارٍ تحميل سير العمل…")}</div>;
   return <div className="workflow-ui flex h-full min-h-0 flex-col bg-[#F7F9FC]" dir={ar ? "rtl" : "ltr"}>
-    <header className="workflow-builder-header shrink-0 bg-white px-5 py-3"><div className="flex items-center justify-between gap-3"><div className="flex min-w-0 items-center gap-3"><Link href={workflowBase} className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-slate-200 text-slate-500 hover:bg-slate-50">←</Link><div className="min-w-0"><div className="text-[9px] font-semibold uppercase tracking-[.17em] text-[var(--wd-primary)]">{txt(ar,"Workflow builder","منشئ سير العمل")}</div><div className="truncate text-[15px] font-semibold text-slate-900">{name || txt(ar,"Create workflow","إنشاء سير عمل")} <span className="ms-2 text-[10px] font-medium text-slate-500">{mode === "MANUAL" ? txt(ar,"Manual","يدوي") : txt(ar,"Automatic","تلقائي")}</span></div></div></div><div className="flex items-center gap-1.5"><button type="button" onClick={() => setElementsOpen(true)} className="workflow-builder-mobile-menu wd-icon-btn xl:hidden" aria-label={txt(ar,"Open workflow elements","فتح عناصر سير العمل")} title={txt(ar,"Open workflow elements","فتح عناصر سير العمل")}>☰</button><WorkflowHelp compact /><label className="wd-pill wd-pill-record cursor-pointer">{txt(ar,"Import JSON","استيراد JSON")}<input type="file" accept="application/json" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) void importSpec(f); e.currentTarget.value = ""; }} /></label><button type="button" onClick={exportSpec} className="wd-pill wd-pill-record">{txt(ar,"Export JSON","تصدير JSON")}</button><button type="button" disabled={busy} onClick={() => void save("DRAFT")} className="wd-pill wd-pill-record">{txt(ar,"Save draft","حفظ المسودة")}</button><button type="button" disabled={busy} onClick={() => setActivationOpen(true)} className="wd-pill wd-pill-new">{txt(ar,"Activate","تفعيل")}</button></div></div>
+    <header className="workflow-builder-header shrink-0 bg-white px-5 py-3"><div className="flex items-center justify-between gap-3"><div className="flex min-w-0 items-center gap-3"><Link href={workflowBase} className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-slate-200 text-slate-500 hover:bg-slate-50">←</Link><div className="min-w-0"><div className="text-[9px] font-semibold uppercase tracking-[.17em] text-[var(--wd-primary)]">{txt(ar,"Workflow builder","منشئ سير العمل")}</div><div className="truncate text-[15px] font-semibold text-slate-900">{name || txt(ar,"Create workflow","إنشاء سير عمل")} <span className="ms-2 text-[10px] font-medium text-slate-500">{mode === "MANUAL" ? txt(ar,"Manual","يدوي") : txt(ar,"Automatic","تلقائي")}</span></div></div></div><div className="flex items-center gap-1.5"><button type="button" onClick={() => setElementsOpen(true)} className="workflow-builder-mobile-menu wd-icon-btn xl:hidden" aria-label={txt(ar,"Open workflow elements","فتح عناصر سير العمل")} title={txt(ar,"Open workflow elements","فتح عناصر سير العمل")}>☰</button><WorkflowHelp compact /><label className="wd-pill wd-pill-record cursor-pointer">{txt(ar,"Import JSON","استيراد JSON")}<input type="file" accept="application/json" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) void importSpec(f); e.currentTarget.value = ""; }} /></label><button type="button" onClick={exportSpec} className="wd-pill wd-pill-record">{txt(ar,"Export JSON","تصدير JSON")}</button><button type="button" disabled={busy} onClick={() => void save("DRAFT")} className="wd-pill wd-pill-record">{txt(ar,"Save draft","حفظ المسودة")}</button><button type="button" disabled={busy} onClick={() => setActivationOpen(true)} className="wd-pill wd-pill-record">{txt(ar,"Activate","تفعيل")}</button></div></div>
       <div className="mt-3 flex items-center justify-center"><div className="flex items-center gap-1 rounded-2xl bg-slate-100 p-1">{([[1,"Configure fields"],[2,"Design workflow"],[3,"Review"]] as const).map(([n,en]) => <button key={n} type="button" onClick={() => setStep(n)} className={`workflow-step-tab px-4 py-2 text-[10.5px] font-medium transition ${step === n ? "is-active" : ""}`}><b className="me-1.5">{n}</b>{txt(ar,en,n===1?"إعداد الحقول":n===2?"تصميم سير العمل":"المراجعة")}</button>)}</div></div>
     </header>
     {error && <div className="mx-5 mt-2 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-[10.5px] text-red-700">{error}</div>}{message && <div className="mx-5 mt-2 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-[10.5px] text-emerald-700">{message}</div>}
@@ -702,7 +629,7 @@ export default function WorkflowBuilderPage() {
       </section>
     </div><div className="wd-card mt-3 flex shrink-0 items-center justify-between px-4 py-3"><button type="button" onClick={() => router.push(workflowBase)} className="wd-pill wd-pill-record">{txt(ar,"Back","رجوع")}</button><button type="button" onClick={() => setStep(2)} className="wd-pill wd-pill-new">{txt(ar,"Continue to design","متابعة إلى التصميم")} →</button></div></div>}
 
-    {step === 2 && <div className="relative min-h-0 flex-1 overflow-hidden p-3"><div className="workflow-design-shell flex h-full min-h-0 flex-col gap-3"><div className="wd-card workflow-design-grid flex min-h-0 flex-1 overflow-hidden"><aside className={`workflow-palette-sidebar hidden border-e border-slate-200 bg-white lg:flex lg:flex-col ${paletteOpen ? "is-open" : "is-collapsed"}`} dir={ar ? "rtl" : "ltr"}><div className="flex items-center justify-between border-b border-slate-100 px-3 py-2"><span className="text-[10px] font-semibold text-slate-700">{txt(ar,"Node palette","عناصر سير العمل")}</span><button type="button" className="wd-icon-btn hidden xl:inline-flex" onClick={() => setPaletteOpen((value) => !value)} aria-label={txt(ar,"Collapse palette","طي القائمة")}>⟨</button></div>{paletteOpen ? <WorkflowNodePalette ar={ar} manualMode={mode === "MANUAL"} onAdd={(type) => addNodeTemplate(type)} /> : null}<div className="border-t border-slate-100 p-3"><div className="text-[9px] font-semibold uppercase tracking-[.14em] text-slate-400">{txt(ar,"Elements","العناصر")}</div><div className="mt-2 space-y-2"><button type="button" onClick={() => setStep(1)} className="w-full rounded-xl border border-dashed border-slate-300 p-2.5 text-start text-[10px] hover:border-[var(--wd-primary)]">{txt(ar,"Workflow fields","حقول سير العمل")} · {fields.length}</button><button type="button" onClick={() => addState()} className="w-full rounded-xl border border-dashed border-slate-300 p-2.5 text-start text-[10px] hover:border-[var(--wd-primary)]">{txt(ar,"State","حالة")} · {states.length}/20</button><button type="button" onClick={() => addTransitionFrom()} className="w-full rounded-xl border border-dashed border-slate-300 p-2.5 text-start text-[10px] hover:border-[var(--wd-primary)]">{txt(ar,"Transition","انتقال")} · {transitions.length}</button><div className="rounded-xl bg-slate-50 p-2.5">{mode === "MANUAL" ? <div className="text-[9.5px] text-slate-600">{txt(ar,"Manual start","بدء يدوي")}</div> : TRIGGERS.map(([v,en,arLabel]) => <label key={v} className="flex items-center gap-2 text-[9.5px] text-slate-600"><input type="checkbox" checked={triggers.includes(v)} onChange={(e) => setTriggers((old) => e.target.checked ? [...new Set([...old,v])] : old.filter((x) => x !== v))} className="accent-[var(--wd-primary)]" />{txt(ar,en,arLabel)}</label>)}</div></div></div></aside><div className="min-w-0 flex-1 flex min-h-0 flex-col"><div className="flex shrink-0 items-center justify-between gap-2 border-b border-slate-200 bg-white/95 px-4 py-2 backdrop-blur" dir={ar ? "rtl" : "ltr"}><div className="flex items-center gap-2"><span className="rounded-lg bg-[var(--wd-primary-light)] px-2.5 py-1.5 text-[10px] font-semibold text-[var(--wd-primary)]">{txt(ar,"Canvas","اللوحة")}</span><span className="hidden text-[10px] text-slate-400 lg:inline">{txt(ar,"Drag states • connect from any side • Space + drag to pan","حرّك الحالات • اربط من أي جانب • Space + اسحب للتحريك")}</span></div><div className="flex flex-wrap items-center gap-1.5"><button type="button" onClick={undoGraph} disabled={historyRef.current.length===0} className="rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-[10px] disabled:opacity-35">↶</button><button type="button" onClick={redoGraph} disabled={redoRef.current.length===0} className="rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-[10px] disabled:opacity-35">↷</button><button type="button" onClick={()=>setSnap(v=>!v)} className={`rounded-lg border px-2.5 py-1.5 text-[9px] font-medium ${snap?"border-[var(--wd-primary)] bg-[var(--wd-primary-light)] text-[var(--wd-primary)]":"border-slate-200 bg-white text-slate-500"}`}>{snap ? txt(ar,"Snap on","محاذاة") : txt(ar,"Free move","حركة حرة")}</button><button type="button" onClick={autoLayout} className="rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-[9px] font-medium text-slate-600">{txt(ar,"Auto layout","تخطيط تلقائي")}</button><button type="button" onClick={()=>duplicateStates(selectedNodes.length ? selectedNodes : [0])} disabled={!selectedNodes.length} className="rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-[9px] font-medium text-slate-600 disabled:opacity-35">{txt(ar,"Duplicate","تكرار")}</button><button type="button" onClick={pasteClipboard} disabled={!workflowCanvasClipboard} className="rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-[9px] font-medium text-slate-600 disabled:opacity-35">{txt(ar,"Paste","لصق")}</button><div className="flex items-center gap-1 rounded-lg border border-slate-200 bg-white p-1 shadow-sm"><button type="button" onClick={() => setZoom(Math.max(.55, Number((zoom - .1).toFixed(2))))} className="h-7 w-7 rounded-md hover:bg-slate-50">−</button><span className="w-12 text-center text-[10px] font-medium text-slate-600">{Math.round(zoom * 100)}%</span><button type="button" onClick={() => setZoom(Math.min(1.5, Number((zoom + .1).toFixed(2))))} className="h-7 w-7 rounded-md hover:bg-slate-50">＋</button></div></div></div><WorkflowCanvas states={states} transitions={transitions} positions={positions} setPositions={setPositions} selected={selected} onSelect={setSelected} selectedNodes={selectedNodes} onSelectNodes={setSelectedNodes} onAddTransition={addTransitionFrom} onConnect={connectStates} onDeleteTransition={removeTransition} onAddStateAt={addStateAt} onAddNodeTemplate={addNodeTemplate} onDeleteStates={removeStates} onDuplicateStates={duplicateStates} onAutoLayout={autoLayout} onHistoryStart={markHistory} onPasteClipboard={pasteClipboard} onUndo={undoGraph} onRedo={redoGraph} canUndo={historyRef.current.length>0} canRedo={redoRef.current.length>0} zoom={zoom} setZoom={setZoom} snap={snap} setSnap={setSnap} canvasMountRef={canvasMountRef} ar={ar} /></div><aside className={`workflow-inspector w-[350px] shrink-0 overflow-y-auto border-s border-slate-200 bg-white ${inspectorOpen ? "is-open" : ""}`} dir={ar ? "rtl" : "ltr"}><div className="sticky top-0 z-20 flex items-center justify-between border-b border-slate-100 bg-white/95 px-5 py-4 backdrop-blur"><div><div className="text-[9px] font-semibold uppercase tracking-[.15em] text-slate-400">{selectedTransition ? txt(ar,"Transition","انتقال") : txt(ar,"State","حالة")}</div><div className="mt-1 text-[14px] font-semibold text-slate-900">{selectedTransition ? selectedTransition.name : states[selectedStateIndex]?.name}</div></div><div className="flex items-center gap-1"><button type="button" className="wd-icon-btn hidden xl:inline-flex" onClick={() => setInspectorOpen((value) => !value)} aria-label={txt(ar,"Collapse inspector","طي المفتش")}>⟩</button>{selectedTransition && <button type="button" onClick={() => removeTransition(selectedTransitionIndex)} className="rounded-lg px-2 py-1.5 text-[10px] font-medium text-red-600 hover:bg-red-50">{txt(ar,"Delete","حذف")}</button>}<WorkflowHelp compact helpKey={selectedTransition ? "workflow.transition" : "workflow.state"} /></div></div><div className="space-y-4 p-5">
+    {step === 2 && <div className="relative min-h-0 flex-1 overflow-hidden p-3"><div className="workflow-design-shell flex h-full min-h-0 flex-col gap-3"><div className="wd-card workflow-design-grid flex min-h-0 flex-1 overflow-hidden"><aside className={`workflow-palette-sidebar hidden border-e border-slate-200 bg-white lg:flex lg:flex-col ${paletteOpen ? "" : "is-collapsed"}`} dir={ar ? "rtl" : "ltr"}><div className="flex items-center justify-between border-b border-slate-100 px-3 py-2"><span className="text-[10px] font-semibold text-slate-700">{txt(ar,"Node palette","عناصر سير العمل")}</span><button type="button" className="wd-icon-btn hidden xl:inline-flex" onClick={() => setPaletteOpen((value) => !value)} aria-label={txt(ar,"Collapse palette","طي القائمة")}>⟨</button></div>{paletteOpen ? <WorkflowNodePalette ar={ar} manualMode={mode === "MANUAL"} onAdd={(type) => addNodeTemplate(type)} /> : null}<div className="border-t border-slate-100 p-3"><div className="text-[9px] font-semibold uppercase tracking-[.14em] text-slate-400">{txt(ar,"Elements","العناصر")}</div><div className="mt-2 space-y-2"><button type="button" onClick={() => setStep(1)} className="w-full rounded-xl border border-dashed border-slate-300 p-2.5 text-start text-[10px] hover:border-[var(--wd-primary)]">{txt(ar,"Workflow fields","حقول سير العمل")} · {fields.length}</button><button type="button" onClick={() => addState()} className="w-full rounded-xl border border-dashed border-slate-300 p-2.5 text-start text-[10px] hover:border-[var(--wd-primary)]">{txt(ar,"State","حالة")} · {states.length}/20</button><button type="button" onClick={() => addTransitionFrom()} className="w-full rounded-xl border border-dashed border-slate-300 p-2.5 text-start text-[10px] hover:border-[var(--wd-primary)]">{txt(ar,"Transition","انتقال")} · {transitions.length}</button><div className="rounded-xl bg-slate-50 p-2.5">{mode === "MANUAL" ? <div className="text-[9.5px] text-slate-600">{txt(ar,"Manual start","بدء يدوي")}</div> : TRIGGERS.map(([v,en,arLabel]) => <label key={v} className="flex items-center gap-2 text-[9.5px] text-slate-600"><input type="checkbox" checked={triggers.includes(v)} onChange={(e) => setTriggers((old) => e.target.checked ? [...new Set([...old,v])] : old.filter((x) => x !== v))} className="accent-[var(--wd-primary)]" />{txt(ar,en,arLabel)}</label>)}</div></div></div></aside><div className="min-w-0 flex-1 flex min-h-0 flex-col"><div className="flex shrink-0 items-center justify-between gap-2 border-b border-slate-200 bg-white/95 px-4 py-2 backdrop-blur" dir={ar ? "rtl" : "ltr"}><div className="flex items-center gap-2"><span className="rounded-lg bg-[var(--wd-primary-light)] px-2.5 py-1.5 text-[10px] font-semibold text-[var(--wd-primary)]">{txt(ar,"Canvas","اللوحة")}</span><span className="hidden text-[10px] text-slate-400 lg:inline">{txt(ar,"Drag states • connect from any side • Space + drag to pan","حرّك الحالات • اربط من أي جانب • Space + اسحب للتحريك")}</span></div><div className="flex flex-wrap items-center gap-1.5"><button type="button" onClick={undoGraph} disabled={historyRef.current.length===0} className="rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-[10px] disabled:opacity-35">↶</button><button type="button" onClick={redoGraph} disabled={redoRef.current.length===0} className="rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-[10px] disabled:opacity-35">↷</button><button type="button" onClick={()=>setSnap(v=>!v)} className={`rounded-lg border px-2.5 py-1.5 text-[9px] font-medium ${snap?"border-[var(--wd-primary)] bg-[var(--wd-primary-light)] text-[var(--wd-primary)]":"border-slate-200 bg-white text-slate-500"}`}>{snap ? txt(ar,"Snap on","محاذاة") : txt(ar,"Free move","حركة حرة")}</button><button type="button" onClick={autoLayout} className="rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-[9px] font-medium text-slate-600">{txt(ar,"Auto layout","تخطيط تلقائي")}</button><button type="button" onClick={()=>duplicateStates(selectedNodes.length ? selectedNodes : [0])} disabled={!selectedNodes.length} className="rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-[9px] font-medium text-slate-600 disabled:opacity-35">{txt(ar,"Duplicate","تكرار")}</button><button type="button" onClick={pasteClipboard} disabled={!workflowCanvasClipboard} className="rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-[9px] font-medium text-slate-600 disabled:opacity-35">{txt(ar,"Paste","لصق")}</button><div className="flex items-center gap-1 rounded-lg border border-slate-200 bg-white p-1 shadow-sm"><button type="button" onClick={() => setZoom(Math.max(.55, Number((zoom - .1).toFixed(2))))} className="h-7 w-7 rounded-md hover:bg-slate-50">−</button><span className="w-12 text-center text-[10px] font-medium text-slate-600">{Math.round(zoom * 100)}%</span><button type="button" onClick={() => setZoom(Math.min(1.5, Number((zoom + .1).toFixed(2))))} className="h-7 w-7 rounded-md hover:bg-slate-50">＋</button></div></div></div><WorkflowCanvas states={states} transitions={transitions} positions={positions} setPositions={setPositions} selected={selected} onSelect={setSelected} selectedNodes={selectedNodes} onSelectNodes={setSelectedNodes} onAddTransition={addTransitionFrom} onConnect={connectStates} onDeleteTransition={removeTransition} onAddStateAt={addStateAt} onAddNodeTemplate={addNodeTemplate} onDeleteStates={removeStates} onDuplicateStates={duplicateStates} onAutoLayout={autoLayout} onHistoryStart={markHistory} onPasteClipboard={pasteClipboard} onUndo={undoGraph} onRedo={redoGraph} canUndo={historyRef.current.length>0} canRedo={redoRef.current.length>0} zoom={zoom} setZoom={setZoom} snap={snap} setSnap={setSnap} canvasMountRef={canvasMountRef} ar={ar} /></div><aside className={`workflow-inspector w-[350px] shrink-0 overflow-y-auto border-s border-slate-200 bg-white ${inspectorOpen ? "is-open" : ""}`} dir={ar ? "rtl" : "ltr"}><div className="sticky top-0 z-20 flex items-center justify-between border-b border-slate-100 bg-white/95 px-5 py-4 backdrop-blur"><div><div className="text-[9px] font-semibold uppercase tracking-[.15em] text-slate-400">{selectedTransition ? txt(ar,"Transition","انتقال") : txt(ar,"State","حالة")}</div><div className="mt-1 text-[14px] font-semibold text-slate-900">{selectedTransition ? selectedTransition.name : states[selectedStateIndex]?.name}</div></div><div className="flex items-center gap-1"><button type="button" className="wd-icon-btn hidden xl:inline-flex" onClick={() => setInspectorOpen((value) => !value)} aria-label={txt(ar,"Collapse inspector","طي المفتش")}>⟩</button>{selectedTransition && <button type="button" onClick={() => removeTransition(selectedTransitionIndex)} className="rounded-lg px-2 py-1.5 text-[10px] font-medium text-red-600 hover:bg-red-50">{txt(ar,"Delete","حذف")}</button>}<WorkflowHelp compact helpKey={selectedTransition ? "workflow.transition" : "workflow.state"} /></div></div><div className="space-y-4 p-5">
       {selectedStateIndex >= 0 && <><label className="block text-[10.5px] font-medium text-slate-600">{txt(ar,"State name","اسم الحالة")}<input value={states[selectedStateIndex]?.name ?? ""} onChange={(e) => setStates((v) => v.map((s,i)=>i===selectedStateIndex?{...s,name:e.target.value}:s))} className="mt-1.5 w-full rounded-xl border border-slate-200 px-3 py-2.5 text-[11px]" /></label><label className="block text-[10.5px] font-medium text-slate-600">{txt(ar,"Description","الوصف")}<textarea value={states[selectedStateIndex]?.description ?? ""} onChange={(e) => setStates((v) => v.map((s,i)=>i===selectedStateIndex?{...s,description:e.target.value}:s))} rows={3} className="mt-1.5 w-full resize-none rounded-xl border border-slate-200 px-3 py-2.5 text-[11px]" /></label><label className="flex items-center gap-2 text-[10.5px] text-slate-600"><input type="checkbox" checked={states[selectedStateIndex]?.terminal ?? false} onChange={(e) => setStates((v) => v.map((s,i)=>i===selectedStateIndex?{...s,terminal:e.target.checked}:s))} className="accent-[var(--wd-primary)]" />{txt(ar,"Final state","حالة نهائية")}</label>{selectedStateIndex > 0 && <button type="button" onClick={() => removeState(selectedStateIndex)} className="w-full rounded-xl border border-red-100 bg-red-50 px-3 py-2.5 text-[10px] font-medium text-red-600">{txt(ar,"Delete state","حذف الحالة")}</button>}</>}
       {selectedTransition && <><label className="block text-[10.5px] font-medium text-slate-600">{txt(ar,"Transition name","اسم الانتقال")}<input value={selectedTransition.name} onChange={(e) => updateTransition(selectedTransitionIndex,{name:e.target.value})} className="mt-1.5 w-full rounded-xl border border-slate-200 px-3 py-2.5 text-[11px]" /></label><label className="block text-[10.5px] font-medium text-slate-600">{txt(ar,"Description","الوصف")}<textarea value={selectedTransition.description} onChange={(e) => updateTransition(selectedTransitionIndex,{description:e.target.value})} rows={2} className="mt-1.5 w-full resize-none rounded-xl border border-slate-200 px-3 py-2.5 text-[11px]" /></label><div className="grid min-w-0 grid-cols-1 gap-2 sm:grid-cols-2"><label className="min-w-0 text-[10px] font-medium text-slate-600">{txt(ar,"From","من")}<select value={selectedTransition.from} onChange={(e)=>updateTransition(selectedTransitionIndex,{from:Number(e.target.value)})} className="mt-1 w-full rounded-xl border border-slate-200 px-2.5 py-2 text-[10.5px]">{states.map((s,i)=><option key={i} value={i}>{s.name}</option>)}</select></label><label className="min-w-0 text-[10px] font-medium text-slate-600">{txt(ar,"To","إلى")}<select value={selectedTransition.to} onChange={(e)=>updateTransition(selectedTransitionIndex,{to:Number(e.target.value)})} className="mt-1 w-full rounded-xl border border-slate-200 px-2.5 py-2 text-[10.5px]">{states.map((s,i)=><option key={i} value={i}>{s.name}</option>)}</select></label></div><div className="rounded-xl border border-slate-200 bg-slate-50 p-3"><div className="text-[10px] font-semibold text-slate-700">{txt(ar,"Execution","التنفيذ")}</div><div className="mt-2 grid grid-cols-2 gap-1.5"><button type="button" onClick={()=>updateTransition(selectedTransitionIndex,{execution:"AUTOMATIC"})} className={`workflow-segment ${selectedTransition.execution==="AUTOMATIC" ? "is-active" : ""}`}>{txt(ar,"Automatic","تلقائي")}</button><button type="button" onClick={()=>updateTransition(selectedTransitionIndex,{execution:"MANUAL"})} className={`workflow-segment ${selectedTransition.execution==="MANUAL" ? "is-active" : ""}`}>{txt(ar,"Manual","يدوي")}</button></div></div>{selectedTransition.execution === "AUTOMATIC" && <label className="block min-w-0 text-[10.5px] font-medium text-slate-600">{txt(ar,"Trigger","المحفز")}<select value={selectedTransition.trigger} onChange={(e)=>updateTransition(selectedTransitionIndex,{trigger:e.target.value})} className="mt-1.5 block w-full min-w-0 rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-[10.5px]"><option value="">{txt(ar,"Any matching event","أي حدث مطابق")}</option>{TRIGGERS.map(([v,en,arLabel])=><option key={v} value={v}>{txt(ar,en,arLabel)}</option>)}</select></label>}<ConditionEditor condition={selectedTransition.condition} ar={ar} onChange={(condition) => updateTransition(selectedTransitionIndex, { condition })} /><div className="border-t border-slate-100 pt-4"><div className="workflow-phase-tabs flex bg-slate-100 p-1">{(["before","during","after"] as Phase[]).map((p)=><button type="button" key={p} onClick={()=>setPhase(p)} className={`workflow-segment flex-1 ${phase===p ? "is-active" : ""}`}>{txt(ar,p,p==="before"?"قبل":p==="during"?"أثناء":"بعد")}</button>)}</div><p className="mt-2.5 text-[9.5px] leading-5 text-slate-500">{phase==="before"?txt(ar,"Runs before the resource changes state.","يُنفذ قبل تغيير حالة المورد."):phase==="during"?txt(ar,"Collect input or perform actions while the transition is active.","اجمع المدخلات أو نفذ الإجراءات أثناء الانتقال."):txt(ar,"Runs after the resource reaches the next state.","يُنفذ بعد وصول المورد إلى الحالة التالية.")}</p><div className="mt-3"><ActionEditor actions={selectedTransition[phase]} onChange={(next)=>updateTransition(selectedTransitionIndex,{[phase]:next} as Partial<TransitionDraft>)} resourceType={resourceType} ar={ar} workflowFields={fields}/></div></div></>}
       {!selectedTransition && selectedStateIndex < 0 && <div className="rounded-xl bg-slate-50 p-4 text-[10.5px] text-slate-500">{txt(ar,"Select a state or transition on the canvas to configure it.","اختر حالة أو انتقالاً من اللوحة لتعديله.")}</div>}

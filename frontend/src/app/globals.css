@@ -3869,76 +3869,11 @@ html[data-theme="dark"] .admin-console-shell .border-slate-100{border-color:var(
 html[data-theme="dark"] .zoho-admin-input{background:var(--wd-bg);color:var(--wd-text);border-color:var(--wd-line)}
 .admin-console-shell .bg-\[\#2f6ee5\],.admin-console-shell .bg-\[\#2f70df\]{background-color:var(--wd-primary)!important}
 
-
-/* Workflow builder canvas UX: compact nodes, free-position connection port, and space-saving palette. */
-.workflow-ui .workflow-palette-sidebar{
-  width:240px;
-  min-width:240px;
-  flex:0 0 240px;
-  transition:width .18s ease,min-width .18s ease,flex-basis .18s ease;
-  overflow:hidden;
-}
-.workflow-ui .workflow-palette-sidebar.is-collapsed{
-  width:48px;
-  min-width:48px;
-  flex-basis:48px;
-}
-.workflow-ui .workflow-palette-sidebar.is-collapsed > div:not(:first-child){display:none}
-.workflow-ui .workflow-palette-sidebar.is-collapsed > div:first-child{justify-content:center;padding-left:8px;padding-right:8px}
-.workflow-ui .workflow-palette-sidebar.is-collapsed > div:first-child > span{display:none}
-.workflow-ui .workflow-palette-sidebar.is-collapsed > div:first-child button{transform:rotate(180deg)}
-.workflow-ui .workflow-state-node{cursor:grab}
+/* Workflow Canvas: compact nodes + n8n-like pointer-position connection handles. */
+.workflow-ui .workflow-state-node{cursor:grab;touch-action:none;will-change:left,top}
 .workflow-ui .workflow-state-node:active{cursor:grabbing}
-.workflow-ui .workflow-floating-connection-handle{
-  width:11px!important;
-  height:11px!important;
-  margin-left:-5.5px;
-  margin-top:-5.5px;
-  top:auto;
-  left:auto;
-  pointer-events:auto;
-  opacity:0;
-  transform:scale(.72);
-}
-.workflow-ui .workflow-state-node:hover .workflow-floating-connection-handle,
-.workflow-ui .workflow-floating-connection-handle:hover{
-  opacity:1;
-  transform:scale(1.12);
-}
-.workflow-ui [data-workflow-state-target="true"]{touch-action:none}
-@media (max-width:1100px){
-  .workflow-ui .workflow-palette-sidebar{width:220px;min-width:220px;flex-basis:220px}
-  .workflow-ui .workflow-palette-sidebar.is-collapsed{width:46px;min-width:46px;flex-basis:46px}
-}
-/* n8n-style workflow node handles: fixed edge ports, never floating under the pointer. */
-.workflow-ui .workflow-n8n-handle{
-  position:absolute!important;
-  top:50%!important;
-  width:10px!important;
-  height:10px!important;
-  margin-top:-5px!important;
-  border:2px solid #fff!important;
-  border-radius:9999px!important;
-  background:#94A3B8!important;
-  box-shadow:0 0 0 1px #CBD5E1,0 2px 7px rgba(15,23,42,.16)!important;
-  z-index:60!important;
-  cursor:crosshair!important;
-  padding:0!important;
-  opacity:0;
-  transform:scale(.8);
-  transition:opacity .12s ease,transform .12s ease,background-color .12s ease,box-shadow .12s ease;
-}
-.workflow-ui .workflow-n8n-handle-left{left:-5px!important}
-.workflow-ui .workflow-n8n-handle-right{right:-5px!important}
-.workflow-ui .workflow-state-node:hover .workflow-n8n-handle,
-.workflow-ui .workflow-state-node:focus-within .workflow-n8n-handle,
-.workflow-ui .workflow-n8n-handle:hover,
-.workflow-ui .workflow-n8n-handle:focus-visible{
-  opacity:1;
-  transform:scale(1.15);
-}
-.workflow-ui .workflow-n8n-handle:hover,
-.workflow-ui .workflow-n8n-handle:focus-visible{
-  background:var(--wd-primary)!important;
-  box-shadow:0 0 0 4px color-mix(in srgb,var(--wd-primary) 14%,transparent),0 2px 8px rgba(15,23,42,.16)!important;
-}
+.workflow-ui .workflow-dynamic-handle,
+.workflow-ui .workflow-dynamic-target{position:absolute;width:12px;height:12px;border-radius:999px;z-index:70;box-sizing:border-box;pointer-events:auto}
+.workflow-ui .workflow-dynamic-handle{border:2px solid #fff;background:var(--wd-primary);box-shadow:0 0 0 1px var(--wd-primary),0 0 0 4px rgba(27,102,234,.12);cursor:crosshair}
+.workflow-ui .workflow-dynamic-target{border:2px solid #fff;background:#fff;box-shadow:0 0 0 2px var(--wd-primary),0 0 0 5px rgba(27,102,234,.10);pointer-events:none}
+.workflow-ui .workflow-state-node > div:first-child{transition:none!important}
