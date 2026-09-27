@@ -5,6 +5,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { PermissionService } from '../permissions/permission.service';
 import { SharesService } from '../shares/shares.service';
 import type { AccessTokenPayload } from '../auth/jwt.types';
+import { runWithTenant } from '../auth/tenant-context';
 import { dynamicValueCatalog, evaluateCondition, walkDynamicValues, resolveDynamicValue } from './workflow-runtime';
 import { addWorkflowBusinessMinutes } from './workflow-calendar';
 import { CustomFunctionExecutor } from './custom-function.executor';
@@ -307,6 +308,7 @@ export class WorkflowEngineService implements OnModuleInit, OnModuleDestroy {
     const event = job.run.trigger as unknown as WorkflowFileEvent; const definition = job.run.versionId && job.workflow.activeVersion && job.workflow.activeVersionId === job.run.versionId ? this.definitionFromSnapshot(job.workflow.activeVersion.snapshot) : this.definitionFromWorkflow(job.workflow); const result = (job.run.result && typeof job.run.result === 'object' ? job.run.result : {}) as RunResult; const fieldValues = result.fieldValues ?? {};
     const continuationId = typeof result.continueTransitionId === 'string' ? result.continueTransitionId : null;
     const user = await this.prisma.user.findUnique({ where: { id: event.userId }, select: { id: true, email: true, name: true } }); if (!user) return this.failJob(job.id, job.run.id, 'Workflow actor no longer exists', job.attempts, job.maxAttempts); const token = { sub: user.id, org_id: job.orgId, email: user.email, name: user.name } as AccessTokenPayload & { email?: string; name?: string };
+    return runWithTenant({ orgId: job.orgId, userId: user.id }, async () => {
     const heartbeat = setInterval(() => void this.prisma.workflowJob.updateMany({ where: { id: job.id, status: 'RUNNING', lockedBy: this.workerId }, data: { leaseUntil: new Date(Date.now() + 2 * 60_000) } }).catch(() => undefined), 30_000);
     try {
       await this.prisma.workflowRun.update({ where: { id: job.run.id }, data: { status: 'RUNNING' } });
@@ -342,6 +344,7 @@ export class WorkflowEngineService implements OnModuleInit, OnModuleDestroy {
       }
       if (hops >= 50) throw new Error('Workflow exceeded the maximum of 50 automatic transitions');
     } catch (error) { const message = error instanceof Error ? error.message : String(error); await this.failJob(job.id, job.run.id, message, job.attempts, job.maxAttempts); } finally { clearInterval(heartbeat); }
+    });
   }
 
   private transitionMatches(t: WorkflowTransitionLike, event: WorkflowFileEvent, fields: Record<string, unknown>) { if (t.trigger && t.trigger !== 'manual' && !this.triggerMatches([t.trigger], event.eventType ?? 'upload')) return false; return this.conditionMatches(t.condition, event, fields); }
