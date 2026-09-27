@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { Icons } from "./layout/icons";
 
 /**
@@ -11,6 +12,9 @@ import { Icons } from "./layout/icons";
  *
  * Use this instead of native `<select>` across WorkDrive product UI.
  * Office editor toolbars and multi-select controls may keep native selects.
+ *
+ * Menus render in a document portal so they float above cards/modals
+ * that use overflow clipping (workflow action cards, wd-card, etc.).
  *
  * @example
  * <ImkanOptionPicker
@@ -63,6 +67,31 @@ export function toImkanPickerOptions(
   }));
 }
 
+type MenuPosition = {
+  top: number;
+  left: number;
+  width: number;
+  maxHeight: number;
+};
+
+function computeMenuPosition(trigger: HTMLElement, menuWidth: "default" | "wide"): MenuPosition {
+  const rect = trigger.getBoundingClientRect();
+  const width = menuWidth === "wide" ? 360 : 280;
+  const viewportPadding = 12;
+  const gap = 6;
+  const maxHeight = Math.max(160, window.innerHeight - rect.bottom - gap - viewportPadding);
+  let left = rect.left;
+  if (left + width > window.innerWidth - viewportPadding) {
+    left = Math.max(viewportPadding, window.innerWidth - width - viewportPadding);
+  }
+  return {
+    top: rect.bottom + gap,
+    left,
+    width,
+    maxHeight,
+  };
+}
+
 export function ImkanOptionPicker<T extends string>({
   value,
   onChange,
@@ -79,62 +108,74 @@ export function ImkanOptionPicker<T extends string>({
   emptyLabel = "—",
 }: ImkanOptionPickerProps<T>) {
   const [open, setOpen] = useState(false);
+  const [menuPosition, setMenuPosition] = useState<MenuPosition | null>(null);
   const rootRef = useRef<HTMLDivElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
   const selected = options.find((option) => option.value === value);
+
+  const repositionMenu = () => {
+    if (!rootRef.current) return;
+    setMenuPosition(computeMenuPosition(rootRef.current, menuWidth));
+  };
+
+  useLayoutEffect(() => {
+    if (!open) {
+      setMenuPosition(null);
+      return;
+    }
+    repositionMenu();
+  }, [open, menuWidth, options.length]);
 
   useEffect(() => {
     if (!open) return;
-    const onDocumentMouseDown = (event: MouseEvent) => {
-      if (!rootRef.current?.contains(event.target as Node)) setOpen(false);
+    const onDocumentPointerDown = (event: PointerEvent) => {
+      const target = event.target as Node;
+      if (rootRef.current?.contains(target) || menuRef.current?.contains(target)) return;
+      setOpen(false);
     };
     const onDocumentKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") setOpen(false);
     };
-    document.addEventListener("mousedown", onDocumentMouseDown);
+    const onViewportChange = () => repositionMenu();
+    document.addEventListener("pointerdown", onDocumentPointerDown);
     document.addEventListener("keydown", onDocumentKeyDown);
+    window.addEventListener("resize", onViewportChange);
+    window.addEventListener("scroll", onViewportChange, true);
     return () => {
-      document.removeEventListener("mousedown", onDocumentMouseDown);
+      document.removeEventListener("pointerdown", onDocumentPointerDown);
       document.removeEventListener("keydown", onDocumentKeyDown);
+      window.removeEventListener("resize", onViewportChange);
+      window.removeEventListener("scroll", onViewportChange, true);
     };
-  }, [open]);
+  }, [open, menuWidth, options.length]);
 
   const menuClasses = [
     "imkan-option-picker-menu",
+    "imkan-option-picker-menu-portal",
     menuWidth === "wide" ? "imkan-option-picker-menu-wide" : "",
     menuClassName,
   ]
     .filter(Boolean)
     .join(" ");
 
-  return (
-    <div
-      ref={rootRef}
-      className={[
-        "imkan-option-picker",
-        fullWidth ? "is-full" : "",
-        className,
-      ]
-        .filter(Boolean)
-        .join(" ")}
-    >
-      <button
-        type="button"
-        className={["imkan-option-picker-trigger", triggerClassName].filter(Boolean).join(" ")}
-        aria-haspopup="listbox"
-        aria-expanded={open}
-        aria-label={ariaLabel}
-        disabled={disabled}
-        onClick={() => {
-          if (!disabled) setOpen((current) => !current);
-        }}
-      >
-        <span className="imkan-option-picker-trigger-label">
-          {selected?.label ?? placeholder ?? emptyLabel}
-        </span>
-        <Icons.chevD size={12} />
-      </button>
-      {open ? (
-        <div className={menuClasses} role="listbox" aria-label={ariaLabel}>
+  const menu = open && menuPosition && typeof document !== "undefined"
+    ? createPortal(
+        <div
+          ref={menuRef}
+          className={menuClasses}
+          role="listbox"
+          aria-label={ariaLabel}
+          style={{
+            position: "fixed",
+            top: menuPosition.top,
+            left: menuPosition.left,
+            width: menuPosition.width,
+            maxHeight: menuPosition.maxHeight,
+            overflowY: "auto",
+            zIndex: 10050,
+          }}
+          onPointerDown={(event) => event.stopPropagation()}
+        >
           {allowEmpty ? (
             <button
               type="button"
@@ -167,8 +208,42 @@ export function ImkanOptionPicker<T extends string>({
               {option.description ? <small>{option.description}</small> : null}
             </button>
           ))}
-        </div>
-      ) : null}
-    </div>
+        </div>,
+        document.body,
+      )
+    : null;
+
+  return (
+    <>
+      <div
+        ref={rootRef}
+        className={[
+          "imkan-option-picker",
+          fullWidth ? "is-full" : "",
+          open ? "is-open" : "",
+          className,
+        ]
+          .filter(Boolean)
+          .join(" ")}
+      >
+        <button
+          type="button"
+          className={["imkan-option-picker-trigger", triggerClassName].filter(Boolean).join(" ")}
+          aria-haspopup="listbox"
+          aria-expanded={open}
+          aria-label={ariaLabel}
+          disabled={disabled}
+          onClick={() => {
+            if (!disabled) setOpen((current) => !current);
+          }}
+        >
+          <span className="imkan-option-picker-trigger-label">
+            {selected?.label ?? placeholder ?? emptyLabel}
+          </span>
+          <Icons.chevD size={12} />
+        </button>
+      </div>
+      {menu}
+    </>
   );
 }

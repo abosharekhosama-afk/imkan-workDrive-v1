@@ -472,6 +472,20 @@ export class WorkflowEngineService implements OnModuleInit, OnModuleDestroy {
         const resource = await this.connections.readResource(user, connectionId, resourceId);
         return { action: 'connection_file', connectionId, resource };
       }
+      case 'connection_upload': {
+        if ((event.resourceType ?? 'FILE') === 'FOLDER') throw new Error('Upload to cloud is only supported for files');
+        const connectionId = String(config.connectionId ?? '');
+        const destinationId = typeof config.destinationId === 'string' ? config.destinationId.trim() : '';
+        if (!connectionId) throw new Error('Choose a connection for cloud upload');
+        const attachment = await this.email.loadAttachment(user, event.fileId);
+        if (attachment.bytes.length > 8_000_000) throw new Error('File is too large for cloud upload (max 8 MB)');
+        const uploaded = await this.connections.uploadResource(user, connectionId, {
+          parentId: destinationId || undefined,
+          name: attachment.name,
+          contentBase64: attachment.bytes.toString('base64'),
+        });
+        return { action: 'connection_upload', connectionId, destinationId: destinationId || null, resource: uploaded };
+      }
       case 'http_request': {
         const connectionId = typeof config.connectionId === 'string' ? config.connectionId.trim() : '';
         if (!connectionId) throw new Error('HTTP request action requires a connection');

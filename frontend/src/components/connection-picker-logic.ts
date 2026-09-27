@@ -46,6 +46,27 @@ export function connectionBrowseReady(connection: {
   return true;
 }
 
+/** REST / OAuth connections usable for workflow HTTP request actions. */
+export function connectionRequestReady(connection: {
+  status?: string | null;
+}): boolean {
+  return connection.status === "ACTIVE";
+}
+
+/** Cloud storage connections that can receive uploaded WorkDrive files. */
+export function connectionUploadReady(connection: {
+  provider?: string | null;
+  authType?: string | null;
+  status?: string | null;
+  scope?: string | null;
+  errorCode?: string | null;
+}): boolean {
+  if (connection.status !== "ACTIVE") return false;
+  if (!providerSupports(connection.provider, "upload")) return false;
+  if (googleDriveReconnectRequired(connection)) return false;
+  return true;
+}
+
 export function reconnectProviderLabel(provider: string | null | undefined): string {
   if (provider === "google") return "Reconnect Google Drive";
   if (provider === "dropbox") return "Reconnect Dropbox";

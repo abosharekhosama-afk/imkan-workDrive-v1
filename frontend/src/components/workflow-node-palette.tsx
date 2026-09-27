@@ -10,6 +10,7 @@ export type WorkflowPaletteNode =
   | "http_request"
   | "custom_function"
   | "import_file"
+  | "export_file"
   | "end";
 
 type PaletteItem = {
@@ -33,6 +34,7 @@ const ITEMS: PaletteItem[] = [
   { type: "http_request", category: "integration", icon: "↗", en: "HTTP Request", ar: "طلب HTTP", descriptionEn: "Call an external API using a connection.", descriptionAr: "استدعاء API خارجي عبر اتصال." },
   { type: "custom_function", category: "integration", icon: "ƒ", en: "Custom Function", ar: "دالة مخصصة", descriptionEn: "Run a published safe function.", descriptionAr: "تشغيل دالة آمنة منشورة." },
   { type: "import_file", category: "integration", icon: "☁", en: "Import External File", ar: "استيراد ملف خارجي", descriptionEn: "Read a file from Google Drive, Dropbox, or OneDrive.", descriptionAr: "قراءة ملف من Google Drive أو Dropbox أو OneDrive." },
+  { type: "export_file", category: "integration", icon: "⇧", en: "Upload to Cloud", ar: "رفع إلى السحابة", descriptionEn: "Push the WorkDrive file to Google Drive, Dropbox, or OneDrive.", descriptionAr: "رفع ملف WorkDrive إلى Google Drive أو Dropbox أو OneDrive." },
   { type: "end", category: "core", icon: "■", en: "End", ar: "نهاية", descriptionEn: "Terminal workflow state.", descriptionAr: "حالة نهائية لسير العمل." },
 ];
 

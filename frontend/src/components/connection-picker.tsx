@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { browseConnectionResources, startConnectionOAuth, uploadConnectionFile, type Connection, type ConnectionResource } from "@/lib/api/workflows";
 import { buildOAuthStartReturnPath } from "@/app/files/connections/connections-oauth-return-logic";
 import { readBrowserAccessToken, stashBrowserAccessTokenForOAuth } from "@/components/auth-gate-logic";
-import { connectionBrowseReady, connectionStatusLabel, friendlyConnectionError, googleDriveReconnectRequired, parseConnectionError, providerSupports, reconnectProviderLabel } from "@/components/connection-picker-logic";
+import { connectionBrowseReady, connectionRequestReady, connectionStatusLabel, connectionUploadReady, friendlyConnectionError, googleDriveReconnectRequired, parseConnectionError, providerSupports, reconnectProviderLabel } from "@/components/connection-picker-logic";
 import { ImkanOptionPicker } from "@/components/imkan-option-picker";
 
 function beginOAuth(provider: string, connectionId?: string) {
@@ -13,17 +13,28 @@ function beginOAuth(provider: string, connectionId?: string) {
   return startConnectionOAuth(provider, undefined, connectionId, returnTo).then((result) => { window.location.href = result.url; });
 }
 
-export function ConnectionPicker({ connections, value, onChange, provider, capability }: { connections: Connection[]; value: string; onChange: (id: string) => void; provider?: string; capability?: "browse" | "request" }) {
+export function ConnectionPicker({ connections, value, onChange, provider, capability }: { connections: Connection[]; value: string; onChange: (id: string) => void; provider?: string; capability?: "browse" | "request" | "upload" }) {
   const rows = useMemo(() => connections.filter((item) => {
     if (provider && item.provider !== provider) return false;
     if (capability === "browse" && !providerSupports(item.provider, "list")) return false;
+    if (capability === "upload" && !providerSupports(item.provider, "upload")) return false;
     return true;
   }), [connections, provider, capability]);
   const selected = rows.find((item) => item.id === value) ?? null;
   const status = connectionStatusLabel(selected?.status);
-  const label = provider === "google" ? "Google Drive" : provider === "dropbox" ? "Dropbox" : provider === "microsoft" ? "OneDrive" : "connection";
-  const usableRows = useMemo(() => rows.filter((item) => connectionBrowseReady(item)), [rows]);
-  const reconnectable = useMemo(() => rows.filter((item) => item.authType === "OAUTH2" && !connectionBrowseReady(item)), [rows]);
+  const label = provider === "google" ? "Google Drive" : provider === "dropbox" ? "Dropbox" : provider === "microsoft" ? "OneDrive" : capability === "request" ? "REST API" : "connection";
+  const readyFor = capability === "request" ? connectionRequestReady : capability === "upload" ? connectionUploadReady : connectionBrowseReady;
+  const usableRows = useMemo(() => rows.filter((item) => readyFor(item)), [rows, capability]);
+  const reconnectable = useMemo(() => rows.filter((item) => {
+    if (capability === "request") return item.authType === "OAUTH2" && !connectionRequestReady(item);
+    if (capability === "upload") return item.authType === "OAUTH2" && !connectionUploadReady(item);
+    return item.authType === "OAUTH2" && !connectionBrowseReady(item);
+  }), [rows, capability]);
+  const disabledDescription = (item: Connection) => {
+    if (capability === "request" && item.status !== "ACTIVE") return "Connection not active";
+    if (capability === "upload" && googleDriveReconnectRequired(item)) return "Upload scope required";
+    return "Needs reconnect";
+  };
   useEffect(() => {
     if (value || typeof window === "undefined") return;
     const returned = new URLSearchParams(window.location.search).get("connectionId");
@@ -55,7 +66,7 @@ export function ConnectionPicker({ connections, value, onChange, provider, capab
             ...reconnectable.map((item) => ({
               value: item.id,
               label: item.name,
-              description: "Needs reconnect",
+              description: disabledDescription(item),
               disabled: true,
             })),
           ]}
@@ -73,7 +84,7 @@ export function ConnectionPicker({ connections, value, onChange, provider, capab
   );
 }
 
-export function ResourcePicker({ connectionId, provider, value, label, onChange }: { connectionId: string; provider?: string; value: string; label?: string; onChange: (resource: ConnectionResource) => void }) {
+export function ResourcePicker({ connectionId, provider, value, label, onChange, selectMode = "file" }: { connectionId: string; provider?: string; value: string; label?: string; onChange: (resource: ConnectionResource) => void; selectMode?: "file" | "folder" }) {
   const [parent, setParent] = useState<string | undefined>(undefined);
   const [trail, setTrail] = useState<Array<{ id?: string; name: string }>>([{ name: "My files" }]);
   const [folders, setFolders] = useState<ConnectionResource[]>([]);
@@ -122,7 +133,7 @@ export function ResourcePicker({ connectionId, provider, value, label, onChange 
   if (!connectionId || !providerSupports(provider, "list")) return null;
   return (
     <div className="workflow-action-field sm:col-span-2 text-[var(--wd-text,#202B38)]">
-      <span>Folder and file</span>
+      <span>{selectMode === "folder" ? "Destination folder" : "Folder and file"}</span>
       <div className="mb-2 flex flex-wrap items-center gap-2 text-[11px] text-[var(--wd-text-muted,#667085)]">
         <span>{trail.map((item) => item.name).join(" / ")}</span>
         {label ? <strong className="text-[var(--wd-text,#202B38)]">{label}</strong> : null}
@@ -134,8 +145,15 @@ export function ResourcePicker({ connectionId, provider, value, label, onChange 
       {!loading && !error && visibleFolders.length === 0 && visibleFiles.length === 0 ? <p className="text-[12px]">No files found</p> : null}
       <div className="max-h-52 overflow-auto rounded-lg border border-[var(--wd-line,var(--wd-border,#E0E6EC))] bg-[var(--wd-bg,#fff)]">
         {trail.length > 1 ? <button type="button" className="block w-full px-3 py-2 text-start text-[12px]" onClick={() => { const next = trail.slice(0, -1); setTrail(next); setParent(next.at(-1)?.id); }}>Back</button> : null}
-        {visibleFolders.map((folder) => <button type="button" key={folder.id} className="block w-full px-3 py-2 text-start text-[12px]" onClick={() => { setTrail((current) => [...current, { id: folder.id, name: folder.name }]); setParent(folder.id); }}>{folder.name}</button>)}
-        {visibleFiles.map((file) => <button type="button" key={file.id} className="block w-full px-3 py-2 text-start text-[12px]" onClick={() => onChange(file)}>{file.name}{file.id === value ? " · selected" : ""}</button>)}
+        {visibleFolders.map((folder) => <button type="button" key={folder.id} className={`block w-full px-3 py-2 text-start text-[12px] ${selectMode === "folder" && folder.id === value ? "bg-[var(--wd-primary-light,#eef4ff)] font-semibold" : ""}`} onClick={() => {
+          if (selectMode === "folder") {
+            onChange(folder);
+            return;
+          }
+          setTrail((current) => [...current, { id: folder.id, name: folder.name }]);
+          setParent(folder.id);
+        }}>{folder.name}{selectMode === "folder" && folder.id === value ? " · selected" : ""}</button>)}
+        {selectMode === "file" ? visibleFiles.map((file) => <button type="button" key={file.id} className="block w-full px-3 py-2 text-start text-[12px]" onClick={() => onChange(file)}>{file.name}{file.id === value ? " · selected" : ""}</button>) : null}
       </div>
       {nextPageToken ? <button type="button" className="mt-2 text-[11px] font-semibold text-[var(--wd-primary)] underline" onClick={() => loadMore()} disabled={loading}>Load more</button> : null}
       {value ? <details className="mt-2 text-[11px]"><summary>Advanced</summary><button type="button" className="mt-1 underline" onClick={() => void navigator.clipboard.writeText(value)}>Copy internal reference</button></details> : null}

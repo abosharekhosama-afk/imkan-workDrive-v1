@@ -36,7 +36,33 @@ export function ConnectionUseHint({ ar }: { ar: boolean }) {
   </div>;
 }
 
-export type WorkflowRecipe = "REVIEW_FILE" | "NOTIFY_UPLOAD" | "EXTERNAL_API" | "CUSTOM_FUNCTION" | "IMPORT_EXTERNAL_FILE";
+export function HttpRequestFieldsHint({ ar }: { ar: boolean }) {
+  return <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-[9px] leading-5 text-slate-700" dir={ar ? "rtl" : "ltr"}>
+    <div className="font-semibold text-slate-900">{ar ? "شرح حقول HTTP Request" : "HTTP request fields explained"}</div>
+    <ul className="mt-2 list-disc space-y-1 ps-4">
+      <li><b>{ar ? "Method" : "Method"}</b> — {ar ? "نوع العملية: GET لقراءة، POST/PUT/PATCH لإرسال بيانات، DELETE للحذف." : "Operation type: GET to read, POST/PUT/PATCH to send data, DELETE to remove."}</li>
+      <li><b>{ar ? "Path" : "Path"}</b> — {ar ? "مسار API بعد Base URL للاتصال، مثل /v1/items أو /drive/v3/files/{{file.id}}. يمكن استخدام {{file.name}} و {{file.id}}." : "API path after the connection base URL, e.g. /v1/items or /drive/v3/files/{{file.id}}. You can use {{file.name}} and {{file.id}}."}</li>
+      <li><b>{ar ? "Body" : "Body"}</b> — {ar ? "محتوى الطلب JSON أو نص (لـ POST/PUT/PATCH فقط). اتركه فارغاً لـ GET." : "Request JSON or text payload (POST/PUT/PATCH only). Leave empty for GET."}</li>
+      <li><b>{ar ? "Response mode" : "Response mode"}</b> — {ar ? "كيف تُخزَّن الاستجابة: TEXT/JSON/HEADERS أو NONE." : "How the response is stored: TEXT, JSON, HEADERS, or NONE."}</li>
+    </ul>
+  </div>;
+}
+
+export function GetFileHint({ ar }: { ar: boolean }) {
+  return <div className="rounded-xl border border-sky-200 bg-sky-50/70 p-3 text-[9px] leading-5 text-sky-900" dir={ar ? "rtl" : "ltr"}>
+    <div className="font-semibold">{ar ? "Get file — استيراد من السحابة" : "Get file — import from cloud"}</div>
+    <p className="mt-1">{ar ? "يقرأ ملفاً من Google Drive أو Dropbox أو OneDrive عبر الاتصال المحدد. لرفع ملف WorkDrive إلى السحابة استخدم إجراء Upload to cloud." : "Reads a file from Google Drive, Dropbox, or OneDrive using the selected connection. To push a WorkDrive file to cloud storage, use Upload to cloud instead."}</p>
+  </div>;
+}
+
+export function UploadToCloudHint({ ar }: { ar: boolean }) {
+  return <div className="rounded-xl border border-emerald-200 bg-emerald-50/70 p-3 text-[9px] leading-5 text-emerald-900" dir={ar ? "rtl" : "ltr"}>
+    <div className="font-semibold">{ar ? "Upload to cloud — رفع إلى Drive" : "Upload to cloud — push to Drive"}</div>
+    <p className="mt-1">{ar ? "عند تشغيل سير العمل (مثلاً محفز File uploaded) يرفع الملف الحالي من WorkDrive إلى المجلد السحابي المحدد. الحد الأقصى 8 MB." : "When the workflow runs (e.g. File uploaded trigger), the current WorkDrive file is uploaded to the selected cloud folder. Max size 8 MB."}</p>
+  </div>;
+}
+
+export type WorkflowRecipe = "REVIEW_FILE" | "NOTIFY_UPLOAD" | "EXPORT_TO_CLOUD" | "EXTERNAL_API" | "CUSTOM_FUNCTION" | "IMPORT_EXTERNAL_FILE";
 
 export const WORKFLOW_RECIPES: Array<{
   id: WorkflowRecipe;
@@ -61,6 +87,14 @@ export const WORKFLOW_RECIPES: Array<{
     ar: "إشعار بعد الرفع",
     enDescription: "Upload → Completed with a real WorkDrive notification action.",
     arDescription: "رفع → مكتمل مع إجراء إشعار حقيقي داخل WorkDrive.",
+  },
+  {
+    id: "EXPORT_TO_CLOUD",
+    icon: "⇧",
+    en: "Upload to Google Drive",
+    ar: "رفع إلى Google Drive",
+    enDescription: "Automatic on file upload → push the WorkDrive file to a cloud folder (Google Drive, Dropbox, or OneDrive).",
+    arDescription: "تلقائياً عند رفع ملف → يرفع ملف WorkDrive إلى مجلد سحابي (Google Drive أو Dropbox أو OneDrive).",
   },
   {
     id: "EXTERNAL_API",
@@ -113,7 +147,7 @@ export function WorkflowRecipePicker({ ar, value, onChange }: { ar: boolean; val
 export function WorkflowNextSteps({ ar, workflowId, recipe }: { ar: boolean; workflowId: string; recipe?: WorkflowRecipe }) {
   return <div className="rounded-2xl border border-emerald-200 bg-emerald-50/50 p-4" dir={ar ? "rtl" : "ltr"}>
     <div className="text-[10.5px] font-semibold text-emerald-900">{ar ? "تم حفظ سير العمل. ما الخطوة التالية؟" : "Workflow saved. What should you do next?"}</div>
-    <p className="mt-1 text-[9.5px] leading-5 text-emerald-800">{recipe === "IMPORT_EXTERNAL_FILE" ? (ar ? "اختر Connection وملفاً خارجياً ومجلد وجهة، ثم نفّذ Workflow يدوياً لإنشاء مهمة استيراد حقيقية." : "Choose a Connection, an external file and a destination, then start the workflow manually to create a real import job.") : recipe === "EXTERNAL_API" ? (ar ? "تحقق من Connection ثم نفّذ التشغيل من مورد حقيقي. ستظهر النتيجة في سجل التشغيل." : "Verify the Connection, then run the workflow from a real resource. The result will appear in run history.") : recipe === "CUSTOM_FUNCTION" ? (ar ? "تأكد من نشر الدالة الآمنة ثم استخدمها في الإجراء. راجع سجل التشغيل بعد التنفيذ." : "Make sure the safe function is published, then use it in the action. Review run history after execution.") : (ar ? "فعّل سير العمل ثم ابدأه من مورد حقيقي. راجع سجل التشغيل والمهام الناتجة." : "Activate the workflow, then start it from a real resource. Review run history and generated tasks.")}</p>
+    <p className="mt-1 text-[9.5px] leading-5 text-emerald-800">{recipe === "IMPORT_EXTERNAL_FILE" ? (ar ? "اختر Connection وملفاً خارجياً ومجلد وجهة، ثم نفّذ Workflow يدوياً لإنشاء مهمة استيراد حقيقية." : "Choose a Connection, an external file and a destination, then start the workflow manually to create a real import job.") : recipe === "EXPORT_TO_CLOUD" ? (ar ? "فعّل المحفز File uploaded، واختر اتصال Google Drive ومجلد الوجهة، ثم فعّل سير العمل." : "Enable the File uploaded trigger, choose a Google Drive connection and destination folder, then activate the workflow.") : recipe === "EXTERNAL_API" ? (ar ? "تحقق من Connection ثم نفّذ التشغيل من مورد حقيقي. ستظهر النتيجة في سجل التشغيل." : "Verify the Connection, then run the workflow from a real resource. The result will appear in run history.") : recipe === "CUSTOM_FUNCTION" ? (ar ? "تأكد من نشر الدالة الآمنة ثم استخدمها في الإجراء. راجع سجل التشغيل بعد التنفيذ." : "Make sure the safe function is published, then use it in the action. Review run history after execution.") : (ar ? "فعّل سير العمل ثم ابدأه من مورد حقيقي. راجع سجل التشغيل والمهام الناتجة." : "Activate the workflow, then start it from a real resource. Review run history and generated tasks.")}</p>
     <div className="mt-3 flex flex-wrap gap-2">
       <a href={`/files/workflows/runs?workflowId=${encodeURIComponent(workflowId)}`} className="wd-pill wd-pill-record">{ar ? "سجل التشغيل" : "Run history"}</a>
       <a href="/files/workflows/functions" className="wd-pill wd-pill-record">{ar ? "Custom Functions" : "Custom Functions"}</a>
