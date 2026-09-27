@@ -10,7 +10,16 @@ function parseCriteria(value: unknown): SearchFieldCriterion[] {
   try {
     const parsed = JSON.parse(value);
     if (!Array.isArray(parsed)) return [];
-    return parsed.slice(0, 5).map((x: any) => ({ key: String(x?.key ?? ''), op: String(x?.op ?? 'eq'), value: String(x?.value ?? ''), join: x?.join === 'OR' ? 'OR' : 'AND' })).filter((x) => x.key && x.value !== '');
+    const allowedOps: SearchFieldCriterion['op'][] = ['contains', 'not_contains', 'eq', 'neq', 'before', 'after', 'lt', 'gt'];
+    return parsed
+      .slice(0, 5)
+      .map((x: any): SearchFieldCriterion => ({
+        key: String(x?.key ?? ''),
+        op: allowedOps.includes(x?.op) ? x.op : 'eq',
+        value: String(x?.value ?? ''),
+        join: x?.join === 'OR' ? 'OR' : 'AND',
+      }))
+      .filter((x) => x.key && x.value !== '');
   } catch { return []; }
 }
 
