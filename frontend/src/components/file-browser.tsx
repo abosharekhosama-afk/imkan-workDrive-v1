@@ -13,7 +13,7 @@ import { FileGridView } from "./file-grid-view";
 import { ShareModal } from "./share-modal";
 import { useLocale } from "./locale-provider";
 import { bulkTrashFolders, createFolder, deleteFolder, getFolder, listRootContents, renameFolder, moveFolder, copyFolder } from "../lib/api/folders";
-import { bulkTrashFiles, renameFile, requestDownload, trashFile, moveFile, copyFile } from "../lib/api/files";
+import { bulkTrashFiles, renameFile, requestDownload, trashFile, moveFile, copyFile, getFileDetails } from "../lib/api/files";
 import { triggerDownload } from "../lib/api/download";
 import { addFavorite, listFavorites, removeFavorite } from "../lib/api/favorites";
 import { ApiError } from "../lib/api/client";
@@ -24,6 +24,7 @@ import { RenameModal } from "./rename-modal";
 import { Modal } from "./modal";
 import { MoveModal } from "./move-modal";
 import { Toast } from "./toast";
+import { FileDetailsModal, type FileDetailsData } from "./file-details-modal";
 import { FilePreviewModal } from "./file-preview-modal";
 import { VersionHistoryDrawer } from "./files/version-history-drawer";
 import { resolveMimeType } from "../lib/api/mime";
@@ -38,7 +39,7 @@ import {
   type ViewMode,
 } from "./view-mode-logic";
 import { getWorkspacePolicy } from "../lib/api/organization";
-import { listDataTemplates, type DataTemplate } from "../lib/api/metadata";
+import { getTransferDataTemplateMandate, listDataTemplates, type DataTemplate } from "../lib/api/metadata";
 import { openInspector } from "./layout/shell-context";
 
 import { canMutateContent, canShareContent } from "../lib/permissions";
@@ -58,7 +59,7 @@ export function FileBrowser({
   role?: string;
   readOnly?: boolean;
 }) {
-  const { label } = useLocale();
+  const { label, locale } = useLocale();
   const searchParams = useSearchParams();
   const router = useRouter();
   const routeQuery = searchParams.get("query")?.trim() ?? "";
@@ -71,6 +72,9 @@ export function FileBrowser({
   const [error, setError] = useState<string | null>(null);
   const [newFolderName, setNewFolderName] = useState("");
   const [newFolderOpen, setNewFolderOpen] = useState(false);
+  const [newFolderMandate, setNewFolderMandate] = useState<DataTemplate | null>(null);
+  const [newFolderFields, setNewFolderFields] = useState<Record<string, unknown>>({});
+  const [newFolderMandateLoading, setNewFolderMandateLoading] = useState(false);
   const [copyTarget, setCopyTarget] = useState<{
     type: "FILE" | "FOLDER";
     id: string;
@@ -95,6 +99,7 @@ export function FileBrowser({
     id: string;
     name: string;
   } | null>(null);
+  const [detailsTarget, setDetailsTarget] = useState<FileDetailsData | null>(null);
   const [workflowTarget, setWorkflowTarget] = useState<{type:"FILE"|"FOLDER";id:string;name:string}|null>(null);
   const [workflowStatuses, setWorkflowStatuses] = useState<Map<string, WorkflowResourceStatus>>(new Map());
   const [workflowStatusTarget, setWorkflowStatusTarget] = useState<{ status: WorkflowResourceStatus; resourceName: string } | null>(null);
@@ -125,12 +130,13 @@ export function FileBrowser({
     type: (searchParams.get("type") as AdvancedFileFilter["type"]) || "all",
     status: (searchParams.get("status") as AdvancedFileFilter["status"]) || "all",
     dateField: (searchParams.get("dateField") as AdvancedFileFilter["dateField"]) || "modified",
-    dateFrom: searchParams.get("dateFrom") || "", dateTo: searchParams.get("dateTo") || "", owner: searchParams.get("owner") || "", dataTemplateId: searchParams.get("dataTemplate") || "",
+    dateFrom: searchParams.get("dateFrom") || "", dateTo: searchParams.get("dateTo") || "", owner: searchParams.get("owner") || "", dataTemplateId: searchParams.get("dataTemplate") || "", dataTemplateCriteria: (() => { try { const raw = searchParams.get("criteria"); return raw ? JSON.parse(raw) : []; } catch { return []; } })(),
   });
   // Folder aggregate metadata surfaced by the API (size / latest file update).
   const [folderSizes, setFolderSizes] = useState<ReadonlyMap<string, number>>(new Map());
   const [folderUpdatedAt, setFolderUpdatedAt] = useState<ReadonlyMap<string, string | null>>(new Map());
   useEffect(() => { void listDataTemplates(false).then(setDataTemplates).catch(() => setDataTemplates([])); }, []);
+  useEffect(() => { if (!newFolderOpen) { setNewFolderMandate(null); setNewFolderFields({}); return; } setNewFolderMandateLoading(true); void getTransferDataTemplateMandate(folderId ?? null, "FOLDERS").then((r) => setNewFolderMandate(r.enabled ? r.template : null)).catch(() => setNewFolderMandate(null)).finally(() => setNewFolderMandateLoading(false)); }, [newFolderOpen, folderId]);
   useEffect(() => { const value = searchParams.get("dataTemplate") || ""; setAdvancedFilter((current) => current.dataTemplateId === value ? current : { ...current, dataTemplateId: value }); }, [searchParams]);
   const owners = useMemo(() => { const map = new Map<string,{id:string;name:string|null;email:string}>(); for (const f of files) if (f.ownerId && !map.has(f.ownerId)) map.set(f.ownerId,{id:f.ownerId,name:f.ownerName??null,email:f.ownerEmail??""}); return [...map.values()]; }, [files]);
 
@@ -215,7 +221,7 @@ export function FileBrowser({
     const setOrDelete = (key: string, value: string) => value ? q.set(key, value) : q.delete(key);
     setOrDelete("filter", filter === "all" ? "" : filter); setOrDelete("type", advancedFilter.type === "all" ? "" : advancedFilter.type);
     setOrDelete("status", advancedFilter.status === "all" ? "" : advancedFilter.status); setOrDelete("owner", advancedFilter.owner);
-    setOrDelete("dateField", advancedFilter.dateField === "modified" ? "" : advancedFilter.dateField); setOrDelete("dateFrom", advancedFilter.dateFrom); setOrDelete("dateTo", advancedFilter.dateTo); setOrDelete("dataTemplate", advancedFilter.dataTemplateId);
+    setOrDelete("dateField", advancedFilter.dateField === "modified" ? "" : advancedFilter.dateField); setOrDelete("dateFrom", advancedFilter.dateFrom); setOrDelete("dateTo", advancedFilter.dateTo); setOrDelete("dataTemplate", advancedFilter.dataTemplateId); setOrDelete("criteria", advancedFilter.dataTemplateCriteria?.length ? JSON.stringify(advancedFilter.dataTemplateCriteria) : "");
     const next = q.toString();
     const current = searchParams.toString();
     if (next !== current) router.replace(`${window.location.pathname}${next ? `?${next}` : ""}`, { scroll: false });
@@ -244,6 +250,7 @@ export function FileBrowser({
           dateFrom: advancedFilter.dateFrom || undefined,
           dateTo: advancedFilter.dateTo || undefined,
           dataTemplateId: advancedFilter.dataTemplateId || undefined,
+          criteria: advancedFilter.dataTemplateCriteria?.filter((c) => c.value !== "") || undefined,
         });
         setFolderName(undefined);
         setTeamFolderId(null);
@@ -450,14 +457,38 @@ export function FileBrowser({
     setMoveTarget({ type, id, name });
   };
 
-  const openInInspector = (type: "FILE" | "FOLDER", id: string) => {
+  const handleViewDetails = async (type: "FILE" | "FOLDER", id: string, name: string, mimeType?: string, size?: number) => {
     if (type === "FOLDER") {
       const folder = folders.find((f) => f.id === id);
       if (folder) openInspector({ kind: "FOLDER", folder });
-      return;
+      setDetailsTarget({
+        resourceType: "FOLDER",
+        name,
+        mimeType: null,
+        size: null,
+        updatedAt: folder?.updatedAt ?? null,
+        ownerName: folder?.ownerName ?? null,
+        ownerEmail: folder?.ownerEmail ?? null,
+        permission: null,
+      });
+    } else {
+      const file = files.find((f) => f.id === id);
+      if (file) openInspector({ kind: "FILE", file });
+      try {
+        const detail = await getFileDetails(id);
+        setDetailsTarget({
+          resourceType: "FILE", name: detail.name, mimeType: detail.mimeType, size: detail.size,
+          updatedAt: detail.updatedAt, createdAt: detail.createdAt, tags: detail.tags.map((tag) => tag.name), ownerName: detail.owner.name, ownerEmail: detail.owner.email,
+          permission: detail.visibility, location: detail.location?.name ?? null,
+        });
+      } catch {
+        setDetailsTarget({
+          resourceType: "FILE", name, mimeType: mimeType ?? null, size: size ?? null,
+          updatedAt: file?.updatedAt ?? null, ownerName: file?.ownerName ?? null,
+          ownerEmail: file?.ownerEmail ?? null, permission: null,
+        });
+      }
     }
-    const file = files.find((f) => f.id === id);
-    if (file) openInspector({ kind: "FILE", file });
   };
 
   const handleSelectAll = (isSelected: boolean) => {
@@ -529,7 +560,7 @@ export function FileBrowser({
           onMove={(type, id, name) => setMoveTarget({ type, id, name })}
           onFavorite={handleFavorite}
           onVersionHistory={onVersionHistory}
-          onInspect={openInInspector}
+          onViewDetails={handleViewDetails}
           favoriteIds={favoriteIds}
           canFavorite={true}
         />
@@ -549,7 +580,7 @@ export function FileBrowser({
           onMove={handleMove}
           onCopy={(type, id, name) => setCopyTarget({ type, id, name })}
           onDropMove={(type, id, destinationFolderId) => { if (type === "FILE") void moveFile(id, destinationFolderId).then(load); else void moveFolder(id, destinationFolderId).then(load); }}
-          onInspect={openInInspector}
+          onViewDetails={handleViewDetails}
           onRename={(type, id, name) => setRenameTarget({ type, id, name })}
           onDelete={(type, id) => setDeleteTarget({ type, id })}
           onFavorite={handleFavorite}
@@ -710,6 +741,7 @@ export function FileBrowser({
         void load();
       }}
     /> : null}
+    {detailsTarget ? <FileDetailsModal data={detailsTarget} onClose={() => setDetailsTarget(null)} /> : null}
     {newFolderOpen ? (
       <Modal title={label("menu.newFolder")} onClose={() => setNewFolderOpen(false)}>
         <form
@@ -717,13 +749,20 @@ export function FileBrowser({
             event.preventDefault();
             const name = newFolderName.trim();
             if (!name) return;
-            await createFolder(name, folderId);
-            setNewFolderName("");
+            const mandateValues = newFolderMandate ? newFolderFields : undefined;
+            if (newFolderMandate) {
+              const missing = newFolderMandate.schema.filter((field) => field.required && (mandateValues?.[field.key] === undefined || mandateValues?.[field.key] === null || String(mandateValues?.[field.key]).trim() === ""));
+              if (missing.length) { setError(`Required Data Template fields: ${missing.map((field) => field.label).join(", ")}`); return; }
+            }
+            await createFolder(name, folderId, newFolderMandate?.id, mandateValues);
+            setNewFolderName(""); setNewFolderFields({}); setNewFolderMandate(null);
             setNewFolderOpen(false);
             await load();
           }}
           className="text-[length:var(--imkan-font-size-ui)]"
         >
+          {newFolderMandateLoading ? <div className="mb-3 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-[11px] text-slate-500">{label("common.loading")}</div> : null}
+          {newFolderMandate ? <div className="mb-3 rounded-lg border border-blue-100 bg-blue-50/60 p-3"><div className="text-[11px] font-semibold text-slate-800">{locale === "ar" ? "خصائص Data Template المطلوبة" : "Required Data Template properties"}</div><div className="mt-1 text-[10px] text-slate-500">{newFolderMandate.name}</div><div className="mt-3 space-y-2">{newFolderMandate.schema.map((field) => <label key={field.key} className="block text-[10px] text-slate-600">{field.label}{field.required ? " *" : ""}{field.type === "boolean" ? <input type="checkbox" checked={Boolean(newFolderFields[field.key])} onChange={(e)=>setNewFolderFields(v=>({...v,[field.key]:e.target.checked}))} className="ms-2" /> : field.type === "select" || field.type === "radio" ? <select value={String(newFolderFields[field.key] ?? "")} onChange={(e)=>setNewFolderFields(v=>({...v,[field.key]:e.target.value}))} className="mt-1 w-full rounded border border-slate-200 bg-white px-2 py-1.5 text-[11px]"><option value="">—</option>{(field.options ?? []).map((o)=><option key={o} value={o}>{o}</option>)}</select> : <input type={field.type === "number" ? "number" : field.type === "date" ? "date" : field.type === "datetime" ? "datetime-local" : field.type === "email" ? "email" : "text"} value={String(newFolderFields[field.key] ?? "")} onChange={(e)=>setNewFolderFields(v=>({...v,[field.key]:field.type === "number" ? Number(e.target.value) : e.target.value}))} className="mt-1 w-full rounded border border-slate-200 px-2 py-1.5 text-[11px]" />}</label>)}</div></div> : null}
           <label className="mb-3 flex flex-col gap-1">
             {label("files.folderName")}
             <input
