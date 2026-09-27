@@ -80,7 +80,10 @@ export class FoldersService {
     for (const objectId of objectIds) {
       const externalRefs = await this.prisma.fileVersion.count({ where: { storageObjectId: objectId, fileId: { notIn: doomedIds } } });
       if (externalRefs > 0) continue;
-      const object = await this.prisma.storageObject.findUnique({ where: { id: objectId }, select: { storageKey: true } });
+      const object = await this.prisma.storageObject.findFirst({
+        where: { id: objectId, orgId: user.org_id },
+        select: { storageKey: true },
+      });
       if (object) await this.storage.deleteStoredObject(object.storageKey);
     }
     for (const file of descendants) { await this.prisma.file.delete({where:{id:file.id}}); }

@@ -20,9 +20,8 @@ export type QueryArgs = {
   data?: Record<string, unknown> | Record<string, unknown>[];
 };
 
+// findUnique / findUniqueOrThrow require a single unique-field shape; AND orgId breaks Prisma.
 const WHERE_OPERATIONS = new Set([
-  'findUnique',
-  'findUniqueOrThrow',
   'findFirst',
   'findFirstOrThrow',
   'findMany',

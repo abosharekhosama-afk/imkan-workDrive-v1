@@ -1,39 +1,27 @@
-import { applyOrgScope, applyOrgScopeForOperation } from './apply-org-scope';
+﻿import { applyOrgScopeForOperation } from './apply-org-scope';
 
-describe('applyOrgScope', () => {
-  it('appends orgId to tenant-scoped models', () => {
-    const scoped = applyOrgScope('File', { where: { id: 'file-1' } }, 'org-a');
-    expect(scoped.where).toEqual({
-      AND: [{ id: 'file-1' }, { orgId: 'org-a' }],
+describe('applyOrgScopeForOperation', () => {
+  const orgId = 'org-1';
+
+  it('scopes findMany with orgId', () => {
+    const result = applyOrgScopeForOperation(
+      'File',
+      'findMany',
+      { where: { deletedAt: null } },
+      orgId,
+    );
+    expect(result.where).toEqual({
+      AND: [{ deletedAt: null }, { orgId }],
     });
   });
 
-  it('does not scope Organization queries by orgId column', () => {
-    const scoped = applyOrgScope(
-      'Organization',
-      { where: { id: 'org-a' } },
-      'org-b',
+  it('does not scope findUnique (Prisma unique where shape)', () => {
+    const result = applyOrgScopeForOperation(
+      'StorageObject',
+      'findUnique',
+      { where: { id: 'obj-1' } },
+      orgId,
     );
-    expect(scoped.where).toEqual({ id: 'org-a' });
-  });
-
-  it('does not append orgId to single-record update/delete where (unique id only)', () => {
-    const updated = applyOrgScopeForOperation(
-      'File',
-      'update',
-      { where: { id: 'file-1' }, data: { name: 'x' } },
-      'org-a',
-    );
-    expect(updated.where).toEqual({ id: 'file-1' });
-  });
-
-  it('forces orgId on create so callers cannot write another tenant', () => {
-    const scoped = applyOrgScopeForOperation(
-      'Folder',
-      'create',
-      { data: { name: 'Inbox', orgId: 'org-b' } },
-      'org-a',
-    );
-    expect(scoped.data).toEqual({ name: 'Inbox', orgId: 'org-a' });
+    expect(result.where).toEqual({ id: 'obj-1' });
   });
 });

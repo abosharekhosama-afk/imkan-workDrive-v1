@@ -324,7 +324,10 @@ export class TemplatesService {
   }
 
   private async snapshotFileVersion(user: AccessTokenPayload, templateId: string, versionNumber: number, file: Awaited<ReturnType<TemplatesService['assertSourceFile']>>, sourceVersion: (typeof file.versions)[number]) {
-    const sourceObject = await this.prisma.storageObject.findUnique({ where: { id: sourceVersion.storageObjectId }, select: { storageKey: true } });
+    const sourceObject = await this.prisma.storageObject.findFirst({
+      where: { id: sourceVersion.storageObjectId, orgId: user.org_id },
+      select: { storageKey: true },
+    });
     if (!sourceObject) throw new NotFoundException('Source storage object not found');
     const versionId = randomUUID();
     const snapshotKey = this.storage.buildObjectKey(templateId, versionId);
