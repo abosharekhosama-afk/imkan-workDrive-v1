@@ -69,6 +69,8 @@ export function LocaleProvider({
       setLocale: (next: Locale) => {
         if (isLocale(next)) {
           persistLocale(next);
+          document.documentElement.lang = next;
+          document.documentElement.dir = directionFor(next);
           setLocaleState(next);
         }
       },

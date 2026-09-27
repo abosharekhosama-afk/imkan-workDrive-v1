@@ -124,7 +124,7 @@ export default function DataTemplateEditorPage() {
   }
 
   async function applyEditing() {
-    if (editIndex === null || !editing) return;
+    if (!editing) return;
     const candidate = { ...editing, label: editing.label.trim() };
     if (!candidate.label) { setError(ar ? "اسم الحقل مطلوب." : "Field name is required."); return; }
     if (["select", "radio"].includes(candidate.type) && !(candidate.options || []).length) { setError(ar ? "أضف خيارًا واحدًا على الأقل." : "Add at least one choice."); return; }

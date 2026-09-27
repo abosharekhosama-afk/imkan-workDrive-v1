@@ -1,5 +1,6 @@
 "use client";
 import type { ReactNode } from "react";
+import { useEffect } from "react";
 import { usePathname } from "next/navigation";
 import { ShellProvider, useShell } from "./shell-context";
 import { PrimarySidebar } from "./primary-sidebar";
@@ -11,9 +12,27 @@ import { ExternalAppsHost } from "../external-apps-modal";
 import { CloudImportHost } from "../cloud-import-modal";
 import { NewItemHost } from "../new-item-host";
 import { RecordingHost } from "../recording-host";
+import { showInspectorForPath } from "../../lib/workspace-routes";
 function Frame({ children }: { children: ReactNode }) {
   const pathname = usePathname();
-  const { sidebarCollapsed, setSidebarCollapsed, mobileNavOpen, setMobileNavOpen } = useShell();
+  const {
+    sidebarCollapsed,
+    setSidebarCollapsed,
+    mobileNavOpen,
+    setMobileNavOpen,
+    setInspectorOpen,
+    setMobileInspectorOpen,
+    select,
+  } = useShell();
+  const showInspector = showInspectorForPath(pathname);
+
+  useEffect(() => {
+    if (showInspector) return;
+    setInspectorOpen(false);
+    setMobileInspectorOpen(false);
+    select(null);
+  }, [showInspector, pathname, select, setInspectorOpen, setMobileInspectorOpen]);
+
   if (pathname.startsWith("/auth/")) return <>{children}</>;
   const width = sidebarCollapsed ? "md:w-16" : "md:w-[264px]";
   return (
@@ -34,8 +53,12 @@ function Frame({ children }: { children: ReactNode }) {
         <TopHeader />
         <div className="flex min-h-0 flex-1">
           <div className="workdrive-main-scroll flex min-h-0 min-w-0 flex-1 flex-col overflow-y-auto">{children}</div>
-          <InspectorPanel />
-          <InspectorDock />
+          {showInspector ? (
+            <>
+              <InspectorPanel />
+              <InspectorDock />
+            </>
+          ) : null}
         </div>
       </div>
       <button type="button" onClick={() => setSidebarCollapsed(!sidebarCollapsed)}

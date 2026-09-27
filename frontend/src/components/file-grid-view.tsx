@@ -24,7 +24,7 @@ export interface FileGridViewProps {
   onMove?: (resourceType:"FILE"|"FOLDER", resourceId: string, name: string) => void;
   onFavorite?: (resourceType:"FILE"|"FOLDER", resourceId: string) => void;
   onVersionHistory?: (resourceType:"FILE"|"FOLDER", resourceId: string, name: string) => void;
-  onViewDetails?: (resourceType:"FILE"|"FOLDER", resourceId: string, name: string) => void;
+  onInspect?: (resourceType:"FILE"|"FOLDER", resourceId: string, name: string) => void;
   onAssignWorkflow?: (resourceType:"FILE"|"FOLDER", resourceId: string, name: string) => void;
   favoriteIds?: Set<string>;
   canFavorite?: boolean;
@@ -65,7 +65,7 @@ export function FileGridView({
   onMove,
   onFavorite,
   onVersionHistory,
-  onViewDetails,
+  onInspect,
   onAssignWorkflow,
   favoriteIds,
   canFavorite = false,
@@ -92,7 +92,6 @@ export function FileGridView({
           onShare: undefined,
           onRename: canMutate && onRename ? () => onRename("FOLDER", folder.id, folder.name) : undefined,
           onMove: canMutate && onMove ? () => onMove("FOLDER", folder.id, folder.name) : undefined,
-          onViewDetails: onViewDetails ? () => onViewDetails("FOLDER", folder.id, folder.name) : undefined,
           onDelete: canMutate && onDelete ? () => onDelete("FOLDER", folder.id) : undefined,
           onAssignWorkflow: canMutate && onAssignWorkflow ? () => onAssignWorkflow("FOLDER", folder.id, folder.name) : undefined,
         };
@@ -102,7 +101,7 @@ export function FileGridView({
               <FileIcon kind="folder"mimeType={null} name={folder.name} label={label("files.type.folder")} />
               <span className="zoho-grid-name"title={folder.name}>{folder.name}</span>
             </button>
-            <div className="zoho-grid-meta">
+            <div className="zoho-grid-meta" onClick={() => onInspect?.("FOLDER", folder.id, folder.name)} role="presentation">
               <OwnerCell name={folder.ownerName} email={folder.ownerEmail} avatarUrl={folder.ownerAvatar} compact />
               <span className="zoho-grid-size">{folderSize(folder.id)}</span>
               <span className="zoho-grid-date">{formatDate(folderDate(folder.id))}</span>
@@ -118,7 +117,6 @@ export function FileGridView({
         const fileHandlers: FileActionHandlers = {
           onOpen: onPreview ? () => onPreview(file) : undefined,
           onPreview: onPreview ? () => onPreview(file) : undefined,
-          onViewDetails: onViewDetails ? () => onViewDetails("FILE", file.id, file.name) : undefined,
           onDownload: onDownload ? () => onDownload(file.id) : undefined,
           onShare: onShare ? () => onShare("FILE", file.id) : undefined,
           onRename: canMutate && onRename ? () => onRename("FILE", file.id, file.name) : undefined,
@@ -139,7 +137,7 @@ export function FileGridView({
               <FileIcon kind="file" mimeType={file.mimeType} name={file.name} label={label("files.type.file")} />
               <span className="zoho-grid-name" title={file.name}>{file.name}</span>
             </button>
-            <div className="zoho-grid-meta">
+            <div className="zoho-grid-meta" onClick={() => onInspect?.("FILE", file.id, file.name)} role="presentation">
               <OwnerCell name={file.ownerName} email={file.ownerEmail} avatarUrl={file.ownerAvatar} compact />
               <span className="zoho-grid-size">{formatBytes(resolveItemSize(file) ?? 0)}</span>
               <span className="zoho-grid-date">{formatDate(file.updatedAt)}</span>

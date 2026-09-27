@@ -13,7 +13,7 @@ import { FileGridView } from "./file-grid-view";
 import { ShareModal } from "./share-modal";
 import { useLocale } from "./locale-provider";
 import { bulkTrashFolders, createFolder, deleteFolder, getFolder, listRootContents, renameFolder, moveFolder, copyFolder } from "../lib/api/folders";
-import { bulkTrashFiles, renameFile, requestDownload, trashFile, moveFile, copyFile, getFileDetails } from "../lib/api/files";
+import { bulkTrashFiles, renameFile, requestDownload, trashFile, moveFile, copyFile } from "../lib/api/files";
 import { triggerDownload } from "../lib/api/download";
 import { addFavorite, listFavorites, removeFavorite } from "../lib/api/favorites";
 import { ApiError } from "../lib/api/client";
@@ -24,7 +24,6 @@ import { RenameModal } from "./rename-modal";
 import { Modal } from "./modal";
 import { MoveModal } from "./move-modal";
 import { Toast } from "./toast";
-import { FileDetailsModal, type FileDetailsData } from "./file-details-modal";
 import { FilePreviewModal } from "./file-preview-modal";
 import { VersionHistoryDrawer } from "./files/version-history-drawer";
 import { resolveMimeType } from "../lib/api/mime";
@@ -96,7 +95,6 @@ export function FileBrowser({
     id: string;
     name: string;
   } | null>(null);
-  const [detailsTarget, setDetailsTarget] = useState<FileDetailsData | null>(null);
   const [workflowTarget, setWorkflowTarget] = useState<{type:"FILE"|"FOLDER";id:string;name:string}|null>(null);
   const [workflowStatuses, setWorkflowStatuses] = useState<Map<string, WorkflowResourceStatus>>(new Map());
   const [workflowStatusTarget, setWorkflowStatusTarget] = useState<{ status: WorkflowResourceStatus; resourceName: string } | null>(null);
@@ -452,38 +450,14 @@ export function FileBrowser({
     setMoveTarget({ type, id, name });
   };
 
-  const handleViewDetails = async (type: "FILE" | "FOLDER", id: string, name: string, mimeType?: string, size?: number) => {
+  const openInInspector = (type: "FILE" | "FOLDER", id: string) => {
     if (type === "FOLDER") {
       const folder = folders.find((f) => f.id === id);
       if (folder) openInspector({ kind: "FOLDER", folder });
-      setDetailsTarget({
-        resourceType: "FOLDER",
-        name,
-        mimeType: null,
-        size: null,
-        updatedAt: folder?.updatedAt ?? null,
-        ownerName: folder?.ownerName ?? null,
-        ownerEmail: folder?.ownerEmail ?? null,
-        permission: null,
-      });
-    } else {
-      const file = files.find((f) => f.id === id);
-      if (file) openInspector({ kind: "FILE", file });
-      try {
-        const detail = await getFileDetails(id);
-        setDetailsTarget({
-          resourceType: "FILE", name: detail.name, mimeType: detail.mimeType, size: detail.size,
-          updatedAt: detail.updatedAt, createdAt: detail.createdAt, tags: detail.tags.map((tag) => tag.name), ownerName: detail.owner.name, ownerEmail: detail.owner.email,
-          permission: detail.visibility, location: detail.location?.name ?? null,
-        });
-      } catch {
-        setDetailsTarget({
-          resourceType: "FILE", name, mimeType: mimeType ?? null, size: size ?? null,
-          updatedAt: file?.updatedAt ?? null, ownerName: file?.ownerName ?? null,
-          ownerEmail: file?.ownerEmail ?? null, permission: null,
-        });
-      }
+      return;
     }
+    const file = files.find((f) => f.id === id);
+    if (file) openInspector({ kind: "FILE", file });
   };
 
   const handleSelectAll = (isSelected: boolean) => {
@@ -555,7 +529,7 @@ export function FileBrowser({
           onMove={(type, id, name) => setMoveTarget({ type, id, name })}
           onFavorite={handleFavorite}
           onVersionHistory={onVersionHistory}
-          onViewDetails={handleViewDetails}
+          onInspect={openInInspector}
           favoriteIds={favoriteIds}
           canFavorite={true}
         />
@@ -575,7 +549,7 @@ export function FileBrowser({
           onMove={handleMove}
           onCopy={(type, id, name) => setCopyTarget({ type, id, name })}
           onDropMove={(type, id, destinationFolderId) => { if (type === "FILE") void moveFile(id, destinationFolderId).then(load); else void moveFolder(id, destinationFolderId).then(load); }}
-          onViewDetails={handleViewDetails}
+          onInspect={openInInspector}
           onRename={(type, id, name) => setRenameTarget({ type, id, name })}
           onDelete={(type, id) => setDeleteTarget({ type, id })}
           onFavorite={handleFavorite}
@@ -736,7 +710,6 @@ export function FileBrowser({
         void load();
       }}
     /> : null}
-    {detailsTarget ? <FileDetailsModal data={detailsTarget} onClose={() => setDetailsTarget(null)} /> : null}
     {newFolderOpen ? (
       <Modal title={label("menu.newFolder")} onClose={() => setNewFolderOpen(false)}>
         <form

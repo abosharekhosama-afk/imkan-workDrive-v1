@@ -8,7 +8,6 @@ import type { RowActionContext } from "./file-row-actions-logic";
 export interface FileActionHandlers {
   onOpen?: () => void;
   onPreview?: () => void;
-  onViewDetails?: () => void;
   onDownload?: () => void;
   onShare?: () => void;
   onCopyLink?: () => void;
@@ -34,7 +33,7 @@ interface FileActionsMenuProps {
 
 /**
  * Unified row-level "⋯" actions menu mirroring the full Zoho WorkDrive
- * 5-section hierarchy: Open/Properties → Share (nested submenu) / Permalink
+ * 5-section hierarchy: Open → Share (nested submenu) / Permalink
  * → Move/Copy/Workflow/Organize → Search/Download/Rename/Follow/More
  * → Move to Trash. Copy and move are separate callbacks so each action
  * reaches its own destination picker and backend endpoint.
@@ -48,8 +47,6 @@ export function FileActionsMenu({ context, handlers, onCopyLink }: FileActionsMe
   if (handlers.onPreview && handlers.onPreview !== handlers.onOpen) {
     push({ label: label("files.preview"), onSelect: handlers.onPreview });
   }
-  if (handlers.onViewDetails) push({ label: label("menu.properties"), onSelect: handlers.onViewDetails });
-
   if (handlers.onShare) {
     push({ label: label("menu.shareMenu"), onSelect: handlers.onShare, dividerBefore: items.length > 0 });
   }

@@ -28,6 +28,35 @@ export function workspaceNavItems(): Array<{
   ];
 }
 
+/** Reserved first segments under `/files/` — not generic folder browsing. */
+const FILES_RESERVED_SEGMENTS = new Set([
+  "trash",
+  "activity",
+  "recent",
+  "shared-with-me",
+  "shared-by-me",
+  "favorites",
+  "templates",
+  "workflows",
+  "external-storage",
+  "team-folders",
+  "editor",
+  "fileId",
+]);
+
+/** Inspector rail + panel appear only on My Files and Team Files surfaces. */
+export function showInspectorForPath(pathname: string): boolean {
+  if (pathname === "/files") return true;
+  if (pathname === "/files/team-folders") return true;
+  if (!pathname.startsWith("/files/")) return false;
+
+  const segment = pathname.slice("/files/".length).split("/")[0] ?? "";
+  if (!segment || FILES_RESERVED_SEGMENTS.has(segment)) return false;
+
+  // `/files/{folderId}` — personal or team-folder content browsing
+  return true;
+}
+
 export function isWorkspaceHref(pathname: string, href: string): boolean {
   if (href === WORKSPACE_HREFS.files) {
     return (

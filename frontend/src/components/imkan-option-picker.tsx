@@ -2,6 +2,7 @@
 
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import { useLocale } from "./locale-provider";
 import { Icons } from "./layout/icons";
 
 /**
@@ -80,9 +81,13 @@ function computeMenuPosition(trigger: HTMLElement, menuWidth: "default" | "wide"
   const viewportPadding = 12;
   const gap = 6;
   const maxHeight = Math.max(160, window.innerHeight - rect.bottom - gap - viewportPadding);
-  let left = rect.left;
+  const isRtl = typeof document !== "undefined" && document.documentElement.dir === "rtl";
+  let left = isRtl ? rect.right - width : rect.left;
   if (left + width > window.innerWidth - viewportPadding) {
     left = Math.max(viewportPadding, window.innerWidth - width - viewportPadding);
+  }
+  if (left < viewportPadding) {
+    left = viewportPadding;
   }
   return {
     top: rect.bottom + gap,
@@ -107,6 +112,7 @@ export function ImkanOptionPicker<T extends string>({
   allowEmpty = false,
   emptyLabel = "—",
 }: ImkanOptionPickerProps<T>) {
+  const { locale } = useLocale();
   const [open, setOpen] = useState(false);
   const [menuPosition, setMenuPosition] = useState<MenuPosition | null>(null);
   const rootRef = useRef<HTMLDivElement>(null);
@@ -124,7 +130,7 @@ export function ImkanOptionPicker<T extends string>({
       return;
     }
     repositionMenu();
-  }, [open, menuWidth, options.length]);
+  }, [open, menuWidth, options.length, locale]);
 
   useEffect(() => {
     if (!open) return;
@@ -137,17 +143,20 @@ export function ImkanOptionPicker<T extends string>({
       if (event.key === "Escape") setOpen(false);
     };
     const onViewportChange = () => repositionMenu();
+    const dirObserver = new MutationObserver(onViewportChange);
+    dirObserver.observe(document.documentElement, { attributes: true, attributeFilter: ["dir", "lang"] });
     document.addEventListener("click", onDocumentClick, true);
     document.addEventListener("keydown", onDocumentKeyDown);
     window.addEventListener("resize", onViewportChange);
     window.addEventListener("scroll", onViewportChange, true);
     return () => {
+      dirObserver.disconnect();
       document.removeEventListener("click", onDocumentClick, true);
       document.removeEventListener("keydown", onDocumentKeyDown);
       window.removeEventListener("resize", onViewportChange);
       window.removeEventListener("scroll", onViewportChange, true);
     };
-  }, [open, menuWidth, options.length]);
+  }, [open, menuWidth, options.length, locale]);
 
   const menuClasses = [
     "imkan-option-picker-menu",

@@ -11,7 +11,6 @@ import { ShareModal } from "../../../components/share-modal";
 import { RenameModal } from "../../../components/rename-modal";
 import { DeleteModal } from "../../../components/delete-modal";
 import { MoveModal } from "../../../components/move-modal";
-import { FileDetailsModal, type FileDetailsData } from "../../../components/file-details-modal";
 import { Toast } from "../../../components/toast";
 import { renameFile, trashFile, requestDownload, moveFile } from "../../../lib/api/files";
 import { triggerDownload } from "../../../lib/api/download";
@@ -31,7 +30,6 @@ export default function FavoritesPage() {
   const [renameTarget, setRenameTarget] = useState<Target | null>(null);
   const [moveTarget, setMoveTarget] = useState<Target | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<Target | null>(null);
-  const [details, setDetails] = useState<FileDetailsData | null>(null);
   const [toast, setToast] = useState<string | null>(null);
   const load = useCallback(async () => {
     try {
@@ -180,17 +178,6 @@ export default function FavoritesPage() {
                                 triggerDownload(result.download_url);
                               }
                             : undefined,
-                        onViewDetails: () =>
-                          setDetails({
-                            resourceType: item.resourceType,
-                            name: item.name,
-                            mimeType: null,
-                            size: null,
-                            updatedAt: null,
-                            ownerName: null,
-                            ownerEmail: null,
-                            permission: null,
-                          }),
                         onShare: () => setShareTarget({ type: item.resourceType, id: item.resourceId, name: item.name }),
                         onRename: () => setRenameTarget({ type: item.resourceType, id: item.resourceId, name: item.name }),
                         onMove: () => setMoveTarget({ type: item.resourceType, id: item.resourceId, name: item.name }),
@@ -260,7 +247,6 @@ export default function FavoritesPage() {
           }}
         />
       ) : null}
-      {details ? <FileDetailsModal data={details} onClose={() => setDetails(null)} /> : null}
     </div>
   );
 }

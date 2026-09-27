@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type MouseEvent, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import type { ColumnKey, SortDir } from "./layout/action-toolbar";
 import { Icons } from "./layout/icons";
@@ -86,7 +86,8 @@ interface FileTableProps {
   onCopy?: (resourceType: "FILE" | "FOLDER", resourceId: string, resourceName: string) => void;
   onDropMove?: (resourceType: "FILE" | "FOLDER", resourceId: string, destinationFolderId: string) => void;
   onCopyLink?: (id: string) => void;
-  onViewDetails?: (resourceType: "FILE" | "FOLDER", resourceId: string, resourceName: string, mimeType?: string, size?: number) => void;
+  /** Single-click row handler — opens the inspector sidebar (not the actions menu). */
+  onInspect?: (resourceType: "FILE" | "FOLDER", resourceId: string, resourceName: string) => void;
   /** Aggregate active-file byte size per listed folder (recursive). */
   folderSizes?: ReadonlyMap<string, number>;
   /** Latest contained-file updatedAt per listed folder (recursive). */
@@ -122,7 +123,7 @@ export function FileTable({
   onDropMove,
   onCopy,
   onCopyLink,
-  onViewDetails,
+  onInspect,
   favoriteIds = new Set(),
   emptyTitle,
   emptyDescription,
@@ -155,6 +156,16 @@ export function FileTable({
   const extOf = (name: string) => { const i = name.lastIndexOf("."); return i > 0 && i < name.length - 1 ? name.slice(i + 1).toLowerCase() : ""; };
   const folderDate = (id: string) => latestOf(folders.find((f) => f.id === id)?.updatedAt, folderUpdatedAt?.get(id) ?? undefined);
   const colOn = (k: ColumnKey) => columns?.[k] ?? (k === "lastModified" || k === "size" || k === "name");
+  const inspectFromRowClick = (
+    event: MouseEvent,
+    resourceType: "FILE" | "FOLDER",
+    resourceId: string,
+    resourceName: string,
+  ) => {
+    const target = event.target as HTMLElement;
+    if (target.closest("a, button, input, label, [role='menu'], [role='listbox']")) return;
+    onInspect?.(resourceType, resourceId, resourceName);
+  };
   const sortedFolders = useMemo(() => {
     const k = sort.key; const d = sort.direction;
     return [...folders].sort((a, b) => {
@@ -248,13 +259,12 @@ export function FileTable({
                 onMove: onMove && canMutate ? () => onMove("FOLDER", folder.id, folder.name) : undefined,
                     onCopy: onCopy && canMutate ? () => onCopy("FOLDER", folder.id, folder.name) : undefined,
                 onFavoriteToggle: onFavorite ? () => onFavorite("FOLDER", folder.id) : undefined,
-                onViewDetails: onViewDetails ? () => onViewDetails("FOLDER", folder.id, folder.name) : undefined,
                 onDelete: canMutate ? () => onDelete("FOLDER", folder.id) : undefined, onAssignWorkflow: onAssignWorkflow && canMutate ? () => onAssignWorkflow("FOLDER", folder.id, folder.name) : undefined,
               }}
               onCopyLink={onCopyLink ? () => onCopyLink(folder.id) : undefined}
               onToast={onToast}
               x={e.clientX} y={e.clientY} onClose={() => setCtxMenu(null)}
-            />)});             }} onDragStart={(e) => { e.dataTransfer.effectAllowed="move"; e.dataTransfer.setData("application/x-workdrive", JSON.stringify({type:"FOLDER",id:folder.id,name:folder.name})); }} className="wd-list-row group cursor-grab" data-compact={compact || undefined} data-selected={selectedIds.has(folder.id) || undefined} onDragOver={(e) => { e.preventDefault(); e.currentTarget.classList.add("ring-2","ring-[var(--wd-primary)]"); }} onDragLeave={(e) => e.currentTarget.classList.remove("ring-2","ring-[var(--wd-primary)]")} onDrop={(e) => { e.preventDefault(); e.currentTarget.classList.remove("ring-2","ring-[var(--wd-primary)]"); try { const item=JSON.parse(e.dataTransfer.getData("application/x-workdrive")); if(item.id !== folder.id) onDropMove?.(item.type,item.id,folder.id); } catch {} }}>
+            />)});             }} onDragStart={(e) => { e.dataTransfer.effectAllowed="move"; e.dataTransfer.setData("application/x-workdrive", JSON.stringify({type:"FOLDER",id:folder.id,name:folder.name})); }} className="wd-list-row group cursor-grab" data-compact={compact || undefined} data-selected={selectedIds.has(folder.id) || undefined} onClick={(e) => inspectFromRowClick(e, "FOLDER", folder.id, folder.name)} onDragOver={(e) => { e.preventDefault(); e.currentTarget.classList.add("ring-2","ring-[var(--wd-primary)]"); }} onDragLeave={(e) => e.currentTarget.classList.remove("ring-2","ring-[var(--wd-primary)]")} onDrop={(e) => { e.preventDefault(); e.currentTarget.classList.remove("ring-2","ring-[var(--wd-primary)]"); try { const item=JSON.parse(e.dataTransfer.getData("application/x-workdrive")); if(item.id !== folder.id) onDropMove?.(item.type,item.id,folder.id); } catch {} }}>
               <td className="ps-[13px]">
                 <input
                   type="checkbox"
@@ -294,7 +304,6 @@ export function FileTable({
                     onMove: onMove && canMutate ? () => onMove("FOLDER", folder.id, folder.name) : undefined,
                     onCopy: onCopy && canMutate ? () => onCopy("FOLDER", folder.id, folder.name) : undefined,
                     onFavoriteToggle: onFavorite ? () => onFavorite("FOLDER", folder.id) : undefined,
-                    onViewDetails: onViewDetails ? () => onViewDetails("FOLDER", folder.id, folder.name) : undefined,
                     onDelete: canMutate ? () => onDelete("FOLDER", folder.id) : undefined, onAssignWorkflow: onAssignWorkflow && canMutate ? () => onAssignWorkflow("FOLDER", folder.id, folder.name) : undefined,
                   }}
                 />
@@ -308,7 +317,7 @@ export function FileTable({
                     onCopy: onCopy && canMutate ? () => onCopy("FILE", file.id, file.name) : undefined, onFavoriteToggle: onFavorite ? () => onFavorite("FILE", file.id) : undefined, onVersionHistory: onVersionHistory ? () => onVersionHistory("FILE", file.id, file.name, file.mimeType ?? undefined, file.size ?? undefined) : undefined, onDelete: canMutate ? () => onDelete("FILE", file.id) : undefined, onAssignWorkflow: onAssignWorkflow && canMutate ? () => onAssignWorkflow("FILE", file.id, file.name) : undefined }}
               onCopyLink={onCopyLink ? () => onCopyLink(file.id) : undefined}
               x={e.clientX} y={e.clientY} onClose={() => setCtxMenu(null)}
-            />)}); }} className="wd-list-row group relative cursor-grab active:cursor-grabbing" data-compact={compact || undefined} data-selected={selectedIds.has(file.id) || undefined}>
+            />)}); }} className="wd-list-row group relative cursor-grab active:cursor-grabbing" data-compact={compact || undefined} data-selected={selectedIds.has(file.id) || undefined} onClick={(e) => inspectFromRowClick(e, "FILE", file.id, file.name)}>
               <td className="ps-[13px]">
                 <input
                   type="checkbox"
@@ -344,7 +353,6 @@ export function FileTable({
                   handlers={{
                     onOpen: onOpen ? () => onOpen("FILE", file.id, file.name) : undefined,
                     onPreview: onPreview ? () => onPreview("FILE", file.id, file.name, file.mimeType ?? undefined, file.size ?? undefined) : undefined,
-                    onViewDetails: onViewDetails ? () => onViewDetails("FILE", file.id, file.name, file.mimeType ?? undefined, file.size ?? undefined) : undefined,
                     onDownload: () => onDownload(file.id),
                     onShare: canShare ? () => onShare("FILE", file.id) : undefined,
                     onRename: canMutate ? () => onRename("FILE", file.id, file.name) : undefined,

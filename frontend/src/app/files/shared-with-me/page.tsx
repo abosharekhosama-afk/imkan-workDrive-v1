@@ -11,7 +11,6 @@ import { permissionAllowsEdit } from "../../../components/file-row-actions-logic
 import { RenameModal } from "../../../components/rename-modal";
 import { DeleteModal } from "../../../components/delete-modal";
 import { MoveModal } from "../../../components/move-modal";
-import { FileDetailsModal, type FileDetailsData } from "../../../components/file-details-modal";
 import { Toast } from "../../../components/toast";
 import { renameFile, trashFile, requestDownload, moveFile } from "../../../lib/api/files";
 import { triggerDownload } from "../../../lib/api/download";
@@ -43,7 +42,6 @@ export default function SharedWithMePage() {
   const [renameTarget, setRenameTarget] = useState<Target | null>(null);
   const [moveTarget, setMoveTarget] = useState<Target | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<Target | null>(null);
-  const [details, setDetails] = useState<FileDetailsData | null>(null);
   const [toast, setToast] = useState<string | null>(null);
 
   const reload = useCallback(async () => {
@@ -200,17 +198,6 @@ export default function SharedWithMePage() {
                                 triggerDownload(result.download_url);
                               }
                             : undefined,
-                        onViewDetails: () =>
-                          setDetails({
-                            resourceType: r.resourceType,
-                            name: r.name ?? r.resourceId,
-                            mimeType: r.mimeType ?? null,
-                            size: r.size ?? null,
-                            updatedAt: r.updatedAt ?? null,
-                            ownerName: r.owner?.name ?? null,
-                            ownerEmail: r.owner?.email ?? null,
-                            permission: r.permission ?? null,
-                          }),
                         onRename: permissionAllowsEdit(r.permission)
                           ? () => setRenameTarget({ type: r.resourceType, id: r.resourceId, name: r.name ?? r.resourceId })
                           : undefined,
@@ -274,7 +261,6 @@ export default function SharedWithMePage() {
           }}
         />
       ) : null}
-      {details ? <FileDetailsModal data={details} onClose={() => setDetails(null)} /> : null}
     </div>
   );
 }

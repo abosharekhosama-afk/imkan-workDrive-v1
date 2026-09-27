@@ -46,7 +46,6 @@ export function FileContextMenu({
   const D = (k: keyof typeof DIC) => label(DIC[k]);
   const toast = (k: keyof typeof DIC) => onToast?.(D(k));
   const open = handlers.onOpen;
-  const props = handlers.onViewDetails;
   const onShare = handlers.onShare;
   const onMove = handlers.onMove;
   const onDownload = handlers.onDownload;
@@ -56,7 +55,6 @@ export function FileContextMenu({
   const sections: Item[][] = [
     [
       { key: "openNewTab", label: D("openNewTab"), onSelect: open ?? (() => toast("openNewTab")) },
-      { key: "properties", label: D("properties"), onSelect: props ?? (() => toast("properties")) },
     ],
     [
       {

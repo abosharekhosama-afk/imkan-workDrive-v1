@@ -52,7 +52,6 @@ export function SelectionBar({ folderCount, fileCount, onShare, onCopyLink, onDo
           }}
           items={[
             { key: "openNewTab", labelKey: "menu.openNewTab" },
-            { key: "properties", labelKey: "menu.properties" },
             "sep",
             { key: "share", labelKey: "menu.shareMenu", chevron: true },
             { key: "copyPermalink", labelKey: "menu.copyPermalink" },
