@@ -112,10 +112,6 @@ export default function TeamFolderManagePage() {
   const [mandateTemplateId, setMandateTemplateId] = useState<string | null>(null);
   const [mandateTarget, setMandateTarget] = useState<"FILES"|"FOLDERS"|"BOTH">("BOTH");
   const [mandateEnabled, setMandateEnabled] = useState(false);
-  const [dataTemplates, setDataTemplates] = useState<DataTemplate[]>([]);
-  const [mandateTemplateId, setMandateTemplateId] = useState<string | null>(null);
-  const [mandateTarget, setMandateTarget] = useState<"FILES"|"FOLDERS"|"BOTH">("BOTH");
-  const [mandateEnabled, setMandateEnabled] = useState(false);
 
   const canManage = role === "ORG_ADMIN" || canManageMembers(role);
   const canRename = role === "ORG_ADMIN" || role === "ADMIN";
