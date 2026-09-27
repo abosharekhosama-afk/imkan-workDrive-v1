@@ -231,8 +231,6 @@ function ActionEditor({ actions, onChange, resourceType, ar, workflowFields }: {
       const linkedFunction = a.type === "custom_function" ? functions.find(f => f.id === String(a.config.functionId ?? "")) : null;
       return <div
         key={`${a.type}-${i}`}
-        draggable
-        onDragStart={() => setDragged(i)}
         onDragOver={e => e.preventDefault()}
         onDrop={() => { if (dragged !== null) move(dragged, i); setDragged(null); }}
         className="workflow-action-card group"
@@ -240,7 +238,13 @@ function ActionEditor({ actions, onChange, resourceType, ar, workflowFields }: {
       >
         <div className="workflow-action-card-head">
           <div className="flex min-w-0 items-center gap-2.5">
-            <span className="workflow-action-drag" aria-hidden="true">⋮⋮</span>
+            <span
+              className="workflow-action-drag"
+              aria-hidden="true"
+              draggable
+              onDragStart={() => setDragged(i)}
+              onDragEnd={() => setDragged(null)}
+            >⋮⋮</span>
             <span className="workflow-action-icon" aria-hidden="true">{actionIcon(a.type)}</span>
             <div className="min-w-0">
               <div className="truncate text-[11px] font-semibold text-slate-900">{actionLabel(a.type)}</div>
@@ -250,7 +254,7 @@ function ActionEditor({ actions, onChange, resourceType, ar, workflowFields }: {
           <button type="button" onClick={() => onChange(actions.filter((_, idx) => idx !== i))} className="workflow-action-remove" aria-label={txt(ar,"Remove action","حذف الإجراء")}>×</button>
         </div>
 
-        <div className="workflow-action-card-body">
+        <div className="workflow-action-card-body" onPointerDown={(event) => event.stopPropagation()} onMouseDown={(event) => event.stopPropagation()}>
           {a.type === "create_document_from_template" && <>
             <label className="workflow-action-field sm:col-span-2"><span>{txt(ar,"Office template","قالب Office")}</span><ImkanOptionPicker value={String(a.config.templateId ?? "")} onChange={(next)=>update(i,"templateId",next)} options={templates.map(t=>({value:t.id,label:`${t.name} · v${t.activeVersion?.version ?? t.version ?? 1}`}))} ariaLabel={txt(ar,"Office template","قالب Office")} fullWidth allowEmpty emptyLabel={txt(ar,"Select template","اختر قالباً")} placeholder={txt(ar,"Select template","اختر قالباً")} /></label>
             {field(txt(ar,"Output file name","اسم ملف الإخراج"),a.config.name,v=>update(i,"name",v),"{{file.name}} - generated")}
@@ -265,12 +269,12 @@ function ActionEditor({ actions, onChange, resourceType, ar, workflowFields }: {
           </>}
 
           {a.type === "connection_file" && <>
-            <ConnectionPicker connections={connections} value={String(a.config.connectionId ?? "")} provider={String(a.config.provider ?? connections.find((item) => item.id === a.config.connectionId)?.provider ?? "")} capability="browse" onChange={(id) => { const next = connections.find((item) => item.id === id); update(i, "connectionId", id); update(i, "provider", next?.provider ?? ""); update(i, "resourceId", ""); update(i, "resourceName", ""); }} />
+            <ConnectionPicker connections={connections} value={String(a.config.connectionId ?? "")} capability="browse" onChange={(id) => { const next = connections.find((item) => item.id === id); update(i, "connectionId", id); update(i, "provider", next?.provider ?? ""); update(i, "resourceId", ""); update(i, "resourceName", ""); }} />
             <ResourcePicker connectionId={String(a.config.connectionId ?? "")} provider={String(a.config.provider ?? connections.find((item) => item.id === a.config.connectionId)?.provider ?? "")} value={String(a.config.resourceId ?? "")} label={String(a.config.resourceName ?? "")} onChange={(resource) => { update(i, "resourceId", resource.id); update(i, "resourceName", resource.name); }} />
             <div className="sm:col-span-2"><GetFileHint ar={ar} /></div>
           </>}
           {a.type === "connection_upload" && <>
-            <ConnectionPicker connections={connections} value={String(a.config.connectionId ?? "")} provider={String(a.config.provider ?? connections.find((item) => item.id === a.config.connectionId)?.provider ?? "")} capability="upload" onChange={(id) => { const next = connections.find((item) => item.id === id); update(i, "connectionId", id); update(i, "provider", next?.provider ?? ""); update(i, "destinationId", ""); update(i, "destinationName", ""); }} />
+            <ConnectionPicker connections={connections} value={String(a.config.connectionId ?? "")} capability="upload" onChange={(id) => { const next = connections.find((item) => item.id === id); update(i, "connectionId", id); update(i, "provider", next?.provider ?? ""); update(i, "destinationId", ""); update(i, "destinationName", ""); }} />
             <ResourcePicker connectionId={String(a.config.connectionId ?? "")} provider={String(a.config.provider ?? connections.find((item) => item.id === a.config.connectionId)?.provider ?? "")} value={String(a.config.destinationId ?? "")} label={String(a.config.destinationName ?? "")} selectMode="folder" onChange={(resource) => { update(i, "destinationId", resource.id); update(i, "destinationName", resource.name); }} />
             <div className="sm:col-span-2"><UploadToCloudHint ar={ar} /></div>
           </>}
@@ -687,7 +691,7 @@ export default function WorkflowBuilderPage() {
 
   if (loading) return <div className="flex h-full items-center justify-center bg-[#F7F9FC] text-[12px] text-slate-500">{txt(ar,"Loading workflow…","جارٍ تحميل سير العمل…")}</div>;
   return <div className="workflow-ui flex h-full min-h-0 flex-col bg-[#F7F9FC]" dir={ar ? "rtl" : "ltr"}>
-    <header className="workflow-builder-header shrink-0 bg-white px-5 py-3"><div className="flex items-center justify-between gap-3"><div className="flex min-w-0 items-center gap-3"><Link href={workflowBase} className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-slate-200 text-slate-500 hover:bg-slate-50">←</Link><div className="min-w-0"><div className="text-[9px] font-semibold uppercase tracking-[.17em] text-[var(--wd-primary)]">{txt(ar,"Workflow builder","منشئ سير العمل")}</div><div className="truncate text-[15px] font-semibold text-slate-900">{name || txt(ar,"Create workflow","إنشاء سير عمل")} <span className="ms-2 text-[10px] font-medium text-slate-500">{mode === "MANUAL" ? txt(ar,"Manual","يدوي") : txt(ar,"Automatic","تلقائي")}</span></div></div></div><div className="flex items-center gap-1.5"><button type="button" onClick={() => setElementsOpen(true)} className="workflow-builder-mobile-menu wd-icon-btn xl:hidden" aria-label={txt(ar,"Open workflow elements","فتح عناصر سير العمل")} title={txt(ar,"Open workflow elements","فتح عناصر سير العمل")}>☰</button><WorkflowHelp compact /><label className="wd-pill wd-pill-record cursor-pointer">{txt(ar,"Import JSON","استيراد JSON")}<input type="file" accept="application/json" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) void importSpec(f); e.currentTarget.value = ""; }} /></label><button type="button" onClick={exportSpec} className="wd-pill wd-pill-record">{txt(ar,"Export JSON","تصدير JSON")}</button><button type="button" disabled={busy} onClick={() => void save("DRAFT")} className="wd-pill wd-pill-record">{txt(ar,"Save draft","حفظ المسودة")}</button><button type="button" disabled={busy} onClick={() => setActivationOpen(true)} className="wd-pill wd-pill-record">{txt(ar,"Activate","تفعيل")}</button></div></div>
+    <header className="workflow-builder-header shrink-0 bg-white px-5 py-3"><div className="flex items-center justify-between gap-3"><div className="flex min-w-0 items-center gap-3"><Link href={workflowBase} className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-slate-200 text-slate-500 hover:bg-slate-50">←</Link><div className="min-w-0"><div className="text-[9px] font-semibold uppercase tracking-[.17em] text-[var(--wd-primary)]">{txt(ar,"Workflow builder","منشئ سير العمل")}</div><div className="truncate text-[15px] font-semibold text-slate-900">{name || txt(ar,"Create workflow","إنشاء سير عمل")} <span className="ms-2 text-[10px] font-medium text-slate-500">{mode === "MANUAL" ? txt(ar,"Manual","يدوي") : txt(ar,"Automatic","تلقائي")}</span></div></div></div><div className="flex items-center gap-1.5"><button type="button" onClick={() => setElementsOpen(true)} className="workflow-builder-mobile-menu wd-icon-btn xl:hidden" aria-label={txt(ar,"Open workflow elements","فتح عناصر سير العمل")} title={txt(ar,"Open workflow elements","فتح عناصر سير العمل")}>☰</button><WorkflowHelp compact /><label className="wd-pill wd-pill-record inline-flex cursor-pointer items-center justify-center">{txt(ar,"Import JSON","استيراد JSON")}<input type="file" accept="application/json" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) void importSpec(f); e.currentTarget.value = ""; }} /></label><button type="button" onClick={exportSpec} className="wd-pill wd-pill-record inline-flex items-center justify-center">{txt(ar,"Export JSON","تصدير JSON")}</button><button type="button" disabled={busy} onClick={() => void save("DRAFT")} className="wd-pill wd-pill-record inline-flex items-center justify-center disabled:cursor-not-allowed disabled:opacity-45">{txt(ar,"Save draft","حفظ المسودة")}</button><button type="button" disabled={busy} onClick={() => setActivationOpen(true)} className="wd-pill wd-pill-new inline-flex items-center justify-center disabled:cursor-not-allowed disabled:opacity-45">{txt(ar,"Activate","تفعيل")}</button></div></div>
       <div className="mt-3 flex items-center justify-center"><div className="flex items-center gap-1 rounded-2xl bg-slate-100 p-1">{([[1,"Configure fields"],[2,"Design workflow"],[3,"Review"]] as const).map(([n,en]) => <button key={n} type="button" onClick={() => setStep(n)} className={`workflow-step-tab px-4 py-2 text-[10.5px] font-medium transition ${step === n ? "is-active" : ""}`}><b className="me-1.5">{n}</b>{txt(ar,en,n===1?"إعداد الحقول":n===2?"تصميم سير العمل":"المراجعة")}</button>)}</div></div>
     </header>
     {error && <div className="mx-5 mt-2 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-[10.5px] text-red-700">{error}</div>}{message && <div className="mx-5 mt-2 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-[10.5px] text-emerald-700">{message}</div>}

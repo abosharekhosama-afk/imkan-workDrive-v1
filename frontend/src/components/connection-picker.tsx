@@ -13,6 +13,20 @@ function beginOAuth(provider: string, connectionId?: string) {
   return startConnectionOAuth(provider, undefined, connectionId, returnTo).then((result) => { window.location.href = result.url; });
 }
 
+function connectionCapabilityReady(connection: Connection, capability?: "browse" | "request" | "upload"): boolean {
+  if (capability === "request") return connectionRequestReady(connection);
+  if (capability === "upload") return connectionUploadReady(connection);
+  return connectionBrowseReady(connection);
+}
+
+function connectionCapabilityHint(connection: Connection, capability?: "browse" | "request" | "upload"): string | undefined {
+  if (connection.status !== "ACTIVE") return "Connection not active";
+  if (capability === "upload" && googleDriveReconnectRequired(connection)) return "Upload scope may be required";
+  if (capability === "browse" && googleDriveReconnectRequired(connection)) return "Drive browse scope may be required";
+  if (connectionCapabilityReady(connection, capability)) return undefined;
+  return "May need reconnect before use";
+}
+
 export function ConnectionPicker({ connections, value, onChange, provider, capability }: { connections: Connection[]; value: string; onChange: (id: string) => void; provider?: string; capability?: "browse" | "request" | "upload" }) {
   const rows = useMemo(() => connections.filter((item) => {
     if (provider && item.provider !== provider) return false;
@@ -20,28 +34,18 @@ export function ConnectionPicker({ connections, value, onChange, provider, capab
     if (capability === "upload" && !providerSupports(item.provider, "upload")) return false;
     return true;
   }), [connections, provider, capability]);
-  const selected = rows.find((item) => item.id === value) ?? null;
+  const selected = connections.find((item) => item.id === value) ?? rows.find((item) => item.id === value) ?? null;
   const status = connectionStatusLabel(selected?.status);
   const label = provider === "google" ? "Google Drive" : provider === "dropbox" ? "Dropbox" : provider === "microsoft" ? "OneDrive" : capability === "request" ? "REST API" : "connection";
-  const readyFor = capability === "request" ? connectionRequestReady : capability === "upload" ? connectionUploadReady : connectionBrowseReady;
-  const usableRows = useMemo(() => rows.filter((item) => readyFor(item)), [rows, capability]);
-  const reconnectable = useMemo(() => rows.filter((item) => {
-    if (capability === "request") return item.authType === "OAUTH2" && !connectionRequestReady(item);
-    if (capability === "upload") return item.authType === "OAUTH2" && !connectionUploadReady(item);
-    return item.authType === "OAUTH2" && !connectionBrowseReady(item);
-  }), [rows, capability]);
-  const disabledDescription = (item: Connection) => {
-    if (capability === "request" && item.status !== "ACTIVE") return "Connection not active";
-    if (capability === "upload" && googleDriveReconnectRequired(item)) return "Upload scope required";
-    return "Needs reconnect";
-  };
+  const selectableRows = useMemo(() => rows.filter((item) => item.status === "ACTIVE"), [rows]);
+  const inactiveRows = useMemo(() => rows.filter((item) => item.status !== "ACTIVE"), [rows]);
   useEffect(() => {
     if (value || typeof window === "undefined") return;
     const returned = new URLSearchParams(window.location.search).get("connectionId");
-    if (returned && usableRows.some((item) => item.id === returned)) onChange(returned);
-  }, [usableRows, value, onChange]);
+    if (returned && selectableRows.some((item) => item.id === returned)) onChange(returned);
+  }, [selectableRows, value, onChange]);
   return (
-    <label className="workflow-action-field sm:col-span-2">
+    <div className="workflow-action-field sm:col-span-2" onPointerDown={(event) => event.stopPropagation()} onMouseDown={(event) => event.stopPropagation()}>
       <span>Connection</span>
       {rows.length === 0 ? (
         <div className="rounded-lg border border-dashed border-[var(--wd-line,var(--wd-border,#E0E6EC))] bg-[var(--wd-bg,#fff)] p-3 text-[12px] text-[var(--wd-text,#202B38)]">
@@ -51,36 +55,36 @@ export function ConnectionPicker({ connections, value, onChange, provider, capab
       ) : (
         <ImkanOptionPicker
           value={value}
-          onChange={onChange}
+          onChange={(next) => { if (next) onChange(next); }}
           ariaLabel={`Select ${label} connection`}
           fullWidth
           allowEmpty
           emptyLabel="Select a connection"
           placeholder="Select a connection"
           options={[
-            ...usableRows.map((item) => ({
+            ...selectableRows.map((item) => ({
               value: item.id,
               label: item.name,
-              description: `${item.provider}${item.baseUrl ? ` · ${item.baseUrl}` : ""}`,
+              description: connectionCapabilityHint(item, capability) ?? `${item.provider}${item.baseUrl ? ` · ${item.baseUrl}` : ""}`,
             })),
-            ...reconnectable.map((item) => ({
+            ...inactiveRows.map((item) => ({
               value: item.id,
               label: item.name,
-              description: disabledDescription(item),
+              description: item.status === "REAUTH_REQUIRED" || item.status === "PENDING_AUTH" ? "Needs reconnect" : "Connection not active",
               disabled: true,
             })),
           ]}
         />
       )}
       {selected && status === "connected" && !googleDriveReconnectRequired(selected) ? <small className="mt-1 block text-[11px] text-emerald-700">Connected · credentials stay server-side</small> : null}
-      {selected && (status !== "connected" || googleDriveReconnectRequired(selected)) ? (
+      {selected && (status !== "connected" || googleDriveReconnectRequired(selected) || !connectionCapabilityReady(selected, capability)) ? (
         <div className="mt-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-[11px] text-amber-800">
-          {googleDriveReconnectRequired(selected) ? friendlyConnectionError("INSUFFICIENT_SCOPE: Google Drive file access is not authorized for this connection.") : selected.status === "REAUTH_REQUIRED" || selected.status === "PENDING_AUTH" ? "Connection needs reconnect." : "Connection is not available."}
+          {googleDriveReconnectRequired(selected) ? friendlyConnectionError("INSUFFICIENT_SCOPE: Google Drive file access is not authorized for this connection.") : selected.status === "REAUTH_REQUIRED" || selected.status === "PENDING_AUTH" ? "Connection needs reconnect." : !connectionCapabilityReady(selected, capability) ? "This connection may not support this action yet. Reconnect or verify scopes." : "Connection is not available."}
           {selected.authType === "OAUTH2" && selected.canManage ? <button type="button" className="ms-2 font-semibold underline" onClick={() => void beginOAuth(selected.provider, selected.id)}>{reconnectProviderLabel(selected.provider)}</button> : null}
         </div>
       ) : null}
       {selected?.baseUrl ? <small className="mt-1 block truncate text-[10px] text-slate-400">API base: {selected.baseUrl}</small> : null}
-    </label>
+    </div>
   );
 }
 
@@ -132,7 +136,7 @@ export function ResourcePicker({ connectionId, provider, value, label, onChange,
 
   if (!connectionId || !providerSupports(provider, "list")) return null;
   return (
-    <div className="workflow-action-field sm:col-span-2 text-[var(--wd-text,#202B38)]">
+    <div className="workflow-action-field sm:col-span-2 text-[var(--wd-text,#202B38)]" onPointerDown={(event) => event.stopPropagation()} onMouseDown={(event) => event.stopPropagation()}>
       <span>{selectMode === "folder" ? "Destination folder" : "Folder and file"}</span>
       <div className="mb-2 flex flex-wrap items-center gap-2 text-[11px] text-[var(--wd-text-muted,#667085)]">
         <span>{trail.map((item) => item.name).join(" / ")}</span>

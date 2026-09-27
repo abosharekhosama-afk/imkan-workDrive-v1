@@ -128,7 +128,7 @@ export function ImkanOptionPicker<T extends string>({
 
   useEffect(() => {
     if (!open) return;
-    const onDocumentPointerDown = (event: PointerEvent) => {
+    const onDocumentClick = (event: MouseEvent) => {
       const target = event.target as Node;
       if (rootRef.current?.contains(target) || menuRef.current?.contains(target)) return;
       setOpen(false);
@@ -137,12 +137,12 @@ export function ImkanOptionPicker<T extends string>({
       if (event.key === "Escape") setOpen(false);
     };
     const onViewportChange = () => repositionMenu();
-    document.addEventListener("pointerdown", onDocumentPointerDown);
+    document.addEventListener("click", onDocumentClick, true);
     document.addEventListener("keydown", onDocumentKeyDown);
     window.addEventListener("resize", onViewportChange);
     window.addEventListener("scroll", onViewportChange, true);
     return () => {
-      document.removeEventListener("pointerdown", onDocumentPointerDown);
+      document.removeEventListener("click", onDocumentClick, true);
       document.removeEventListener("keydown", onDocumentKeyDown);
       window.removeEventListener("resize", onViewportChange);
       window.removeEventListener("scroll", onViewportChange, true);
@@ -157,6 +157,11 @@ export function ImkanOptionPicker<T extends string>({
   ]
     .filter(Boolean)
     .join(" ");
+
+  const selectOption = (next: T | "") => {
+    onChange(next);
+    setOpen(false);
+  };
 
   const menu = open && menuPosition && typeof document !== "undefined"
     ? createPortal(
@@ -174,6 +179,7 @@ export function ImkanOptionPicker<T extends string>({
             overflowY: "auto",
             zIndex: 10050,
           }}
+          onMouseDown={(event) => event.stopPropagation()}
           onPointerDown={(event) => event.stopPropagation()}
         >
           {allowEmpty ? (
@@ -182,9 +188,10 @@ export function ImkanOptionPicker<T extends string>({
               role="option"
               aria-selected={value === ""}
               className={value === "" ? "is-active" : ""}
-              onClick={() => {
-                onChange("" as T);
-                setOpen(false);
+              onPointerDown={(event) => {
+                event.preventDefault();
+                event.stopPropagation();
+                selectOption("" as T);
               }}
             >
               <b>{emptyLabel}</b>
@@ -198,10 +205,11 @@ export function ImkanOptionPicker<T extends string>({
               aria-selected={value === option.value}
               disabled={option.disabled}
               className={value === option.value ? "is-active" : ""}
-              onClick={() => {
+              onPointerDown={(event) => {
                 if (option.disabled) return;
-                onChange(option.value);
-                setOpen(false);
+                event.preventDefault();
+                event.stopPropagation();
+                selectOption(option.value);
               }}
             >
               <b>{option.label}</b>

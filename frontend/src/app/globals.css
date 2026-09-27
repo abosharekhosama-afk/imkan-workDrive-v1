@@ -2024,7 +2024,11 @@ html[data-theme="dark"] .workflow-ui .wd-card {
 }
 
 /* Workflow control language: match the secondary WorkDrive New/Record buttons while keeping controls compact. */
-.workflow-ui .wd-pill{border-radius:5px}
+.workflow-ui .wd-pill{border-radius:var(--wd-pill-radius,16px)}
+.workflow-ui .wd-pill-new{background:var(--wd-primary)!important;color:#fff!important;font-weight:700!important;border:0!important}
+.workflow-ui .wd-pill-new:hover{background:var(--wd-primary-dark)!important}
+.workflow-ui .wd-pill-record{background:transparent!important;color:var(--wd-primary-ink)!important;font-weight:500!important;box-shadow:inset 0 0 0 1px var(--wd-active)!important}
+.workflow-ui .wd-pill-record:hover{background:var(--wd-menu-hover)!important}
 .workflow-ui .workflow-step-tab{border-radius:4px;color:#64748b;background:transparent}
 .workflow-ui .workflow-step-tab:hover{background:#f8fafc;color:#1f2937}
 .workflow-ui .workflow-step-tab.is-active{background:#fff;color:#1B66EA;box-shadow:0 1px 3px rgba(15,23,42,.08)}
@@ -2816,8 +2820,6 @@ html[data-sidebar-light="true"] .primary-sidebar{background:#f6f7f9!important;co
 
 /* Account appearance also governs Workflow surfaces. */
 .workflow-ui{font-family:var(--user-font-family),Arial,system-ui,sans-serif;color:var(--wd-text);background:var(--wd-canvas)!important}
-.workflow-ui .wd-pill-new{background:var(--wd-primary)!important;color:#fff!important}
-.workflow-ui .wd-pill-record{background:transparent!important;color:var(--wd-primary-ink)!important;box-shadow:inset 0 0 0 1px var(--wd-primary)!important}
 .workflow-ui .workflow-segment.is-active{border-color:var(--wd-primary)!important;background:var(--wd-primary-light)!important;color:var(--wd-primary)!important}
 .workflow-ui .workflow-step-tab.is-active{color:var(--wd-primary)!important}
 .workflow-ui .workflow-action-icon{border-color:color-mix(in srgb,var(--wd-primary) 20%,var(--wd-line));background:var(--wd-primary-light);color:var(--wd-primary)}
