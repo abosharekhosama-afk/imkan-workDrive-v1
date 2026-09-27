@@ -3877,3 +3877,25 @@ html[data-theme="dark"] .zoho-admin-input{background:var(--wd-bg);color:var(--wd
 .workflow-ui .workflow-dynamic-handle{border:2px solid #fff;background:var(--wd-primary);box-shadow:0 0 0 1px var(--wd-primary),0 0 0 4px rgba(27,102,234,.12);cursor:crosshair}
 .workflow-ui .workflow-dynamic-target{border:2px solid #fff;background:#fff;box-shadow:0 0 0 2px var(--wd-primary),0 0 0 5px rgba(27,102,234,.10);pointer-events:none}
 .workflow-ui .workflow-state-node > div:first-child{transition:none!important}
+
+/* Workflow canvas stability + palette collapse. */
+.workflow-ui .workflow-palette-sidebar{
+  width:230px;
+  flex:0 0 230px;
+  min-width:230px;
+  transition:width .18s ease, min-width .18s ease, flex-basis .18s ease;
+}
+.workflow-ui .workflow-palette-sidebar.is-collapsed{
+  width:46px;
+  flex-basis:46px;
+  min-width:46px;
+}
+.workflow-ui .workflow-palette-sidebar.is-collapsed > :not(:first-child){display:none!important}
+.workflow-ui .workflow-palette-sidebar.is-collapsed > :first-child{justify-content:center;padding-inline:6px!important}
+.workflow-ui .workflow-palette-sidebar.is-collapsed > :first-child > span{display:none}
+.workflow-ui .workflow-palette-sidebar.is-collapsed > :first-child button{display:inline-flex!important;transform:rotate(180deg)}
+.workflow-ui .workflow-state-node{width:190px!important;contain:layout style;backface-visibility:hidden;-webkit-backface-visibility:hidden;transform-style:preserve-3d}
+.workflow-ui .workflow-state-node > div:first-child{backface-visibility:hidden;-webkit-font-smoothing:antialiased}
+.workflow-ui .workflow-dynamic-handle,.workflow-ui .workflow-dynamic-target{width:10px!important;height:10px!important}
+.workflow-ui .workflow-dynamic-handle{margin:0}
+@media(max-width:1100px){.workflow-ui .workflow-palette-sidebar{width:210px;min-width:210px;flex-basis:210px}.workflow-ui .workflow-palette-sidebar.is-collapsed{width:46px;min-width:46px;flex-basis:46px}}
