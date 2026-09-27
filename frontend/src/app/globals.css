@@ -3910,3 +3910,35 @@ html[data-theme="dark"] .zoho-admin-input{background:var(--wd-bg);color:var(--wd
   .workflow-ui .workflow-palette-sidebar{width:220px;min-width:220px;flex-basis:220px}
   .workflow-ui .workflow-palette-sidebar.is-collapsed{width:46px;min-width:46px;flex-basis:46px}
 }
+/* n8n-style workflow node handles: fixed edge ports, never floating under the pointer. */
+.workflow-ui .workflow-n8n-handle{
+  position:absolute!important;
+  top:50%!important;
+  width:10px!important;
+  height:10px!important;
+  margin-top:-5px!important;
+  border:2px solid #fff!important;
+  border-radius:9999px!important;
+  background:#94A3B8!important;
+  box-shadow:0 0 0 1px #CBD5E1,0 2px 7px rgba(15,23,42,.16)!important;
+  z-index:60!important;
+  cursor:crosshair!important;
+  padding:0!important;
+  opacity:0;
+  transform:scale(.8);
+  transition:opacity .12s ease,transform .12s ease,background-color .12s ease,box-shadow .12s ease;
+}
+.workflow-ui .workflow-n8n-handle-left{left:-5px!important}
+.workflow-ui .workflow-n8n-handle-right{right:-5px!important}
+.workflow-ui .workflow-state-node:hover .workflow-n8n-handle,
+.workflow-ui .workflow-state-node:focus-within .workflow-n8n-handle,
+.workflow-ui .workflow-n8n-handle:hover,
+.workflow-ui .workflow-n8n-handle:focus-visible{
+  opacity:1;
+  transform:scale(1.15);
+}
+.workflow-ui .workflow-n8n-handle:hover,
+.workflow-ui .workflow-n8n-handle:focus-visible{
+  background:var(--wd-primary)!important;
+  box-shadow:0 0 0 4px color-mix(in srgb,var(--wd-primary) 14%,transparent),0 2px 8px rgba(15,23,42,.16)!important;
+}
