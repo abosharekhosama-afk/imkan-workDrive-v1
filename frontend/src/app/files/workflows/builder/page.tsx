@@ -179,6 +179,9 @@ function ActionEditor({ actions, onChange, resourceType, ar, workflowFields }: {
   const update = (i: number, key: string, value: unknown) =>
     onChange(actions.map((a, idx) => idx === i ? { ...a, config: { ...a.config, [key]: value } } : a));
 
+  const patchConfig = (i: number, patch: Record<string, unknown>) =>
+    onChange(actions.map((a, idx) => idx === i ? { ...a, config: { ...a.config, ...patch } } : a));
+
   const add = (type: string) => {
     if (actions.length < 5) {
       const config = type === "request_approval"
@@ -269,17 +272,17 @@ function ActionEditor({ actions, onChange, resourceType, ar, workflowFields }: {
           </>}
 
           {a.type === "connection_file" && <>
-            <ConnectionPicker connections={connections} value={String(a.config.connectionId ?? "")} capability="browse" onChange={(id) => { const next = connections.find((item) => item.id === id); update(i, "connectionId", id); update(i, "provider", next?.provider ?? ""); update(i, "resourceId", ""); update(i, "resourceName", ""); }} />
-            <ResourcePicker connectionId={String(a.config.connectionId ?? "")} provider={String(a.config.provider ?? connections.find((item) => item.id === a.config.connectionId)?.provider ?? "")} value={String(a.config.resourceId ?? "")} label={String(a.config.resourceName ?? "")} onChange={(resource) => { update(i, "resourceId", resource.id); update(i, "resourceName", resource.name); }} />
+            <ConnectionPicker connections={connections} value={String(a.config.connectionId ?? "")} capability="browse" onChange={(id) => { const next = connections.find((item) => item.id === id); patchConfig(i, { connectionId: id, provider: next?.provider ?? "", resourceId: "", resourceName: "" }); }} />
+            <ResourcePicker connectionId={String(a.config.connectionId ?? "")} provider={String(a.config.provider ?? connections.find((item) => item.id === a.config.connectionId)?.provider ?? "")} value={String(a.config.resourceId ?? "")} label={String(a.config.resourceName ?? "")} onChange={(resource) => { patchConfig(i, { resourceId: resource.id, resourceName: resource.name }); }} />
             <div className="sm:col-span-2"><GetFileHint ar={ar} /></div>
           </>}
           {a.type === "connection_upload" && <>
-            <ConnectionPicker connections={connections} value={String(a.config.connectionId ?? "")} capability="upload" onChange={(id) => { const next = connections.find((item) => item.id === id); update(i, "connectionId", id); update(i, "provider", next?.provider ?? ""); update(i, "destinationId", ""); update(i, "destinationName", ""); }} />
-            <ResourcePicker connectionId={String(a.config.connectionId ?? "")} provider={String(a.config.provider ?? connections.find((item) => item.id === a.config.connectionId)?.provider ?? "")} value={String(a.config.destinationId ?? "")} label={String(a.config.destinationName ?? "")} selectMode="folder" onChange={(resource) => { update(i, "destinationId", resource.id); update(i, "destinationName", resource.name); }} />
+            <ConnectionPicker connections={connections} value={String(a.config.connectionId ?? "")} capability="upload" onChange={(id) => { const next = connections.find((item) => item.id === id); patchConfig(i, { connectionId: id, provider: next?.provider ?? "", destinationId: "", destinationName: "" }); }} />
+            <ResourcePicker connectionId={String(a.config.connectionId ?? "")} provider={String(a.config.provider ?? connections.find((item) => item.id === a.config.connectionId)?.provider ?? "")} value={String(a.config.destinationId ?? "")} label={String(a.config.destinationName ?? "")} selectMode="folder" onChange={(resource) => { patchConfig(i, { destinationId: resource.id, destinationName: resource.name }); }} />
             <div className="sm:col-span-2"><UploadToCloudHint ar={ar} /></div>
           </>}
           {a.type === "http_request" && <>
-            <ConnectionPicker connections={connections} value={String(a.config.connectionId ?? "")} capability="request" onChange={(id) => { const next = connections.find((item) => item.id === id); update(i, "connectionId", id); update(i, "provider", next?.provider ?? ""); }} />
+            <ConnectionPicker connections={connections} value={String(a.config.connectionId ?? "")} capability="request" onChange={(id) => { const next = connections.find((item) => item.id === id); patchConfig(i, { connectionId: id, provider: next?.provider ?? "" }); }} />
             {field(txt(ar,"Path / URL path","المسار"), a.config.path, v => update(i,"path",v), "/v1/resource or ?id={{file.id}}")}
             <label className="workflow-action-field"><span>{txt(ar,"Method","الطريقة")}</span><ImkanOptionPicker value={String(a.config.method ?? "GET")} onChange={(next)=>{ if (next) update(i,"method",next); }} options={toImkanPickerOptions(["GET","POST","PUT","PATCH","DELETE","HEAD"])} ariaLabel={txt(ar,"Method","الطريقة")} fullWidth /></label>
             <label className="workflow-action-field sm:col-span-2"><span>{txt(ar,"Body (optional)","الجسم (اختياري)")}</span><textarea value={String(a.config.body ?? "")} onChange={e=>update(i,"body",e.target.value)} rows={4} placeholder='{"fileId":"{{file.id}}"}' /></label>
@@ -307,7 +310,7 @@ function ActionEditor({ actions, onChange, resourceType, ar, workflowFields }: {
 
           {a.type === "request_approval" && <div className="contents">
             <label className="workflow-action-field sm:col-span-2"><span>{txt(ar,"Approvers / members","الموافقون / الأعضاء")}</span>
-              <select multiple value={Array.isArray(a.config.userIds) ? a.config.userIds.map(String) : (a.config.userId ? [String(a.config.userId)] : [])} onChange={e => { const ids = Array.from(e.target.selectedOptions).map(o => o.value); update(i,"userIds",ids); update(i,"userId",ids[0] ?? ""); }}>
+              <select multiple value={Array.isArray(a.config.userIds) ? a.config.userIds.map(String) : (a.config.userId ? [String(a.config.userId)] : [])} onChange={e => { const ids = Array.from(e.target.selectedOptions).map(o => o.value); patchConfig(i, { userIds: ids, userId: ids[0] ?? "" }); }}>
                 {participantOptions.users.map(u => <option key={u.id} value={u.id}>{u.name || u.email} · {u.email}</option>)}
               </select>
             </label>

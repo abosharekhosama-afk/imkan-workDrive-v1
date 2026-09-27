@@ -55,7 +55,7 @@ export function ConnectionPicker({ connections, value, onChange, provider, capab
       ) : (
         <ImkanOptionPicker
           value={value}
-          onChange={(next) => { if (next) onChange(next); }}
+          onChange={(next) => onChange(next || "")}
           ariaLabel={`Select ${label} connection`}
           fullWidth
           allowEmpty
