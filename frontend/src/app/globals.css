@@ -3868,3 +3868,45 @@ html[data-theme="dark"] .admin-console-shell .border-slate-200,
 html[data-theme="dark"] .admin-console-shell .border-slate-100{border-color:var(--wd-line)!important}
 html[data-theme="dark"] .zoho-admin-input{background:var(--wd-bg);color:var(--wd-text);border-color:var(--wd-line)}
 .admin-console-shell .bg-\[\#2f6ee5\],.admin-console-shell .bg-\[\#2f70df\]{background-color:var(--wd-primary)!important}
+
+
+/* Workflow builder canvas UX: compact nodes, free-position connection port, and space-saving palette. */
+.workflow-ui .workflow-palette-sidebar{
+  width:240px;
+  min-width:240px;
+  flex:0 0 240px;
+  transition:width .18s ease,min-width .18s ease,flex-basis .18s ease;
+  overflow:hidden;
+}
+.workflow-ui .workflow-palette-sidebar.is-collapsed{
+  width:48px;
+  min-width:48px;
+  flex-basis:48px;
+}
+.workflow-ui .workflow-palette-sidebar.is-collapsed > div:not(:first-child){display:none}
+.workflow-ui .workflow-palette-sidebar.is-collapsed > div:first-child{justify-content:center;padding-left:8px;padding-right:8px}
+.workflow-ui .workflow-palette-sidebar.is-collapsed > div:first-child > span{display:none}
+.workflow-ui .workflow-palette-sidebar.is-collapsed > div:first-child button{transform:rotate(180deg)}
+.workflow-ui .workflow-state-node{cursor:grab}
+.workflow-ui .workflow-state-node:active{cursor:grabbing}
+.workflow-ui .workflow-floating-connection-handle{
+  width:11px!important;
+  height:11px!important;
+  margin-left:-5.5px;
+  margin-top:-5.5px;
+  top:auto;
+  left:auto;
+  pointer-events:auto;
+  opacity:0;
+  transform:scale(.72);
+}
+.workflow-ui .workflow-state-node:hover .workflow-floating-connection-handle,
+.workflow-ui .workflow-floating-connection-handle:hover{
+  opacity:1;
+  transform:scale(1.12);
+}
+.workflow-ui [data-workflow-state-target="true"]{touch-action:none}
+@media (max-width:1100px){
+  .workflow-ui .workflow-palette-sidebar{width:220px;min-width:220px;flex-basis:220px}
+  .workflow-ui .workflow-palette-sidebar.is-collapsed{width:46px;min-width:46px;flex-basis:46px}
+}
