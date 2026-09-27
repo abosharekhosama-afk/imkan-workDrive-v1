@@ -31,10 +31,10 @@ export function listFolderTree(): Promise<FolderTreeItem[]> {
   return apiRequest<FolderTreeItem[]>('/folders/tree');
 }
 
-export function createFolder(name: string, parentId?: string): Promise<FolderRecord> {
+export function createFolder(name: string, parentId?: string, templateId?: string, customFields?: Record<string, unknown>): Promise<FolderRecord> {
   return apiRequest<FolderRecord>("/folders", {
     method: "POST",
-    body: JSON.stringify({ name, parentId }),
+    body: JSON.stringify({ name, parentId, ...(templateId ? { templateId } : {}), ...(customFields ? { customFields } : {}) }),
   });
 }
 

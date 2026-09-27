@@ -25,6 +25,7 @@ export type SearchOptions = {
   tags?: string[];
   field?: string;
   dataTemplateId?: string;
+  criteria?: Array<{ key: string; op: string; value: string; join: 'AND'|'OR' }>;
   sort?: "relevance" | "updated" | "created" | "name";
 };
 
@@ -34,6 +35,7 @@ export function searchNames(query: string, filter: SearchFilter = "all", options
   if (options.owner) url.searchParams.set('owner', options.owner);
   if (options.dateField && options.dateField !== 'modified') url.searchParams.set('dateField', options.dateField);
   if (options.dataTemplateId) url.searchParams.set('dataTemplate', options.dataTemplateId);
+  if (options.criteria?.length) url.searchParams.set('criteria', JSON.stringify(options.criteria.slice(0, 5)));
   if (options.field) url.searchParams.set('field', options.field);
   if (options.dateFrom) url.searchParams.set('dateFrom', options.dateFrom);
   if (options.dateTo) url.searchParams.set('dateTo', options.dateTo);
