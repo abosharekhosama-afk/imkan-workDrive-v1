@@ -560,7 +560,7 @@ export function FileBrowser({
           onMove={(type, id, name) => setMoveTarget({ type, id, name })}
           onFavorite={handleFavorite}
           onVersionHistory={onVersionHistory}
-          onViewDetails={handleViewDetails}
+          onInspect={handleViewDetails}
           favoriteIds={favoriteIds}
           canFavorite={true}
         />
@@ -580,7 +580,7 @@ export function FileBrowser({
           onMove={handleMove}
           onCopy={(type, id, name) => setCopyTarget({ type, id, name })}
           onDropMove={(type, id, destinationFolderId) => { if (type === "FILE") void moveFile(id, destinationFolderId).then(load); else void moveFolder(id, destinationFolderId).then(load); }}
-          onViewDetails={handleViewDetails}
+          onInspect={handleViewDetails}
           onRename={(type, id, name) => setRenameTarget({ type, id, name })}
           onDelete={(type, id) => setDeleteTarget({ type, id })}
           onFavorite={handleFavorite}

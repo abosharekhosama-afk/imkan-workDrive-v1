@@ -5,6 +5,7 @@ import { useLocale } from "./locale-provider";
 import { Modal } from "./modal";
 import { ImkanOptionPicker } from "./imkan-option-picker";
 import { uploadFileToFolder } from "../lib/api/upload-file";
+import { getUploadDataTemplateMandate, type DataTemplate } from "../lib/api/metadata";
 import { createTeamFolder } from "../lib/api/team-folders";
 import { getTemplate, listTemplates, listTemplateCategories, useTemplate, type TemplateLibrary, type TemplatePreview, type TemplateRecord } from "../lib/api/templates";
 import { TemplatePreview as TemplatePreviewPane } from "./templates/template-preview";
@@ -36,6 +37,10 @@ export function NewItemHost() {
   const [name, setName] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const [dataTemplateMandate, setDataTemplateMandate] = useState<DataTemplate | null>(null);
+  const [dataTemplateFields, setDataTemplateFields] = useState<Record<string, unknown>>({});
+  const [dataTemplatePromptOpen, setDataTemplatePromptOpen] = useState(false);
+  const [dataTemplatePromptResolver, setDataTemplatePromptResolver] = useState<((value: { templateId: string; customFields: Record<string, unknown> } | null) => void) | null>(null);
   const [teamFolderOpen, setTeamFolderOpen] = useState(false);
   const [teamFolderName, setTeamFolderName] = useState("");
   const [teamFolderBusy, setTeamFolderBusy] = useState(false);
@@ -92,6 +97,25 @@ export function NewItemHost() {
     finally { setTeamFolderBusy(false); }
   };
 
+  const requestCreateDataTemplate = async (targetFolderId: string | null) => {
+    const result = await getUploadDataTemplateMandate(targetFolderId);
+    if (!result.enabled || !result.template) return { templateId: undefined as string | undefined, customFields: undefined as Record<string, unknown> | undefined };
+    const values: Record<string, unknown> = {};
+    for (const field of (result.template.fields ?? result.template.schema ?? [])) if (field.type === "boolean") values[field.key] = false;
+    setDataTemplateMandate(result.template);
+    setDataTemplateFields(values);
+    setDataTemplatePromptOpen(true);
+    return await new Promise<{ templateId: string; customFields: Record<string, unknown> } | null>((resolve) => setDataTemplatePromptResolver(() => resolve));
+  };
+
+  const resolveCreateDataTemplate = (value: { templateId: string; customFields: Record<string, unknown> } | null) => {
+    const resolve = dataTemplatePromptResolver;
+    setDataTemplatePromptResolver(null);
+    setDataTemplatePromptOpen(false);
+    if (!resolve) return;
+    resolve(value);
+  };
+
   const create = async () => {
     if (!detail) return;
     const cleanName = name.trim(); if (!cleanName) return;
@@ -99,7 +123,9 @@ export function NewItemHost() {
     try {
       const definition = DEFINITIONS[detail.kind];
       const base = cleanName.replace(/\.(html|csv|js|url)$/i, "");
-      await uploadFileToFolder(detail.folderId, new File([definition.content], `${base}.${definition.extension}`, { type: definition.mime }));
+      const fields = await requestCreateDataTemplate(detail.folderId);
+      if (!fields) return;
+      await uploadFileToFolder(detail.folderId, new File([definition.content], `${base}.${definition.extension}`, { type: definition.mime }), undefined, fields.customFields, fields.templateId);
       window.dispatchEvent(new Event("workdrive:content-changed")); setDetail(null);
     } catch (e) { setError(e instanceof Error ? e.message : (ar ? "تعذر إنشاء الملف." : "Unable to create the file.")); }
     finally { setBusy(false); }
@@ -125,16 +151,31 @@ export function NewItemHost() {
     if (!selectedTemplate || !templateName.trim() || !picker) return;
     setBusy(true); setError("");
     try {
+      const fields = await requestCreateDataTemplate(picker.folderId);
+      if (!fields) return;
       const created = await useTemplate(selectedTemplate.id, { name: templateName.trim(), folderId: picker.folderId });
+      if (fields.templateId) {
+        const { associateFileDataTemplate } = await import("../lib/api/metadata");
+        await associateFileDataTemplate(created.file_id, fields.templateId, fields.customFields);
+      }
       setPicker(null); setSelectedTemplate(null); setPreview(null); setTemplateName(""); window.dispatchEvent(new Event("workdrive:content-changed"));
       window.dispatchEvent(new CustomEvent("workdrive:template-created", { detail: created }));
     } catch (e) { setError(e instanceof Error ? e.message : (ar ? "تعذر إنشاء الملف من القالب." : "Unable to create the file from template.")); }
     finally { setBusy(false); }
   };
 
+  const dataTemplatePrompt = dataTemplatePromptOpen && dataTemplateMandate ? (
+    <Modal title={`${ar ? "خصائص Data Template المطلوبة" : "Required Data Template properties"} — ${dataTemplateMandate.name}`} onClose={() => resolveCreateDataTemplate(null)} footer={<><button type="button" className="imkan-button-secondary" onClick={() => resolveCreateDataTemplate(null)}>{ar ? "إلغاء" : "Cancel"}</button><button type="button" className="imkan-button" onClick={() => { const missing=(dataTemplateMandate.fields ?? dataTemplateMandate.schema ?? []).filter((f)=>f.required && (dataTemplateFields[f.key] === undefined || dataTemplateFields[f.key] === null || String(dataTemplateFields[f.key]).trim()==="")); if(missing.length){setError((ar?"الحقول المطلوبة: ":"Required fields: ")+missing.map((f)=>f.label).join(", ")); return;} resolveCreateDataTemplate({templateId:dataTemplateMandate.id,customFields:dataTemplateFields}); }}>{ar ? "متابعة" : "Continue"}</button></>}>
+      <div className="space-y-3">
+        <p className="text-[11px] text-slate-500">{ar ? "يجب استكمال الخصائص قبل إنشاء العنصر في هذا المجلد." : "Complete these properties before creating the item in this folder."}</p>
+        {(dataTemplateMandate.fields ?? dataTemplateMandate.schema ?? []).map((field) => <label key={field.key} className="block text-[11px] text-slate-600">{field.label}{field.required ? " *" : ""}{field.type === "boolean" ? <input type="checkbox" checked={Boolean(dataTemplateFields[field.key])} onChange={(e)=>setDataTemplateFields(v=>({...v,[field.key]:e.target.checked}))} className="ms-2" /> : field.type === "select" || field.type === "radio" ? <select value={String(dataTemplateFields[field.key] ?? "")} onChange={(e)=>setDataTemplateFields(v=>({...v,[field.key]:e.target.value}))} className="mt-1 w-full rounded border border-slate-200 bg-white px-2 py-2 text-[11px]"><option value="">—</option>{(field.options ?? []).map((o)=><option key={o} value={o}>{o}</option>)}</select> : <input type={field.type === "number" ? "number" : field.type === "email" ? "email" : field.type === "date" ? "date" : field.type === "datetime" ? "datetime-local" : "text"} value={String(dataTemplateFields[field.key] ?? "")} onChange={(e)=>setDataTemplateFields(v=>({...v,[field.key]:field.type === "number" ? (e.target.value === "" ? "" : Number(e.target.value)) : e.target.value}))} className="mt-1 w-full rounded border border-slate-200 px-2 py-2 text-[11px]" />}</label>)}
+      </div>
+    </Modal>
+  ) : null;
+
   if (!detail && !teamFolderOpen && !picker) return null;
   if (!detail && !teamFolderOpen && picker) {
-    return <Modal title={ar ? "إنشاء من قالب" : "Create from template"} onClose={() => !busy && setPicker(null)}>
+    return <>{dataTemplatePrompt}<Modal title={ar ? "إنشاء من قالب" : "Create from template"} onClose={() => !busy && setPicker(null)}>
       <div className="w-[min(860px,calc(100vw-40px))] max-w-full space-y-3">
         <div className="flex flex-wrap gap-1 border-b border-slate-100">
           {(["PERSONAL", "ORGANIZATION", "PUBLIC"] as TemplateLibrary[]).map((lib) => <button key={lib} type="button" onClick={() => { setTemplateLibrary(lib); setTemplateCategoryId(""); setSelectedTemplate(null); setPreview(null); }} className={`border-b-2 px-3 py-2 text-[12px] font-medium ${templateLibrary === lib ? "border-[var(--wd-primary)] text-[var(--wd-primary)]" : "border-transparent text-slate-500"}`}>{lib === "PERSONAL" ? (ar ? "قوالبي" : "My templates") : lib === "ORGANIZATION" ? (ar ? "المؤسسة" : "Organization") : (ar ? "عام" : "Public")}</button>)}
@@ -187,10 +228,10 @@ export function NewItemHost() {
         {error ? <div className="rounded-lg bg-red-50 px-3 py-2 text-[11px] text-red-700">{error}</div> : null}
         <div className="flex justify-end border-t border-slate-100 pt-3"><button type="button" className="imkan-button-secondary" disabled={busy} onClick={() => setPicker(null)}>{ar ? "إلغاء" : "Cancel"}</button></div>
       </div>
-    </Modal>;
+    </Modal></>
   }
   if (!detail && teamFolderOpen) return <Modal title={ar ? "إنشاء مجلد فريق" : "New team folder"} onClose={() => !teamFolderBusy && setTeamFolderOpen(false)}><div className="space-y-4"><label className="flex flex-col gap-1.5 text-[11px] font-medium text-slate-600">{ar ? "اسم مجلد الفريق" : "Team folder name"}<input autoFocus value={teamFolderName} onChange={(e) => setTeamFolderName(e.target.value)} className="imkan-input w-full" disabled={teamFolderBusy} /></label>{error ? <div className="rounded-lg bg-red-50 px-3 py-2 text-[11px] text-red-700">{error}</div> : null}<div className="flex justify-end gap-2 border-t border-slate-100 pt-3"><button type="button" className="wd-pill wd-pill-record" onClick={() => setTeamFolderOpen(false)}>{ar ? "إلغاء" : "Cancel"}</button><button type="button" className="wd-pill wd-pill-new" disabled={teamFolderBusy || !teamFolderName.trim()} onClick={() => void createTeamFolderFromToolbar()}>{teamFolderBusy ? (ar ? "جارٍ الإنشاء…" : "Creating…") : (ar ? "إنشاء" : "Create")}</button></div></div></Modal>;
   const definition = DEFINITIONS[detail!.kind];
   const title = LABELS[detail!.kind][ar ? "ar" : "en"];
-  return <Modal title={title} onClose={() => !busy && setDetail(null)}><div className="space-y-3"><label className="flex flex-col gap-1 text-[11px] text-slate-500">{ar ? "اسم الملف" : "File name"}<input autoFocus value={name} onChange={(e) => setName(e.target.value)} className="imkan-input" disabled={busy} /></label><p className="text-[11px] leading-5 text-slate-500">{ar ? "سيتم إنشاء ملف حقيقي في المجلد الحالي." : "A real file will be created in the current folder."}</p>{error ? <div className="rounded-lg bg-red-50 px-3 py-2 text-[11px] text-red-700">{error}</div> : null}<div className="flex justify-end gap-2 border-t border-slate-100 pt-3"><button type="button" className="imkan-button-secondary" onClick={() => setDetail(null)}>{ar ? "إلغاء" : "Cancel"}</button><button type="button" className="imkan-button" disabled={busy || !name.trim()} onClick={() => void create()}>{busy ? (ar ? "جارٍ الإنشاء…" : "Creating…") : (ar ? "إنشاء" : "Create")}</button></div></div></Modal>;
+  return <>{dataTemplatePrompt}<Modal title={title} onClose={() => !busy && setDetail(null)}><div className="space-y-3"><label className="flex flex-col gap-1 text-[11px] text-slate-500">{ar ? "اسم الملف" : "File name"}<input autoFocus value={name} onChange={(e) => setName(e.target.value)} className="imkan-input" disabled={busy} /></label><p className="text-[11px] leading-5 text-slate-500">{ar ? "سيتم إنشاء ملف حقيقي في المجلد الحالي." : "A real file will be created in the current folder."}</p>{error ? <div className="rounded-lg bg-red-50 px-3 py-2 text-[11px] text-red-700">{error}</div> : null}<div className="flex justify-end gap-2 border-t border-slate-100 pt-3"><button type="button" className="imkan-button-secondary" onClick={() => setDetail(null)}>{ar ? "إلغاء" : "Cancel"}</button><button type="button" className="imkan-button" disabled={busy || !name.trim()} onClick={() => void create()}>{busy ? (ar ? "جارٍ الإنشاء…" : "Creating…") : (ar ? "إنشاء" : "Create")}</button></div></div></Modal></>;
 }
