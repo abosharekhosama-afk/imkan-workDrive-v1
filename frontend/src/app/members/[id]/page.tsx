@@ -12,6 +12,7 @@ import {
 } from "../../../lib/api/organization";
 import { addTeamFolderMember, removeTeamFolderMember, updateTeamFolderMember, type TeamFolderRole } from "../../../lib/api/team-folders";
 import { Toast } from "../../../components/toast";
+import { ImkanOptionPicker } from "../../../components/imkan-option-picker";
 
 type Tab = "settings" | "team-folders" | "groups";
 const TEAM_ROLES: TeamFolderRole[] = ["ADMIN", "ORGANIZER", "EDITOR", "COMMENTER", "VIEWER"];
@@ -28,6 +29,32 @@ function sizeLabel(value: string) {
 function roleLabel(role: string, ar: boolean) {
   const map: Record<string,string> = ar ? { ADMIN:"مسؤول", ORGANIZER:"منظّم", EDITOR:"محرر", COMMENTER:"معلّق", VIEWER:"مشاهد", SUPER_ADMIN:"مسؤول عام", MEMBER:"عضو" } : { ADMIN:"Admin", ORGANIZER:"Organizer", EDITOR:"Editor", COMMENTER:"Commenter", VIEWER:"Viewer", SUPER_ADMIN:"Super Admin", MEMBER:"Member" };
   return map[role] ?? role;
+}
+function orgRoleDescription(role: OrgRole, ar: boolean) {
+  if (role === "SUPER_ADMIN") return ar ? "صلاحيات كاملة" : "Full control";
+  if (role === "ADMIN") return ar ? "إدارة وتنظيم المؤسسة" : "Can organize, share, create, edit, and manage members";
+  return ar ? "الوصول كعضو" : "Standard member access";
+}
+function teamRoleDescription(role: TeamFolderRole, ar: boolean) {
+  if (role === "ADMIN") return ar ? "تحكم كامل" : "Full control";
+  if (role === "ORGANIZER") return ar ? "يمكنه التنظيم والمشاركة" : "Can organize, share, create, edit, and manage members";
+  if (role === "EDITOR") return ar ? "يمكنه الإنشاء والتحرير والتعليق" : "Can create, edit, and comment";
+  if (role === "COMMENTER") return ar ? "يمكنه العرض والتعليق" : "Can view and comment";
+  return ar ? "يمكنه العرض" : "Can view";
+}
+function orgRolePickerOptions(ar: boolean) {
+  return (["SUPER_ADMIN", "ADMIN", "MEMBER"] as OrgRole[]).map((role) => ({
+    value: role,
+    label: roleLabel(role, ar),
+    description: orgRoleDescription(role, ar),
+  }));
+}
+function teamRolePickerOptions(ar: boolean) {
+  return TEAM_ROLES.map((role) => ({
+    value: role,
+    label: roleLabel(role, ar),
+    description: teamRoleDescription(role, ar),
+  }));
 }
 
 export default function MemberDetailsPage() {
@@ -86,7 +113,7 @@ export default function MemberDetailsPage() {
 function SettingsPanel({member,ar,onRole,onStatus,onDelete}:{member:MemberDetails["member"];ar:boolean;onRole:(r:OrgRole)=>Promise<void>;onStatus:()=>Promise<void>;onDelete:()=>Promise<void>}) {
   return <div className="member-settings-panel">
     <SettingRow label={ar?"حالة الحساب":"Account Status"}><span className="member-state-badge">{member.status==="ACTIVE"?(ar?"نشط":"ACTIVE"):(ar?"موقوف":"SUSPENDED")}</span><button className="member-info-icon"><Icons.info size={13}/></button></SettingRow>
-    <SettingRow label={ar?"تغيير الدور":"Change Role"}><RolePicker value={member.role} onChange={onRole} ar={ar}/><button className="member-info-icon"><Icons.info size={13}/></button></SettingRow>
+    <SettingRow label={ar?"تغيير الدور":"Change Role"}><ImkanOptionPicker value={member.role} onChange={onRole} options={orgRolePickerOptions(ar)} ariaLabel={ar?"تغيير الدور":"Change Role"} menuWidth="wide" /><button className="member-info-icon"><Icons.info size={13}/></button></SettingRow>
     <SettingRow label={ar?"المشاركة الخارجية":"External Sharing"}><span className="member-setting-value">{ar?"مفعلة":"Enabled"}</span><button className="member-info-icon"><Icons.info size={13}/></button></SettingRow>
     <SettingRow label={ar?"مسؤول القوالب":"Template Admin"}><span className="member-state-badge">{ar?"مفعلة":"Enabled"}</span><button className="member-info-icon"><Icons.info size={13}/></button></SettingRow>
     <div className="member-danger-zone"><p>{ar?"حذف هذا العضو سيزيل حسابه من المؤسسة ويفقده الوصول إلى الملفات والمجلدات والبيانات المشتركة. لا يمكن التراجع عن هذا الإجراء.":"Deleting this member will permanently remove their account from your Team. They will immediately lose all access to the Team, including all files, folders, and shared data. This action cannot be undone."}</p><div className="flex gap-2"><button className="member-danger-button" onClick={()=>void onDelete()}>{ar?"حذف العضو":"Delete Member"}</button><button className="member-soft-button" onClick={()=>void onStatus()}>{member.status==="SUSPENDED"?(ar?"تنشيط الحساب":"Activate account"):(ar?"إيقاف الحساب":"Suspend account")}</button></div></div>
@@ -94,16 +121,7 @@ function SettingsPanel({member,ar,onRole,onStatus,onDelete}:{member:MemberDetail
 }
 function SettingRow({label,children}:{label:string;children:React.ReactNode}){return <div className="member-setting-row"><span className="member-setting-label">{label}</span><div className="member-setting-control">{children}</div></div>}
 
-function RolePicker({value,onChange,ar}:{value:OrgRole;onChange:(v:OrgRole)=>void;ar:boolean}) {
-  const [open,setOpen]=useState(false);
-  const roles:OrgRole[]=["SUPER_ADMIN","ADMIN","MEMBER"];
-  return <div className="relative"><button type="button" className="member-role-pill" onClick={()=>setOpen(v=>!v)}>{roleLabel(value,ar)}<Icons.chevD size={12}/></button>{open?<div className="member-role-menu">
-    {roles.map(r=><button type="button" key={r} className={value===r?"is-active":""} onClick={()=>{onChange(r);setOpen(false)}}><b>{roleLabel(r,ar)}</b><small>{r==="SUPER_ADMIN"?(ar?"صلاحيات كاملة":"Full control"):r==="ADMIN"?(ar?"إدارة وتنظيم المؤسسة":"Can organize, share, create, edit, and manage members"):(ar?"الوصول كعضو":"Standard member access")}</small></button>)}
-  </div>:null}</div>;
-}
-
 function TeamFoldersPanel({data,ar,onRefresh,setToast}:{data:MemberDetails;ar:boolean;onRefresh:()=>Promise<void>;setToast:(x:{message:string;tone?:"success"|"error"}|null)=>void}) {
-  const [openId,setOpenId]=useState<string|null>(null);
   const [query,setQuery]=useState("");
   async function change(id:string,role:TeamFolderRole){try{await updateTeamFolderMember(id,data.member.userId,role);await onRefresh()}catch{setToast({message:ar?"تعذر تغيير الصلاحية.":"Unable to change permission.",tone:"error"})}}
   async function remove(id:string){try{await removeTeamFolderMember(id,data.member.userId);await onRefresh()}catch{setToast({message:ar?"تعذر إزالة المجلد.":"Unable to remove the team folder.",tone:"error"})}}
@@ -132,17 +150,20 @@ function TeamFoldersPanel({data,ar,onRefresh,setToast}:{data:MemberDetails;ar:bo
               </span> : null}
             </span>
             <span className="relative">
-              <button className="member-role-pill" disabled={viaGroup} title={viaGroup ? (ar ? "تُدار صلاحية هذا الوصول من المجموعة" : "This access is managed by the group") : undefined} onClick={()=>!viaGroup && setOpenId(openId===tf.id?null:tf.id)}>
-                {roleLabel(tf.role,ar)}<Icons.chevD size={12}/>
-              </button>
-              {!viaGroup && openId===tf.id?<TeamRoleMenu value={tf.role as TeamFolderRole} ar={ar} onChange={(r)=>{setOpenId(null);void change(tf.id,r)}}/>:null}
+              <ImkanOptionPicker
+                value={tf.role as TeamFolderRole}
+                onChange={(role) => void change(tf.id, role)}
+                options={teamRolePickerOptions(ar)}
+                ariaLabel={ar ? "دور العضو" : "Member role"}
+                disabled={viaGroup}
+                menuWidth="wide"
+              />
             </span>
             {viaGroup ? <span className="member-derived-access-source">{(tf.groupNames || []).join(", ")}</span> : <button className="member-remove-x" onClick={()=>void remove(tf.id)} aria-label={ar?"إزالة":"Remove"}><Icons.x size={15}/></button>}
           </div>;
         })}</div>}
   </div>;
 }
-function TeamRoleMenu({value,ar,onChange}:{value:TeamFolderRole;ar:boolean;onChange:(v:TeamFolderRole)=>void}){return <div className="member-role-menu team-role-menu">{TEAM_ROLES.map(r=><button key={r} onClick={()=>onChange(r)} className={value===r?"is-active":""}><b>{roleLabel(r,ar)}</b><small>{r==="ADMIN"?(ar?"تحكم كامل":"Full control"):r==="ORGANIZER"?(ar?"يمكنه التنظيم والمشاركة":"Can organize, share, create, edit, and manage members"):r==="EDITOR"?(ar?"يمكنه الإنشاء والتحرير والتعليق":"Can create, edit, and comment"):r==="COMMENTER"?(ar?"يمكنه العرض والتعليق":"Can view and comment"):(ar?"يمكنه العرض":"Can view")}</small></button>)}</div>}
 function EmptyPanel({icon,title,text}:{icon:"folder"|"users";title:string;text:string}){return <div className="member-empty-panel"><span className="member-empty-icon">{icon==="folder"?<Icons.folder size={42}/>:<Icons.users size={42}/>}</span><h3>{title}</h3><p>{text}</p></div>}
 
 function AddTeamFoldersModal({data,ar,memberId,onClose,onDone,setToast}:{data:MemberDetails;ar:boolean;memberId:string;onClose:()=>void;onDone:()=>Promise<void>;setToast:(x:{message:string;tone?:"success"|"error"}|null)=>void}) {
@@ -151,7 +172,7 @@ function AddTeamFoldersModal({data,ar,memberId,onClose,onDone,setToast}:{data:Me
   async function add(id:string){setSaving(id);try{await addTeamFolderMember(id,memberId,role);setToast({message:ar?"تمت إضافة مجلد الفريق.":"Team folder added.",tone:"success"});await onDone()}catch{setToast({message:ar?"تعذر إضافة مجلد الفريق.":"Unable to add team folder.",tone:"error"})}finally{setSaving(null)}}
   return <ModalShell title={ar?"إضافة مجلدات الفريق":"Add Team Folders"} ar={ar} onClose={onClose}>
     <div className="member-modal-search"><Icons.search size={15}/><input value={q} onChange={e=>setQ(e.target.value)} placeholder={ar?"البحث عن مجلد فريق":"Search team folders"}/></div>
-    <div className="member-modal-role"><span>{ar?"صلاحية العضو":"Member role"}</span><select value={role} onChange={e=>setRole(e.target.value as TeamFolderRole)}>{TEAM_ROLES.map(r=><option key={r} value={r}>{roleLabel(r,ar)}</option>)}</select></div>
+    <div className="member-modal-role"><span>{ar?"صلاحية العضو":"Member role"}</span><ImkanOptionPicker value={role} onChange={setRole} options={teamRolePickerOptions(ar)} ariaLabel={ar?"صلاحية العضو":"Member role"} menuWidth="wide" /></div>
     <div className="team-folder-option-list">
       {available.length===0?<EmptyPanel icon="folder" title={ar?"لا توجد مجلدات فريق متاحة.":"No team folders available."} text={ar?"هذا العضو مضاف بالفعل إلى جميع مجلدات الفريق المتاحة.":"This member is already assigned to all available team folders."}/>:available.map(folder=><div className="team-folder-option" key={folder.id}>
         <div className="team-folder-option-head"><span className="team-folder-icon"><Icons.folder size={18}/></span><div><b>{folder.name}</b><small>{folder.isPublicToOrg?(ar?"متاح للمؤسسة":"Available to organization"):(ar?"مجلد فريق":"Team Folder")}</small></div><button className="member-primary-button compact" disabled={saving===folder.id} onClick={()=>void add(folder.id)}>{saving===folder.id?(ar?"جارٍ...":"Adding..."):(ar?"إضافة":"Add")}</button></div>

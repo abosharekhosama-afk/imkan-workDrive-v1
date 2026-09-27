@@ -10,6 +10,7 @@ import {
 } from "react";
 import { useLocale } from "./locale-provider";
 import { Modal } from "./modal";
+import { ImkanOptionPicker } from "./imkan-option-picker";
 import {
   addTeamFolderMember,
   listTeamFolderMembers,
@@ -161,6 +162,11 @@ export function MembersModal({
 const roleLabel = (role: TeamFolderRole) =>
     label(`teamFolders.role.${role}` as Parameters<typeof label>[0]);
 
+  const teamFolderRoleOptions = ROLE_ORDER.map((role) => ({
+    value: role,
+    label: roleLabel(role),
+  }));
+
   async function onAdd(event: FormEvent) {
     event.preventDefault();
     if (!selected || submitting) return;
@@ -266,21 +272,14 @@ return (
                   </span>
                   {canManage ? (
                     <>
-                      <span className={ROLE_BADGES[m.role]} title={roleLabel(m.role)}>
-                        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M12 19V5M5 12l7-7 7 7" /></svg>
-                        {roleLabel(m.role)}
-                        <select
-                          aria-label={`${label("teamFolders.member.role")}: ${displayName}`}
-                          value={m.role}
-                          disabled={pendingRole === m.userId}
-                          onChange={(e) => void onChangeRole(m.userId, e.target.value as TeamFolderRole)}
-                          className="zoho-role-select sr-only"
-                        >
-                          {ROLE_ORDER.map((role) => (
-                            <option key={role} value={role}>{roleLabel(role)}</option>
-                          ))}
-                        </select>
-                      </span>
+                      <ImkanOptionPicker
+                        value={m.role}
+                        onChange={(role) => { if (role) void onChangeRole(m.userId, role); }}
+                        options={teamFolderRoleOptions}
+                        ariaLabel={`${label("teamFolders.member.role")}: ${displayName}`}
+                        disabled={pendingRole === m.userId}
+                        menuWidth="wide"
+                      />
                       <button type="button" className="zoho-member-remove" onClick={() => void onRemove(m.userId)} disabled={pendingRole === m.userId} aria-label={`${label("teamFolders.member.remove")}: ${displayName}`} title={label("teamFolders.member.remove")}>
                         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><polyline points="3 6 5 6 21 6" /><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" /></svg>
                       </button>
@@ -363,15 +362,14 @@ return (
             </div>
             <label className="flex flex-col gap-1 text-[length:var(--imkan-font-size-secondary)]">
               {label("teamFolders.member.role")}
-              <select
+              <ImkanOptionPicker
                 value={targetRole}
-                onChange={(e) => setTargetRole(e.target.value as TeamFolderRole)}
-                className="zoho-role-select"
-              >
-                {ROLE_ORDER.map((role) => (
-                  <option key={role} value={role}>{roleLabel(role)}</option>
-                ))}
-              </select>
+                onChange={(role) => { if (role) setTargetRole(role); }}
+                options={teamFolderRoleOptions}
+                ariaLabel={label("teamFolders.member.role")}
+                fullWidth
+                menuWidth="wide"
+              />
             </label>
             <button type="submit" disabled={!selected || submitting} className="imkan-button disabled:opacity-50 inline-flex items-center gap-1.5">
               <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14" /></svg>

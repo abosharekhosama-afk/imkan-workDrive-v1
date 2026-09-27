@@ -8,6 +8,7 @@ import { buildCreateShareBody, createShare } from "../lib/api/shares";
 import { listOrganizationMembers, type OrgMember } from "../lib/api/organization";
 import { friendlyErrorMessageKey } from "../lib/friendly-error";
 import { normalizePublicAppUrl } from "../lib/public-url";
+import { ImkanOptionPicker } from "./imkan-option-picker";
 
 type SharePermission = "VIEW" | "COMMENT" | "EDIT";
 type ExpiryKind = "never" | "1d" | "7d" | "30d" | "custom";
@@ -141,17 +142,16 @@ export function ShareModal({
   const permissionField = (
     <div className="wd-field">
       <label>{label("share.permission")}</label>
-      <select
+      <ImkanOptionPicker
         value={permission}
-        onChange={(event) => setPermission(event.target.value as SharePermission)}
-        className="wd-input"
-      >
-        {PERMISSION_OPTIONS.map((option) => (
-          <option key={option} value={option}>
-            {label(permissionOptionLabel(option) as Parameters<typeof label>[0])}
-          </option>
-        ))}
-      </select>
+        onChange={setPermission as (value: SharePermission | "") => void}
+        ariaLabel={label("share.permission")}
+        fullWidth
+        options={PERMISSION_OPTIONS.map((option) => ({
+          value: option,
+          label: label(permissionOptionLabel(option) as Parameters<typeof label>[0]),
+        }))}
+      />
     </div>
   );
 
@@ -246,17 +246,22 @@ export function ShareModal({
                 </div>
                 <div className="wd-field">
                   <label>{label("share.expires")}</label>
-                  <select
+                  <ImkanOptionPicker
                     value={expiryKind}
-                    onChange={(event) => setExpiryKind(event.target.value as ExpiryKind)}
-                    className="wd-input"
-                  >
-                    <option value="never">{label("share.expiry.never")}</option>
-                    <option value="1d">{label("share.expiry.1d")}</option>
-                    <option value="7d">{label("share.expiry.7d")}</option>
-                    <option value="30d">{label("share.expiry.30d")}</option>
-                    <option value="custom">{label("share.expiry.custom")}</option>
-                  </select>
+                    onChange={setExpiryKind as (value: ExpiryKind | "") => void}
+                    ariaLabel={label("share.expires")}
+                    fullWidth
+                    options={([
+                      "never",
+                      "1d",
+                      "7d",
+                      "30d",
+                      "custom",
+                    ] as ExpiryKind[]).map((option) => ({
+                      value: option,
+                      label: label(`share.expiry.${option}` as Parameters<typeof label>[0]),
+                    }))}
+                  />
                 </div>
                 {expiryKind === "custom" ? (
                   <div className="wd-field">

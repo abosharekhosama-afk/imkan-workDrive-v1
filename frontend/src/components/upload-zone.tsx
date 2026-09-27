@@ -8,6 +8,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { createUploadQueueItems, updateUploadQueueItem, type UploadQueueItem } from "./upload-queue-logic";
 import { UploadProgressToast } from "./upload-progress-toast";
 import { Modal } from "./modal";
+import { ImkanOptionPicker, toImkanPickerOptions } from "./imkan-option-picker";
 import { getUploadDataTemplateMandate, type DataTemplate, type DataTemplateField } from "../lib/api/metadata";
 
 export function UploadZone({ folderId, onUploaded, triggerOnly = false }: { folderId: string | null; onUploaded: () => void; triggerOnly?: boolean }) {
@@ -135,7 +136,7 @@ export function UploadZone({ folderId, onUploaded, triggerOnly = false }: { fold
           <span className="mb-1 block text-xs font-medium">{field.label}{field.required ? " *" : ""}</span>
           {field.type === "multiline" ? <textarea className="imkan-input w-full min-h-20" value={String(value ?? "")} onChange={(e) => setTemplateValue(field, e.target.value)} /> :
            field.type === "boolean" ? <input type="checkbox" checked={value === true} onChange={(e) => setTemplateValue(field, e.target.checked)} /> :
-           field.type === "select" || field.type === "radio" ? <select className="imkan-input w-full" value={String(value ?? "")} onChange={(e) => setTemplateValue(field, e.target.value)}><option value="">{ar ? "اختر" : "Select"}</option>{(field.options ?? []).map((option) => <option key={option} value={option}>{option}</option>)}</select> :
+           field.type === "select" || field.type === "radio" ? <ImkanOptionPicker value={String(value ?? "")} onChange={(next) => setTemplateValue(field, next)} options={toImkanPickerOptions(field.options ?? [])} ariaLabel={field.label} fullWidth allowEmpty emptyLabel={ar ? "اختر" : "Select"} placeholder={ar ? "اختر" : "Select"} /> :
            <input className="imkan-input w-full" type={field.type === "number" ? "number" : field.type === "email" ? "email" : field.type === "date" ? "date" : field.type === "datetime" ? "datetime-local" : "text"} value={String(value ?? "")} onChange={(e) => setTemplateValue(field, field.type === "number" ? (e.target.value === "" ? "" : Number(e.target.value)) : e.target.value)} /> }
         </label>;
       })}

@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useLocale } from "./locale-provider";
 import { Modal } from "./modal";
+import { ImkanOptionPicker } from "./imkan-option-picker";
 import { uploadFileToFolder } from "../lib/api/upload-file";
 import { createTeamFolder } from "../lib/api/team-folders";
 import { getTemplate, listTemplates, listTemplateCategories, useTemplate, type TemplateLibrary, type TemplatePreview, type TemplateRecord } from "../lib/api/templates";
@@ -141,8 +142,28 @@ export function NewItemHost() {
         <div className="rounded-lg bg-slate-50 px-3 py-2 text-[11px] text-slate-500">{ar ? `سيتم إنشاء الملف داخل المجلد الحالي${picker.folderId ? " المحدد" : ""}.` : `The new file will be created in the current${picker.folderId ? " selected" : ""} folder.`}</div>
         <div className="flex flex-wrap gap-2">
           <input value={templateQuery} onChange={(e) => setTemplateQuery(e.target.value)} placeholder={ar ? "ابحث في القوالب…" : "Search templates…"} className="imkan-input min-w-[220px] flex-1" />
-          <select value={templateType} onChange={(e) => setTemplateType(e.target.value as typeof templateType)} className="imkan-input w-40"><option value="">{ar ? "كل الأنواع" : "All types"}</option><option value="DOCUMENT">{ar ? "مستند" : "Document"}</option><option value="SPREADSHEET">{ar ? "جدول" : "Spreadsheet"}</option><option value="PRESENTATION">{ar ? "عرض" : "Presentation"}</option></select>
-          <select value={templateCategoryId} onChange={(e) => setTemplateCategoryId(e.target.value)} className="imkan-input w-44"><option value="">{ar ? "كل التصنيفات" : "All categories"}</option>{templateCategories.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</select>
+          <ImkanOptionPicker
+            value={templateType}
+            onChange={setTemplateType}
+            ariaLabel={ar ? "نوع القالب" : "Template type"}
+            allowEmpty
+            emptyLabel={ar ? "كل الأنواع" : "All types"}
+            placeholder={ar ? "كل الأنواع" : "All types"}
+            options={([
+              { value: "DOCUMENT" as const, label: ar ? "مستند" : "Document" },
+              { value: "SPREADSHEET" as const, label: ar ? "جدول" : "Spreadsheet" },
+              { value: "PRESENTATION" as const, label: ar ? "عرض" : "Presentation" },
+            ])}
+          />
+          <ImkanOptionPicker
+            value={templateCategoryId}
+            onChange={setTemplateCategoryId}
+            ariaLabel={ar ? "تصنيف القالب" : "Template category"}
+            allowEmpty
+            emptyLabel={ar ? "كل التصنيفات" : "All categories"}
+            placeholder={ar ? "كل التصنيفات" : "All categories"}
+            options={templateCategories.map((category) => ({ value: category.id, label: category.name }))}
+          />
         </div>
         {selectedTemplate ? <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_300px]">
           <div className="overflow-hidden rounded-xl border border-slate-200 bg-slate-50">

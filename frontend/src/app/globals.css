@@ -2626,16 +2626,24 @@ html[data-theme="dark"] .workflow-ui .wd-card {
 .member-setting-row{display:grid;grid-template-columns:225px minmax(0,1fr);align-items:center;min-height:54px}
 .member-setting-label{font-size:13px}
 .member-setting-control{display:flex;align-items:center;gap:7px}
-.member-state-badge,.member-role-pill{background:#e9e9ea;border:0;border-radius:15px;padding:6px 10px;color:#202124;font-size:12px;font-weight:600;display:inline-flex;align-items:center;gap:8px}
-.member-role-pill{cursor:pointer}
+/* Global option picker — same visual language as Members → Change Role (see imkan-option-picker.tsx). */
+.imkan-option-picker{position:relative;display:inline-block;max-width:100%;vertical-align:top}
+.imkan-option-picker.is-full{display:block;width:100%}
+.imkan-option-picker-trigger-label{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.imkan-option-picker.is-full .imkan-option-picker-trigger{width:100%;justify-content:space-between}
+.imkan-option-picker-menu-wide{width:360px;max-width:min(360px,calc(100vw - 24px))}
+
+.member-state-badge,.member-role-pill,.imkan-option-picker-trigger{background:#e9e9ea;border:0;border-radius:15px;padding:6px 10px;color:#202124;font-size:12px;font-weight:600;display:inline-flex;align-items:center;gap:8px}
+.member-role-pill,.imkan-option-picker-trigger{cursor:pointer}
+.imkan-option-picker-trigger:disabled{cursor:not-allowed;opacity:.55}
 .member-setting-value{font-weight:600}
 .member-info-icon{border:0;background:transparent;padding:2px;color:#202124}
-.member-role-menu{position:absolute;z-index:60;top:39px;inset-inline-start:0;width:280px;background:#fff;border:1px solid #e5e5e5;border-radius:15px;padding:6px;box-shadow:0 8px 28px rgba(20,25,35,.13)}
-.member-role-menu button{display:block;width:100%;border:0;background:#fff;text-align:start;border-radius:11px;padding:9px 11px}
-.member-role-menu button:hover,.member-role-menu button.is-active{background:#eef4ff}
-.member-role-menu b,.member-role-menu small{display:block}
-.member-role-menu b{font-size:13px;font-weight:500}
-.member-role-menu small{font-size:11px;color:#666;margin-top:3px;line-height:16px}
+.member-role-menu,.imkan-option-picker-menu{position:absolute;z-index:120;top:calc(100% + 6px);inset-inline-start:0;width:280px;max-width:min(280px,calc(100vw - 24px));background:#fff;border:1px solid #e5e5e5;border-radius:15px;padding:6px;box-shadow:0 8px 28px rgba(20,25,35,.13)}
+.member-role-menu button,.imkan-option-picker-menu button{display:block;width:100%;border:0;background:#fff;text-align:start;border-radius:11px;padding:9px 11px}
+.member-role-menu button:hover,.member-role-menu button.is-active,.imkan-option-picker-menu button:hover,.imkan-option-picker-menu button.is-active{background:#eef4ff}
+.member-role-menu b,.member-role-menu small,.imkan-option-picker-menu b,.imkan-option-picker-menu small{display:block}
+.member-role-menu b,.imkan-option-picker-menu b{font-size:13px;font-weight:500}
+.member-role-menu small,.imkan-option-picker-menu small{font-size:11px;color:#666;margin-top:3px;line-height:16px}
 .team-role-menu{width:360px}
 .member-danger-zone{border-top:1px solid #e7e7e7;margin-top:17px;padding-top:22px}
 .member-danger-zone p{max-width:780px;line-height:19px;margin:0 0 17px}
@@ -3106,6 +3114,7 @@ html[data-theme="dark"] .member-data-row,
 html[data-theme="dark"] .member-detail-card,
 html[data-theme="dark"] .member-modal,
 html[data-theme="dark"] .member-role-menu,
+html[data-theme="dark"] .imkan-option-picker-menu,
 html[data-theme="dark"] .team-folder-option,
 html[data-theme="dark"] .member-search-combo { background: var(--wd-bg) !important; color: var(--wd-text) !important; border-color: var(--wd-line) !important; }
 html[data-theme="dark"] .members-table-row:hover,
@@ -3907,7 +3916,7 @@ html[data-theme="dark"] .zoho-admin-input{background:var(--wd-bg);color:var(--wd
   max-height:min(86vh,900px);
   overflow:hidden;
 }
-.imkan-transfer-modal > .p-4{min-height:0;overflow:hidden}
+.imkan-transfer-modal > .p-4{min-height:0;overflow-y:auto;overflow-x:hidden}
 @media (max-width:900px){
   .imkan-modal-surface.imkan-transfer-modal{width:min(96vw,760px)}
 }

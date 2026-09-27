@@ -5,6 +5,7 @@ import { Modal } from "./modal";
 import { createFolder, getFolder, listRootContents } from "../lib/api/folders";
 import { friendlyErrorMessageKey } from "../lib/friendly-error";
 import { Icons } from "./layout/icons";
+import { ImkanOptionPicker, toImkanPickerOptions } from "./imkan-option-picker";
 import { getTransferDataTemplateMandate, type DataTemplate } from "../lib/api/metadata";
 
 type FlatFolder = { id: string; name: string; depth: number };
@@ -107,8 +108,8 @@ export function MoveModal({ resourceName, resourceType = "FILE", resourceId, mod
 
   const title = mode === "copy" ? `${label("menu.copyTo")} ${resourceName}` : `${label("files.moveTitle")} ${resourceName}`;
 return (
-    <Modal title={title} onClose={onClose}>
-      <div className="flex flex-col gap-3" style={{ width: "min(96vw, 960px)" }}>
+    <Modal title={title} onClose={onClose} className="imkan-transfer-modal">
+      <div className="flex min-h-0 w-full flex-col gap-3">
         <div className="relative">
           <Icons.search size={15} className="pointer-events-none absolute start-3 top-1/2 -translate-y-1/2 text-slate-400" />
           <input
@@ -184,7 +185,7 @@ return (
               {mandate ? <div className="rounded-2xl border border-[color:var(--wd-primary)]/20 bg-white p-4 shadow-sm">
                 <div className="flex items-start justify-between gap-3 border-b border-slate-100 pb-3"><div className="min-w-0"><h4 className="truncate text-[14px] font-semibold text-slate-900">{mandate.name}</h4><p className="mt-1 text-[11px] text-slate-500">{locale === "ar" ? "أدخل الخصائص المطلوبة قبل المتابعة." : "Enter the required properties before continuing."}</p></div><span className="shrink-0 rounded-full bg-[var(--wd-primary-light)] px-2.5 py-1 text-[10px] font-semibold text-[color:var(--wd-primary-ink)]">{mandate.schema.length} {locale === "ar" ? "حقول" : "fields"}</span></div>
                 <div className="mt-4 grid gap-4">{mandate.schema.map((field) => <label key={field.key} className="text-[11px] font-medium text-slate-700">{field.label}{field.required ? <span className="ms-1 text-red-500">*</span> : null}
-                  {field.type === "boolean" ? <span className="mt-2 flex h-10 items-center rounded-lg border border-slate-200 bg-slate-50 px-3"><input type="checkbox" checked={Boolean(mandateFields[field.key])} onChange={(e) => setMandateFields((v) => ({ ...v, [field.key]: e.target.checked }))} className="me-2" />{locale === "ar" ? "نعم" : "Yes"}</span> : field.type === "select" || field.type === "radio" ? <select value={String(mandateFields[field.key] ?? "")} onChange={(e) => setMandateFields((v) => ({ ...v, [field.key]: e.target.value }))} className="mt-2 h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-[12px] outline-none focus:border-[color:var(--wd-primary)]"><option value="">—</option>{(field.options ?? []).map((option) => <option key={option} value={option}>{option}</option>)}</select> : <input type={field.type === "number" ? "number" : field.type === "date" ? "date" : field.type === "datetime" ? "datetime-local" : field.type === "email" ? "email" : "text"} value={String(mandateFields[field.key] ?? "")} onChange={(e) => setMandateFields((v) => ({ ...v, [field.key]: field.type === "number" ? (e.target.value === "" ? "" : Number(e.target.value)) : e.target.value }))} className="mt-2 h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-[12px] outline-none focus:border-[color:var(--wd-primary)]" />}
+                  {field.type === "boolean" ? <span className="mt-2 flex h-10 items-center rounded-lg border border-slate-200 bg-slate-50 px-3"><input type="checkbox" checked={Boolean(mandateFields[field.key])} onChange={(e) => setMandateFields((v) => ({ ...v, [field.key]: e.target.checked }))} className="me-2" />{locale === "ar" ? "نعم" : "Yes"}</span> : field.type === "select" || field.type === "radio" ? <div className="mt-2"><ImkanOptionPicker value={String(mandateFields[field.key] ?? "")} onChange={(next) => setMandateFields((v) => ({ ...v, [field.key]: next }))} options={toImkanPickerOptions(field.options ?? [])} ariaLabel={field.label} fullWidth allowEmpty emptyLabel="—" placeholder={locale === "ar" ? "اختر" : "Select"} /></div> : <input type={field.type === "number" ? "number" : field.type === "date" ? "date" : field.type === "datetime" ? "datetime-local" : field.type === "email" ? "email" : "text"} value={String(mandateFields[field.key] ?? "")} onChange={(e) => setMandateFields((v) => ({ ...v, [field.key]: field.type === "number" ? (e.target.value === "" ? "" : Number(e.target.value)) : e.target.value }))} className="mt-2 h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-[12px] outline-none focus:border-[color:var(--wd-primary)]" />}
                 </label>)}</div>
               </div> : null}
             </div>

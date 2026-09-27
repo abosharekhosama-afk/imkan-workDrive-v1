@@ -5,6 +5,7 @@ import { browseConnectionResources, startConnectionOAuth, uploadConnectionFile, 
 import { buildOAuthStartReturnPath } from "@/app/files/connections/connections-oauth-return-logic";
 import { readBrowserAccessToken, stashBrowserAccessTokenForOAuth } from "@/components/auth-gate-logic";
 import { connectionBrowseReady, connectionStatusLabel, friendlyConnectionError, googleDriveReconnectRequired, parseConnectionError, providerSupports, reconnectProviderLabel } from "@/components/connection-picker-logic";
+import { ImkanOptionPicker } from "@/components/imkan-option-picker";
 
 function beginOAuth(provider: string, connectionId?: string) {
   const returnTo = buildOAuthStartReturnPath(window.location.pathname, window.location.search);
@@ -37,11 +38,28 @@ export function ConnectionPicker({ connections, value, onChange, provider, capab
           <div className="mt-2"><a className="wd-btn wd-btn-primary" href="/files/connections">+ Connect {label}</a></div>
         </div>
       ) : (
-        <select className="bg-[var(--wd-bg,#fff)] text-[var(--wd-text,#202B38)]" value={value} onChange={(event) => onChange(event.target.value)}>
-          <option value="">Select a connection</option>
-          {usableRows.map((item) => <option key={item.id} value={item.id}>{item.name} · {item.provider}{item.baseUrl ? ` · ${item.baseUrl}` : ""}</option>)}
-          {reconnectable.map((item) => <option key={item.id} value="" disabled>{item.name} · Needs reconnect</option>)}
-        </select>
+        <ImkanOptionPicker
+          value={value}
+          onChange={onChange}
+          ariaLabel={`Select ${label} connection`}
+          fullWidth
+          allowEmpty
+          emptyLabel="Select a connection"
+          placeholder="Select a connection"
+          options={[
+            ...usableRows.map((item) => ({
+              value: item.id,
+              label: item.name,
+              description: `${item.provider}${item.baseUrl ? ` · ${item.baseUrl}` : ""}`,
+            })),
+            ...reconnectable.map((item) => ({
+              value: item.id,
+              label: item.name,
+              description: "Needs reconnect",
+              disabled: true,
+            })),
+          ]}
+        />
       )}
       {selected && status === "connected" && !googleDriveReconnectRequired(selected) ? <small className="mt-1 block text-[11px] text-emerald-700">Connected · credentials stay server-side</small> : null}
       {selected && (status !== "connected" || googleDriveReconnectRequired(selected)) ? (

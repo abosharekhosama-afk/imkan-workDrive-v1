@@ -9,6 +9,7 @@ import {
   type TemplateVariable,
   type TemplateVariableType,
 } from "@/lib/api/templates";
+import { ImkanOptionPicker, toImkanPickerOptions } from "@/components/imkan-option-picker";
 
 const TYPES: TemplateVariableType[] = ["TEXT","NUMBER","DATE","BOOLEAN","EMAIL","URL","CURRENCY","IMAGE","USER","FILE","CHOICE"];
 
@@ -45,7 +46,7 @@ export function TemplateVariablesPanel({ templateId, ar, canManage, onClose }: {
         {canManage&&<div className="rounded-xl border border-slate-200 p-4"><h3 className="text-[12px] font-semibold text-slate-800">{editing?(ar?"تعديل المتغير":"Edit variable"):(ar?"إضافة متغير":"Add variable")}</h3>
           <label className="mt-4 block text-[10px] font-medium text-slate-600">{ar?"الاسم البرمجي":"Variable name"}</label><input value={name} onChange={e=>setName(e.target.value)} placeholder="customer_name" className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-[12px]"/>
           <label className="mt-3 block text-[10px] font-medium text-slate-600">{ar?"التسمية":"Label"}</label><input value={label} onChange={e=>setLabel(e.target.value)} className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-[12px]"/>
-          <label className="mt-3 block text-[10px] font-medium text-slate-600">{ar?"النوع":"Type"}</label><select value={type} onChange={e=>setType(e.target.value as TemplateVariableType)} className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-[12px]">{TYPES.map(x=><option key={x}>{x}</option>)}</select>
+          <label className="mt-3 block text-[10px] font-medium text-slate-600">{ar?"النوع":"Type"}</label><div className="mt-1"><ImkanOptionPicker value={type} onChange={(next) => { if (next) setType(next); }} options={toImkanPickerOptions(TYPES)} ariaLabel={ar?"النوع":"Type"} fullWidth /></div>
           <label className="mt-3 block text-[10px] font-medium text-slate-600">{ar?"القيمة الافتراضية":"Default value"}</label><input value={defaultValue} onChange={e=>setDefaultValue(e.target.value)} className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-[12px]"/>
           {type==="CHOICE"&&<><label className="mt-3 block text-[10px] font-medium text-slate-600">{ar?"الخيارات بفواصل":"Options, comma separated"}</label><input value={options} onChange={e=>setOptions(e.target.value)} className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-[12px]"/></>}
           <label className="mt-3 flex items-center gap-2 text-[11px] text-slate-600"><input type="checkbox" checked={required} onChange={e=>setRequired(e.target.checked)}/>{ar?"مطلوب":"Required"}</label>
