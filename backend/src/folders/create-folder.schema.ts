@@ -4,6 +4,8 @@ export type CreateFolderInput = {
   name: string;
   parentId?: string;
   teamFolderId?: string;
+  templateId?: string;
+  customFields?: Record<string, unknown>;
 };
 
 const UUID_RE =
@@ -35,5 +37,7 @@ export function parseCreateFolder(body: unknown): CreateFolderInput {
     name,
     parentId: optionalUuid(record.parentId, 'parentId'),
     teamFolderId: optionalUuid(record.teamFolderId, 'teamFolderId'),
+    templateId: optionalUuid(record.templateId, 'templateId'),
+    customFields: record.customFields !== undefined ? (record.customFields && typeof record.customFields === 'object' && !Array.isArray(record.customFields) ? record.customFields as Record<string, unknown> : (() => { throw new BadRequestException('customFields must be an object'); })()) : undefined,
   };
 }

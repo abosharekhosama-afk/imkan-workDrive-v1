@@ -139,6 +139,7 @@ export class FoldersService {
 
   async create(user: AccessTokenPayload, input: CreateFolderInput) {
     const teamFolderId = await this.resolveCreateTeamFolderId(user, input);
+    const mandate = await this.metadata.validateMandatedTemplateForDestination(user, input.parentId ?? null, 'FOLDERS', input.templateId, input.customFields ?? {});
     const created = await this.prisma.folder.create({
       data: {
         name: input.name,
@@ -148,6 +149,7 @@ export class FoldersService {
         orgId: user.org_id,
       },
     });
+    if (mandate) await this.metadata.associateFolder(user, created.id, mandate.templateId, mandate.values);
     this.dispatchWorkflowFolderEvent(user, 'create', created);
     return created;
   }
