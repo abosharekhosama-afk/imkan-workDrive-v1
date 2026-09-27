@@ -6,6 +6,7 @@ import { useLocale } from "@/components/locale-provider";
 import { Icons } from "@/components/layout/icons";
 import { listGroups, listOrganizationMembers, type GroupOption, type OrgMember } from "@/lib/api/organization";
 import { createDataTemplate, deleteDataTemplate, listDataTemplates, updateDataTemplate, type DataTemplate } from "@/lib/api/metadata";
+import { ImkanOptionPicker } from "@/components/imkan-option-picker";
 
 export default function DataTemplatesAdminPage() {
   const router = useRouter();
@@ -90,7 +91,17 @@ export default function DataTemplatesAdminPage() {
       <aside className="overflow-y-auto border-e border-slate-200 bg-white">
         <div className="sticky top-0 z-10 space-y-3 border-b border-slate-100 bg-white p-4">
           <div className="flex h-10 items-center gap-2 rounded-lg border border-slate-200 px-3"><Icons.search size={15}/><input value={query} onChange={(e)=>setQuery(e.target.value)} className="min-w-0 flex-1 text-[11px] outline-none" placeholder={ar ? "البحث عن قالب" : "Search templates"}/></div>
-          <select value={status} onChange={(e)=>setStatus(e.target.value as typeof status)} className="h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-[11px] outline-none"><option value="ALL">{ar ? "كل القوالب" : "All Data Templates"}</option><option value="ACTIVE">{ar ? "النشطة" : "Active Data Templates"}</option><option value="DISABLED">{ar ? "المعطلة" : "Disabled Data Templates"}</option></select>
+          <ImkanOptionPicker
+            value={status}
+            onChange={(next) => { if (next) setStatus(next); }}
+            ariaLabel={ar ? "تصفية القوالب" : "Filter templates"}
+            fullWidth
+            options={[
+              { value: "ALL", label: ar ? "كل القوالب" : "All Data Templates" },
+              { value: "ACTIVE", label: ar ? "النشطة" : "Active Data Templates" },
+              { value: "DISABLED", label: ar ? "المعطلة" : "Disabled Data Templates" },
+            ]}
+          />
         </div>
         {filtered.map((t) => <div key={t.id} className="group flex items-center gap-3 border-b border-slate-100 p-4 hover:bg-slate-50">
           <button className="flex min-w-0 flex-1 items-center gap-3 text-start" onClick={() => router.push(`/admin/data-templates/${t.id}`)}>

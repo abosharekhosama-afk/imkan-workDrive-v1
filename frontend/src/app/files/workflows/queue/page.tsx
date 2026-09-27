@@ -6,6 +6,7 @@ import { WorkflowHelp } from "@/components/workflow-help";
 import { WorkflowShell } from "@/components/workflow-shell";
 import { useLocale } from "@/components/locale-provider";
 import { listWorkflowQueue, workflowQueueAction, type WorkflowQueueJob } from "@/lib/api/workflows";
+import { ImkanOptionPicker } from "@/components/imkan-option-picker";
 
 export default function QueuePage() {
   const { locale } = useLocale();
@@ -50,10 +51,15 @@ export default function QueuePage() {
               <p className="mt-1 text-[10.5px] text-slate-500">{ar ? "بيانات من قاعدة البيانات وليست مؤشرات تجريبية." : "Database-backed operational data, not mock metrics."}</p>
             </div>
             <div className="flex items-center gap-2">
-              <select value={status} onChange={(e) => setStatus(e.target.value)} className="wf-input mt-0 w-auto">
-                <option value="">{ar ? "كل الحالات" : "All statuses"}</option>
-                <option>QUEUED</option><option>RUNNING</option><option>FAILED</option><option>DEAD_LETTER</option><option>COMPLETED</option>
-              </select>
+              <ImkanOptionPicker
+                value={status}
+                onChange={setStatus}
+                ariaLabel={ar ? "حالة الطابور" : "Queue status"}
+                allowEmpty
+                emptyLabel={ar ? "كل الحالات" : "All statuses"}
+                placeholder={ar ? "كل الحالات" : "All statuses"}
+                options={["QUEUED", "RUNNING", "FAILED", "DEAD_LETTER", "COMPLETED"].map((value) => ({ value, label: value }))}
+              />
               <WorkflowHelp compact helpKey="workflow.queue" />
             </div>
           </div>

@@ -11,6 +11,7 @@ import {
   type WorkflowAuditEntry,
   type WorkflowVersionSummary,
 } from "@/lib/api/workflows";
+import { ImkanOptionPicker } from "@/components/imkan-option-picker";
 
 export default function AuditPage() {
   const { locale } = useLocale();
@@ -140,12 +141,8 @@ export default function AuditPage() {
 
             <div className="mt-3 grid gap-2 md:grid-cols-3">
               <input className="wf-input" value={workflowId} onChange={(e) => setWorkflowId(e.target.value)} placeholder="Workflow ID" />
-              <select className="wf-input" value={v1} onChange={(e) => setV1(e.target.value)}>
-                {versions.length === 0 ? <option value="">{ar ? "الإصدار الأول" : "Version A"}</option> : versions.map((v) => <option key={v.id} value={v.id}>v{v.version}</option>)}
-              </select>
-              <select className="wf-input" value={v2} onChange={(e) => setV2(e.target.value)}>
-                {versions.length === 0 ? <option value="">{ar ? "الإصدار الثاني" : "Version B"}</option> : versions.map((v) => <option key={v.id} value={v.id}>v{v.version}</option>)}
-              </select>
+              <ImkanOptionPicker value={v1} onChange={setV1} allowEmpty emptyLabel={ar ? "الإصدار الأول" : "Version A"} placeholder={ar ? "الإصدار الأول" : "Version A"} options={versions.map((v) => ({ value: v.id, label: `v${v.version}` }))} ariaLabel={ar ? "الإصدار الأول" : "Version A"} fullWidth />
+              <ImkanOptionPicker value={v2} onChange={setV2} allowEmpty emptyLabel={ar ? "الإصدار الثاني" : "Version B"} placeholder={ar ? "الإصدار الثاني" : "Version B"} options={versions.map((v) => ({ value: v.id, label: `v${v.version}` }))} ariaLabel={ar ? "الإصدار الثاني" : "Version B"} fullWidth />
             </div>
 
             <button className="wd-pill wd-pill-new mt-3" disabled={!workflowId.trim()} onClick={loadVersions}>
