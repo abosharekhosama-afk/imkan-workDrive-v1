@@ -433,21 +433,31 @@ function WorkflowCanvas({ states, transitions, positions, setPositions, setPosit
 
   useEffect(() => {
     if (!drag && !connection && !pan) return;
-    const move = (e: PointerEvent) => {
-      if (pan) { const el=canvasRef.current; if (el) { el.scrollLeft = pan.scrollLeft - (e.clientX-pan.x); el.scrollTop = pan.scrollTop - (e.clientY-pan.y); } return; }
+    let frame = 0;
+    let pendingPoint: { x:number; y:number } | null = null;
+    const flush = () => {
+      frame = 0;
+      if (!pendingPoint) return;
+      const point = pendingPoint;
+      pendingPoint = null;
       if (drag) {
-        const point = pointerPoint(e);
         let x = point.x - drag.dx, y = point.y - drag.dy;
-        const base = positions[drag.index] ?? { x: 20, y: 30 };
-        let dx = x - base.x, dy = y - base.y;
+        const origin = drag.group.find((g) => g.index === drag.index) ?? drag.group[0] ?? { index: drag.index, x: 20, y: 30 };
+        let dx = x - origin.x, dy = y - origin.y;
         if (snap) { dx = Math.round(dx/SNAP)*SNAP; dy = Math.round(dy/SNAP)*SNAP; }
-        const next = [...positions];
+        const next = livePositionsRef.current.map((p) => ({ ...p }));
         drag.group.forEach((g) => { next[g.index] = { x: Math.max(20, g.x + dx), y: Math.max(30, g.y + dy) }; });
         applyPositions(next);
       }
-      if (connection) { const point = pointerPoint(e); setConnection(c => c ? { ...c, x: point.x, y: point.y } : c); }
+      if (connection) setConnection(c => c ? { ...c, x: point.x, y: point.y } : c);
+    };
+    const move = (e: PointerEvent) => {
+      if (pan) { const el=canvasRef.current; if (el) { el.scrollLeft = pan.scrollLeft - (e.clientX-pan.x); el.scrollTop = pan.scrollTop - (e.clientY-pan.y); } return; }
+      pendingPoint = pointerPoint(e);
+      if (!frame) frame = requestAnimationFrame(flush);
     };
     const up = (e: PointerEvent) => {
+      if (frame) { cancelAnimationFrame(frame); frame = 0; flush(); }
       if (pan) { setPan(null); return; }
       if (connection) {
         const el = document.elementFromPoint(e.clientX,e.clientY) as HTMLElement | null;
@@ -462,12 +472,18 @@ function WorkflowCanvas({ states, transitions, positions, setPositions, setPosit
       if (drag) setPositions(livePositionsRef.current);
       setDrag(null);
     };
-    window.addEventListener("pointermove", move); window.addEventListener("pointerup", up);
-    return () => { window.removeEventListener("pointermove", move); window.removeEventListener("pointerup", up); };
-  }, [drag, connection, pan, positions, setPositions, zoom, snap]);
+    window.addEventListener("pointermove", move, { passive: true });
+    window.addEventListener("pointerup", up);
+    return () => { if (frame) cancelAnimationFrame(frame); window.removeEventListener("pointermove", move); window.removeEventListener("pointerup", up); };
+  }, [drag, connection, pan, setPositions, zoom, snap]);
   const width = Math.max(1800, ...positions.map((p) => p.x + CARD_W + 180), 1800);
   const height = Math.max(1100, ...positions.map((p) => p.y + CARD_H + 180), 1100);
-  const connectionPath = (a:{x:number;y:number}, b:{x:number;y:number}) => `M ${a.x} ${a.y} L ${b.x} ${b.y}`;
+  const connectionPath = (a:{x:number;y:number}, b:{x:number;y:number}, as:ConnectionSide="right", bs:ConnectionSide="left") => {
+    const distance = Math.max(70, Math.min(240, Math.hypot(b.x-a.x, b.y-a.y) * 0.42));
+    const vector = (side: ConnectionSide) => side === "top" ? { x: 0, y: -distance } : side === "right" ? { x: distance, y: 0 } : side === "bottom" ? { x: 0, y: distance } : { x: -distance, y: 0 };
+    const av = vector(as), bv = vector(bs);
+    return `M ${a.x} ${a.y} C ${a.x+av.x} ${a.y+av.y}, ${b.x+bv.x} ${b.y+bv.y}, ${b.x} ${b.y}`;
+  };
   return <div ref={canvasRef} className={`workflow-canvas-pane relative h-full min-h-0 overflow-auto bg-[#F8FAFC] ${spaceDown ? "cursor-grab" : ""}`} dir="ltr"
     onPointerDown={(e) => { if ((spaceDown || e.button === 1) && e.target === e.currentTarget) { const el=canvasRef.current; if(el) setPan({x:e.clientX,y:e.clientY,scrollLeft:el.scrollLeft,scrollTop:el.scrollTop}); } }}
     onDoubleClick={(e) => { const target = e.target as HTMLElement; if (target.closest(".workflow-state-node,button,.workflow-connection-handle")) return; onAddStateAt(pointerPoint(e)); }}
@@ -477,8 +493,8 @@ function WorkflowCanvas({ states, transitions, positions, setPositions, setPosit
     <div className="relative" style={{ width: width * zoom, height: height * zoom }}>
       <svg className="pointer-events-none absolute inset-0 z-10" width={width * zoom} height={height * zoom} viewBox={`0 0 ${width} ${height}`}>
         <defs><marker id="wf-arrow" markerWidth="9" markerHeight="9" refX="8" refY="4.5" orient="auto"><path d="M0,0 L9,4.5 L0,9 z" fill="#94A3B8"/></marker><marker id="wf-arrow-active" markerWidth="9" markerHeight="9" refX="8" refY="4.5" orient="auto"><path d="M0,0 L9,4.5 L0,9 z" fill={BLUE}/></marker></defs>
-        {transitions.map((t,i)=>{ const as=t.sourceSide??"right", bs=t.targetSide??"left"; const a=sidePoint(t.from,as), b=sidePoint(t.to,bs); const active=selected===`transition-${i}`; const d=connectionPath(a,b); return <g key={i}><path d={d} fill="none" stroke={active?BLUE:"#64748B"} strokeWidth={active?3:2} strokeLinecap="round" markerEnd={`url(#${active?"wf-arrow-active":"wf-arrow"})`}/><foreignObject x={(a.x+b.x)/2-78} y={(a.y+b.y)/2-15} width="156" height="30"><button type="button" onClick={()=>onSelect(`transition-${i}`)} className={`pointer-events-auto mx-auto block max-w-[150px] truncate rounded-md border bg-white px-3 py-1.5 text-[9.5px] font-semibold shadow-md hover:border-[var(--wd-primary)] hover:text-[var(--wd-primary)] ${active ? "border-[var(--wd-primary)] text-[var(--wd-primary)] ring-2 ring-[var(--wd-primary)]/10" : "border-slate-300 text-slate-700"}`}>{t.name||txt(ar,"Transition","انتقال")}</button></foreignObject></g>; })}
-        {connection && <path d={connectionPath({x:connection.startX,y:connection.startY},{x:connection.x,y:connection.y})} fill="none" stroke={BLUE} strokeWidth="2.5" strokeDasharray="6 5" strokeLinecap="round"/>}
+        {transitions.map((t,i)=>{ const as=t.sourceSide??"right", bs=t.targetSide??"left"; const a=sidePoint(t.from,as), b=sidePoint(t.to,bs); const active=selected===`transition-${i}`; const d=connectionPath(a,b,as,bs); return <g key={i}><path d={d} fill="none" stroke={active?BLUE:"#64748B"} strokeWidth={active?3:2} strokeLinecap="round" markerEnd={`url(#${active?"wf-arrow-active":"wf-arrow"})`}/><foreignObject x={(a.x+b.x)/2-78} y={(a.y+b.y)/2-15} width="156" height="30"><button type="button" onClick={()=>onSelect(`transition-${i}`)} className={`pointer-events-auto mx-auto block max-w-[150px] truncate rounded-md border bg-white px-3 py-1.5 text-[9.5px] font-semibold shadow-md hover:border-[var(--wd-primary)] hover:text-[var(--wd-primary)] ${active ? "border-[var(--wd-primary)] text-[var(--wd-primary)] ring-2 ring-[var(--wd-primary)]/10" : "border-slate-300 text-slate-700"}`}>{t.name||txt(ar,"Transition","انتقال")}</button></foreignObject></g>; })}
+        {connection && <path d={connectionPath({x:connection.startX,y:connection.startY},{x:connection.x,y:connection.y},connection.sourceSide,"left")} fill="none" stroke={BLUE} strokeWidth="2.5" strokeDasharray="6 5" strokeLinecap="round"/>}
       </svg>
       {states.map((s,i)=>{
         const hp = hoveredNode?.index === i ? boundaryPoint(i, hoveredNode).point : null;
