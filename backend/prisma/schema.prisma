@@ -1435,7 +1435,10 @@ model ResourceFollow {
   userId       String       @map("user_id") @db.Char(36)
   resourceType ResourceType @map("resource_type")
   resourceId   String       @map("resource_id") @db.Char(36)
+  notifyBell   Boolean      @default(true) @map("notify_bell")
+  notifyEmail  Boolean      @default(false) @map("notify_email")
   createdAt    DateTime     @default(now()) @map("created_at")
+  updatedAt    DateTime     @updatedAt @map("updated_at")
 
   organization Organization @relation(fields: [orgId], references: [id])
   user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
