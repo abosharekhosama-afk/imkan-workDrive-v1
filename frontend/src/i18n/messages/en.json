@@ -759,5 +759,7 @@
   "share.folderContents": "Shared folder contents",
   "nav.members": "Members",
   "workflow.connections": "Connections",
-  "nav.collections": "Collections"
+  "nav.collections": "Collections",
+  "menu.associateDataTemplate": "Associate Data Template",
+  "menu.following": "Following"
 }

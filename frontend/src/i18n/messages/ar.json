@@ -759,5 +759,7 @@
   "share.folderContents": "محتويات المجلد المشترك",
   "nav.members": "الأعضاء",
   "workflow.connections": "الاتصالات",
-  "nav.collections": "مجموعات جمع الملفات"
+  "nav.collections": "مجموعات جمع الملفات",
+  "menu.associateDataTemplate": "ربط قالب البيانات",
+  "menu.following": "تتم المتابعة"
 }
