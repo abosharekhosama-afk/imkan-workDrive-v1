@@ -5,14 +5,5 @@ export function createCollection(input:{name:string;description?:string;folderId
 export function updateCollection(id:string,input:Partial<{name:string;description:string;status:'ACTIVE'|'DISABLED'|'COMPLETED';expiresAt:string|null}>){return apiRequest(`/collections/${id}`,{method:'PATCH',body:JSON.stringify(input)});}
 export function deleteCollection(id:string){return apiRequest(`/collections/${id}`,{method:'DELETE'});}
 
-export type CollectionSubmission = {
-  id: string;
-  submitterName: string | null;
-  submitterEmail: string | null;
-  fileCount: number;
-  status: string;
-  submittedAt: string;
-};
-export function listCollectionSubmissions(id: string) {
-  return apiRequest<CollectionSubmission[]>(`/collections/${encodeURIComponent(id)}/submissions`);
-}
+export type CollectionSubmission = {id:string;submitterName:string|null;submitterEmail:string|null;fileCount:number;status:string;submittedAt:string;file:{id:string;name:string;mimeType:string|null;size:string|number;folderId:string}|null};
+export function listCollectionSubmissions(id:string){return apiRequest<CollectionSubmission[]>(`/collections/${id}/submissions`);}
