@@ -344,13 +344,13 @@ export default function TeamFolderManagePage() {
   };
 
   if (!folder && !error) {
-    return <section className="flex min-h-full items-center justify-center bg-white text-sm text-slate-500">Loading…</section>;
+    return <section className="flex h-full min-h-0 items-center justify-center bg-white text-sm text-slate-500">Loading…</section>;
   }
 
   const rootHref = folder?.rootFolderId ? `/files/${encodeURIComponent(folder.rootFolderId)}` : adminBase;
 
   return (
-    <section className="flex min-h-full min-w-0 flex-col bg-white">
+    <section className="flex h-full min-h-0 min-w-0 flex-col overflow-hidden bg-white">
       <nav className="grid shrink-0 grid-cols-7 border-b border-slate-200">
         {tabs.map((item) => (
           <button key={item.key} type="button" onClick={() => selectTab(item.key)} className={`flex min-h-[90px] flex-col items-center justify-center gap-2 border-e border-slate-200 px-2 text-center text-[13px] transition ${tab === item.key ? "border-t-2 border-t-[#2457B8] bg-white text-[#2457B8]" : "border-t-2 border-t-transparent text-[#555] hover:bg-slate-50"}`}>
@@ -410,7 +410,7 @@ export default function TeamFolderManagePage() {
                   <select value={inviteRole} onChange={(e) => setInviteRole(e.target.value as TeamFolderRole)} className="h-11 self-end border border-slate-200 px-3 text-[12px] outline-none">
                     <option value="EDITOR">Editor</option><option value="VIEWER">Viewer</option><option value="ORGANIZER">Organizer</option><option value="ADMIN">Admin</option>
                   </select>
-                  <button type="button" onClick={() => void addMember()} disabled={!selectedUser || busy} className="wd-pill wd-pill-new h-11 self-end disabled:opacity-50">{locale === "ar" ? "إضافة" : "Add"}</button>
+                  <button type="button" onClick={() => void addMember()} disabled={!selectedUser || busy} className="h-11 self-end rounded-md bg-[color:var(--wd-primary)] px-4 text-[13px] font-semibold text-white disabled:opacity-50">{locale === "ar" ? "إضافة" : "Add"}</button>
                 </div>
               ) : null}
               {canManage ? (
@@ -430,7 +430,7 @@ export default function TeamFolderManagePage() {
                     <select value={groupRole} onChange={(e) => setGroupRole(e.target.value as TeamFolderRole)} className="h-11 self-end rounded-md border border-slate-200 px-3 text-[12px] outline-none">
                       <option value="EDITOR">Editor</option><option value="VIEWER">Viewer</option><option value="COMMENTER">Commenter</option><option value="ORGANIZER">Organizer</option><option value="ADMIN">Admin</option>
                     </select>
-                    <button type="button" onClick={() => void addGroup()} disabled={!selectedGroup || busy} className="wd-pill wd-pill-new h-11 self-end disabled:opacity-50">{locale === "ar" ? "إضافة" : "Add"}</button>
+                    <button type="button" onClick={() => void addGroup()} disabled={!selectedGroup || busy} className="h-11 self-end rounded-md bg-[color:var(--wd-primary)] px-4 text-[13px] font-semibold text-white disabled:opacity-50">{locale === "ar" ? "إضافة" : "Add"}</button>
                   </div>
                 </div>
               ) : null}

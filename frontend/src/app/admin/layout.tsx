@@ -12,7 +12,7 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
         <AdminConsoleSidebar />
         <div className="flex min-w-0 flex-1 flex-col overflow-hidden bg-[#f7f7f7]">
           <TopHeader adminMode />
-          <div className="min-h-0 min-w-0 flex-1 overflow-hidden bg-[#f7f7f7]">{children}</div>
+          <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-[#f7f7f7]">{children}</div>
         </div>
       </div>
     </AuthGate>
