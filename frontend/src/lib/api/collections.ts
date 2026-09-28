@@ -7,3 +7,5 @@ export function deleteCollection(id:string){return apiRequest(`/collections/${id
 
 export type CollectionSubmission = {id:string;submitterName:string|null;submitterEmail:string|null;fileCount:number;status:string;submittedAt:string;file:{id:string;name:string;mimeType:string|null;size:string|number;folderId:string}|null};
 export function listCollectionSubmissions(id:string){return apiRequest<CollectionSubmission[]>(`/collections/${id}/submissions`);}
+
+export function regenerateCollectionLink(id:string){ return apiRequest<{token:string;publicPath:string}>(`/collections/${id}/link`,{method:'POST'}); }
