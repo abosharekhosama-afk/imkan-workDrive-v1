@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useLocale } from "../../../components/locale-provider";
-import { createCollection, deleteCollection, listCollections, listCollectionSubmissions, updateCollection, type FileCollection, type CollectionSubmission } from "../../../lib/api/collections";
+import { createCollection, deleteCollection, listCollections, listCollectionSubmissions, regenerateCollectionLink, updateCollection, type FileCollection, type CollectionSubmission } from "../../../lib/api/collections";
 import { createFolder, getFolder, listRootContents } from "../../../lib/api/folders";
 import type { FolderRecord } from "../../../lib/api/types";
 
@@ -56,6 +56,17 @@ export default function CollectionsPage() {
   const [newFolderOpen, setNewFolderOpen] = useState(false);
   const [newFolderName, setNewFolderName] = useState("");
   const [creatingFolder, setCreatingFolder] = useState(false);
+  const [menuFor, setMenuFor] = useState<string | null>(null);
+  const [linkCollection, setLinkCollection] = useState<FileCollection | null>(null);
+  const [linkUrl, setLinkUrl] = useState("");
+  const [linkBusy, setLinkBusy] = useState(false);
+  const [linkTokens, setLinkTokens] = useState<Record<string,string>>({});
+  const [detail, setDetail] = useState<FileCollection | null>(null);
+  const [settings, setSettings] = useState<FileCollection | null>(null);
+  const [settingsName, setSettingsName] = useState("");
+  const [settingsDescription, setSettingsDescription] = useState("");
+  const [settingsExpires, setSettingsExpires] = useState("");
+  const [settingsBusy, setSettingsBusy] = useState(false);
 
   const refresh = useCallback(() => listCollections().then(setRows).catch(e => setError(e instanceof Error ? e.message : (ar ? "تعذر تحميل مجموعات التجميع" : "Unable to load collections"))).finally(() => setLoading(false)), [ar]);
   useEffect(() => { void refresh(); }, [refresh]);
@@ -83,7 +94,7 @@ export default function CollectionsPage() {
         sameNameAsVersion,
         notifyOnSubmission,
       });
-      setToken(result.token); setShow(false); resetForm(); await refresh();
+      setToken(result.token); setLinkTokens(current=>({...current,[result.id]:result.token})); setShow(false); resetForm(); await refresh();
     } catch (e) { setError(e instanceof Error ? e.message : (ar ? "تعذر إنشاء المجموعة" : "Unable to create collection")); }
     finally { setCreating(false); }
   }
@@ -114,6 +125,39 @@ export default function CollectionsPage() {
     finally { setCreatingFolder(false); }
   }
 
+  async function showCollectionLink(row: FileCollection, email = false) {
+    setMenuFor(null); setLinkCollection(row); setLinkUrl(""); setLinkBusy(true);
+    try {
+      let token = linkTokens[row.id];
+      if (!token) {
+        const result = await regenerateCollectionLink(row.id);
+        token = result.token;
+        setLinkTokens(current=>({...current,[row.id]:token!}));
+      }
+      const url = `${window.location.origin}/collect/${token}`;
+      setLinkUrl(url);
+      if (email) window.location.href = `mailto:?subject=${encodeURIComponent(row.name)}&body=${encodeURIComponent(url)}`;
+    } catch (e) { setError(e instanceof Error ? e.message : text("Unable to generate collection link", "تعذر إنشاء رابط المجموعة")); setLinkCollection(null); }
+    finally { setLinkBusy(false); }
+  }
+  async function openSubmissions(row: FileCollection) {
+    setMenuFor(null); setSelected(row); setSubmissionsLoading(true); setSubmissions([]);
+    try { setSubmissions(await listCollectionSubmissions(row.id)); }
+    catch (e) { setError(e instanceof Error ? e.message : text("Unable to load submissions", "تعذر تحميل الإرسالات")); }
+    finally { setSubmissionsLoading(false); }
+  }
+  function openSettings(row: FileCollection) {
+    setMenuFor(null); setSettings(row); setSettingsName(row.name); setSettingsDescription(row.description ?? "");
+    setSettingsExpires(row.expiresAt ? new Date(row.expiresAt).toISOString().slice(0,16) : "");
+  }
+  async function saveSettings() {
+    if (!settings || !settingsName.trim() || settingsBusy) return;
+    setSettingsBusy(true);
+    try { await updateCollection(settings.id, { name: settingsName.trim(), description: settingsDescription.trim(), expiresAt: settingsExpires ? new Date(settingsExpires).toISOString() : null }); setSettings(null); await refresh(); }
+    catch (e) { setError(e instanceof Error ? e.message : text("Unable to save settings", "تعذر حفظ الإعدادات")); }
+    finally { setSettingsBusy(false); }
+  }
+
   const visiblePickerFolders = useMemo(() => pickerFolders.filter(folder => folder.name.toLocaleLowerCase(ar ? "ar" : "en").includes(pickerSearch.trim().toLocaleLowerCase(ar ? "ar" : "en"))), [pickerFolders, pickerSearch, ar]);
   const selectedSizeLabel = useMemo(() => SIZE_OPTIONS.find(o => o.value === maxFileSizeBytes)?.label ?? "100 MB", [maxFileSizeBytes]);
   const text = (en: string, arabic: string) => ar ? arabic : en;
@@ -125,7 +169,16 @@ export default function CollectionsPage() {
     <header className="wd-page-head"><div className="wd-page-head-titles"><h1>{label("nav.collectFiles")}</h1><p>{text("Collect files from team members and external people into a selected WorkDrive folder.", "اجمع الملفات من أعضاء الفريق والأشخاص الخارجيين داخل مجلد محدد في WorkDrive.")}</p></div><button className="wd-primary-button" onClick={() => setShow(true)}>＋ {text("Create Collection", "إنشاء مجموعة تجميع")}</button></header>
     {error && <div className="wd-alert" role="alert">{error}</div>}
     {token && <div className="wd-alert" role="status">{text("Collection created. Save this one-time link token:", "تم إنشاء المجموعة. احتفظ برمز الرابط لمرة واحدة:")} <strong dir="ltr">{token}</strong> <button onClick={() => setToken("")}>{text("Dismiss", "إغلاق")}</button></div>}
-    {loading ? <div className="wd-card p-6">{text("Loading collections…", "جارٍ تحميل المجموعات…")}</div> : rows.length === 0 ? <section className="wd-card"><div className="wd-empty"><div className="wd-empty-icon">⇧</div><h2>{text("No collections yet", "لا توجد مجموعات بعد")}</h2><p>{text("Create a collection to receive files from employees, clients, or suppliers.", "أنشئ مجموعة لاستلام الملفات من الموظفين أو العملاء أو الموردين.")}</p><button className="wd-primary-button" onClick={() => setShow(true)}>{text("Create Collection", "إنشاء مجموعة")}</button></div></section> : <div className="wd-card overflow-x-auto"><table className="w-full text-sm"><thead><tr className="border-b text-start">{[text("Collection", "المجموعة"),text("Type", "النوع"),text("Destination", "الموقع"),text("Submissions", "الإرسالات"),text("Files", "الملفات"),text("Status", "الحالة"),text("Actions", "الإجراءات")].map(v=><th key={v} className="p-4 text-start">{v}</th>)}</tr></thead><tbody>{rows.map(r=><tr key={r.id} className="border-b last:border-0"><td className="p-4"><strong>{r.name}</strong><div className="text-xs text-slate-500">{r.description}</div></td><td className="p-4">{r.type === "INTERNAL" ? text("Internal", "داخلي") : text("External", "خارجي")}</td><td className="p-4">{r.folder.name}</td><td className="p-4"><button className="underline" onClick={() => { setSelected(r); setSubmissionsLoading(true); void listCollectionSubmissions(r.id).then(setSubmissions).catch(e=>setError(e instanceof Error?e.message:text("Unable to load submissions", "تعذر تحميل الإرسالات"))).finally(()=>setSubmissionsLoading(false)); }}>{r.submissionsCount} · {text("View", "عرض")}</button></td><td className="p-4">{r.filesCount}</td><td className="p-4"><span className="wd-badge wd-badge-green">{r.status}</span></td><td className="p-4"><div className="flex gap-2"><button onClick={()=>void updateCollection(r.id,{status:r.status==="ACTIVE"?"DISABLED":"ACTIVE"}).then(refresh)}>{r.status==="ACTIVE"?text("Disable", "تعطيل"):text("Enable", "تفعيل")}</button><button className="text-red-600" onClick={()=>{if(confirm(text("Delete this collection?", "هل تريد حذف هذه المجموعة؟")))void deleteCollection(r.id).then(refresh);}}>{text("Delete", "حذف")}</button></div></td></tr>)}</tbody></table></div>}
+    {loading ? <div className="wd-card p-6">{text("Loading collections…", "جارٍ تحميل المجموعات…")}</div> : rows.length === 0 ? <section className="wd-card"><div className="wd-empty"><div className="wd-empty-icon">⇧</div><h2>{text("No collections yet", "لا توجد مجموعات بعد")}</h2><p>{text("Create a collection to receive files from employees, clients, or suppliers.", "أنشئ مجموعة لاستلام الملفات من الموظفين أو العملاء أو الموردين.")}</p><button className="wd-primary-button" onClick={() => setShow(true)}>{text("Create Collection", "إنشاء مجموعة")}</button></div></section> : <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">{rows.map(r=><article key={r.id} onClick={()=>{setDetail(r);setMenuFor(null);}} className="group relative min-h-[188px] cursor-pointer rounded-xl border border-slate-200 bg-white p-5 shadow-[0_1px_2px_rgba(15,23,42,.04)] transition hover:border-slate-300 hover:shadow-md">
+      <div className="flex items-start gap-3"><div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-slate-100 text-lg text-slate-700">▣</div><div className="min-w-0 flex-1"><h2 className="truncate text-[15px] font-semibold text-slate-800">{r.name}</h2><p className="mt-1 text-[11px] text-slate-500">{text("Created by you on", "أنشأتها في")} {new Date(r.createdAt).toLocaleString(ar?"ar":"en",{month:"short",day:"numeric",hour:"numeric",minute:"2-digit"})}</p></div>
+      <div className="relative" onClick={e=>e.stopPropagation()}><button type="button" aria-label={text("Collection settings", "إعدادات المجموعة")} title={text("Settings", "الإعدادات")} onClick={()=>setMenuFor(menuFor===r.id?null:r.id)} className={`flex h-9 w-9 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-600 shadow-sm transition hover:bg-slate-50 ${menuFor===r.id?"opacity-100":"opacity-0 group-hover:opacity-100 group-focus-within:opacity-100"}`}>⚙</button>
+      {menuFor===r.id&&<div className={`absolute ${ar?"left-0":"right-0"} top-10 z-40 w-52 rounded-xl border border-slate-200 bg-white p-1.5 shadow-xl`} role="menu">{[["copy",text("Copy link","نسخ الرابط"),"▢"],["view",text("View submissions","عرض الإرسالات"),"♧"],["email",text("Email link","إرسال الرابط بالبريد"),"✉"],["settings",text("Change settings","تغيير الإعدادات"),"⚙"],["toggle",r.status==="ACTIVE"?text("Disable collection","تعطيل المجموعة"):text("Enable collection","تفعيل المجموعة"),r.status==="ACTIVE"?"⊗":"✓"],["delete",text("Delete collection","حذف المجموعة"),"⌫"]].map(([key,label,ico])=><button key={key} role="menuitem" className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-start text-[12px] text-slate-700 hover:bg-blue-50 hover:text-blue-800" onClick={()=>{if(key==="copy")void showCollectionLink(r);else if(key==="view")void openSubmissions(r);else if(key==="email")void showCollectionLink(r,true);else if(key==="settings")openSettings(r);else if(key==="toggle"){setMenuFor(null);void updateCollection(r.id,{status:r.status==="ACTIVE"?"DISABLED":"ACTIVE"}).then(refresh).catch(e=>setError(e instanceof Error?e.message:"Update failed"));}else{setMenuFor(null);if(confirm(text("Delete this collection? This cannot be undone.","هل تريد حذف هذه المجموعة؟ لا يمكن التراجع عن ذلك.")))void deleteCollection(r.id).then(refresh).catch(e=>setError(e instanceof Error?e.message:"Delete failed"));}}}><span className="w-4 text-center">{ico}</span>{label}</button>)}</div>}</div></div>
+      {r.description&&<p className="mt-4 line-clamp-2 text-[12px] text-slate-500">{r.description}</p>}
+      <p className="mt-3 text-[11px] text-slate-500">{text("Notes not available", "لا توجد ملاحظات متاحة")}</p>
+      <div className="mt-5 flex items-center gap-5 border-t border-slate-100 pt-3 text-[12px] text-slate-600"><button onClick={e=>{e.stopPropagation();void openSubmissions(r);}} className="inline-flex items-center gap-2 hover:text-blue-700"><span className="flex h-6 w-6 items-center justify-center rounded-full bg-blue-500 text-white">↑</span>{r.submissionsCount} {text("users submitted","مستخدم أرسل")}</button><span className="inline-flex items-center gap-2"><span className="flex h-6 w-6 items-center justify-center rounded-full bg-blue-500 text-white">▤</span>{r.filesCount} {text("files uploaded","ملف مرفوع")}</span></div>
+      <span className={`absolute bottom-3 ${ar?"left-4":"right-4"} rounded-full px-2 py-0.5 text-[10px] ${r.status==="ACTIVE"?"bg-emerald-50 text-emerald-700":"bg-slate-100 text-slate-500"}`}>{r.status==="ACTIVE"?text("Active","نشطة"):text("Disabled","معطلة")}</span>
+    </article>)}</div>}
+
 
     {selected && <div className="fixed inset-0 z-[250] flex items-center justify-center bg-black/40 p-4"><section dir={ar?"rtl":"ltr"} className="w-full max-w-3xl rounded-xl bg-white p-6 shadow-xl"><div className="mb-4 flex items-center justify-between"><h2 className="text-xl font-semibold">{text("Submissions", "الإرسالات")} · {selected.name}</h2><button onClick={()=>setSelected(null)}>{text("Close", "إغلاق")}</button></div>{submissionsLoading?<p>{text("Loading…", "جارٍ التحميل…")}</p>:submissions.length===0?<p className="text-sm text-slate-500">{text("No submissions yet.", "لا توجد إرسالات بعد.")}</p>:<div className="max-h-[60vh] overflow-auto"><table className="w-full text-sm"><thead><tr>{[text("Submitter", "المرسل"),text("File", "الملف"),text("Status", "الحالة"),text("Received", "تاريخ الاستلام")].map(v=><th key={v} className="p-2 text-start">{v}</th>)}</tr></thead><tbody>{submissions.map(s=><tr key={s.id} className="border-t"><td className="p-2">{s.submitterName||s.submitterEmail||text("External submitter", "مرسل خارجي")}</td><td className="p-2">{s.file?.name||"—"}</td><td className="p-2">{s.status}</td><td className="p-2">{s.submittedAt?new Date(s.submittedAt).toLocaleString(ar?"ar":"en"):"—"}</td></tr>)}</tbody></table></div>}</section></div>}
 
@@ -150,6 +203,10 @@ export default function CollectionsPage() {
         <div className="mt-6 flex justify-end gap-2 border-t border-slate-100 pt-4"><button type="button" className="wd-secondary-button" onClick={()=>setShow(false)}>{text("Cancel", "إلغاء")}</button><button type="button" className="wd-primary-button min-w-16 disabled:cursor-not-allowed disabled:opacity-50" disabled={!name.trim()||!folderId||creating||(expiryEnabled&&!expiresAt)} onClick={()=>void create()}>{creating?text("Creating…", "جارٍ الإنشاء…"):text("Create", "إنشاء")}</button></div>
       </section>
     </div>}
+
+    {linkCollection&&<div className="fixed inset-0 z-[300] flex items-center justify-center bg-slate-950/50 p-4" onMouseDown={e=>{if(e.target===e.currentTarget)setLinkCollection(null);}}><section dir={ar?"rtl":"ltr"} role="dialog" aria-modal="true" className="w-full max-w-[470px] overflow-hidden rounded-xl border border-slate-200 bg-white shadow-2xl"><header className="flex items-center justify-between px-6 py-4"><h2 className="text-[17px] font-semibold">{text("Collect Files", "جمع الملفات")} ▣ {linkCollection.name}</h2><button onClick={()=>setLinkCollection(null)} className="text-xl text-slate-500">×</button></header><div className="px-6 pb-5"><p className="mb-3 text-[13px] text-slate-600">{text("Copy and share this collection link", "انسخ رابط المجموعة وشاركه") } ↗</p><div className="flex overflow-hidden rounded-xl border border-slate-300"><input readOnly value={linkBusy?text("Generating link…","جارٍ إنشاء الرابط…"):linkUrl} className="min-w-0 flex-1 px-3 py-2 text-[12px]" dir="ltr"/><button disabled={!linkUrl} onClick={()=>void navigator.clipboard.writeText(linkUrl)} className="border-s border-slate-300 px-4 text-[12px] text-blue-700 disabled:opacity-40">{text("Copy","نسخ")}</button></div><p className="mt-3 text-[11px] text-slate-500">{text("Created by you", "أنشأتها أنت")} · {new Date(linkCollection.createdAt).toLocaleString(ar?"ar":"en")}</p></div><footer className="flex items-center justify-between border-t border-slate-100 px-6 py-4"><button onClick={()=>{const subject=encodeURIComponent(linkCollection.name);const body=encodeURIComponent(linkUrl);window.location.href=`mailto:?subject=${subject}&body=${body}`;}} disabled={!linkUrl} className="text-[12px] font-medium text-blue-700 disabled:opacity-40">{text("Email collection link","إرسال رابط المجموعة بالبريد")}</button><button onClick={()=>{setLinkCollection(null);openSettings(linkCollection);}} className="text-[12px] font-medium text-blue-700">{text("Link Settings","إعدادات الرابط")}</button></footer></section></div>}
+    {settings&&<div className="fixed inset-0 z-[300] flex items-center justify-center bg-slate-950/50 p-4"><section dir={ar?"rtl":"ltr"} role="dialog" aria-modal="true" className="w-full max-w-lg rounded-xl bg-white p-6 shadow-2xl"><header className="mb-5 flex items-center justify-between"><h2 className="text-lg font-semibold">{text("Collection settings","إعدادات المجموعة")}</h2><button onClick={()=>setSettings(null)} className="text-xl text-slate-500">×</button></header><div className="space-y-4"><label className="block text-[12px]">{text("Collection name","اسم المجموعة")}<input className="wd-input mt-1 w-full" value={settingsName} onChange={e=>setSettingsName(e.target.value)}/></label><label className="block text-[12px]">{text("Description","الوصف")}<textarea className="wd-input mt-1 w-full" value={settingsDescription} onChange={e=>setSettingsDescription(e.target.value)}/></label><label className="block text-[12px]">{text("Expiration","تاريخ الانتهاء")}<input type="datetime-local" className="wd-input mt-1 w-full" value={settingsExpires} onChange={e=>setSettingsExpires(e.target.value)}/></label><p className="text-[11px] text-slate-500">{text("Changing link settings does not change the destination folder.","تغيير إعدادات الرابط لا يغير مجلد الوجهة.")}</p></div><footer className="mt-6 flex justify-end gap-2"><button className="wd-secondary-button" onClick={()=>setSettings(null)}>{text("Cancel","إلغاء")}</button><button className="wd-primary-button" disabled={!settingsName.trim()||settingsBusy} onClick={()=>void saveSettings()}>{settingsBusy?text("Saving…","جارٍ الحفظ…"):text("Save","حفظ")}</button></footer></section></div>}
+    {detail&&<div className="fixed inset-0 z-[230] flex flex-col bg-white" dir={ar?"rtl":"ltr"}><header className="flex min-h-[76px] items-center gap-3 border-b border-slate-200 px-4 sm:px-7"><span className="flex h-10 w-10 items-center justify-center rounded-lg bg-slate-100">▣</span><div className="min-w-0 flex-1"><h2 className="truncate text-[14px] font-semibold">{detail.name}</h2><p className="text-[11px] text-slate-500">{text("Created by you on","أنشأتها في")} {new Date(detail.createdAt).toLocaleString(ar?"ar":"en")}</p></div><button onClick={()=>void openSubmissions(detail)} className="flex items-center gap-2 rounded-full bg-blue-500 px-3 py-2 text-[11px] text-white"><span>↑</span>{detail.submissionsCount} {text("users submitted","مستخدم أرسل")}</button><span className="hidden items-center gap-2 rounded-full bg-blue-500 px-3 py-2 text-[11px] text-white sm:flex">▤ {detail.filesCount} {text("files uploaded","ملف مرفوع")}</span><button onClick={()=>setDetail(null)} className="ms-2 text-2xl text-slate-500">×</button></header><div className="flex justify-end p-4"><button onClick={()=>{window.location.href=detail.folder.id?`/files/${encodeURIComponent(detail.folder.id)}`:"/files";}} className="wd-primary-button">{text("Open folder","فتح المجلد")}</button></div><div className="flex flex-1 items-center justify-center text-center text-[13px] text-slate-500">{detail.submissionsCount===0?text("No user submissions made yet","لم يتم استلام أي ملفات بعد"):text("Select the submissions count to review received files","اختر عدد الإرسالات لمراجعة الملفات المستلمة")}</div></div>}
 
     {pickerOpen&&<div className="fixed inset-0 z-[270] flex items-center justify-center bg-slate-950/55 p-2 sm:p-4" onMouseDown={e=>{if(e.target===e.currentTarget)setPickerOpen(false);}}><section dir={ar?"rtl":"ltr"} className="flex h-[min(82dvh,720px)] w-[min(820px,98vw)] flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl" role="dialog" aria-modal="true" aria-labelledby="collection-folder-picker-title">
       <header className="flex items-center gap-3 border-b border-slate-100 px-5 py-4"><h3 id="collection-folder-picker-title" className="min-w-0 flex-1 text-[17px] font-semibold">{text("Choose destination folder", "اختيار مجلد الوجهة")}</h3><div className="hidden w-52 sm:block"><input className="wd-input !py-2" value={pickerSearch} onChange={e=>setPickerSearch(e.target.value)} placeholder={text("Search", "بحث")}/></div><button type="button" onClick={()=>setPickerOpen(false)} className="h-8 w-8 rounded-lg text-xl text-slate-500 hover:bg-slate-100" aria-label={text("Close", "إغلاق")}>×</button></header>
