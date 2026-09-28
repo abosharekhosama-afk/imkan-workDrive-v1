@@ -17,7 +17,7 @@ import {
   type CloudProviderState,
   type CloudRemoteFile,
 } from '../lib/api/cloud-import';
-import { cloudFilesFromListing } from '../lib/api/cloud-import-listing-logic';
+import { cloudFilesFromListing, isCloudFolder, pushCloudBrowseCrumb, rootCloudBrowseCrumb, sliceCloudBrowsePath, sortCloudRemoteFiles, type CloudBrowseCrumb } from '../lib/api/cloud-import-listing-logic';
 
 type Detail = { folderId: string | null };
 type UiProvider = CloudProvider | 'box' | 'evernote';
@@ -165,6 +165,8 @@ export function CloudImportHost() {
   const [railExpanded, setRailExpanded] = useState(false);
   const [showAccounts, setShowAccounts] = useState(false);
   const [filesRequested, setFilesRequested] = useState(false);
+  const [browsePath, setBrowsePath] = useState<CloudBrowseCrumb[]>([rootCloudBrowseCrumb('en')]);
+  const [nextPageToken, setNextPageToken] = useState<string | null>(null);
 
   const connectedState = useMemo(
     () => (provider === 'box' || provider === 'evernote' ? null : providers.find((p) => p.provider === provider) ?? null),
@@ -183,6 +185,8 @@ export function CloudImportHost() {
     setError('');
     setFilesRequested(false);
     setShowAccounts(false);
+    setBrowsePath([rootCloudBrowseCrumb(locale === 'ar' ? 'ar' : 'en')]);
+    setNextPageToken(null);
     void refreshProviders();
     void loadRecentJobs();
   };
@@ -231,6 +235,8 @@ export function CloudImportHost() {
     setFiles([]);
     setFilesRequested(false);
     setShowAccounts(false);
+    setBrowsePath([rootCloudBrowseCrumb(locale === 'ar' ? 'ar' : 'en')]);
+    setNextPageToken(null);
     setError('');
     setLoading(true);
 
@@ -251,20 +257,51 @@ export function CloudImportHost() {
     }
   };
 
-  const requestFiles = async () => {
+  const loadDirectory = async (parentId: string | null, opts?: { append?: boolean; pageToken?: string | null }) => {
     if (!connectedState || provider === 'box' || provider === 'evernote') return;
-    setFilesRequested(true);
-    setSelected([]);
-    setError('');
+    if (!opts?.append) {
+      setFilesRequested(true);
+      setSelected([]);
+      setError('');
+    }
     setLoading(true);
     try {
-      const next = await listCloudFiles(provider, connectionId || connectedState.connectionId || null);
-      setFiles(cloudFilesFromListing(next));
+      const listing = await listCloudFiles(
+        provider,
+        connectionId || connectedState.connectionId || null,
+        parentId,
+        opts?.pageToken ?? null,
+      );
+      const rows = sortCloudRemoteFiles(listing.files ?? []);
+      setFiles((current) => (opts?.append ? [...current, ...rows] : rows));
+      setNextPageToken(listing.nextPageToken ?? null);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Unable to access this cloud provider');
     } finally {
       setLoading(false);
     }
+  };
+
+  const requestFiles = async () => {
+    const root = rootCloudBrowseCrumb(locale === 'ar' ? 'ar' : 'en');
+    setBrowsePath([root]);
+    setNextPageToken(null);
+    await loadDirectory(null);
+  };
+
+  const openCloudFolder = async (folder: CloudRemoteFile) => {
+    if (!isCloudFolder(folder)) return;
+    setBrowsePath((path) => pushCloudBrowseCrumb(path, folder));
+    setNextPageToken(null);
+    await loadDirectory(folder.id);
+  };
+
+  const navigateBrowseTo = async (index: number) => {
+    const nextPath = sliceCloudBrowsePath(browsePath, index);
+    const target = nextPath[nextPath.length - 1];
+    setBrowsePath(nextPath);
+    setNextPageToken(null);
+    await loadDirectory(target?.id ?? null);
   };
 
   const switchConnection = async (nextId: string) => {
@@ -273,6 +310,8 @@ export function CloudImportHost() {
     setFiles([]);
     setSelected([]);
     setFilesRequested(false);
+    setBrowsePath([rootCloudBrowseCrumb(locale === 'ar' ? 'ar' : 'en')]);
+    setNextPageToken(null);
     setError('');
   };
 
@@ -292,13 +331,11 @@ export function CloudImportHost() {
     setBusy(true);
     setError('');
     try {
-      const created = await createCloudImports(
-        provider,
-        detail.folderId,
-        cloudFilesFromListing(files).filter((f) => selected.includes(f.id)).map((f) => ({ id: f.id, name: f.name })),
-        connectionId,
-      );
-      setJobs(created);
+      const payload = files
+        .filter((f) => selected.includes(f.id))
+        .map((f) => ({ id: f.id, name: f.name, kind: isCloudFolder(f) ? 'folder' as const : 'file' as const }));
+      const created = await createCloudImports(provider, detail.folderId, payload, connectionId);
+      setJobs((current) => [...created, ...current]);
       setSelected([]);
       window.dispatchEvent(new Event('workdrive:content-changed'));
     } catch (e) {
@@ -433,34 +470,71 @@ export function CloudImportHost() {
           <div className="imkan-cloud-import-content">
             {error ? <div className="imkan-cloud-import-error">{error}</div> : null}
 
-            {filesRequested && fileRows.length > 0 ? (
+            {filesRequested ? (
               <div className="imkan-cloud-files-view">
                 <div className="imkan-cloud-files-toolbar">
-                  <div className="min-w-0">
-                    <div className="truncate text-[14px] font-semibold text-[#273247]">{locale === 'ar' ? 'ملفات Google Drive' : `${currentProvider.en} files`}</div>
-                    <div className="mt-0.5 text-[11px] text-[#8a93a3]">{selectedFiles.length} / {fileRows.length} {locale === 'ar' ? 'محدد' : 'selected'}</div>
+                  <div className="min-w-0 flex-1">
+                    <div className="truncate text-[14px] font-semibold text-[#273247]">{locale === 'ar' ? 'ملفات السحابة' : `${currentProvider.en} files`}</div>
+                    <nav className="imkan-cloud-breadcrumb" aria-label={locale === 'ar' ? 'المسار' : 'Path'}>
+                      {browsePath.map((crumb, index) => {
+                        const last = index === browsePath.length - 1;
+                        return (
+                          <span key={`${crumb.id ?? 'root'}-${index}`} className="imkan-cloud-breadcrumb-item">
+                            {index > 0 ? <span className="imkan-cloud-breadcrumb-sep" aria-hidden="true">/</span> : null}
+                            {last ? (
+                              <span className="imkan-cloud-breadcrumb-current">{crumb.name}</span>
+                            ) : (
+                              <button type="button" className="imkan-cloud-breadcrumb-link" onClick={() => void navigateBrowseTo(index)}>
+                                {crumb.name}
+                              </button>
+                            )}
+                          </span>
+                        );
+                      })}
+                    </nav>
+                    {fileRows.length > 0 ? (
+                      <div className="mt-0.5 text-[11px] text-[#8a93a3]">{selectedFiles.length} / {fileRows.length} {locale === 'ar' ? 'محدد' : 'selected'}</div>
+                    ) : null}
                   </div>
-                  <button type="button" className="imkan-cloud-select-all" onClick={() => setSelected(allSelected ? [] : fileRows.map((f) => f.id))}>
-                    {allSelected ? (locale === 'ar' ? 'إلغاء تحديد الكل' : 'Clear all') : locale === 'ar' ? 'تحديد الكل' : 'Select all'}
-                  </button>
+                  {fileRows.length > 0 ? (
+                    <button type="button" className="imkan-cloud-select-all" onClick={() => setSelected(allSelected ? [] : fileRows.map((f) => f.id))}>
+                      {allSelected ? (locale === 'ar' ? 'إلغاء تحديد الكل' : 'Clear all') : locale === 'ar' ? 'تحديد الكل' : 'Select all'}
+                    </button>
+                  ) : null}
                 </div>
                 {loading ? (
                   <div className="imkan-cloud-empty"><span className="imkan-cloud-spinner" />{locale === 'ar' ? 'جارٍ تحميل الملفات…' : 'Loading cloud files…'}</div>
-                ) : (
+                ) : fileRows.length > 0 ? (
                   <div className="imkan-cloud-files-list">
-                    {fileRows.map((file) => (
-                      <label key={file.id} className="imkan-cloud-file-row">
-                        <input type="checkbox" checked={selected.includes(file.id)} onChange={() => setSelected((s) => (s.includes(file.id) ? s.filter((id) => id !== file.id) : [...s, file.id]))} />
-                        <span className="imkan-cloud-file-icon"><Icons.doc size={18} /></span>
-                        <span className="min-w-0 flex-1">
-                          <span className="block truncate text-[13px] font-medium text-[#2d374b]">{file.name}</span>
-                          <span className="block truncate text-[10px] text-[#8b95a5]">{file.mimeType}{file.size != null ? ` · ${fmt(file.size)}` : ''}</span>
-                        </span>
-                        <span className="text-[11px] text-[#9aa3b2]">{file.modifiedAt ? new Date(file.modifiedAt).toLocaleDateString() : ''}</span>
-                      </label>
-                    ))}
+                    {fileRows.map((file) => {
+                      const folder = isCloudFolder(file);
+                      return (
+                        <div key={file.id} className={`imkan-cloud-file-row ${folder ? 'is-folder' : ''}`}>
+                          <input type="checkbox" checked={selected.includes(file.id)} onChange={() => setSelected((s) => (s.includes(file.id) ? s.filter((id) => id !== file.id) : [...s, file.id]))} aria-label={file.name} />
+                          <button type="button" className="imkan-cloud-file-open" onClick={() => folder ? void openCloudFolder(file) : undefined} disabled={!folder} aria-label={folder ? (locale === 'ar' ? `فتح ${file.name}` : `Open ${file.name}`) : file.name}>
+                            <span className={`imkan-cloud-file-icon ${folder ? 'is-folder' : ''}`}>{folder ? <Icons.folder size={18} /> : <Icons.doc size={18} />}</span>
+                            <span className="min-w-0 flex-1 text-left">
+                              <span className="block truncate text-[13px] font-medium text-[#2d374b]">{file.name}</span>
+                              <span className="block truncate text-[10px] text-[#8b95a5]">{folder ? (locale === 'ar' ? 'مجلد' : 'Folder') : file.mimeType}{!folder && file.size != null ? ` · ${fmt(file.size)}` : ''}</span>
+                            </span>
+                          </button>
+                          <span className="text-[11px] text-[#9aa3b2]">{file.modifiedAt ? new Date(file.modifiedAt).toLocaleDateString() : ''}</span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <div className="imkan-cloud-empty imkan-cloud-empty-large">
+                    {locale === 'ar' ? 'لا توجد ملفات أو مجلدات في هذا المسار.' : 'No files or folders in this location.'}
                   </div>
                 )}
+                {nextPageToken ? (
+                  <div className="imkan-cloud-load-more-wrap">
+                    <button type="button" className="imkan-cloud-load-more" disabled={loading} onClick={() => void loadDirectory(browsePath[browsePath.length - 1]?.id ?? null, { append: true, pageToken: nextPageToken })}>
+                      {locale === 'ar' ? 'تحميل المزيد' : 'Load more'}
+                    </button>
+                  </div>
+                ) : null}
               </div>
             ) : (
               <div className="imkan-cloud-access-state">
@@ -489,12 +563,6 @@ export function CloudImportHost() {
               </div>
             )}
 
-            {filesRequested && !loading && fileRows.length === 0 ? (
-              <div className="imkan-cloud-empty imkan-cloud-empty-large">
-                {locale === 'ar' ? 'لا توجد ملفات قابلة للاستيراد في هذا الحساب.' : 'No importable files found in this cloud account.'}
-              </div>
-            ) : null}
-
             {jobs.length > 0 ? (
               <div className="imkan-cloud-jobs">
                 {jobs.map((job) => (
@@ -521,7 +589,13 @@ export function CloudImportHost() {
 
         <footer className="imkan-cloud-import-footer">
           <span className="imkan-cloud-selection-count">
-            {selected.length ? (locale === 'ar' ? `${selected.length} ملف محدد` : `${selected.length} ${selected.length === 1 ? 'file' : 'files'} selected`) : (locale === 'ar' ? 'لا توجد ملفات محددة' : 'No files selected')}
+            {selected.length
+              ? locale === 'ar'
+                ? `${selected.length} عنصر محدد`
+                : `${selected.length} ${selected.length === 1 ? 'item' : 'items'} selected`
+              : locale === 'ar'
+                ? 'لا توجد عناصر محددة'
+                : 'No items selected'}
           </span>
           <div className="imkan-cloud-footer-actions">
             <button type="button" className="imkan-cloud-footer-secondary" disabled={busy} onClick={() => setDetail(null)}>{locale === 'ar' ? 'إلغاء' : 'Cancel'}</button>

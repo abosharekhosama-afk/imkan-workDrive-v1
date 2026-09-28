@@ -128,8 +128,21 @@ export function ShellProvider({ children }: { children: ReactNode }) {
         }
       }
     };
+    const onTab = (event: Event) => {
+      const tab = (event as CustomEvent<InspectorTab>).detail;
+      if (tab === "details" || tab === "dataTemplates" || tab === "activity") {
+        setInspectorTabState(tab);
+        try {
+          window.localStorage.setItem(INSPECTOR_TAB_KEY, tab);
+        } catch { /* noop */ }
+      }
+    };
     window.addEventListener("workdrive:inspector-select", onSelect);
-    return () => window.removeEventListener("workdrive:inspector-select", onSelect);
+    window.addEventListener("workdrive:inspector-tab", onTab);
+    return () => {
+      window.removeEventListener("workdrive:inspector-select", onSelect);
+      window.removeEventListener("workdrive:inspector-tab", onTab);
+    };
   }, []);
 
   const value = useMemo<ShellContextValue>(() => ({
@@ -166,4 +179,7 @@ export function ShellScopeSync({ folderId, folderName }: { folderId?: string; fo
 /** Dispatch from anywhere (FileBrowser rows, grids, search) to open the inspector. */
 export function openInspector(resource: InspectorResource | null) {
   window.dispatchEvent(new CustomEvent("workdrive:inspector-select", { detail: resource }));
+  if (resource) {
+    window.dispatchEvent(new CustomEvent("workdrive:inspector-tab", { detail: "details" }));
+  }
 }

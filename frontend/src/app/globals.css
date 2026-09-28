@@ -3727,12 +3727,62 @@ html[data-theme="dark"] .imkan-connections-page .connections-detail-overlay{back
   gap: 10px;
   padding: 11px 13px;
   border-bottom: 1px solid #f0f2f5;
-  cursor: pointer;
 }
 .imkan-cloud-file-row:last-child { border-bottom: 0; }
 .imkan-cloud-file-row:hover { background: #fafcff; }
-.imkan-cloud-file-row input { width: 15px; height: 15px; accent-color: #1d5bd7; }
-.imkan-cloud-file-icon { display: grid; width: 30px; height: 30px; place-items: center; border-radius: 6px; background: #f1f5ff; color: #4f75d9; }
+.imkan-cloud-file-row input { width: 15px; height: 15px; accent-color: #1d5bd7; flex: 0 0 auto; }
+.imkan-cloud-file-open { display: flex; min-width: 0; flex: 1; align-items: center; gap: 10px; border: 0; background: transparent; padding: 0; text-align: inherit; cursor: pointer; }
+.imkan-cloud-file-open:disabled { cursor: default; }
+.imkan-cloud-file-row.is-folder .imkan-cloud-file-open:not(:disabled):hover .imkan-cloud-file-icon { background: #fff4df; color: #c58a00; }
+.imkan-cloud-file-icon { display: grid; width: 30px; height: 30px; place-items: center; border-radius: 6px; background: #f1f5ff; color: #4f75d9; flex: 0 0 auto; }
+.imkan-cloud-file-icon.is-folder { background: #fff8ea; color: #c58a00; }
+
+.imkan-cloud-breadcrumb {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 2px;
+  margin-top: 4px;
+  max-width: 100%;
+  font-size: 11px;
+  line-height: 1.4;
+  color: #8a93a3;
+}
+.imkan-cloud-breadcrumb-item { display: inline-flex; align-items: center; max-width: 100%; }
+.imkan-cloud-breadcrumb-sep { margin: 0 4px; color: #c2c9d4; }
+.imkan-cloud-breadcrumb-link {
+  border: 0;
+  background: transparent;
+  padding: 0;
+  color: #4f75d9;
+  cursor: pointer;
+  max-width: 180px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.imkan-cloud-breadcrumb-link:hover { text-decoration: underline; }
+.imkan-cloud-breadcrumb-current {
+  color: #273247;
+  font-weight: 600;
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.imkan-cloud-load-more-wrap { display: flex; justify-content: center; padding: 10px 14px 14px; }
+.imkan-cloud-load-more {
+  border: 1px solid #dfe4eb;
+  border-radius: 6px;
+  background: #fff;
+  padding: 6px 12px;
+  font-size: 11px;
+  font-weight: 600;
+  color: #4f75d9;
+}
+.imkan-cloud-load-more:hover { background: #edf3ff; }
+.imkan-cloud-load-more:disabled { opacity: .55; cursor: wait; }
 
 .imkan-cloud-empty {
   display: flex;

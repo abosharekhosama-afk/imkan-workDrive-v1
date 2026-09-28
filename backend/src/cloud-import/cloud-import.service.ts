@@ -14,6 +14,7 @@ import { parseCreateJobs } from './cloud-import.schemas';
 import { ConnectionsService } from '../connections/connections.service';
 import { googleDriveAllFilesReadScopeGranted } from '../connections/connection-browse-logic';
 import { buildGoogleDriveApiStatus, classifyGoogleDriveApiError, type StructuredCloudImportError } from '../connections/google-drive-api-logic';
+import { MAX_FOLDER_IMPORT_FILES, remoteEntryKind } from './cloud-import-folder-logic';
 
 const MAX_IMPORT_BYTES = 250 * 1024 * 1024;
 const MAX_LIST_ITEMS = 100;
@@ -262,15 +263,75 @@ export class CloudImportService implements OnModuleInit, OnModuleDestroy {
     const connection = await this.getConnection(user, provider, input.connectionId ?? null);
     const jobs = [];
     for (const requested of input.files) {
-      const file = await this.remoteFileById(user, provider, connection, requested.id);
-      if (!file || file.kind !== 'file') throw new BadRequestException('One or more selected cloud files are no longer available');
-      if (file.size !== null && file.size > this.maxBytes) throw new BadRequestException(`${file.name} exceeds the ${Math.floor(this.maxBytes / 1024 / 1024)} MB import limit`);
-      const existing = await this.prisma.cloudImportJob.findFirst({ where: { orgId: user.org_id, userId: user.sub, connectionId: connection.id, remoteFileId: file.id, folderId: input.folderId, status: { in: [CloudImportJobStatus.PENDING, CloudImportJobStatus.IN_PROGRESS, CloudImportJobStatus.COMPLETED] } }, orderBy: { createdAt: 'desc' } });
-      if (existing) { jobs.push(existing); continue; }
-      jobs.push(await this.prisma.cloudImportJob.create({ data: { id: randomUUID(), orgId: user.org_id, userId: user.sub, connectionId: connection.id, provider, folderId: input.folderId, remoteFileId: file.id, remoteName: file.name, remoteMimeType: file.mimeType, totalBytes: file.size === null ? null : BigInt(file.size), status: CloudImportJobStatus.PENDING, progress: 0 } }));
+      const remote = await this.remoteFileById(user, provider, connection, requested.id);
+      if (!remote) throw new BadRequestException('One or more selected cloud files are no longer available');
+      if (remote.kind === 'folder' || requested.kind === 'folder') {
+        jobs.push(...await this.createJobsFromRemoteFolder(user, provider, connection, remote, input.folderId));
+        continue;
+      }
+      jobs.push(await this.ensureFileImportJob(user, provider, connection, remote, input.folderId));
     }
     void this.processPendingJobs();
     return jobs.map((job) => this.publicJob(job));
+  }
+
+  private async ensureFileImportJob(user: AccessTokenPayload, provider: CloudProvider, connection: Connection, file: RemoteFile, folderId: string | null) {
+    if (!file || file.kind !== 'file') throw new BadRequestException('One or more selected cloud files are no longer available');
+    if (file.size !== null && file.size > this.maxBytes) throw new BadRequestException(`${file.name} exceeds the ${Math.floor(this.maxBytes / 1024 / 1024)} MB import limit`);
+    const existing = await this.prisma.cloudImportJob.findFirst({ where: { orgId: user.org_id, userId: user.sub, connectionId: connection.id, remoteFileId: file.id, folderId, status: { in: [CloudImportJobStatus.PENDING, CloudImportJobStatus.IN_PROGRESS, CloudImportJobStatus.COMPLETED] } }, orderBy: { createdAt: 'desc' } });
+    if (existing) return existing;
+    return this.prisma.cloudImportJob.create({ data: { id: randomUUID(), orgId: user.org_id, userId: user.sub, connectionId: connection.id, provider, folderId, remoteFileId: file.id, remoteName: file.name, remoteMimeType: file.mimeType, totalBytes: file.size === null ? null : BigInt(file.size), status: CloudImportJobStatus.PENDING, progress: 0 } });
+  }
+
+  private async createJobsFromRemoteFolder(user: AccessTokenPayload, provider: CloudProvider, connection: Connection, rootFolder: RemoteFile, destinationFolderId: string | null) {
+    const createdRoot = await this.createDestinationFolder(user, rootFolder.name, destinationFolderId);
+    const jobs: Awaited<ReturnType<typeof this.ensureFileImportJob>>[] = [];
+    let fileCount = 0;
+    const queue: Array<{ remoteId: string; destFolderId: string }> = [{ remoteId: rootFolder.id, destFolderId: createdRoot.id }];
+    const connectionQueryId = connection.genericConnectionId ?? null;
+
+    while (queue.length > 0) {
+      const current = queue.shift();
+      if (!current) continue;
+      let pageToken: string | null = null;
+      do {
+        const listing = await this.listFiles(user, provider, connectionQueryId, current.remoteId, pageToken);
+        for (const item of listing.files) {
+          const kind = remoteEntryKind(item.mimeType, item.kind);
+          if (kind === 'folder') {
+            const childFolder = await this.createDestinationFolder(user, item.name, current.destFolderId);
+            queue.push({ remoteId: item.id, destFolderId: childFolder.id });
+            continue;
+          }
+          if (fileCount >= MAX_FOLDER_IMPORT_FILES) {
+            throw new BadRequestException(`Folder import exceeds the ${MAX_FOLDER_IMPORT_FILES} file limit`);
+          }
+          fileCount += 1;
+          jobs.push(await this.ensureFileImportJob(user, provider, connection, { ...item, kind: 'file' }, current.destFolderId));
+        }
+        pageToken = listing.nextPageToken;
+      } while (pageToken);
+    }
+
+    return jobs;
+  }
+
+  private async createDestinationFolder(user: AccessTokenPayload, name: string, parentId: string | null) {
+    const parent = parentId
+      ? await this.prisma.folder.findFirst({ where: { id: parentId, orgId: user.org_id }, select: { id: true, teamFolderId: true } })
+      : null;
+    if (parentId && !parent) throw new NotFoundException('Destination folder not found');
+    const cleanName = this.safeFileName(name);
+    return this.prisma.folder.create({
+      data: {
+        id: randomUUID(),
+        name: cleanName === 'Imported file' ? 'Imported folder' : cleanName,
+        parentId,
+        teamFolderId: parent?.teamFolderId ?? null,
+        ownerId: user.sub,
+        orgId: user.org_id,
+      },
+    });
   }
 
   async retryJob(user: AccessTokenPayload, id: string) {
