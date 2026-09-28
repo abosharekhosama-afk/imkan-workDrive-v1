@@ -2593,6 +2593,7 @@ model FileCollection {
   folderId              String   @map("folder_id") @db.Char(36)
   name                  String   @db.VarChar(180)
   description           String?  @db.Text
+  notes                 String?  @db.Text
   type                  String   @default("EXTERNAL") @db.VarChar(20)
   tokenHash             String   @unique @map("token_hash") @db.Char(64)
   status                String   @default("ACTIVE") @db.VarChar(20)
@@ -2601,6 +2602,9 @@ model FileCollection {
   maxFileSizeBytes      BigInt?  @map("max_file_size_bytes")
   collectName           Boolean  @default(true) @map("collect_name")
   collectEmail          Boolean  @default(false) @map("collect_email")
+  collectPhone          Boolean  @default(false) @map("collect_phone")
+  sameNameAsVersion     Boolean  @default(false) @map("same_name_as_version")
+  notifyOnSubmission    Boolean  @default(true) @map("notify_on_submission")
   separateFolderPerUser Boolean  @default(false) @map("separate_folder_per_user")
   createdAt             DateTime @default(now()) @map("created_at")
   updatedAt             DateTime @updatedAt @map("updated_at")
@@ -2616,6 +2620,7 @@ model CollectionSubmission {
   collectionId String   @map("collection_id") @db.Char(36)
   submitterName String? @map("submitter_name") @db.VarChar(180)
   submitterEmail String? @map("submitter_email") @db.VarChar(320)
+  submitterPhone String? @map("submitter_phone") @db.VarChar(40)
   fileCount    Int      @default(0) @map("file_count")
   uploadVersionId String? @map("upload_version_id") @db.Char(36)
   fileId          String?  @map("file_id") @db.Char(36)
