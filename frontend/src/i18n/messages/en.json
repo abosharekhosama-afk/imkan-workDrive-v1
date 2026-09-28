@@ -757,7 +757,7 @@
   "help.contactSupport": "Contact support",
   "help.sendFeedback": "Send feedback",
   "share.folderContents": "Shared folder contents",
-  "nav.members": "Members"
-,
-  "workflow.connections": "Connections"
+  "nav.members": "Members",
+  "workflow.connections": "Connections",
+  "nav.collections": "Collections"
 }
