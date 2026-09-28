@@ -79,7 +79,10 @@ export class FoldersService {
     if (mandate) await this.metadata.associateFolder(user, copiedId, mandate.templateId, mandate.values);
     await this.prisma.auditLog.create({ data: { orgId: user.org_id, actorId: user.sub, action: 'FOLDER_COPIED', resourceType: 'FOLDER', resourceId: copiedId } });
     const copied = await this.prisma.folder.findUnique({where:{id:copiedId}});
-    if (copied) this.dispatchWorkflowFolderEvent(user, 'copy', copied);
+    if (copied) {
+      this.dispatchWorkflowFolderEvent(user, 'copy', copied);
+      void this.follows.notifyResourceEvent({ orgId: user.org_id, resourceType: ResourceType.FOLDER, resourceId: copied.id, actorUserId: user.sub, action: AuditAction.COPY, resourceName: copied.name }).catch(() => undefined);
+    }
     return copied;
   }
 
@@ -164,6 +167,7 @@ export class FoldersService {
     });
     if (mandate) await this.metadata.associateFolder(user, created.id, mandate.templateId, mandate.values);
     this.dispatchWorkflowFolderEvent(user, 'create', created);
+    void this.follows.notifyResourceEvent({ orgId: user.org_id, resourceType: ResourceType.FOLDER, resourceId: created.id, actorUserId: user.sub, action: AuditAction.CREATE, resourceName: created.name }).catch(() => undefined);
     return created;
   }
 
@@ -353,6 +357,7 @@ export class FoldersService {
         resourceId: folder.id,
       },
     });
+    void this.follows.notifyResourceEvent({ orgId: user.org_id, resourceType: ResourceType.FOLDER, resourceId: folder.id, actorUserId: user.sub, action: AuditAction.DELETE, resourceName: folder.name }).catch(() => undefined);
     return { id: folder.id, deleted: true };
   }
 
