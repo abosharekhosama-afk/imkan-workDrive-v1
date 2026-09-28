@@ -59,10 +59,21 @@ export class CollectionsService {
     const existing = await this.prisma.collectionSubmission.aggregate({ where: { collectionId: row.id }, _sum: { fileCount: true } });
     if (row.maxFiles && (existing._sum.fileCount ?? 0) >= row.maxFiles) throw new BadRequestException('Collection file limit reached');
     if (!/^[a-f0-9]{64}$/.test(sha256)) throw new BadRequestException('A valid SHA-256 checksum is required');
+    let destinationFolderId = row.folderId;
+    if (row.separateFolderPerUser) {
+      const parent = await this.prisma.folder.findFirst({ where: { id: row.folderId, orgId: row.orgId }, select: { id: true, teamFolderId: true } });
+      if (!parent) throw new NotFoundException('Collection destination folder not found');
+      const rawLabel = (row.collectName ? String(body?.submitterName ?? '') : '') || (row.collectEmail ? String(body?.submitterEmail ?? '') : '') || 'External submitter';
+      const safeLabel = rawLabel.normalize('NFKC').replace(/[\\/\0-\x1f]/g, '-').trim().slice(0, 90) || 'External submitter';
+      const existingCount = await this.prisma.folder.count({ where: { orgId: row.orgId, parentId: parent.id, name: { startsWith: safeLabel } } });
+      const folderName = existingCount ? `${safeLabel} (${existingCount + 1})` : safeLabel;
+      const created = await this.prisma.folder.create({ data: { orgId: row.orgId, teamFolderId: parent.teamFolderId, parentId: parent.id, name: folderName, ownerId: row.createdById } });
+      destinationFolderId = created.id;
+    }
     const submission = await this.prisma.collectionSubmission.create({ data: { collectionId: row.id, submitterName: row.collectName ? String(body?.submitterName ?? '').slice(0,180) || null : null, submitterEmail: row.collectEmail ? String(body?.submitterEmail ?? '').slice(0,320) || null : null, fileCount: 1, status: 'UPLOADING' } });
     const user = { sub: row.createdById, org_id: row.orgId, email: 'collection-upload@internal.invalid', role: 'ADMIN' };
     try {
-      const upload = await this.files.requestUpload(user, { name, folderId: row.folderId, size, mimeType, sha256 });
+      const upload = await this.files.requestUpload(user, { name, folderId: destinationFolderId, size, mimeType, sha256 });
       await this.prisma.collectionSubmission.update({ where: { id: submission.id }, data: { uploadVersionId: upload.upload_id } });
       return { submissionId: submission.id, ...upload };
     } catch (error) { await this.prisma.collectionSubmission.delete({ where: { id: submission.id } }); throw error; }
@@ -75,14 +86,18 @@ export class CollectionsService {
     if (!submission || !uploadId || submission.uploadVersionId !== uploadId) throw new NotFoundException('Upload session not found');
     const user = { sub: row.createdById, org_id: row.orgId, email: 'collection-upload@internal.invalid', role: 'ADMIN' };
     const result = await this.files.completeUpload(user, uploadId);
-    await this.prisma.collectionSubmission.update({ where: { id: submission.id }, data: { fileCount: 1, status: 'RECEIVED', submittedAt: new Date() } });
+    await this.prisma.collectionSubmission.update({ where: { id: submission.id }, data: { fileCount: 1, fileId: result.file_id, status: 'RECEIVED', submittedAt: new Date() } });
     return { completed: true, submissionId, file: result };
   }
   async submissions(user: AccessTokenPayload, id: string) {
     await this.assertManager(user);
     const collection = await this.prisma.fileCollection.findFirst({ where: { id, orgId: user.org_id }, select: { id: true } });
     if (!collection) throw new NotFoundException('Collection not found');
-    return this.prisma.collectionSubmission.findMany({ where: { collectionId: id }, orderBy: { submittedAt: 'desc' } });
+    const rows = await this.prisma.collectionSubmission.findMany({ where: { collectionId: id }, orderBy: { submittedAt: 'desc' } });
+    const fileIds = rows.flatMap((row) => row.fileId ? [row.fileId] : []);
+    const files = fileIds.length ? await this.prisma.file.findMany({ where: { id: { in: fileIds }, orgId: user.org_id }, select: { id: true, name: true, mimeType: true, size: true, folderId: true } }) : [];
+    const byId = new Map(files.map((file) => [file.id, file]));
+    return rows.map(({ uploadVersionId, ...row }) => ({ ...row, file: row.fileId ? byId.get(row.fileId) ?? null : null }));
   }
   async publicInfo(token: string) {
     if (!token || token.length > 100) throw new NotFoundException('Collection not found');
