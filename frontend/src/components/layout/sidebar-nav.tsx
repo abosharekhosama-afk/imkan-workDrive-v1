@@ -4,6 +4,7 @@ import { usePathname } from "next/navigation";
 import { useLocale } from "../locale-provider";
 import { Icons, type IconName } from "./icons";
 import { useShell } from "./shell-context";
+import { buildWorkdriveSidebarItems } from "./workdrive-sidebar-logic";
 import type { MessageKey } from "../../i18n";
 type Item = { href: string; key: MessageKey; icon: IconName; active?: boolean; spaced?: boolean };
 function Row({ item, collapsed, onNav, active }: { item: Item; collapsed: boolean; onNav: () => void; active?: boolean }) {
@@ -27,22 +28,7 @@ export function SidebarNav() {
   const { sidebarCollapsed, setMobileNavOpen } = useShell();
   const c = sidebarCollapsed;
   const close = () => setMobileNavOpen(false);
-  const myActive = pathname === "/files" || (pathname.startsWith("/files/") && !pathname.startsWith("/files/recent") && !pathname.startsWith("/files/favorites") && !pathname.startsWith("/files/shared-with-me") && !pathname.startsWith("/files/shared-links") && !pathname.startsWith("/files/trash") && !pathname.startsWith("/files/team-folders"));
-  const items: Item[] = [
-    { href: "/files", key: "nav.fileSuggestions", icon: "spark" },
-    { href: "/notifications", key: "nav.allUnread", icon: "bell" },
-    { href: "/files/recent", key: "nav.recent", icon: "clock", active: pathname.startsWith("/files/recent") },
-    { href: "/files/favorites", key: "nav.favorites", icon: "star", active: pathname.startsWith("/files/favorites") },
-    { href: "/files", key: "nav.labels", icon: "tag" },
-    { href: "/files/shared-with-me", key: "nav.sharedWithMe", icon: "share", active: pathname.startsWith("/files/shared-with-me") },
-    { href: "/files/shared-links", key: "nav.collectFiles", icon: "inbox", active: pathname.startsWith("/files/shared-links") },
-    { href: "/files/templates", key: "nav.templates", icon: "layout", active: pathname.startsWith("/files/templates") },
-    { href: "/files/workflows", key: "nav.workflows", icon: "flow", active: pathname.startsWith("/files/workflows") },
-    { href: "/files/workflows/connections", key: "nav.connections", icon: "link", active: pathname.startsWith("/files/workflows/connections") },
-    { href: "/members", key: "nav.members", icon: "users", active: pathname === "/members" || pathname.startsWith("/members/") },
-    { href: "/organization", key: "nav.organization", icon: "users", active: pathname.startsWith("/organization") },
-    { href: "/files", key: "files.breadcrumb.root", icon: "folder", active: myActive, spaced: true },
-  ];
+  const items: Item[] = buildWorkdriveSidebarItems(pathname);
   return (
     <nav className="workspace-sidebar-scroll min-h-0 flex-1 overflow-y-auto px-2 pt-4" aria-label="workspace">
       <div className="flex flex-col">{items.map((i) => <Row key={`${i.key}-${i.href}`} item={i} collapsed={c} onNav={close} />)}</div>

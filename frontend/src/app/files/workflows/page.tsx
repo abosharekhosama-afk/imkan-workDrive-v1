@@ -20,6 +20,7 @@ export default function WorkflowsPage() {
   const router = useRouter();
   const pathname = usePathname();
   const workflowBase = pathname.startsWith("/admin/workflows") ? "/admin/workflows" : "/files/workflows";
+  const adminConsole = pathname.startsWith("/admin/workflows");
   const access = useWorkflowAccess();
 
   const [createOpen, setCreateOpen] = useState(false);
@@ -156,7 +157,7 @@ export default function WorkflowsPage() {
             </div>
             <WorkflowHelp compact helpKey="workflow.list" />
           </div>
-          {access?.canCreate ? <button type="button" onClick={() => setCreateOpen(true)} className="wd-pill wd-pill-new">＋ {ar ? "سير عمل جديد" : "New workflow"}</button> : null}
+          {adminConsole && access?.canCreate ? <button type="button" onClick={() => setCreateOpen(true)} className="wd-pill wd-pill-new">＋ {ar ? "سير عمل جديد" : "New workflow"}</button> : null}
         </div>
 
         <div className="mt-4"><WorkflowConceptGuide ar={ar} /></div>

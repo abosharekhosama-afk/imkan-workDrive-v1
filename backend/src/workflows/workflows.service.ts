@@ -40,11 +40,11 @@ export class WorkflowsService {
     return {
       role: user.role,
       canViewWorkspace: true,
-      canViewMy: true,
+      canViewMy: admin,
       canViewDrafts: true,
       canCreate: admin,
       canEditOwnedDrafts: true,
-      canViewWaiting: true,
+      canViewWaiting: admin,
       canViewRuns: true,
       canViewDynamicValues: true,
       canViewTemplates: admin,
