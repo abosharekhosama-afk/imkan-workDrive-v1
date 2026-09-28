@@ -56,6 +56,9 @@ import { UploadZone } from "./upload-zone";
 import { errorMessageForStatus } from "./feedback-state-logic";
 import { WorkflowPicker } from "./workflow-picker";
 import { listWorkflowResourceStatus, type WorkflowResourceStatus } from "../lib/api/workflows";
+import { listFollows } from "../lib/api/follows";
+import { FollowUpdatesModal, type FollowTarget } from "./follow-updates-modal";
+import { DataTemplateAssociationModal, type DataTemplateTarget } from "./data-template-association-modal";
 
 export function FileBrowser({
   folderId,
@@ -145,6 +148,8 @@ export function FileBrowser({
   const [folderSizes, setFolderSizes] = useState<ReadonlyMap<string, number>>(new Map());
   const [folderUpdatedAt, setFolderUpdatedAt] = useState<ReadonlyMap<string, string | null>>(new Map());
   useEffect(() => { void listDataTemplates(false).then(setDataTemplates).catch(() => setDataTemplates([])); }, []);
+  const refreshFollows = useCallback(() => { void listFollows().then((rows) => setFollowIds(new Set(rows.map((row) => row.resourceId)))).catch(() => setFollowIds(new Set())); }, []);
+  useEffect(() => { refreshFollows(); }, [refreshFollows]);
   useEffect(() => { if (!newFolderOpen) { setNewFolderMandate(null); setNewFolderFields({}); return; } setNewFolderMandateLoading(true); void getTransferDataTemplateMandate(folderId ?? null, "FOLDERS").then((r) => setNewFolderMandate(r.enabled ? r.template : null)).catch(() => setNewFolderMandate(null)).finally(() => setNewFolderMandateLoading(false)); }, [newFolderOpen, folderId]);
   useEffect(() => { const value = searchParams.get("dataTemplate") || ""; setAdvancedFilter((current) => current.dataTemplateId === value ? current : { ...current, dataTemplateId: value }); }, [searchParams]);
   const owners = useMemo(() => { const map = new Map<string,{id:string;name:string|null;email:string}>(); for (const f of files) if (f.ownerId && !map.has(f.ownerId)) map.set(f.ownerId,{id:f.ownerId,name:f.ownerName??null,email:f.ownerEmail??""}); return [...map.values()]; }, [files]);
@@ -168,6 +173,9 @@ export function FileBrowser({
 
   // Selection State (Phase 5)
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [followIds, setFollowIds] = useState<Set<string>>(new Set());
+  const [followTargets, setFollowTargets] = useState<FollowTarget[] | null>(null);
+  const [dataTemplateTargets, setDataTemplateTargets] = useState<DataTemplateTarget[] | null>(null);
 
   const canMutate = canMutateContent(role, readOnly);
   const canShare = canShareContent(role, readOnly);
@@ -590,11 +598,8 @@ export function FileBrowser({
         setWorkflowTarget({ type: single.type, id: single.id, name: single.name });
         return;
       case "organize":
-        if (!canMutate || !single) return;
-        handleInspect(single.type, single.id);
-        setInspectorTab("dataTemplates");
-        setInspectorOpen(true);
-        setMobileInspectorOpen(true);
+        if (!canMutate) return;
+        setDataTemplateTargets([...filteredContents.folders.filter((f) => selectedIds.has(f.id)).map((f) => ({ type: "FOLDER" as const, id: f.id, name: f.name })), ...filteredContents.files.filter((f) => selectedIds.has(f.id)).map((f) => ({ type: "FILE" as const, id: f.id, name: f.name }))]);
         return;
       case "searchInFold": {
         const targetFolderId = single?.type === "FOLDER" ? single.id : folderId;
@@ -616,8 +621,7 @@ export function FileBrowser({
         setRenameTarget({ type: single.type, id: single.id, name: single.name });
         return;
       case "followUpdates":
-        if (!single) return;
-        void handleFavorite(single.type, single.id);
+        setFollowTargets([...filteredContents.folders.filter((f) => selectedIds.has(f.id)).map((f) => ({ type: "FOLDER" as const, id: f.id, name: f.name })), ...filteredContents.files.filter((f) => selectedIds.has(f.id)).map((f) => ({ type: "FILE" as const, id: f.id, name: f.name }))]);
         return;
       case "moreOptions":
         if (!single) return;
@@ -676,6 +680,7 @@ export function FileBrowser({
               const target = resolveShareTarget(selectedIds, folders, files);
               if (target) void copyShareLink(target);
             }}
+            isFollowingSelected={selectedIds.size === 1 && followIds.has(Array.from(selectedIds)[0] ?? "")}
             onDownload={() => {
               const { fileIds } = partitionSelection(selectedIds, folders, files);
               if (fileIds.length === 0) {
@@ -736,6 +741,8 @@ export function FileBrowser({
           onFavorite={handleFavorite}
           favoriteIds={favoriteIds}
           onAssignWorkflow={(type,id,name)=>setWorkflowTarget({type,id,name})}
+          onFollowUpdates={(type,id,name)=>setFollowTargets([{ type, id, name }])}
+          followIds={followIds}
           workflowStatuses={workflowStatuses}
           onWorkflowStatusClick={(status, resourceName) => setWorkflowStatusTarget({ status, resourceName })}
           onCopyLink={(id) => {
@@ -955,6 +962,8 @@ export function FileBrowser({
       onUploaded={() => { void load(); }}
       triggerOnly
     />
+    {followTargets?.length ? <FollowUpdatesModal targets={followTargets} onClose={() => setFollowTargets(null)} onChanged={refreshFollows} /> : null}
+    {dataTemplateTargets?.length ? <DataTemplateAssociationModal targets={dataTemplateTargets} dataTemplates={dataTemplates} onClose={() => setDataTemplateTargets(null)} onChanged={() => { void load(); }} /> : null}
     {toast ? <Toast message={toast} onDismiss={() => setToast(null)} /> : null}
     </section>
   );
