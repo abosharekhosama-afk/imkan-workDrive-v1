@@ -17,10 +17,10 @@ export function buildWorkdriveSidebarItems(pathname: string): WorkdriveSidebarIt
       !pathname.startsWith("/files/favorites") &&
       !pathname.startsWith("/files/shared-with-me") &&
       !pathname.startsWith("/files/shared-links") &&
+      !pathname.startsWith("/files/collections") &&
       !pathname.startsWith("/files/trash") &&
       !pathname.startsWith("/files/team-folders") &&
       !pathname.startsWith("/files/templates") &&
-      !pathname.startsWith("/files/collections") &&
       !pathname.startsWith("/files/workflows"));
 
   return [
@@ -31,7 +31,7 @@ export function buildWorkdriveSidebarItems(pathname: string): WorkdriveSidebarIt
     { href: "/files", key: "nav.labels", icon: "tag" },
     { href: "/files/shared-with-me", key: "nav.sharedWithMe", icon: "share", active: pathname.startsWith("/files/shared-with-me") },
     { href: "/files/shared-links", key: "nav.sharedLinks", icon: "share", active: pathname.startsWith("/files/shared-links") },
-    { href: "/files/collections", key: "nav.collections", icon: "inbox", active: pathname.startsWith("/files/collections") },
+    { href: "/files/collections", key: "nav.collectFiles", icon: "inbox", active: pathname.startsWith("/files/collections") },
     { href: "/files/templates", key: "nav.templates", icon: "layout", active: pathname.startsWith("/files/templates") },
     { href: "/files/workflows", key: "nav.workflows", icon: "flow", active: pathname.startsWith("/files/workflows") },
     { href: "/files", key: "files.breadcrumb.root", icon: "folder", active: myActive, spaced: true },
