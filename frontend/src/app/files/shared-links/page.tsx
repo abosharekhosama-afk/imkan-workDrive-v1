@@ -48,19 +48,10 @@ export default function SharedLinksPage() {
   return (
     <>
       <div className="flex min-h-0 flex-1 flex-col">
-        <div className="flex h-12 shrink-0 items-center justify-between border-b border-[color:var(--imkan-color-border)] bg-white px-3">
+        <div className="flex h-12 shrink-0 items-center border-b border-[color:var(--imkan-color-border)] bg-white px-3">
           <h1 className="text-[15px] font-semibold text-[#212121]">
             {label("nav.sharedLinks")}
           </h1>
-          <button
-            type="button"
-            onClick={() => {
-              window.dispatchEvent(new Event("workdrive:trigger-create-folder"));
-            }}
-            className="wd-pill wd-pill-new inline-flex items-center gap-1"
-          >
-            + {label("menu.newFolder")}
-          </button>
         </div>
         <div className="min-h-0 flex-1 overflow-y-auto">
           {loading ? (

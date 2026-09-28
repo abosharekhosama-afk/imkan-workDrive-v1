@@ -1,9 +1,11 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useLocale } from "../locale-provider";
 import { FileTypeIcon, fileIconKind } from "../file-icon";
 import { formatDateLocalized } from "../../lib/localized";
 import { listAudit, formatAuditAction, type AuditRecord } from "../../lib/api/audit";
+import { listSharedByMe } from "../../lib/api/shared";
+import { formatInspectorShareSummary, sharesForResource } from "../../lib/share-resource-logic";
 import { useShell, type InspectorTab } from "./shell-context";
 import { Icons } from "./icons";
 import { openWip } from "../wip-modal";
@@ -51,7 +53,9 @@ export function InspectorPanel({ onVersionHistory }: { onVersionHistory?: (fileI
   const [templateBusy, setTemplateBusy] = useState(false);
   const [editingDesc, setEditingDesc] = useState(false);
   const [desc, setDesc] = useState("");
+  const [resourceShares, setResourceShares] = useState<Awaited<ReturnType<typeof listSharedByMe>>>([]);
   const resourceId = selected ? (selected.kind === "FILE" ? selected.file.id : selected.folder.id) : null;
+  const resourceType = selected ? (selected.kind === "FILE" ? "FILE" as const : "FOLDER" as const) : null;
   useEffect(() => {
     if (!inspectorOpen || inspectorTab !== "activity") return;
     listAudit().then(setLogs).catch(() => setLogs([]));
@@ -64,10 +68,20 @@ export function InspectorPanel({ onVersionHistory }: { onVersionHistory?: (fileI
       .catch(() => { setDataTemplates([]); setBindings([]); });
   }, [inspectorOpen, inspectorTab, selected]);
   useEffect(() => {
+    if (!resourceId || !resourceType) { setResourceShares([]); return; }
+    listSharedByMe()
+      .then((rows) => setResourceShares(sharesForResource(rows, resourceType, resourceId)))
+      .catch(() => setResourceShares([]));
+  }, [resourceId, resourceType]);
+  useEffect(() => {
     if (!resourceId) { setDesc(""); setEditingDesc(false); return; }
     try { setDesc(localStorage.getItem(descKey(resourceId)) ?? ""); } catch { setDesc(""); }
     setEditingDesc(false);
   }, [resourceId]);
+  const shareSummary = useMemo(
+    () => formatInspectorShareSummary(resourceShares, locale, label("inspector.sharedWithPrivate")),
+    [resourceShares, locale, label],
+  );
   if (!inspectorOpen) return null;
   const name = selected ? (selected.kind === "FILE" ? selected.file.name : selected.folder.name) : null;
   const kind = selected ? fileIconKind(selected.kind === "FILE" ? "file" : "folder", selected.kind === "FILE" ? selected.file.mimeType : null, name ?? "") : "file";
@@ -76,6 +90,10 @@ export function InspectorPanel({ onVersionHistory }: { onVersionHistory?: (fileI
   const copyPermalink = async () => {
     if (!permalink) return;
     try { await navigator.clipboard.writeText(permalink); } catch { /* clipboard unavailable */ }
+  };
+  const openShare = () => {
+    if (!resourceId || !resourceType) return;
+    window.dispatchEvent(new CustomEvent("workdrive:open-share", { detail: { type: resourceType, id: resourceId } }));
   };
   const saveDesc = () => {
     if (!resourceId) return;
@@ -119,7 +137,15 @@ export function InspectorPanel({ onVersionHistory }: { onVersionHistory?: (fileI
             </div>
             <dl className="flex flex-col gap-2 text-[13px]">
               <div className="flex justify-between gap-2"><dt className="text-[#4F4F4F]">{label("inspector.createdBy")}</dt><dd className="truncate">{(selected.kind === "FILE" ? selected.file.ownerName : selected.folder.ownerName) ?? "—"}</dd></div>
-              <div className="flex justify-between gap-2"><dt className="text-[#4F4F4F]">{label("inspector.sharedWith")}</dt><dd className="truncate text-[12px]">{label("inspector.sharedWithPrivate")}</dd></div>
+              <div className="flex items-start justify-between gap-2">
+                <dt className="text-[#4F4F4F]">{label("inspector.sharedWith")}</dt>
+                <dd className="min-w-0 text-end">
+                  <span className="block truncate text-[12px]">{shareSummary}</span>
+                  <button type="button" onClick={openShare} className="mt-1 text-[12px] text-[var(--wd-primary)] hover:underline">
+                    {label("menu.shareMenu")}
+                  </button>
+                </dd>
+              </div>
               <div className="flex justify-between gap-2">
                 <dt className="text-[#4F4F4F]">{label("inspector.permalink")}</dt>
                 <dd className="min-w-0 truncate">

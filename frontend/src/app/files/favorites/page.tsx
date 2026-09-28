@@ -31,6 +31,18 @@ export default function FavoritesPage() {
   const [moveTarget, setMoveTarget] = useState<Target | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<Target | null>(null);
   const [toast, setToast] = useState<string | null>(null);
+
+  useEffect(() => {
+    const onOpenShare = (event: Event) => {
+      const detail = (event as CustomEvent<{ type: "FILE" | "FOLDER"; id: string }>).detail;
+      if (!detail?.id || !detail?.type) return;
+      const item = items.find((row) => row.resourceId === detail.id && row.resourceType === detail.type);
+      setShareTarget({ type: detail.type, id: detail.id, name: item?.name ?? detail.id });
+    };
+    window.addEventListener("workdrive:open-share", onOpenShare);
+    return () => window.removeEventListener("workdrive:open-share", onOpenShare);
+  }, [items]);
+
   const load = useCallback(async () => {
     try {
       setLoading(true);

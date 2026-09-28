@@ -30,14 +30,16 @@ function permissionOptionLabel(option: SharePermission): string {
 export function ShareModal({
   resourceType,
   resourceId,
+  initialTab = "link",
   onClose,
 }: {
   resourceType: "FILE" | "FOLDER";
   resourceId: string;
+  initialTab?: ShareTab;
   onClose: () => void;
 }) {
   const { label, locale } = useLocale();
-  const [activeTab, setActiveTab] = useState<ShareTab>("link");
+  const [activeTab, setActiveTab] = useState<ShareTab>(initialTab);
   const [password, setPassword] = useState("");
   const [expiryKind, setExpiryKind] = useState<ExpiryKind>("never");
   const [customExpiryDate, setCustomExpiryDate] = useState("");
@@ -52,6 +54,10 @@ export function ShareModal({
   const [toast, setToast] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+
+  useEffect(() => {
+    setActiveTab(initialTab);
+  }, [initialTab, resourceId]);
 
   useEffect(() => {
     void listOrganizationMembers({ status: "ACTIVE" })

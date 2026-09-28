@@ -2,7 +2,7 @@ import { BadRequestException } from '@nestjs/common';
 const PROVIDERS = ['google', 'dropbox', 'onedrive'] as const;
 export type CloudProvider = (typeof PROVIDERS)[number];
 export function parseProvider(value: unknown): CloudProvider { if (typeof value !== 'string' || !(PROVIDERS as readonly string[]).includes(value)) throw new BadRequestException('Unsupported cloud provider'); return value as CloudProvider; }
-export function parseCreateJobs(body: unknown): { folderId: string | null; connectionId: string | null; files: Array<{ id: string; name?: string }> } {
+export function parseCreateJobs(body: unknown): { folderId: string | null; connectionId: string | null; files: Array<{ id: string; name?: string; kind: 'file' | 'folder' }> } {
   if (!body || typeof body !== 'object') throw new BadRequestException('Invalid import request'); const record = body as Record<string, unknown>;
   const folderIdRaw = record.folderId === null || record.folderId === undefined ? null : record.folderId;
   const folderId: string | null = folderIdRaw === null ? null : String(folderIdRaw);

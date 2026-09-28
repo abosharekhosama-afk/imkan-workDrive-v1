@@ -41,6 +41,9 @@ import { getWorkspacePolicy } from "../lib/api/organization";
 import { getTransferDataTemplateMandate, listDataTemplates, type DataTemplate } from "../lib/api/metadata";
 
 import { canMutateContent, canShareContent } from "../lib/permissions";
+import { listSharedByMe } from "../lib/api/shared";
+import { normalizePublicAppUrl } from "../lib/public-url";
+import { findActiveShareForResource, resolveShareTarget } from "../lib/share-resource-logic";
 import { AlertBanner } from "./alert-banner";
 import { SkeletonLoader } from "./skeleton-loader";
 import { UploadZone } from "./upload-zone";
@@ -84,6 +87,7 @@ export function FileBrowser({
     type: "FILE" | "FOLDER";
     id: string;
   } | null>(null);
+  const [shareInitialTab, setShareInitialTab] = useState<"link" | "invite">("link");
   const [renameTarget, setRenameTarget] = useState<{
     type: "FILE" | "FOLDER";
     id: string;
@@ -160,6 +164,38 @@ export function FileBrowser({
 
   const canMutate = canMutateContent(role, readOnly);
   const canShare = canShareContent(role, readOnly);
+
+  const openShare = useCallback((target: { type: "FILE" | "FOLDER"; id: string }, tab: "link" | "invite" = "link") => {
+    if (!canShare) return;
+    setShareInitialTab(tab);
+    setShareTarget(target);
+  }, [canShare]);
+
+  const copyShareLink = useCallback(async (target: { type: "FILE" | "FOLDER"; id: string }) => {
+    if (!canShare) return;
+    try {
+      const shares = await listSharedByMe();
+      const active = findActiveShareForResource(shares, target.type, target.id);
+      if (active?.linkUrl) {
+        await navigator.clipboard.writeText(normalizePublicAppUrl(active.linkUrl));
+        setToast(label("share.copied"));
+        return;
+      }
+    } catch {
+      /* open share modal below */
+    }
+    openShare(target, "link");
+  }, [canShare, label, openShare]);
+
+  useEffect(() => {
+    const onOpenShare = (event: Event) => {
+      const detail = (event as CustomEvent<{ type: "FILE" | "FOLDER"; id: string; tab?: "link" | "invite" }>).detail;
+      if (!detail?.id || !detail?.type) return;
+      openShare({ type: detail.type, id: detail.id }, detail.tab ?? "link");
+    };
+    window.addEventListener("workdrive:open-share", onOpenShare);
+    return () => window.removeEventListener("workdrive:open-share", onOpenShare);
+  }, [openShare]);
 
   // The toolbar previously persisted the selected filter but never applied it
   // to the rendered dataset. Keep filtering local to the loaded folder so it
@@ -526,18 +562,13 @@ export function FileBrowser({
           <SelectionBar
             folderCount={folders.filter((f) => selectedIds.has(f.id)).length}
             fileCount={files.filter((f) => selectedIds.has(f.id)).length}
-            onShare={() => {
-              const id = Array.from(selectedIds)[0];
-              if (!id) return;
-              if (!files.some((f) => f.id === id)) return;
-              setShareTarget({ type: "FILE", id });
+            onShare={(tab) => {
+              const target = resolveShareTarget(selectedIds, folders, files);
+              if (target) openShare(target, tab ?? "link");
             }}
             onCopyLink={() => {
-              const id = Array.from(selectedIds)[0];
-              if (!id) return;
-              try {
-                void navigator.clipboard.writeText(`${window.location.origin}/files/${id}`);
-              } catch { /* clipboard unavailable */ }
+              const target = resolveShareTarget(selectedIds, folders, files);
+              if (target) void copyShareLink(target);
             }}
             onDownload={() => {
               const file = files.find((f) => selectedIds.has(f.id));
@@ -597,9 +628,12 @@ export function FileBrowser({
           workflowStatuses={workflowStatuses}
           onWorkflowStatusClick={(status, resourceName) => setWorkflowStatusTarget({ status, resourceName })}
           onCopyLink={(id) => {
-            try {
-              void navigator.clipboard.writeText(`${window.location.origin}/files/${id}`);
-            } catch { /* clipboard unavailable */ }
+            const target = folders.some((folder) => folder.id === id)
+              ? { type: "FOLDER" as const, id }
+              : files.some((file) => file.id === id)
+                ? { type: "FILE" as const, id }
+                : null;
+            if (target) void copyShareLink(target);
           }}
           emptyTitle={searchActive ? label("files.searchEmpty") : filteredContents.folders.length + filteredContents.files.length === 0 && filter !== "all" ? label("files.searchEmpty") : label("empty.title")}
           emptyDescription={searchActive ? label("files.searchEmptyDescription") : filteredContents.folders.length + filteredContents.files.length === 0 && filter !== "all" ? label("files.searchEmptyDescription") : label("empty.subtitle")}
@@ -621,6 +655,7 @@ export function FileBrowser({
         <ShareModal
           resourceType={shareTarget.type}
           resourceId={shareTarget.id}
+          initialTab={shareInitialTab}
           onClose={() => setShareTarget(null)}
         />
       ) : null}

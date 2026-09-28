@@ -5,7 +5,10 @@ import { ZohoMenu } from "./zoho-menu";
 import { useState } from "react";
 export function SelectionBar({ folderCount, fileCount, onShare, onCopyLink, onDownload, onClear }: {
   folderCount: number; fileCount: number;
-  onShare: () => void; onCopyLink: () => void; onDownload: () => void; onClear: () => void;
+  onShare: (tab?: "link" | "invite") => void;
+  onCopyLink: () => void;
+  onDownload: () => void;
+  onClear: () => void;
 }) {
   const { label } = useLocale();
   const [shareOpen, setShareOpen] = useState(false);
@@ -29,13 +32,14 @@ export function SelectionBar({ folderCount, fileCount, onShare, onCopyLink, onDo
           {label("sel.share")} <Icons.chevD size={13} />
         </button>
         <ZohoMenu open={shareOpen} onClose={() => setShareOpen(false)} labelledBy="sel-share-btn"
-          onSelect={(k) => { if (k === "share" || k === "addMembers" || k === "externalShareLink") onShare(); else if (k === "copy") onCopyLink(); }}
+          onSelect={(k) => {
+            if (k === "addMembers") onShare("invite");
+            else if (k === "externalShareLink") onShare("link");
+            else if (k === "copy") onCopyLink();
+          }}
           items={[
             { key: "addMembers", labelKey: "menu.addMembers" },
             { key: "externalShareLink", labelKey: "menu.externalShareLink" },
-            { key: "downloadLink", labelKey: "menu.downloadLink" },
-            { key: "embedCode", labelKey: "menu.embedCode" },
-            { key: "shareToSupport", labelKey: "menu.shareToSupport" },
           ]} />
         <button type="button" onClick={onCopyLink} title={label("menu.copyLink")} aria-label={label("menu.copyLink")}
           className="flex h-7 w-7 items-center justify-center rounded-full text-[color:var(--wd-primary-ink)] hover:bg-[var(--wd-active)]"><Icons.link size={14} /></button>
@@ -46,7 +50,7 @@ export function SelectionBar({ folderCount, fileCount, onShare, onCopyLink, onDo
           className={`flex h-7 w-7 items-center justify-center rounded-full text-[color:var(--wd-primary-ink)] hover:bg-[var(--wd-active)] ${moreOpen ? "bg-[var(--wd-active)]" : ""}`}><Icons.dots size={14} /></button>
         <ZohoMenu open={moreOpen} onClose={() => setMoreOpen(false)} labelledBy="sel-more-btn" align="end" widthPx={252}
           onSelect={(k) => {
-            if (k === "share" || k === "addMembers") onShare();
+            if (k === "share" || k === "addMembers") onShare("invite");
             else if (k === "copy" || k === "copyPermalink") onCopyLink();
             else if (k === "download") onDownload();
           }}
