@@ -21,8 +21,6 @@ import { WorkflowEngineService } from '../workflows/workflow-engine.service';
 import { MetadataService } from '../metadata/metadata.service';
 import { FollowsService } from '../follows/follows.service';
 import { AuditAction } from '@prisma/client';
-import { FollowsService } from '../follows/follows.service';
-import { AuditAction } from '@prisma/client';
 
 @Injectable()
 export class FoldersService {
