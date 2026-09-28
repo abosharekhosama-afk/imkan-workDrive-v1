@@ -634,6 +634,8 @@
   "sel.download": "Download",
   "sel.more": "More",
   "sel.share": "Share",
+  "sel.singleItemRequired": "Select one item for this action.",
+  "sel.noFilesSelected": "Select at least one file to download.",
   "sort.by": "Sort by",
   "sort.newestFirst": "Newest First",
   "sort.oldestFirst": "Oldest First",

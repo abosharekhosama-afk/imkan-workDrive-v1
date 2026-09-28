@@ -72,7 +72,7 @@ export function FileContextMenu({
     ],
     [
       { key: "move", label: `${D("moveTo")} (Z)`, hint: "Z", onSelect: onMove ?? (() => toast("moveTo")) },
-      { key: "copy", label: `${D("copyTo")} (C)`, hint: "C", onSelect: onMove ?? (() => toast("copyTo")) },
+      { key: "copy", label: `${D("copyTo")} (C)`, hint: "C", onSelect: handlers.onCopy ?? (() => toast("copyTo")) },
       { key: "workflow", label: D("assignWorkflow"), onSelect: handlers.onAssignWorkflow ?? (() => toast("assignWorkflow")) },
       { key: "organize", label: D("organize"), onSelect: () => toast("organize") },
     ],

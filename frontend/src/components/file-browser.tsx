@@ -44,6 +44,12 @@ import { canMutateContent, canShareContent } from "../lib/permissions";
 import { listSharedByMe } from "../lib/api/shared";
 import { normalizePublicAppUrl } from "../lib/public-url";
 import { findActiveShareForResource, resolveShareTarget } from "../lib/share-resource-logic";
+import {
+  openResourceInNewTab,
+  partitionSelection,
+  resolveSelectedResource,
+  type SelectionBarActionKey,
+} from "../lib/selection-bar-actions-logic";
 import { AlertBanner } from "./alert-banner";
 import { SkeletonLoader } from "./skeleton-loader";
 import { UploadZone } from "./upload-zone";
@@ -61,7 +67,7 @@ export function FileBrowser({
   readOnly?: boolean;
 }) {
   const { label, locale } = useLocale();
-  const { select, setInspectorTab, inspectorOpen, selected: inspectorSelected } = useShell();
+  const { select, setInspectorTab, setInspectorOpen, setMobileInspectorOpen, inspectorOpen, selected: inspectorSelected } = useShell();
   const searchParams = useSearchParams();
   const router = useRouter();
   const routeQuery = searchParams.get("query")?.trim() ?? "";
@@ -97,6 +103,7 @@ export function FileBrowser({
     type: "FILE" | "FOLDER";
     id: string;
   } | null>(null);
+  const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false);
   const [moveTarget, setMoveTarget] = useState<{
     type: "FILE" | "FOLDER";
     id: string;
@@ -552,6 +559,102 @@ export function FileBrowser({
     router.push(`/files/${targetId}`);
   }, [folderId, router]);
 
+  const handleSelectionAction = useCallback((key: SelectionBarActionKey) => {
+    const single = resolveSelectedResource(selectedIds, filteredContents.folders, filteredContents.files);
+    const { fileIds, folderIds } = partitionSelection(selectedIds, filteredContents.folders, filteredContents.files);
+
+    switch (key) {
+      case "openNewTab":
+        if (!single) {
+          setToast(label("sel.singleItemRequired"));
+          return;
+        }
+        openResourceInNewTab(single.type, single.id);
+        return;
+      case "share":
+        if (single && canShare) openShare(single, "invite");
+        return;
+      case "copyPermalink":
+        if (single && canShare) void copyShareLink(single);
+        return;
+      case "moveTo":
+        if (!canMutate || !single) return;
+        handleMove(single.type, single.id, single.name);
+        return;
+      case "copyTo":
+        if (!canMutate || !single) return;
+        setCopyTarget({ type: single.type, id: single.id, name: single.name });
+        return;
+      case "assignWorkflow":
+        if (!canMutate || !single) return;
+        setWorkflowTarget({ type: single.type, id: single.id, name: single.name });
+        return;
+      case "organize":
+        if (!canMutate || !single) return;
+        handleInspect(single.type, single.id);
+        setInspectorTab("dataTemplates");
+        setInspectorOpen(true);
+        setMobileInspectorOpen(true);
+        return;
+      case "searchInFold": {
+        const targetFolderId = single?.type === "FOLDER" ? single.id : folderId;
+        if (targetFolderId && targetFolderId !== folderId) {
+          router.push(`/files/${targetFolderId}`);
+        }
+        window.dispatchEvent(new CustomEvent("workdrive:focus-search"));
+        return;
+      }
+      case "download":
+        if (fileIds.length === 0) {
+          setToast(label("sel.noFilesSelected"));
+          return;
+        }
+        for (const id of fileIds) void onDownload(id);
+        return;
+      case "rename":
+        if (!canMutate || !single) return;
+        setRenameTarget({ type: single.type, id: single.id, name: single.name });
+        return;
+      case "followUpdates":
+        if (!single) return;
+        void handleFavorite(single.type, single.id);
+        return;
+      case "moreOptions":
+        if (!single) return;
+        handleInspect(single.type, single.id);
+        setInspectorTab("details");
+        setInspectorOpen(true);
+        setMobileInspectorOpen(true);
+        return;
+      case "moveToTrash":
+        if (!canMutate) return;
+        if (single && selectedIds.size === 1) {
+          setDeleteTarget({ type: single.type, id: single.id });
+          return;
+        }
+        if (selectedIds.size > 1) setBulkDeleteOpen(true);
+        return;
+      default:
+        return;
+    }
+  }, [
+    selectedIds,
+    filteredContents.folders,
+    filteredContents.files,
+    canShare,
+    canMutate,
+    folderId,
+    openShare,
+    copyShareLink,
+    handleMove,
+    handleInspect,
+    setInspectorTab,
+    setInspectorOpen,
+    setMobileInspectorOpen,
+    router,
+    label,
+  ]);
+
   return (
     <section className="wd-file-browser flex min-h-0 flex-1 flex-col w-full max-w-full overflow-x-hidden">
       <ShellScopeSync folderId={folderId} folderName={folderName} />
@@ -562,6 +665,9 @@ export function FileBrowser({
           <SelectionBar
             folderCount={folders.filter((f) => selectedIds.has(f.id)).length}
             fileCount={files.filter((f) => selectedIds.has(f.id)).length}
+            singleSelected={selectedIds.size === 1}
+            canMutate={canMutate}
+            canShare={canShare}
             onShare={(tab) => {
               const target = resolveShareTarget(selectedIds, folders, files);
               if (target) openShare(target, tab ?? "link");
@@ -571,9 +677,14 @@ export function FileBrowser({
               if (target) void copyShareLink(target);
             }}
             onDownload={() => {
-              const file = files.find((f) => selectedIds.has(f.id));
-              if (file) void onDownload(file.id);
+              const { fileIds } = partitionSelection(selectedIds, folders, files);
+              if (fileIds.length === 0) {
+                setToast(label("sel.noFilesSelected"));
+                return;
+              }
+              for (const id of fileIds) void onDownload(id);
             }}
+            onAction={handleSelectionAction}
             onClear={() => setSelectedIds(new Set())}
           />
         )}
@@ -682,6 +793,20 @@ export function FileBrowser({
             } else {
               await trashFile(deleteTarget.id);
             }
+            setSelectedIds(new Set());
+            await load();
+          }}
+        />
+      ) : null}
+      {bulkDeleteOpen ? (
+        <DeleteModal
+          onClose={() => setBulkDeleteOpen(false)}
+          onConfirm={async () => {
+            const { fileIds, folderIds } = partitionSelection(selectedIds, folders, files);
+            if (fileIds.length) await bulkTrashFiles(fileIds);
+            if (folderIds.length) await bulkTrashFolders(folderIds);
+            setBulkDeleteOpen(false);
+            setSelectedIds(new Set());
             await load();
           }}
         />

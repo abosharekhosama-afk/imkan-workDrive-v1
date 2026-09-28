@@ -634,6 +634,8 @@
   "sel.download": "تنزيل",
   "sel.more": "مزيد",
   "sel.share": "مشاركة",
+  "sel.singleItemRequired": "حدّد عنصرًا واحدًا لتنفيذ هذا الإجراء.",
+  "sel.noFilesSelected": "حدّد ملفًا واحدًا على الأقل للتنزيل.",
   "sort.by": "الفرز حسب",
   "sort.newestFirst": "الأحدث أولاً",
   "sort.oldestFirst": "الأقدم أولاً",

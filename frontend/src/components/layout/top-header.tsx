@@ -54,6 +54,14 @@ export function TopHeader({ adminMode = false }: { adminMode?: boolean }) {
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
   }, [searchOpen]);
+  useEffect(() => {
+    const onFocusSearch = () => {
+      setSearchOpen(true);
+      requestAnimationFrame(() => searchInputRef.current?.focus());
+    };
+    window.addEventListener("workdrive:focus-search", onFocusSearch);
+    return () => window.removeEventListener("workdrive:focus-search", onFocusSearch);
+  }, []);
   const isTeamManageRoute = /^\/files\/team-folders\/[^/]+\/manage/.test(pathname);
   const isTeamFoldersDirectory = pathname === "/files/team-folders";
   const isFolderRoute = /^\/files\/[^/]+$/.test(pathname);

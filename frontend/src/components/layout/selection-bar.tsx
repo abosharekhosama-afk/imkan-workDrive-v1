@@ -2,18 +2,59 @@
 import { useLocale } from "../locale-provider";
 import { Icons } from "./icons";
 import { ZohoMenu } from "./zoho-menu";
-import { useState } from "react";
-export function SelectionBar({ folderCount, fileCount, onShare, onCopyLink, onDownload, onClear }: {
-  folderCount: number; fileCount: number;
+import { useMemo, useState } from "react";
+import type { SelectionBarActionKey } from "../../lib/selection-bar-actions-logic";
+
+export function SelectionBar({
+  folderCount,
+  fileCount,
+  singleSelected,
+  canMutate,
+  canShare,
+  onShare,
+  onCopyLink,
+  onDownload,
+  onAction,
+  onClear,
+}: {
+  folderCount: number;
+  fileCount: number;
+  singleSelected: boolean;
+  canMutate: boolean;
+  canShare: boolean;
   onShare: (tab?: "link" | "invite") => void;
   onCopyLink: () => void;
   onDownload: () => void;
+  onAction: (key: SelectionBarActionKey) => void;
   onClear: () => void;
 }) {
   const { label } = useLocale();
   const [shareOpen, setShareOpen] = useState(false);
   const [moreOpen, setMoreOpen] = useState(false);
   const total = folderCount + fileCount;
+  const needsSingle = !singleSelected;
+  const moreItems = useMemo(
+    () => [
+      { key: "openNewTab", labelKey: "menu.openNewTab" as const, disabled: needsSingle },
+      "sep" as const,
+      { key: "share", labelKey: "menu.shareMenu" as const, chevron: true, disabled: !canShare || needsSingle },
+      { key: "copyPermalink", labelKey: "menu.copyPermalink" as const, disabled: !canShare || needsSingle },
+      "sep" as const,
+      { key: "moveTo", labelKey: "menu.moveTo" as const, hint: "Z", disabled: !canMutate || needsSingle },
+      { key: "copyTo", labelKey: "menu.copyTo" as const, hint: "C", disabled: !canMutate || needsSingle },
+      { key: "assignWorkflow", labelKey: "menu.assignWorkflow" as const, disabled: !canMutate || needsSingle },
+      { key: "organize", labelKey: "menu.organize" as const, disabled: !canMutate || needsSingle },
+      "sep" as const,
+      { key: "searchInFold", labelKey: "menu.searchInFold" as const },
+      { key: "download", labelKey: "sel.download" as const, hint: "⌃S", disabled: fileCount === 0 },
+      { key: "rename", labelKey: "menu.rename" as const, disabled: !canMutate || needsSingle },
+      { key: "followUpdates", labelKey: "menu.followUpdates" as const, disabled: needsSingle },
+      { key: "moreOptions", labelKey: "menu.moreOptions" as const, disabled: needsSingle },
+      "sep" as const,
+      { key: "moveToTrash", labelKey: "menu.moveToTrash" as const, danger: true, disabled: !canMutate },
+    ],
+    [canMutate, canShare, fileCount, needsSingle],
+  );
   if (total === 0) return null;
   const text = (folderCount > 0 && fileCount === 0
     ? label("sel.foldersSelected")
@@ -53,26 +94,9 @@ export function SelectionBar({ folderCount, fileCount, onShare, onCopyLink, onDo
             if (k === "share" || k === "addMembers") onShare("invite");
             else if (k === "copy" || k === "copyPermalink") onCopyLink();
             else if (k === "download") onDownload();
+            else onAction(k as SelectionBarActionKey);
           }}
-          items={[
-            { key: "openNewTab", labelKey: "menu.openNewTab" },
-            "sep",
-            { key: "share", labelKey: "menu.shareMenu", chevron: true },
-            { key: "copyPermalink", labelKey: "menu.copyPermalink" },
-            "sep",
-            { key: "moveTo", labelKey: "menu.moveTo", hint: "Z" },
-            { key: "copyTo", labelKey: "menu.copyTo", hint: "C" },
-            { key: "assignWorkflow", labelKey: "menu.assignWorkflow" },
-            { key: "organize", labelKey: "menu.organize" },
-            "sep",
-            { key: "searchInFold", labelKey: "menu.searchInFold" },
-            { key: "download", labelKey: "sel.download", hint: "⌃S" },
-            { key: "rename", labelKey: "menu.rename" },
-            { key: "followUpdates", labelKey: "menu.followUpdates" },
-            { key: "moreOptions", labelKey: "menu.moreOptions" },
-            "sep",
-            { key: "moveToTrash", labelKey: "menu.moveToTrash", danger: true },
-          ]} />
+          items={moreItems} />
         <button type="button" onClick={onClear} aria-label={label("sel.clear")} title="Esc"
           className="inline-flex h-8 items-center gap-1 rounded-full bg-[var(--wd-active)] px-3 text-[12px] font-medium text-[color:var(--wd-primary-ink)] transition-colors duration-150 ease-in-out hover:bg-[color:var(--wd-active)]">Esc <Icons.x size={12} /></button>
       </div>
