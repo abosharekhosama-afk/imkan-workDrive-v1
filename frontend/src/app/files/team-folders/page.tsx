@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState, useId } from "react";
 import { usePathname } from "next/navigation";
 import { useLocale } from "../../../components/locale-provider";
 import { ApiError } from "../../../lib/api/client";
@@ -12,6 +12,8 @@ import { AlertBanner } from "../../../components/alert-banner";
 import { EmptyState } from "../../../components/empty-state";
 import { SkeletonLoader } from "../../../components/skeleton-loader";
 import { ViewModePicker } from "../../../components/view-mode-picker";
+import { TeamFolderActionMenu } from "../../../components/team-folder-action-menu";
+import { ToolbarAnchoredPanel } from "../../../components/layout/toolbar-anchored-panel";
 import { errorMessageForStatus } from "../../../components/feedback-state-logic";
 import { persistViewMode, readStoredViewMode, type ViewMode } from "../../../components/view-mode-logic";
 
@@ -50,6 +52,7 @@ export default function TeamFoldersPage() {
   const [activeMembersTf, setActiveMembersTf] = useState<TeamFolderListItem | null>(null);
   const [detailsTf, setDetailsTf] = useState<TeamFolderListItem | null>(null);
   const [menuId, setMenuId] = useState<string | null>(null);
+  const [menuAnchor, setMenuAnchor] = useState<HTMLElement | null>(null);
   const [pinnedIds, setPinnedIds] = useState<Set<string>>(new Set());
   const [search, setSearch] = useState("");
   const [scopeFilter, setScopeFilter] = useState<"joined" | "all" | "public" | "private">("joined");
@@ -58,6 +61,7 @@ export default function TeamFoldersPage() {
   const [renameName, setRenameName] = useState("");
   const [actionBusy, setActionBusy] = useState(false);
   const [viewMode, setViewMode] = useState<ViewMode>("list");
+  const filterButtonId = useId().replace(/:/g, "");
 
   useEffect(() => {
     setViewMode(readStoredViewMode(window.localStorage, "list"));
@@ -106,8 +110,10 @@ export default function TeamFoldersPage() {
   useEffect(() => {
     const onDown = (event: MouseEvent) => {
       if (!(event.target instanceof Element)) return;
-      if (!event.target.closest("[data-team-folder-menu], [data-team-folder-menu-trigger]")) setMenuId(null);
-      if (!event.target.closest("[data-team-folder-filter]")) setFilterOpen(false);
+      if (!event.target.closest("[data-team-folder-menu], [data-team-folder-menu-trigger]")) {
+        setMenuId(null);
+        setMenuAnchor(null);
+      }
     };
     document.addEventListener("mousedown", onDown);
     return () => document.removeEventListener("mousedown", onDown);
@@ -125,12 +131,14 @@ export default function TeamFoldersPage() {
 
   const openRename = (tf: TeamFolderListItem) => {
     setMenuId(null);
+    setMenuAnchor(null);
     setRenameTarget(tf);
     setRenameName(tf.name);
   };
 
   const remove = (tf: TeamFolderListItem) => {
     setMenuId(null);
+    setMenuAnchor(null);
     void (async () => {
       if (!window.confirm(locale === "ar" ? `هل تريد حذف مجلد الفريق «${tf.name}»؟` : `Delete team folder “${tf.name}”?`)) return;
       setActionBusy(true);
@@ -186,24 +194,36 @@ export default function TeamFoldersPage() {
     }
   };
 
+  const menuTf = useMemo(() => visibleFolders.find((tf) => tf.id === menuId) ?? null, [visibleFolders, menuId]);
+
+  const toggleMenu = (tf: TeamFolderListItem, event: React.MouseEvent<HTMLButtonElement>) => {
+    event.preventDefault();
+    event.stopPropagation();
+    if (menuId === tf.id) {
+      setMenuId(null);
+      setMenuAnchor(null);
+      return;
+    }
+    setMenuId(tf.id);
+    setMenuAnchor(event.currentTarget);
+  };
+
   return (
     <section className="team-folders-page flex min-h-full min-w-0 flex-col bg-white">
       <div className="team-folders-toolbar flex shrink-0 items-center border-b border-slate-100 px-5" data-team-folders-toolbar>
         <div className="relative shrink-0" data-team-folder-filter>
-          <button type="button" onClick={() => setFilterOpen((v) => !v)} className={`team-filter-trigger ${scopeFilter !== "joined" ? "is-active" : ""}`} aria-expanded={filterOpen} aria-haspopup="menu">
+          <button id={filterButtonId} type="button" onClick={() => setFilterOpen((v) => !v)} className={`team-filter-trigger ${scopeFilter !== "joined" ? "is-active" : ""}`} aria-expanded={filterOpen} aria-haspopup="menu">
             <FilterIcon />
             <span>{scopeFilter === "joined" ? (locale === "ar" ? "مشترك" : "Joined") : scopeFilter === "public" ? "Public" : scopeFilter === "private" ? "Private" : "All"}</span>
             <span className="team-filter-chevron">⌄</span>
           </button>
-          {filterOpen ? (
-            <div className="team-filter-menu" role="menu">
-              {([["joined", locale === "ar" ? "مشترك" : "Joined"], ["all", locale === "ar" ? "الكل" : "All"], ["public", "Public"], ["private", "Private"]] as const).map(([key, text]) => (
-                <button key={key} type="button" role="menuitem" className={scopeFilter === key ? "is-selected" : ""} onClick={() => { setScopeFilter(key); setFilterOpen(false); }}>
-                  <span>{text}</span>{scopeFilter === key ? <span aria-hidden="true">✓</span> : null}
-                </button>
-              ))}
-            </div>
-          ) : null}
+          <ToolbarAnchoredPanel open={filterOpen} onClose={() => setFilterOpen(false)} anchorId={filterButtonId} align="start" width={180} className="p-1.5 [&_button]:flex [&_button]:w-full [&_button]:min-h-[34px] [&_button]:items-center [&_button]:justify-between [&_button]:rounded-[7px] [&_button]:border-0 [&_button]:bg-transparent [&_button]:px-[9px] [&_button]:text-[12px] [&_button]:text-[#41474d] [&_button:hover]:bg-[#f5f7f9] [&_button.is-selected]:bg-[#eef4ff] [&_button.is-selected]:font-medium [&_button.is-selected]:text-[#1b66ea]">
+            {([["joined", locale === "ar" ? "مشترك" : "Joined"], ["all", locale === "ar" ? "الكل" : "All"], ["public", "Public"], ["private", "Private"]] as const).map(([key, text]) => (
+              <button key={key} type="button" role="menuitem" className={scopeFilter === key ? "is-selected" : ""} onClick={() => { setScopeFilter(key); setFilterOpen(false); }}>
+                <span>{text}</span>{scopeFilter === key ? <span aria-hidden="true">✓</span> : null}
+              </button>
+            ))}
+          </ToolbarAnchoredPanel>
         </div>
 
         <label className="team-folders-search">
@@ -266,15 +286,8 @@ export default function TeamFoldersPage() {
                     ) : (
                       <button type="button" className="team-folder-members" disabled={actionBusy} onClick={() => void join(tf)}><span className="text-[11px] font-semibold text-blue-600">{locale === "ar" ? "انضمام" : "Join"}</span></button>
                     )}
-                    <button type="button" data-team-folder-menu-trigger aria-expanded={menuId === tf.id} className="team-folder-more" onClick={() => setMenuId((id) => id === tf.id ? null : tf.id)} aria-label={locale === "ar" ? "المزيد" : "More"}><MoreIcon /></button>
+                    <button type="button" data-team-folder-menu-trigger aria-expanded={menuId === tf.id} className="team-folder-more" onClick={(event) => toggleMenu(tf, event)} aria-label={locale === "ar" ? "المزيد" : "More"}><MoreIcon /></button>
                   </div>
-                  {menuId === tf.id ? (
-                    <div className="team-folder-menu team-folder-menu--card" data-team-folder-menu role="menu">
-                      {!tf.isMember && tf.isPublicToOrg ? <button type="button" disabled={actionBusy} onClick={() => { setMenuId(null); void join(tf); }}>{locale === "ar" ? "انضمام" : "Join"}</button> : null}
-                      <button type="button" onClick={() => { setDetailsTf(tf); setMenuId(null); }}>{locale === "ar" ? "التفاصيل" : "Details"}</button>
-                      {tf.isMember ? <><button type="button" onClick={() => { setActiveMembersTf(tf); setMenuId(null); }}>{locale === "ar" ? "الأعضاء" : "Members"}</button><button type="button" onClick={() => openRename(tf)}>{label("files.rename")}</button><button type="button" className="danger" onClick={() => remove(tf)}>{label("files.delete")}</button></> : null}
-                    </div>
-                  ) : null}
                 </article>
               );
             })}
@@ -315,14 +328,7 @@ export default function TeamFoldersPage() {
                       <PinIcon filled={pinned} /><span className="team-folder-pin-label">{pinned ? (locale === "ar" ? "إلغاء التثبيت" : "Unpin") : (locale === "ar" ? "تثبيت" : "Pin")}</span>
                     </button>
                     <div className="relative">
-                      <button type="button" data-team-folder-menu-trigger aria-expanded={menuId === tf.id} className="team-folder-more" onClick={(e) => { e.preventDefault(); e.stopPropagation(); setMenuId((id) => id === tf.id ? null : tf.id); }} aria-label={locale === "ar" ? "المزيد" : "More"}><MoreIcon /></button>
-                      {menuId === tf.id ? (
-                        <div className="team-folder-menu" data-team-folder-menu role="menu">
-                          {!tf.isMember && tf.isPublicToOrg ? <button type="button" disabled={actionBusy} onClick={() => { setMenuId(null); void join(tf); }}>{locale === "ar" ? "انضمام" : "Join"}</button> : null}
-                          <button type="button" onClick={() => { setDetailsTf(tf); setMenuId(null); }}>{locale === "ar" ? "التفاصيل" : "Details"}</button>
-                          {tf.isMember ? <><button type="button" onClick={() => { setActiveMembersTf(tf); setMenuId(null); }}>{locale === "ar" ? "الأعضاء" : "Members"}</button><button type="button" onClick={() => openRename(tf)}>{label("files.rename")}</button><button type="button" className="danger" onClick={() => remove(tf)}>{label("files.delete")}</button></> : null}
-                        </div>
-                      ) : null}
+                      <button type="button" data-team-folder-menu-trigger aria-expanded={menuId === tf.id} className="team-folder-more" onClick={(event) => toggleMenu(tf, event)} aria-label={locale === "ar" ? "المزيد" : "More"}><MoreIcon /></button>
                     </div>
                   </div>
 
@@ -366,6 +372,14 @@ export default function TeamFoldersPage() {
             </div>
           </div>
         </div>
+      ) : null}
+
+      {menuTf ? (
+        <TeamFolderActionMenu open={Boolean(menuId)} anchorEl={menuAnchor} onClose={() => { setMenuId(null); setMenuAnchor(null); }}>
+          {!menuTf.isMember && menuTf.isPublicToOrg ? <button type="button" disabled={actionBusy} onClick={() => { setMenuId(null); setMenuAnchor(null); void join(menuTf); }}>{locale === "ar" ? "انضمام" : "Join"}</button> : null}
+          <button type="button" onClick={() => { setDetailsTf(menuTf); setMenuId(null); setMenuAnchor(null); }}>{locale === "ar" ? "التفاصيل" : "Details"}</button>
+          {menuTf.isMember ? <><button type="button" onClick={() => { setActiveMembersTf(menuTf); setMenuId(null); setMenuAnchor(null); }}>{locale === "ar" ? "الأعضاء" : "Members"}</button><button type="button" onClick={() => openRename(menuTf)}>{label("files.rename")}</button><button type="button" className="danger" onClick={() => remove(menuTf)}>{label("files.delete")}</button></> : null}
+        </TeamFolderActionMenu>
       ) : null}
 
       {activeMembersTf ? <MembersModal teamFolderId={activeMembersTf.id} teamFolderName={activeMembersTf.name} userRole={activeMembersTf.role} onClose={() => setActiveMembersTf(null)} /> : null}

@@ -550,7 +550,7 @@ export function FileBrowser({
 
       {error ? <AlertBanner message={error} action={<button type="button" className="imkan-button-secondary" onClick={() => void load()}>{label("feedback.retry")}</button>} /> : null}
 
-      <div className="min-h-0 flex-1 bg-white">
+      <div className="wd-file-browser-body min-h-0 flex-1 bg-white">
       {loading ? <SkeletonLoader columns={6} /> : viewMode === "grid" ? (
         <FileGridView
           folders={filteredContents.folders}
@@ -611,6 +611,7 @@ export function FileBrowser({
           sortField={sortField}
           sortDir={sortDir}
           columns={columns}
+          onColumns={setColumns}
         />
       )}
       </div>

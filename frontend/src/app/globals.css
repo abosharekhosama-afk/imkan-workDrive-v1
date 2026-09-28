@@ -2771,7 +2771,10 @@ html[data-sidebar-light="true"] .primary-sidebar{background:#f6f7f9!important;co
 .member-section-toolbar{padding:16px 26px 8px}.member-section-toolbar p{margin-top:4px}
 @media(max-width:700px){.account-drawer{width:100vw}.account-download-grid{grid-template-columns:1fr 1fr}.account-qr{display:none}.appearance-modes{gap:6px}.member-search-combo{width:100%}.member-team-toolbar{align-items:stretch;flex-direction:column}.member-team-toolbar-actions{justify-content:space-between}.members-table{min-height:calc(100vh - 230px)}}
 
-/* File browser tables should size to content so row action menus stay visible. */
+/* File browser tables: keep row menus visible while giving the content area room. */
+.wd-file-browser .wd-file-browser-body {
+  min-height: calc(100vh - 190px);
+}
 .wd-file-browser .imkan-file-table-root,
 .wd-file-browser .imkan-table-scroll,
 .wd-file-browser .imkan-table-scroll > table {
@@ -2779,8 +2782,12 @@ html[data-sidebar-light="true"] .primary-sidebar{background:#f6f7f9!important;co
   height: auto;
   overflow: visible;
 }
+.wd-toolbar { overflow: visible; }
+.team-folders-page { overflow: visible; }
+.team-folders-toolbar { overflow: visible; position: relative; z-index: 25; }
 .team-folders-table-wrap,
 .team-folders-grid-wrap {
+  min-height: calc(100vh - 190px);
   overflow-x: auto;
   overflow-y: visible;
 }
@@ -2823,10 +2830,9 @@ html[data-sidebar-light="true"] .primary-sidebar{background:#f6f7f9!important;co
   gap: 8px;
   margin-top: 12px;
 }
-.team-folder-menu--card {
-  inset-inline-end: 14px;
-  top: auto;
-  bottom: 48px;
+.team-folder-menu--portal {
+  position: fixed;
+  inset: auto;
 }
 
 /* Long-table surfaces should occupy the viewport even when only a few rows exist. */

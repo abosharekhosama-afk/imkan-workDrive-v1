@@ -1,11 +1,73 @@
-import { submitOfficeOperation, type OfficeOperationPatch } from '@/lib/api/office';
+import { submitOfficeOperation, openOfficeDocument, type OfficeOperationPatch } from '@/lib/api/office';
+import { ApiError } from '@/lib/api/client';
+import { diffOfficeDocuments } from './offline-logic';
 
 export type OfficeQueuedOperation = { opId:string; fileId:string; baseRevision:number; patches:OfficeOperationPatch[]; createdAt:string; kind:'SHEET'|'SHOW'|'WRITER'; clientId:string; sequence:number };
 const key=(fileId:string)=>`imkan:office:offline:${fileId}`;
 export function queueOfficeOperation(op:OfficeQueuedOperation){ const all=readOfficeQueue(op.fileId); all.push(op); localStorage.setItem(key(op.fileId),JSON.stringify(all.slice(-200))); }
 export function readOfficeQueue(fileId:string):OfficeQueuedOperation[]{try{const v=JSON.parse(localStorage.getItem(key(fileId))||'[]');return Array.isArray(v)?v:[]}catch{return[]}}
 export function removeOfficeOperation(fileId:string,opId:string){const next=readOfficeQueue(fileId).filter(x=>x.opId!==opId); if(next.length)localStorage.setItem(key(fileId),JSON.stringify(next));else localStorage.removeItem(key(fileId));}
-export async function flushOfficeQueue(fileId:string,sessionId:string|undefined,onRevision?:(r:number)=>void,onConflict?:(e:any)=>void){if(typeof navigator!=='undefined'&&!navigator.onLine)return;for(const op of readOfficeQueue(fileId)){try{const r=await submitOfficeOperation(fileId,{opId:op.opId,baseRevision:op.baseRevision,patches:op.patches,sessionId,clientId:op.clientId,sequence:op.sequence});removeOfficeOperation(fileId,op.opId);const rest=readOfficeQueue(fileId).map(x=>({...x,baseRevision:r.revision}));if(rest.length)localStorage.setItem(key(fileId),JSON.stringify(rest));onRevision?.(r.revision)}catch(e){onConflict?.(e);break}}}
+function replaceQueuedOperation(fileId:string,op:OfficeQueuedOperation){const next=readOfficeQueue(fileId).map(x=>x.opId===op.opId?op:x); localStorage.setItem(key(fileId),JSON.stringify(next));}
+
+async function submitQueuedOperation(fileId:string,op:OfficeQueuedOperation,sessionId:string|undefined){
+  return submitOfficeOperation(fileId,{opId:op.opId,baseRevision:op.baseRevision,patches:op.patches,sessionId,clientId:op.clientId,sequence:op.sequence});
+}
+
+function readSnapshotDocument(fileId:string){
+  try{
+    const snap=JSON.parse(localStorage.getItem(`imkan:office:snapshot:${fileId}`)||'null');
+    return snap?.fileId===fileId?snap.document:null;
+  }catch{return null}
+}
+
+export async function flushOfficeQueue(fileId:string,sessionId:string|undefined,onRevision?:(r:number)=>void,onConflict?:(e:unknown)=>void){
+  if(typeof navigator!=='undefined'&&!navigator.onLine)return;
+  for(const op of [...readOfficeQueue(fileId)]){
+    let current=op;
+    let attempted=false;
+    while(true){
+      try{
+        const r=await submitQueuedOperation(fileId,current,sessionId);
+        removeOfficeOperation(fileId,current.opId);
+        const rest=readOfficeQueue(fileId).map(x=>({...x,baseRevision:r.revision}));
+        if(rest.length)localStorage.setItem(key(fileId),JSON.stringify(rest));
+        onRevision?.(r.revision);
+        break;
+      }catch(e){
+        const code=e instanceof ApiError?e.code:undefined;
+        if(!attempted && (code==='OFFICE_OPERATION_REVISION'||code==='OFFICE_OPERATION_RETRY')){
+          attempted=true;
+          try{
+            const remote=await openOfficeDocument(fileId);
+            current={...current,baseRevision:remote.revision};
+            replaceQueuedOperation(fileId,current);
+            continue;
+          }catch{
+            onConflict?.(e);
+            return;
+          }
+        }
+        if(code==='OFFICE_OPERATION_EMPTY'){
+          try{
+            const snap=readSnapshotDocument(fileId);
+            const remote=await openOfficeDocument(fileId);
+            const patches=diffOfficeDocuments(remote.content,snap ?? remote.content);
+            if(patches.length){
+              current={...current,baseRevision:remote.revision,patches};
+              replaceQueuedOperation(fileId,current);
+              attempted=false;
+              continue;
+            }
+          }catch{/* fall through */}
+          removeOfficeOperation(fileId,current.opId);
+          continue;
+        }
+        onConflict?.(e);
+        break;
+      }
+    }
+  }
+}
 const clientKey=(fileId:string)=>`imkan:office:client:${fileId}`;
 function getClientId(fileId:string){let id=localStorage.getItem(clientKey(fileId));if(!id){id=crypto.randomUUID();localStorage.setItem(clientKey(fileId),id)}return id}
 function nextSequence(fileId:string){const k=`${clientKey(fileId)}:seq`;const n=Number(localStorage.getItem(k)||'0')+1;localStorage.setItem(k,String(n));return n}

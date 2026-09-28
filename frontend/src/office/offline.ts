@@ -1,4 +1,5 @@
 import { flushOfficeQueue, readOfficeQueue, queueOfficeOperation, type OfficeQueuedOperation, createOfficeOperation, applyOfficePatchDocument } from './collaboration-v2';
+import { diffOfficeDocuments, patchPathsOverlap } from './offline-logic';
 import { getOfficeOperations, openOfficeDocument } from '@/lib/api/office';
 import type { OfficeOperationPatch } from '@/lib/api/office';
 import { officeClone, officeEqual, scheduleOfficeIdle } from './performance';
@@ -22,8 +23,7 @@ export function readOfflineConflict(fileId:string):OfflineConflict|null{try{retu
 export function clearOfflineConflict(fileId:string){try{localStorage.removeItem(conflictKey(fileId))}catch{}}
 
 function patchOverlap(a:OfficeOperationPatch,b:OfficeOperationPatch){
-  const norm=(p:string)=>p.replace(/\/+$/,'')||'/'; const x=norm(a.path), y=norm(b.path);
-  return x===y || x.startsWith(y+'/') || y.startsWith(x+'/');
+  return patchPathsOverlap(a.path, b.path);
 }
 
 export async function prepareOfflineConflict(fileId:string,kind:OfflineSnapshot['kind'],reason:string){
@@ -62,21 +62,7 @@ export function discardOfflineQueue(fileId:string){
   clearOfflineConflict(fileId);
 }
 
-function clone<T>(v:T):T{return officeClone(v)}
-function path(parts:string[]){return '/'+parts.map(encodeURIComponent).join('/')}
-
-export function diffOfficeDocuments(previous:any,next:any):OfficeOperationPatch[]{
-  const patches:OfficeOperationPatch[]=[];
-  const walk=(a:any,b:any,parts:string[],depth=0)=>{
-    if(officeEqual(a,b)) return;
-    if(depth>5 || a===null || b===null || typeof a!=='object' || typeof b!=='object') { patches.push({op:'set',path:path(parts),value:clone(b)}); return; }
-    if(Array.isArray(a)||Array.isArray(b)) { patches.push({op:'set',path:path(parts),value:clone(b)}); return; }
-    const keys=new Set([...Object.keys(a||{}),...Object.keys(b||{})]);
-    for(const k of keys){ if(!(k in b)) patches.push({op:'delete',path:path([...parts,k])}); else walk(a?.[k],b?.[k],[...parts,k],depth+1); }
-  };
-  walk(previous,next,[]);
-  return patches.filter(p=>p.path!=='/');
-}
+export { diffOfficeDocuments } from './offline-logic';
 
 export function queueDocumentChange(fileId:string,kind:OfficeQueuedOperation['kind'],baseRevision:number,previous:any,next:any){
   const patches=diffOfficeDocuments(previous,next);

@@ -1,15 +1,10 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useId, useState } from "react";
 import { useLocale } from "./locale-provider";
 import { persistViewMode, type ViewMode } from "./view-mode-logic";
 import { Icons } from "./layout/icons";
-
-const CARD_CLASS = [
-  "absolute top-full z-[90] mt-1.5 min-w-52",
-  "rounded-[var(--wd-menu-radius)] bg-white",
-  "border border-slate-200/80 shadow-[var(--wd-menu-shadow)]",
-].join(" ");
+import { ToolbarAnchoredPanel } from "./layout/toolbar-anchored-panel";
 
 const VIEW_OPTIONS = [
   ["list", "view.list", Icons.list] as const,
@@ -30,24 +25,7 @@ export function ViewModePicker({
 }) {
   const { label } = useLocale();
   const [open, setOpen] = useState(false);
-  const rootRef = useRef<HTMLDivElement | null>(null);
-
-  useEffect(() => {
-    if (!open) return;
-    const onDown = (e: MouseEvent) => {
-      if (rootRef.current?.contains(e.target as Node)) return;
-      setOpen(false);
-    };
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setOpen(false);
-    };
-    document.addEventListener("mousedown", onDown);
-    document.addEventListener("keydown", onKey);
-    return () => {
-      document.removeEventListener("mousedown", onDown);
-      document.removeEventListener("keydown", onKey);
-    };
-  }, [open]);
+  const buttonId = useId().replace(/:/g, "");
 
   function pick(next: ViewMode) {
     onView(next);
@@ -63,8 +41,9 @@ export function ViewModePicker({
     view === "grid" ? <Icons.grid size={15} /> : view === "compact" ? <Icons.compact size={15} /> : <Icons.list size={15} />;
 
   return (
-    <div ref={rootRef} className={`relative ${className}`}>
+    <div className={className}>
       <button
+        id={buttonId}
         type="button"
         onClick={() => setOpen((v) => !v)}
         aria-expanded={open}
@@ -75,25 +54,23 @@ export function ViewModePicker({
       >
         {activeIcon}
       </button>
-      {open ? (
-        <div className={`${CARD_CLASS} ${align === "end" ? "end-0" : "start-0"} w-48 p-1`} role="menu">
-          {VIEW_OPTIONS.map(([mode, key, Icon]) => (
-            <button
-              key={mode}
-              type="button"
-              role="menuitem"
-              onClick={() => pick(mode as ViewMode)}
-              className={`flex w-full items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-[13px] text-start ${view === mode ? "bg-[var(--wd-menu-hover)] font-medium text-[color:var(--wd-primary-ink)]" : "text-slate-600 hover:bg-slate-50"}`}
-            >
-              <span className="w-4 shrink-0 text-[color:var(--wd-primary)]">
-                <Icon size={15} />
-              </span>
-              <span className="flex-1">{label(key as never)}</span>
-              {view === mode ? <Icons.check size={13} className="text-[color:var(--wd-primary)]" /> : null}
-            </button>
-          ))}
-        </div>
-      ) : null}
+      <ToolbarAnchoredPanel open={open} onClose={() => setOpen(false)} anchorId={buttonId} align={align} width={192} className="p-1">
+        {VIEW_OPTIONS.map(([mode, key, Icon]) => (
+          <button
+            key={mode}
+            type="button"
+            role="menuitem"
+            onClick={() => pick(mode as ViewMode)}
+            className={`flex w-full items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-[13px] text-start ${view === mode ? "bg-[var(--wd-menu-hover)] font-medium text-[color:var(--wd-primary-ink)]" : "text-slate-600 hover:bg-slate-50"}`}
+          >
+            <span className="w-4 shrink-0 text-[color:var(--wd-primary)]">
+              <Icon size={15} />
+            </span>
+            <span className="flex-1">{label(key as never)}</span>
+            {view === mode ? <Icons.check size={13} className="text-[color:var(--wd-primary)]" /> : null}
+          </button>
+        ))}
+      </ToolbarAnchoredPanel>
     </div>
   );
 }

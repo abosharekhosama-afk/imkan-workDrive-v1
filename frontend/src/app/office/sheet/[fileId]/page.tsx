@@ -134,7 +134,7 @@ export default function SheetPage() {
   const persist = async (w: Workbook) => {
     if (!doc) return;
     setSaving(true); setSaved(false);
-    const op = queueDocumentChange(fileId,'SHEET',revision,doc,w);
+    const op = queueDocumentChange(fileId,'SHEET',revision,ref.current ?? doc,w);
     cacheOfficeSnapshot(fileId,'SHEET',revision,w);
     if (!op) { setSaving(false); setSaved(offlineQueueCount(fileId)===0); return; }
     try {

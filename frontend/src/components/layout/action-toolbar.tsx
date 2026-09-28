@@ -5,6 +5,7 @@ import { useLocale } from "../locale-provider";
 import { persistViewMode, type ViewMode } from "../view-mode-logic";
 import { Icons } from "./icons";
 import { ZohoMenu } from "./zoho-menu";
+import { ToolbarAnchoredPanel } from "./toolbar-anchored-panel";
 import { openWip } from "../wip-modal";
 import { WorkdriveEvents } from "../../lib/workdrive-events";
 import { getFolder } from "../../lib/api/folders";
@@ -20,14 +21,6 @@ export const FILTER_STORAGE_KEY = "zoho.filter";
 export type ColumnKey = "name" | "lastModified" | "timeCreated" | "size" | "type" | "extension";
 
 // Shared unified card surface used by every inline popover (Zoho + New parity).
-// Rounded corners, soft shadow, white surface + hairline border, driven by the
-// official CSS variables (no hardcoded colors).
-const CARD_CLASS = [
-  "absolute top-full z-[90] mt-1.5 min-w-52",
-  "rounded-[var(--wd-menu-radius)] bg-white",
-  "border border-slate-200/80 shadow-[var(--wd-menu-shadow)]",
-].join(" ");
-
 const SORT_FIELDS: Array<[ColumnKey, string]> = [
   ["name", "files.column.name"],
   ["lastModified", "files.column.modified"],
@@ -188,29 +181,27 @@ export function ActionToolbar({
   const isColOn = (k: ColumnKey) => cols[k] ?? true;
 
   return (
-    <div ref={rootRef} className={`wd-toolbar relative flex shrink-0 flex-wrap items-center gap-1.5 ${context === "teamFolder" ? "team-folder-toolbar" : ""}`}>
+    <div ref={rootRef} className={`wd-toolbar relative z-20 flex shrink-0 flex-wrap items-center gap-1.5 overflow-visible ${context === "teamFolder" ? "team-folder-toolbar" : ""}`}>
       <button id="tb-tree-btn" type="button" onClick={() => toggle("tree")} aria-expanded={openMenu === "tree"} aria-haspopup="menu"
         className={`wd-icon-btn !h-[27px] !w-[45px] shadow-[inset_0_0_0_1px_var(--wd-menu-border)] ${openMenu === "tree" ? "bg-[var(--wd-active)] text-[color:var(--wd-primary-ink)]" : ""}`}
         title={label("nav.fileTree")} aria-label={label("nav.fileTree")}>
         <Icons.tree size={16} />
       </button>
 
-      {openMenu === "tree" ? (
-        <div className={`${CARD_CLASS} start-0 w-72 p-1.5`}>
-          <div className="border-b border-slate-100 px-2 py-1.5 text-[11px] font-semibold uppercase tracking-wide text-slate-400">{label("nav.fileTree")}</div>
-          {folders.length === 0 ? (
-            <p className="px-2 py-3 text-[13px] text-slate-400">{label("files.empty")}</p>
-          ) : (
-            <ul className="flex max-h-72 flex-col gap-0.5 overflow-y-auto py-1">
-              {folders.map((folder) => (
-                <TreeRow key={folder.id} folder={folder} expandedNodes={expandedNodes} childMap={childMap}
-                  activeId={currentFolderId} onToggle={toggleNode}
-                  onSelect={(id) => { if (id !== currentFolderId) onOpenFolder?.(id); setOpenMenu(null); }} />
-              ))}
-            </ul>
-          )}
-        </div>
-      ) : null}
+      <ToolbarAnchoredPanel open={openMenu === "tree"} onClose={close} anchorId="tb-tree-btn" align="start" width={288} className="p-1.5">
+        <div className="border-b border-slate-100 px-2 py-1.5 text-[11px] font-semibold uppercase tracking-wide text-slate-400">{label("nav.fileTree")}</div>
+        {folders.length === 0 ? (
+          <p className="px-2 py-3 text-[13px] text-slate-400">{label("files.empty")}</p>
+        ) : (
+          <ul className="flex max-h-72 flex-col gap-0.5 overflow-y-auto py-1">
+            {folders.map((folder) => (
+              <TreeRow key={folder.id} folder={folder} expandedNodes={expandedNodes} childMap={childMap}
+                activeId={currentFolderId} onToggle={toggleNode}
+                onSelect={(id) => { if (id !== currentFolderId) onOpenFolder?.(id); setOpenMenu(null); }} />
+            ))}
+          </ul>
+        )}
+      </ToolbarAnchoredPanel>
 
       {context !== "teamFolders" ? (
         <button type="button" onClick={dispatchFolderCreate} title={label("menu.folder")} aria-label={label("menu.folder")}
@@ -273,49 +264,45 @@ export function ActionToolbar({
           title={label("view.toggle")} aria-label={label("view.toggle")}>
           {view === "grid" ? <Icons.grid size={15} /> : view === "compact" ? <Icons.compact size={15} /> : <Icons.list size={15} />}
         </button>
-        {openMenu === "view" ? (
-          <div className={`${CARD_CLASS} end-0 w-48 p-1`}>
-            {([["list", "view.list", <Icons.list key="i" size={15} />], ["compact", "view.compact", <Icons.compact key="i" size={15} />], ["grid", "view.grid", <Icons.grid key="i" size={15} />]] as const).map(([v, key, icon]) => (
-              <button key={v} type="button" onClick={() => pick(v)}
-                className={`flex w-full items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-[13px] text-start ${view === v ? "bg-[var(--wd-menu-hover)] font-medium text-[color:var(--wd-primary-ink)]" : "text-slate-600 hover:bg-slate-50"}`}>
-                <span className="w-4 shrink-0 text-[color:var(--wd-primary)]">{icon}</span>
-                <span className="flex-1">{label(key as never)}</span>
-                {view === v ? <Icons.check size={13} className="text-[color:var(--wd-primary)]" /> : null}
-              </button>
-            ))}
-          </div>
-        ) : null}</> : null}
+        <ToolbarAnchoredPanel open={openMenu === "view"} onClose={close} anchorId="tb-view-btn" width={192} className="p-1">
+          {([["list", "view.list", <Icons.list key="i" size={15} />], ["compact", "view.compact", <Icons.compact key="i" size={15} />], ["grid", "view.grid", <Icons.grid key="i" size={15} />]] as const).map(([v, key, icon]) => (
+            <button key={v} type="button" onClick={() => pick(v)}
+              className={`flex w-full items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-[13px] text-start ${view === v ? "bg-[var(--wd-menu-hover)] font-medium text-[color:var(--wd-primary-ink)]" : "text-slate-600 hover:bg-slate-50"}`}>
+              <span className="w-4 shrink-0 text-[color:var(--wd-primary)]">{icon}</span>
+              <span className="flex-1">{label(key as never)}</span>
+              {view === v ? <Icons.check size={13} className="text-[color:var(--wd-primary)]" /> : null}
+            </button>
+          ))}
+        </ToolbarAnchoredPanel></> : null}
         {/* Sort By popover: SORT BY + SORT ORDER, blue highlight + checkmark. */}
         <button id="tb-sort-btn" type="button" onClick={() => toggle("sort")} aria-expanded={openMenu === "sort"} aria-haspopup="menu"
           className={`wd-icon-btn ${openMenu === "sort" ? "bg-[var(--wd-active)] text-[color:var(--wd-primary-ink)]" : ""}`}
           title={label("nav.sort")} aria-label={label("nav.sort")}>
           <Icons.sort size={17} />
         </button>
-        {openMenu === "sort" ? (
-          <div className={`${CARD_CLASS} end-0 w-60 p-1.5`}>
-            <div className="mb-1 px-1 pt-1 text-[11px] font-semibold uppercase tracking-wide text-slate-400">{label("sort.by")}</div>
-            <div className="flex flex-col gap-0.5">
-              {SORT_FIELDS.map(([key, keyName]) => (
-                <button key={key} type="button" onClick={() => setSort(key, sortDir)}
-                  className={`flex items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-[13px] text-start ${sortField === key ? "bg-[var(--wd-menu-hover)] font-medium text-[color:var(--wd-primary-ink)]" : "text-slate-600 hover:bg-slate-50"}`}>
-                  <span className="flex-1">{label(keyName as never)}</span>
-                  {sortField === key ? <Icons.check size={13} className="text-[color:var(--wd-primary)]" /> : null}
-                </button>
-              ))}
-            </div>
-            <div className="my-1.5 border-t border-slate-100" />
-            <div className="mb-1 px-1 pt-1 text-[11px] font-semibold uppercase tracking-wide text-slate-400">{label("sort.order")}</div>
-            <div className="flex flex-col gap-0.5">
-              {([["desc", "sort.newestFirst"], ["asc", "sort.oldestFirst"]] as const).map(([d, dk]) => (
-                <button key={d} type="button" onClick={() => setSort(sortField, d)}
-                  className={`flex items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-[13px] text-start ${sortDir === d ? "bg-[var(--wd-menu-hover)] font-medium text-[color:var(--wd-primary-ink)]" : "text-slate-600 hover:bg-slate-50"}`}>
-                  <span className="flex-1">{label(dk)}</span>
-                  {sortDir === d ? <Icons.check size={13} className="text-[color:var(--wd-primary)]" /> : null}
-                </button>
-              ))}
-            </div>
+        <ToolbarAnchoredPanel open={openMenu === "sort"} onClose={close} anchorId="tb-sort-btn" width={240} className="p-1.5">
+          <div className="mb-1 px-1 pt-1 text-[11px] font-semibold uppercase tracking-wide text-slate-400">{label("sort.by")}</div>
+          <div className="flex flex-col gap-0.5">
+            {SORT_FIELDS.map(([key, keyName]) => (
+              <button key={key} type="button" onClick={() => setSort(key, sortDir)}
+                className={`flex items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-[13px] text-start ${sortField === key ? "bg-[var(--wd-menu-hover)] font-medium text-[color:var(--wd-primary-ink)]" : "text-slate-600 hover:bg-slate-50"}`}>
+                <span className="flex-1">{label(keyName as never)}</span>
+                {sortField === key ? <Icons.check size={13} className="text-[color:var(--wd-primary)]" /> : null}
+              </button>
+            ))}
           </div>
-        ) : null}
+          <div className="my-1.5 border-t border-slate-100" />
+          <div className="mb-1 px-1 pt-1 text-[11px] font-semibold uppercase tracking-wide text-slate-400">{label("sort.order")}</div>
+          <div className="flex flex-col gap-0.5">
+            {([["desc", "sort.newestFirst"], ["asc", "sort.oldestFirst"]] as const).map(([d, dk]) => (
+              <button key={d} type="button" onClick={() => setSort(sortField, d)}
+                className={`flex items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-[13px] text-start ${sortDir === d ? "bg-[var(--wd-menu-hover)] font-medium text-[color:var(--wd-primary-ink)]" : "text-slate-600 hover:bg-slate-50"}`}>
+                <span className="flex-1">{label(dk)}</span>
+                {sortDir === d ? <Icons.check size={13} className="text-[color:var(--wd-primary)]" /> : null}
+              </button>
+            ))}
+          </div>
+        </ToolbarAnchoredPanel>
 
         <button id="tb-filter-btn" type="button" onClick={() => toggle("filter")} aria-expanded={openMenu === "filter"} aria-haspopup="menu"
           className={`wd-icon-btn ${openMenu === "filter" ? "bg-[var(--wd-active)] text-[color:var(--wd-primary-ink)]" : ""}`} title={label("nav.filter")} aria-label={label("nav.filter")}>
@@ -326,30 +313,28 @@ export function ActionToolbar({
           items={(["all", "folders", "documents", "sheets", "slides", "media", "audio", "archives", "favorites"] as FilterKey[]).map((f) => ({
             key: f, labelKey: `filter.${f}` as never, checked: filter === f,
           }))} /> : null}
-        {openMenu === "filter" && onAdvancedFilter ? (
-          <div className={`${CARD_CLASS} end-0 mt-[178px] w-[330px] p-3`} role="dialog" aria-label={label("nav.filter")}>
-            <div className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-slate-400">{label("nav.filter")}</div><div className="mb-3 flex flex-wrap gap-1">{(["all","folders","documents","sheets","slides","media","audio","archives","favorites"] as FilterKey[]).map(k=><button key={k} type="button" onClick={()=>chooseFilter(k)} className={`rounded-md px-2 py-1 text-[10px] ${filter===k?"bg-[#EEF4FF] text-[#1B66EA]":"bg-slate-50 text-slate-500 hover:bg-slate-100"}`}>{label(`filter.${k}` as never)}</button>)}</div>
-            <div className="grid grid-cols-2 gap-2">
-              <label className="text-[11px] text-slate-500">File type<select value={af.type} onChange={e=>onAdvancedFilter({...af,type:e.target.value as AdvancedFileFilter['type']})} className="mt-1 w-full rounded-md border border-slate-200 bg-white px-2 py-1.5 text-[12px] text-slate-700"><option value="all">All types</option><option value="document">Document</option><option value="spreadsheet">Spreadsheet</option><option value="presentation">Presentation</option><option value="image">Image</option><option value="pdf">PDF</option></select></label>
-              <label className="text-[11px] text-slate-500">Status<select value={af.status} onChange={e=>onAdvancedFilter({...af,status:e.target.value as AdvancedFileFilter['status']})} className="mt-1 w-full rounded-md border border-slate-200 bg-white px-2 py-1.5 text-[12px] text-slate-700"><option value="all">All</option><option value="ACTIVE">Active</option><option value="ARCHIVED">Archived</option><option value="PENDING_APPROVAL">Pending approval</option></select></label>
-              <label className="text-[11px] text-slate-500">Date field<select value={af.dateField} onChange={e=>onAdvancedFilter({...af,dateField:e.target.value as AdvancedFileFilter['dateField']})} className="mt-1 w-full rounded-md border border-slate-200 bg-white px-2 py-1.5 text-[12px] text-slate-700"><option value="modified">Date modified</option><option value="created">Date created</option></select></label>
-              <label className="text-[11px] text-slate-500">Data Template<select value={af.dataTemplateId} onChange={e=>onAdvancedFilter({...af,dataTemplateId:e.target.value,dataTemplateCriteria:[]})} className="mt-1 w-full rounded-md border border-slate-200 bg-white px-2 py-1.5 text-[12px] text-slate-700"><option value="">All Data Templates</option>{(dataTemplates??[]).filter(t=>t.active).map(t=><option key={t.id} value={t.id}>{t.name}</option>)}</select></label><label className="text-[11px] text-slate-500">Owner/author<select value={af.owner} onChange={e=>onAdvancedFilter({...af,owner:e.target.value})} className="mt-1 w-full rounded-md border border-slate-200 bg-white px-2 py-1.5 text-[12px] text-slate-700"><option value="">All owners</option>{(owners??[]).map(o=><option key={o.id} value={o.id}>{o.name??o.email}</option>)}</select></label>
-              <label className="col-span-2 text-[11px] text-slate-500">From<input type="date" value={af.dateFrom} onChange={e=>onAdvancedFilter({...af,dateFrom:e.target.value})} className="mt-1 w-full rounded-md border border-slate-200 px-2 py-1.5 text-[12px]" /></label>
-              <label className="col-span-2 text-[11px] text-slate-500">To<input type="date" value={af.dateTo} onChange={e=>onAdvancedFilter({...af,dateTo:e.target.value})} className="mt-1 w-full rounded-md border border-slate-200 px-2 py-1.5 text-[12px]" /></label>
-            </div>
-            {af.dataTemplateId ? (() => {
-              const template = (dataTemplates ?? []).find((t) => t.id === af.dataTemplateId);
-              const searchable = (template?.fields ?? []).filter((f) => f.searchable !== false);
-              const criteria = af.dataTemplateCriteria ?? [];
-              const update = (index: number, patch: Partial<DataTemplateSearchCriterion>) => onAdvancedFilter({...af, dataTemplateCriteria: criteria.map((c, i) => i === index ? {...c, ...patch} : c)});
-              const add = () => { if (criteria.length >= 5 || !searchable.length) return; onAdvancedFilter({...af, dataTemplateCriteria: [...criteria, {key: searchable[0].key, op: "eq", value: "", join: criteria.length ? "AND" : "AND"}]}); };
-              const remove = (index: number) => onAdvancedFilter({...af, dataTemplateCriteria: criteria.filter((_, i) => i !== index)});
-              const ops = (type: string) => type === "number" ? [["eq","is equal to"],["neq","is not equal to"],["lt","is below"],["gt","is above"]] : type === "date" || type === "datetime" ? [["eq","is equal to"],["neq","is not equal to"],["before","is before"],["after","is after"]] : type === "boolean" || type === "select" || type === "radio" ? [["eq","is equal to"],["neq","is not equal to"]] : [["contains","contains"],["not_contains","does not contain"]];
-              return <div className="mt-3 rounded-lg border border-slate-200 bg-slate-50 p-2.5"><div className="mb-2 flex items-center justify-between"><div><div className="text-[10px] font-semibold text-slate-700">Custom Field criteria</div><div className="text-[9px] text-slate-400">Up to 5 conditions · AND / OR</div></div><button type="button" onClick={add} disabled={criteria.length >= 5 || !searchable.length} className="rounded-md border border-slate-200 bg-white px-2 py-1 text-[10px] font-medium text-slate-600 disabled:opacity-40">+ Add</button></div>{criteria.map((c, i) => { const field = searchable.find((f) => f.key === c.key) ?? searchable[0]; const options = ops(field?.type ?? "text"); return <div key={`${i}-${c.key}`} className="mb-2 grid grid-cols-[52px_1fr] gap-1.5"><select value={c.join} onChange={e=>update(i,{join:e.target.value as "AND"|"OR"})} disabled={i===0} className="rounded border border-slate-200 bg-white px-1 py-1 text-[9px]"><option>AND</option><option>OR</option></select><div className="grid grid-cols-[1fr_1fr] gap-1.5"><select value={c.key} onChange={e=>update(i,{key:e.target.value,op:"eq",value:""})} className="rounded border border-slate-200 bg-white px-1.5 py-1 text-[10px]">{searchable.map(f=><option key={f.key} value={f.key}>{f.label}</option>)}</select><select value={c.op} onChange={e=>update(i,{op:e.target.value as DataTemplateSearchCriterion["op"]})} className="rounded border border-slate-200 bg-white px-1.5 py-1 text-[10px]">{options.map(([v,l])=><option key={v} value={v}>{l}</option>)}</select><input value={c.value} onChange={e=>update(i,{value:e.target.value})} type={field?.type === "number" ? "number" : field?.type === "date" ? "date" : field?.type === "datetime" ? "datetime-local" : "text"} placeholder="Value" className="col-span-2 rounded border border-slate-200 bg-white px-2 py-1 text-[10px]" /> <button type="button" onClick={()=>remove(i)} className="col-span-2 text-start text-[9px] text-red-500">Remove</button></div></div>})}</div>;
-            })() : null}
-            <div className="mt-3 flex justify-between border-t border-slate-100 pt-2"><button type="button" className="text-[12px] text-slate-500" onClick={()=>onAdvancedFilter({type:"all",status:"all",dateField:"modified",dateFrom:"",dateTo:"",owner:"",dataTemplateId:"",dataTemplateCriteria:[]})}>Clear</button><button type="button" className="rounded-md bg-[#1B66EA] px-3 py-1.5 text-[12px] font-medium text-white" onClick={close}>Done</button></div>
+        <ToolbarAnchoredPanel open={openMenu === "filter" && Boolean(onAdvancedFilter)} onClose={close} anchorId="tb-filter-btn" width={330} className="p-3">
+          <div className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-slate-400">{label("nav.filter")}</div><div className="mb-3 flex flex-wrap gap-1">{(["all","folders","documents","sheets","slides","media","audio","archives","favorites"] as FilterKey[]).map(k=><button key={k} type="button" onClick={()=>chooseFilter(k)} className={`rounded-md px-2 py-1 text-[10px] ${filter===k?"bg-[#EEF4FF] text-[#1B66EA]":"bg-slate-50 text-slate-500 hover:bg-slate-100"}`}>{label(`filter.${k}` as never)}</button>)}</div>
+          <div className="grid grid-cols-2 gap-2">
+            <label className="text-[11px] text-slate-500">File type<select value={af.type} onChange={e=>onAdvancedFilter?.({...af,type:e.target.value as AdvancedFileFilter['type']})} className="mt-1 w-full rounded-md border border-slate-200 bg-white px-2 py-1.5 text-[12px] text-slate-700"><option value="all">All types</option><option value="document">Document</option><option value="spreadsheet">Spreadsheet</option><option value="presentation">Presentation</option><option value="image">Image</option><option value="pdf">PDF</option></select></label>
+            <label className="text-[11px] text-slate-500">Status<select value={af.status} onChange={e=>onAdvancedFilter?.({...af,status:e.target.value as AdvancedFileFilter['status']})} className="mt-1 w-full rounded-md border border-slate-200 bg-white px-2 py-1.5 text-[12px] text-slate-700"><option value="all">All</option><option value="ACTIVE">Active</option><option value="ARCHIVED">Archived</option><option value="PENDING_APPROVAL">Pending approval</option></select></label>
+            <label className="text-[11px] text-slate-500">Date field<select value={af.dateField} onChange={e=>onAdvancedFilter?.({...af,dateField:e.target.value as AdvancedFileFilter['dateField']})} className="mt-1 w-full rounded-md border border-slate-200 bg-white px-2 py-1.5 text-[12px] text-slate-700"><option value="modified">Date modified</option><option value="created">Date created</option></select></label>
+            <label className="text-[11px] text-slate-500">Data Template<select value={af.dataTemplateId} onChange={e=>onAdvancedFilter?.({...af,dataTemplateId:e.target.value,dataTemplateCriteria:[]})} className="mt-1 w-full rounded-md border border-slate-200 bg-white px-2 py-1.5 text-[12px] text-slate-700"><option value="">All Data Templates</option>{(dataTemplates??[]).filter(t=>t.active).map(t=><option key={t.id} value={t.id}>{t.name}</option>)}</select></label><label className="text-[11px] text-slate-500">Owner/author<select value={af.owner} onChange={e=>onAdvancedFilter?.({...af,owner:e.target.value})} className="mt-1 w-full rounded-md border border-slate-200 bg-white px-2 py-1.5 text-[12px] text-slate-700"><option value="">All owners</option>{(owners??[]).map(o=><option key={o.id} value={o.id}>{o.name??o.email}</option>)}</select></label>
+            <label className="col-span-2 text-[11px] text-slate-500">From<input type="date" value={af.dateFrom} onChange={e=>onAdvancedFilter?.({...af,dateFrom:e.target.value})} className="mt-1 w-full rounded-md border border-slate-200 px-2 py-1.5 text-[12px]" /></label>
+            <label className="col-span-2 text-[11px] text-slate-500">To<input type="date" value={af.dateTo} onChange={e=>onAdvancedFilter?.({...af,dateTo:e.target.value})} className="mt-1 w-full rounded-md border border-slate-200 px-2 py-1.5 text-[12px]" /></label>
           </div>
-        ) : null}
+          {af.dataTemplateId ? (() => {
+            const template = (dataTemplates ?? []).find((t) => t.id === af.dataTemplateId);
+            const searchable = (template?.fields ?? []).filter((f) => f.searchable !== false);
+            const criteria = af.dataTemplateCriteria ?? [];
+            const update = (index: number, patch: Partial<DataTemplateSearchCriterion>) => onAdvancedFilter?.({...af, dataTemplateCriteria: criteria.map((c, i) => i === index ? {...c, ...patch} : c)});
+            const add = () => { if (criteria.length >= 5 || !searchable.length) return; onAdvancedFilter?.({...af, dataTemplateCriteria: [...criteria, {key: searchable[0].key, op: "eq", value: "", join: criteria.length ? "AND" : "AND"}]}); };
+            const remove = (index: number) => onAdvancedFilter?.({...af, dataTemplateCriteria: criteria.filter((_, i) => i !== index)});
+            const ops = (type: string) => type === "number" ? [["eq","is equal to"],["neq","is not equal to"],["lt","is below"],["gt","is above"]] : type === "date" || type === "datetime" ? [["eq","is equal to"],["neq","is not equal to"],["before","is before"],["after","is after"]] : type === "boolean" || type === "select" || type === "radio" ? [["eq","is equal to"],["neq","is not equal to"]] : [["contains","contains"],["not_contains","does not contain"]];
+            return <div className="mt-3 rounded-lg border border-slate-200 bg-slate-50 p-2.5"><div className="mb-2 flex items-center justify-between"><div><div className="text-[10px] font-semibold text-slate-700">Custom Field criteria</div><div className="text-[9px] text-slate-400">Up to 5 conditions · AND / OR</div></div><button type="button" onClick={add} disabled={criteria.length >= 5 || !searchable.length} className="rounded-md border border-slate-200 bg-white px-2 py-1 text-[10px] font-medium text-slate-600 disabled:opacity-40">+ Add</button></div>{criteria.map((c, i) => { const field = searchable.find((f) => f.key === c.key) ?? searchable[0]; const options = ops(field?.type ?? "text"); return <div key={`${i}-${c.key}`} className="mb-2 grid grid-cols-[52px_1fr] gap-1.5"><select value={c.join} onChange={e=>update(i,{join:e.target.value as "AND"|"OR"})} disabled={i===0} className="rounded border border-slate-200 bg-white px-1 py-1 text-[9px]"><option>AND</option><option>OR</option></select><div className="grid grid-cols-[1fr_1fr] gap-1.5"><select value={c.key} onChange={e=>update(i,{key:e.target.value,op:"eq",value:""})} className="rounded border border-slate-200 bg-white px-1.5 py-1 text-[10px]">{searchable.map(f=><option key={f.key} value={f.key}>{f.label}</option>)}</select><select value={c.op} onChange={e=>update(i,{op:e.target.value as DataTemplateSearchCriterion["op"]})} className="rounded border border-slate-200 bg-white px-1.5 py-1 text-[10px]">{options.map(([v,l])=><option key={v} value={v}>{l}</option>)}</select><input value={c.value} onChange={e=>update(i,{value:e.target.value})} type={field?.type === "number" ? "number" : field?.type === "date" ? "date" : field?.type === "datetime" ? "datetime-local" : "text"} placeholder="Value" className="col-span-2 rounded border border-slate-200 bg-white px-2 py-1 text-[10px]" /> <button type="button" onClick={()=>remove(i)} className="col-span-2 text-start text-[9px] text-red-500">Remove</button></div></div>})}</div>;
+          })() : null}
+          <div className="mt-3 flex justify-between border-t border-slate-100 pt-2"><button type="button" className="text-[12px] text-slate-500" onClick={()=>onAdvancedFilter?.({type:"all",status:"all",dateField:"modified",dateFrom:"",dateTo:"",owner:"",dataTemplateId:"",dataTemplateCriteria:[]})}>Clear</button><button type="button" className="rounded-md bg-[#1B66EA] px-3 py-1.5 text-[12px] font-medium text-white" onClick={close}>Done</button></div>
+        </ToolbarAnchoredPanel>
 
         {onColumns && context !== "files" ? (
           <>
@@ -357,25 +342,23 @@ export function ActionToolbar({
               className={`wd-icon-btn ${openMenu === "columns" ? "bg-[var(--wd-active)] text-[color:var(--wd-primary-ink)]" : ""}`} title={label("view.columns")} aria-label={label("view.columns")}>
               <Icons.columns size={17} />
             </button>
-            {openMenu === "columns" ? (
-              <div className={`${CARD_CLASS} end-0 w-60 p-1.5`}>
-                <div className="mb-1 px-1 pt-1 text-[11px] font-semibold uppercase tracking-wide text-slate-400">{label("manage.columns")}</div>
-                <div className="flex flex-col gap-0.5">
-                  {COLUMN_DEFS.map(([key, keyName, locked]) => {
-                    const active = isColOn(key);
-                    return (
-                      <button key={key} type="button" disabled={locked} onClick={() => toggleColumn(key)}
-                        className={`flex w-full items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-[13px] text-start ${locked ? "opacity-70 cursor-not-allowed" : "text-slate-600 hover:bg-slate-50"}`}>
-                        <span className={`flex h-4 w-4 shrink-0 items-center justify-center rounded-[4px] border ${active ? "border-[color:var(--wd-primary)] bg-[color:var(--wd-primary)] text-white" : "border-slate-300 bg-white"}`}>
-                          {active ? <Icons.check size={10} /> : null}
-                        </span>
-                        <span className={locked ? "font-medium text-slate-500" : ""}>{label(keyName as never)}</span>
-                      </button>
-                    );
-                  })}
-                </div>
+            <ToolbarAnchoredPanel open={openMenu === "columns"} onClose={close} anchorId="tb-cols-btn" width={240} className="p-1.5">
+              <div className="mb-1 px-1 pt-1 text-[11px] font-semibold uppercase tracking-wide text-slate-400">{label("manage.columns")}</div>
+              <div className="flex flex-col gap-0.5">
+                {COLUMN_DEFS.map(([key, keyName, locked]) => {
+                  const active = isColOn(key);
+                  return (
+                    <button key={key} type="button" disabled={locked} onClick={() => toggleColumn(key)}
+                      className={`flex w-full items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-[13px] text-start ${locked ? "opacity-70 cursor-not-allowed" : "text-slate-600 hover:bg-slate-50"}`}>
+                      <span className={`flex h-4 w-4 shrink-0 items-center justify-center rounded-[4px] border ${active ? "border-[color:var(--wd-primary)] bg-[color:var(--wd-primary)] text-white" : "border-slate-300 bg-white"}`}>
+                        {active ? <Icons.check size={10} /> : null}
+                      </span>
+                      <span className={locked ? "font-medium text-slate-500" : ""}>{label(keyName as never)}</span>
+                    </button>
+                  );
+                })}
               </div>
-            ) : null}
+            </ToolbarAnchoredPanel>
           </>
         ) : null}      </div>
     </div>
