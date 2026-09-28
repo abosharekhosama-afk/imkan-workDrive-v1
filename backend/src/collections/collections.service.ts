@@ -63,6 +63,7 @@ export class CollectionsService {
     const user = { sub: row.createdById, org_id: row.orgId, email: 'collection-upload@internal.invalid', role: 'ADMIN' };
     try {
       const upload = await this.files.requestUpload(user, { name, folderId: row.folderId, size, mimeType, sha256 });
+      await this.prisma.collectionSubmission.update({ where: { id: submission.id }, data: { uploadVersionId: upload.upload_id } });
       return { submissionId: submission.id, ...upload };
     } catch (error) { await this.prisma.collectionSubmission.delete({ where: { id: submission.id } }); throw error; }
   }
@@ -71,7 +72,7 @@ export class CollectionsService {
     const submissionId = String(body?.submissionId ?? '');
     const uploadId = String(body?.uploadId ?? '');
     const submission = await this.prisma.collectionSubmission.findFirst({ where: { id: submissionId, collectionId: row.id, status: 'UPLOADING' } });
-    if (!submission || !uploadId) throw new NotFoundException('Upload session not found');
+    if (!submission || !uploadId || submission.uploadVersionId !== uploadId) throw new NotFoundException('Upload session not found');
     const user = { sub: row.createdById, org_id: row.orgId, email: 'collection-upload@internal.invalid', role: 'ADMIN' };
     const result = await this.files.completeUpload(user, uploadId);
     await this.prisma.collectionSubmission.update({ where: { id: submission.id }, data: { fileCount: 1, status: 'RECEIVED', submittedAt: new Date() } });
