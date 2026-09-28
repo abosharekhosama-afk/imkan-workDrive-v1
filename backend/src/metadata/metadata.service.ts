@@ -102,12 +102,12 @@ export class MetadataService {
 
   private templateFields(template: any): DataTemplateField[] { return Array.isArray(template?.schema) ? template.schema as DataTemplateField[] : []; }
 
-  private dispatchTemplatePropertyEvent(user: AccessTokenPayload, file: { id: string; name: string; mimeType?: string | null; fileType?: string | null; size?: bigint | number | null; folderId?: string | null }, templateId: string, customFields: Record<string, unknown>) {
-    void this.workflowEngine.executeTrigger(user, { eventType: 'properties_updated', fileId: file.id, resourceId: file.id, resourceType: 'FILE', name: file.name, mimeType: file.mimeType ?? null, fileType: file.fileType ?? null, size: file.size == null ? '0' : String(file.size), folderId: file.folderId ?? null, userId: user.sub, dataTemplateId: templateId, customFields }).catch(() => undefined);
+  private dispatchTemplatePropertyEvent(user: AccessTokenPayload, file: { id: string; name: string; mimeType?: string | null; fileType?: string | null; size?: bigint | number | null; folderId?: string | null }, templateId: string, customFields: Record<string, unknown>, sourceWorkflowId?: string) {
+    void this.workflowEngine.executeTrigger(user, { eventType: 'properties_updated', fileId: file.id, resourceId: file.id, resourceType: 'FILE', name: file.name, mimeType: file.mimeType ?? null, fileType: file.fileType ?? null, size: file.size == null ? '0' : String(file.size), folderId: file.folderId ?? null, userId: user.sub, dataTemplateId: templateId, customFields, ...(sourceWorkflowId ? { sourceWorkflowId } : {}) }).catch(() => undefined);
   }
 
-  private dispatchFolderTemplatePropertyEvent(user: AccessTokenPayload, folder: { id: string; name: string; parentId?: string | null }, templateId: string, customFields: Record<string, unknown>) {
-    void this.workflowEngine.executeTrigger(user, { eventType: 'properties_updated', fileId: folder.id, resourceId: folder.id, resourceType: 'FOLDER', name: folder.name, mimeType: null, fileType: 'OTHER', size: '0', folderId: folder.parentId ?? null, userId: user.sub, dataTemplateId: templateId, customFields }).catch(() => undefined);
+  private dispatchFolderTemplatePropertyEvent(user: AccessTokenPayload, folder: { id: string; name: string; parentId?: string | null }, templateId: string, customFields: Record<string, unknown>, sourceWorkflowId?: string) {
+    void this.workflowEngine.executeTrigger(user, { eventType: 'properties_updated', fileId: folder.id, resourceId: folder.id, resourceType: 'FOLDER', name: folder.name, mimeType: null, fileType: 'OTHER', size: '0', folderId: folder.parentId ?? null, userId: user.sub, dataTemplateId: templateId, customFields, ...(sourceWorkflowId ? { sourceWorkflowId } : {}) }).catch(() => undefined);
   }
 
 
@@ -170,7 +170,7 @@ export class MetadataService {
     return this.associateFolder(user, folderId, templateId, {});
   }
 
-  async associateFile(user: AccessTokenPayload, fileId: string, templateId: string, customFields: unknown = {}) {
+  async associateFile(user: AccessTokenPayload, fileId: string, templateId: string, customFields: unknown = {}, sourceWorkflowId?: string) {
     const file = await this.prisma.file.findFirst({ where: { id: fileId, orgId: user.org_id, deletedAt: null }, include: { folder: true } }); if (!file) throw new NotFoundException('File not found');
     const template = await this.prisma.fileDataTemplate.findFirst({ where: { id: templateId, orgId: user.org_id, active: true } }); if (!template) throw new NotFoundException('Data template not found');
     await this.canAssociate(user, template, { orgId: file.orgId, ownerId: file.ownerId, teamFolderId: file.folder?.teamFolderId ?? null });
@@ -180,11 +180,11 @@ export class MetadataService {
     const values = validateFields(this.templateFields(template), customFields);
     const binding = await this.prisma.fileDataTemplateBinding.upsert({ where: { templateId_fileId: { templateId, fileId } }, create: { orgId: user.org_id, templateId, fileId, customFields: values as never, createdById: user.sub }, update: { customFields: values as never }, include: { template: true } });
     await this.prisma.fileMetadata.upsert({ where: { fileId }, create: { fileId, dataTemplateId: templateId, customFields: values as never }, update: { ...(existing ? {} : { dataTemplateId: templateId }), customFields: values as never } });
-    this.dispatchTemplatePropertyEvent(user, file, templateId, values);
+    this.dispatchTemplatePropertyEvent(user, file, templateId, values, sourceWorkflowId);
     return binding;
   }
 
-  async associateFolder(user: AccessTokenPayload, folderId: string, templateId: string, customFields: unknown = {}) {
+  async associateFolder(user: AccessTokenPayload, folderId: string, templateId: string, customFields: unknown = {}, sourceWorkflowId?: string) {
     const folder = await this.prisma.folder.findFirst({ where: { id: folderId, orgId: user.org_id } }); if (!folder) throw new NotFoundException('Folder not found');
     const template = await this.prisma.fileDataTemplate.findFirst({ where: { id: templateId, orgId: user.org_id, active: true } }); if (!template) throw new NotFoundException('Data template not found');
     await this.canAssociate(user, template, { orgId: folder.orgId, ownerId: folder.ownerId, teamFolderId: folder.teamFolderId });
@@ -194,7 +194,7 @@ export class MetadataService {
     const values = validateFields(this.templateFields(template), customFields);
     const binding = await this.prisma.fileDataTemplateBinding.upsert({ where: { templateId_folderId: { templateId, folderId } }, create: { orgId: user.org_id, templateId, folderId, customFields: values as never, createdById: user.sub }, update: { customFields: values as never }, include: { template: true } });
     await this.prisma.folder.update({ where: { id: folderId }, data: { dataTemplateId: templateId } });
-    this.dispatchFolderTemplatePropertyEvent(user, folder, templateId, values);
+    this.dispatchFolderTemplatePropertyEvent(user, folder, templateId, values, sourceWorkflowId);
     return binding;
   }
 
