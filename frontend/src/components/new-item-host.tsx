@@ -1,12 +1,14 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import { useLocale } from "./locale-provider";
 import { Modal } from "./modal";
 import { ImkanOptionPicker } from "./imkan-option-picker";
 import { uploadFileToFolder } from "../lib/api/upload-file";
 import { getUploadDataTemplateMandate, type DataTemplate } from "../lib/api/metadata";
 import { createTeamFolder } from "../lib/api/team-folders";
+import { createOfficeDocument, type OfficeType } from "../lib/api/office";
 import { getTemplate, listTemplates, listTemplateCategories, useTemplate, type TemplateLibrary, type TemplatePreview, type TemplateRecord } from "../lib/api/templates";
 import { TemplatePreview as TemplatePreviewPane } from "./templates/template-preview";
 
@@ -31,6 +33,7 @@ const TYPE_LABELS: Record<TemplateRecord["type"], { ar: string; en: string }> = 
 
 export function NewItemHost() {
   const { locale } = useLocale();
+  const router = useRouter();
   const ar = locale === "ar";
   const [detail, setDetail] = useState<Detail | null>(null);
   const [picker, setPicker] = useState<PickerDetail | null>(null);
@@ -62,10 +65,45 @@ export function NewItemHost() {
       const value = (event as CustomEvent<Partial<PickerDetail>>).detail;
       setPicker({ folderId: value?.folderId ?? null }); setTemplateQuery(""); setTemplateType(""); setTemplateCategoryId(""); setSelectedTemplate(null); setPreview(null); setTemplateName(""); setError("");
     };
+    const onNewFile = (event: Event) => {
+      const value = (event as CustomEvent<{ kind: NewItemKind; folderId: string | null }>).detail;
+      if (!value?.kind) return;
+      if (value.kind === "doc" || value.kind === "sheet" || value.kind === "slide") {
+        void createOfficeItem(value.kind, value.folderId ?? null);
+        return;
+      }
+      setDetail({ kind: value.kind, folderId: value.folderId ?? null });
+      setName(DEFINITIONS[value.kind].defaultName);
+      setError("");
+    };
     window.addEventListener("workdrive:new-team-folder", onTeamFolder);
     window.addEventListener("workdrive:template-picker", onTemplatePicker);
-    return () => { window.removeEventListener("workdrive:new-team-folder", onTeamFolder); window.removeEventListener("workdrive:template-picker", onTemplatePicker); };
+    window.addEventListener("workdrive:new-file", onNewFile);
+    return () => {
+      window.removeEventListener("workdrive:new-team-folder", onTeamFolder);
+      window.removeEventListener("workdrive:template-picker", onTemplatePicker);
+      window.removeEventListener("workdrive:new-file", onNewFile);
+    };
   }, []);
+
+  const createOfficeItem = async (kind: "doc" | "sheet" | "slide", folderId: string | null) => {
+    const typeMap: Record<typeof kind, OfficeType> = { doc: "WRITER", sheet: "SHEET", slide: "SHOW" };
+    const routeMap: Record<typeof kind, string> = { doc: "writer", sheet: "sheet", slide: "show" };
+    const type = typeMap[kind];
+    setBusy(true);
+    setError("");
+    try {
+      const fields = await requestCreateDataTemplate(folderId);
+      if (!fields) return;
+      const result = await createOfficeDocument({ name: DEFINITIONS[kind].defaultName, type, folderId });
+      window.dispatchEvent(new Event("workdrive:content-changed"));
+      router.push(`/office/${routeMap[kind]}/${result.fileId}`);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : (ar ? "تعذر إنشاء المستند." : "Unable to create the document."));
+    } finally {
+      setBusy(false);
+    }
+  };
 
   useEffect(() => {
     if (!picker) return;
@@ -173,7 +211,8 @@ export function NewItemHost() {
     </Modal>
   ) : null;
 
-  if (!detail && !teamFolderOpen && !picker) return null;
+  if (!detail && !teamFolderOpen && !picker && !dataTemplatePromptOpen) return null;
+  if (dataTemplatePromptOpen && !detail && !teamFolderOpen && !picker) return dataTemplatePrompt;
   if (!detail && !teamFolderOpen && picker) {
     return <>{dataTemplatePrompt}<Modal title={ar ? "إنشاء من قالب" : "Create from template"} onClose={() => !busy && setPicker(null)}>
       <div className="w-[min(860px,calc(100vw-40px))] max-w-full space-y-3">

@@ -11,6 +11,7 @@ import { Icons } from "./icons";
 import { AccountMenu } from "./account-menu";
 import { NotificationPanel } from "./notification-panel";
 import { OrgSwitcher } from "../org-switcher";
+import { resolveTopHeaderTitle } from "../../lib/page-title-logic";
 export function TopHeader({ adminMode = false }: { adminMode?: boolean }) {
   const { label, locale, setLocale } = useLocale();
   const router = useRouter();
@@ -185,17 +186,7 @@ export function TopHeader({ adminMode = false }: { adminMode?: boolean }) {
     <header className="wd-default-topbar flex h-12 shrink-0 items-center gap-2 border-b border-[#EDEDED] bg-white px-4">
       <div className="flex min-w-0 items-center gap-2">
         <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[8px] bg-[#F0F4FF] text-[var(--wd-primary)]"><Icons.folder size={18} /></span>
-        <span className="max-w-[42vw] truncate text-[15px] font-semibold text-[#212121]">{
-          adminMode ? (locale === "ar" ? "وحدة الإدارة" : "Admin Console") :
-          pathname.startsWith("/members") ? (locale === "ar" ? "الأعضاء" : "Members") :
-          pathname.startsWith("/organization") ? (locale === "ar" ? "المنظمة" : "Organization") :
-          pathname.startsWith("/files/workflows") ? (locale === "ar" ? "سير العمل" : "Workflows") :
-          pathname === "/files/team-folders" ? (locale === "ar" ? "مجلدات الفريق" : "Team Folders") :
-          pathname.startsWith("/files/favorites") ? (locale === "ar" ? "المفضلة" : "Favorites") :
-          pathname.startsWith("/files/recent") ? (locale === "ar" ? "الأخيرة" : "Recent") :
-          pathname.startsWith("/files/trash") ? (locale === "ar" ? "المهملات" : "Trash") :
-          scope.folderName ?? label("files.breadcrumb.root")
-        }</span>
+        <span className="max-w-[42vw] truncate text-[15px] font-semibold text-[#212121]">{resolveTopHeaderTitle({ pathname, scopeFolderName: scope.folderName, adminMode, locale, label })}</span>
       </div>
       <div className="ms-auto flex min-w-0 shrink-0 items-center gap-1.5">
         <OrgSwitcher organizationName={org || "IMKAN"} userRole={role} />

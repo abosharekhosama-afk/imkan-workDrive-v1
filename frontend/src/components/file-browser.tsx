@@ -517,11 +517,11 @@ export function FileBrowser({
   }, [folderId, router]);
 
   return (
-    <section className="flex min-h-0 flex-1 flex-col w-full max-w-full overflow-x-hidden">
+    <section className="wd-file-browser flex min-h-0 flex-1 flex-col w-full max-w-full overflow-x-hidden">
       <ShellScopeSync folderId={folderId} folderName={folderName} />
       <div className="flex min-w-0 flex-1 flex-col bg-white">
         {selectedIds.size === 0 ? (
-          <ActionToolbar context={teamFolderId ? "teamFolder" : "files"} view={viewMode} onView={(v) => switchViewMode(v)} sortField={sortField} onSortField={setSortField} sortDir={sortDir} onSortDir={setSortDir} filter={filter} onFilter={setFilter} advancedFilter={advancedFilter} onAdvancedFilter={setAdvancedFilter} owners={owners} dataTemplates={dataTemplates} columns={columns} onColumns={setColumns} folders={folders} currentFolderId={folderId} onOpenFolder={handleOpenFolder} />
+          <ActionToolbar context={teamFolderId ? "teamFolder" : "files"} view={viewMode} onView={(v) => switchViewMode(v)} sortField={sortField} onSortField={setSortField} sortDir={sortDir} onSortDir={setSortDir} filter={filter} onFilter={setFilter} advancedFilter={advancedFilter} onAdvancedFilter={setAdvancedFilter} owners={owners} dataTemplates={dataTemplates} folders={folders} currentFolderId={folderId} onOpenFolder={handleOpenFolder} />
         ) : (
           <SelectionBar
             folderCount={folders.filter((f) => selectedIds.has(f.id)).length}
@@ -550,7 +550,7 @@ export function FileBrowser({
 
       {error ? <AlertBanner message={error} action={<button type="button" className="imkan-button-secondary" onClick={() => void load()}>{label("feedback.retry")}</button>} /> : null}
 
-      <div className="min-h-0 flex-1 overflow-y-auto bg-white">
+      <div className="min-h-0 flex-1 bg-white">
       {loading ? <SkeletonLoader columns={6} /> : viewMode === "grid" ? (
         <FileGridView
           folders={filteredContents.folders}
@@ -611,7 +611,6 @@ export function FileBrowser({
           sortField={sortField}
           sortDir={sortDir}
           columns={columns}
-          onColumns={setColumns}
         />
       )}
       </div>

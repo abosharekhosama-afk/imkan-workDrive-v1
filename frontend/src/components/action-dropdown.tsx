@@ -5,6 +5,7 @@ import {
   Popover,
   PopoverTrigger,
   PopoverContent,
+  PopoverPortal,
 } from "@radix-ui/react-popover";
 import { useLocale } from "./locale-provider";
 
@@ -183,24 +184,29 @@ export function ActionDropdown({ label, items, trigger }: ActionDropdownProps) {
   return (
     <Popover open={open} onOpenChange={setOpen}>
       {trigger ?? defaultTrigger}
-      <PopoverContent
-        onPointerDown={(event) => event.stopPropagation()}
-        onMouseDown={(event) => event.stopPropagation()}
-        onClick={(event) => event.stopPropagation()}
-        side="bottom"
-        align="end"
-        sideOffset={4}
-        className="wd-menu z-[100] w-64"
-        style={{ minWidth: "252px" }}
-      >
-        {groupedItems.map((group, groupIndex) => (
-          <div key={groupIndex} className={groupIndex > 0 ? "border-t border-[color:var(--imkan-color-border)] pt-1" : ""}>
-            {group.items.map((item) => (
-              <RenderItem key={item.label} item={item} close={() => setOpen(false)} />
-            ))}
-          </div>
-        ))}
-      </PopoverContent>
+      <PopoverPortal>
+        <PopoverContent
+          onPointerDown={(event) => event.stopPropagation()}
+          onMouseDown={(event) => event.stopPropagation()}
+          onClick={(event) => event.stopPropagation()}
+          side="bottom"
+          align="end"
+          sideOffset={4}
+          collisionPadding={16}
+          avoidCollisions
+          sticky="always"
+          className="wd-menu z-[100] w-64"
+          style={{ minWidth: "252px" }}
+        >
+          {groupedItems.map((group, groupIndex) => (
+            <div key={groupIndex} className={groupIndex > 0 ? "border-t border-[color:var(--imkan-color-border)] pt-1" : ""}>
+              {group.items.map((item) => (
+                <RenderItem key={item.label} item={item} close={() => setOpen(false)} />
+              ))}
+            </div>
+          ))}
+        </PopoverContent>
+      </PopoverPortal>
     </Popover>
   );
 }

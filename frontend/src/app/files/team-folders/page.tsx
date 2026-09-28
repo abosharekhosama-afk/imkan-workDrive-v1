@@ -11,7 +11,9 @@ import { MembersModal } from "../../../components/members-modal";
 import { AlertBanner } from "../../../components/alert-banner";
 import { EmptyState } from "../../../components/empty-state";
 import { SkeletonLoader } from "../../../components/skeleton-loader";
+import { ViewModePicker } from "../../../components/view-mode-picker";
 import { errorMessageForStatus } from "../../../components/feedback-state-logic";
+import { persistViewMode, readStoredViewMode, type ViewMode } from "../../../components/view-mode-logic";
 
 function FolderGlyph() {
   return (
@@ -55,6 +57,11 @@ export default function TeamFoldersPage() {
   const [renameTarget, setRenameTarget] = useState<TeamFolderListItem | null>(null);
   const [renameName, setRenameName] = useState("");
   const [actionBusy, setActionBusy] = useState(false);
+  const [viewMode, setViewMode] = useState<ViewMode>("list");
+
+  useEffect(() => {
+    setViewMode(readStoredViewMode(window.localStorage, "list"));
+  }, []);
 
   const load = useCallback(async () => {
     try {
@@ -207,9 +214,14 @@ export default function TeamFoldersPage() {
 
         <div className="ms-auto flex items-center gap-2">
           <Link href={createHref} className="team-create-button"><span aria-hidden="true">+</span>{locale === "ar" ? "إنشاء مجلد فريق" : "Create Team Folder"}</Link>
-          <button type="button" className="team-view-button" aria-label={locale === "ar" ? "عرض القائمة" : "List view"} title={locale === "ar" ? "عرض القائمة" : "List view"}>
-            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" aria-hidden="true"><path d="M5 6h14M5 12h14M5 18h14" /></svg>
-          </button>
+          <ViewModePicker
+            view={viewMode}
+            onView={(next) => {
+              setViewMode(next);
+              persistViewMode(window.localStorage, next);
+            }}
+            align="end"
+          />
         </div>
       </div>
 
@@ -224,6 +236,49 @@ export default function TeamFoldersPage() {
             description={search ? undefined : label("teamFolders.emptyDescription")}
             action={!search ? <Link href={createHref} className="imkan-button">{locale === "ar" ? "إنشاء مجلد فريق" : "Create Team Folder"}</Link> : undefined}
           />
+        </div>
+      ) : viewMode === "grid" ? (
+        <div className="team-folders-grid-wrap min-h-0 min-w-0 flex-1 overflow-auto p-5">
+          <div className="team-folders-grid">
+            {visibleFolders.map((tf) => {
+              const pinned = pinnedIds.has(tf.id);
+              const href = tf.rootFolderId ? (isAdminConsole ? `${adminTeamFoldersBase}/${encodeURIComponent(tf.id)}/manage` : `/files/${encodeURIComponent(tf.rootFolderId)}`) : createHref;
+              return (
+                <article key={tf.id} className="team-folder-card">
+                  {tf.isMember ? (
+                    <Link href={href} className="team-folder-card-main">
+                      <span className="team-folder-glyph"><FolderGlyph /></span>
+                      <span className="team-folder-name truncate">{tf.name}</span>
+                    </Link>
+                  ) : (
+                    <div className="team-folder-card-main">
+                      <span className="team-folder-glyph"><FolderGlyph /></span>
+                      <span className="team-folder-name truncate">{tf.name}</span>
+                    </div>
+                  )}
+                  <div className="team-folder-card-meta">
+                    <span>{tf.memberCount} {locale === "ar" ? "عضو" : tf.memberCount === 1 ? "Member" : "Members"}</span>
+                    {pinned ? <span>{locale === "ar" ? "مثبت" : "Pinned"}</span> : null}
+                  </div>
+                  <div className="team-folder-card-actions">
+                    {tf.isMember ? (
+                      <button type="button" className="team-folder-members" onClick={() => setActiveMembersTf(tf)}><MembersIcon /><span>{locale === "ar" ? "الأعضاء" : "Members"}</span></button>
+                    ) : (
+                      <button type="button" className="team-folder-members" disabled={actionBusy} onClick={() => void join(tf)}><span className="text-[11px] font-semibold text-blue-600">{locale === "ar" ? "انضمام" : "Join"}</span></button>
+                    )}
+                    <button type="button" data-team-folder-menu-trigger aria-expanded={menuId === tf.id} className="team-folder-more" onClick={() => setMenuId((id) => id === tf.id ? null : tf.id)} aria-label={locale === "ar" ? "المزيد" : "More"}><MoreIcon /></button>
+                  </div>
+                  {menuId === tf.id ? (
+                    <div className="team-folder-menu team-folder-menu--card" data-team-folder-menu role="menu">
+                      {!tf.isMember && tf.isPublicToOrg ? <button type="button" disabled={actionBusy} onClick={() => { setMenuId(null); void join(tf); }}>{locale === "ar" ? "انضمام" : "Join"}</button> : null}
+                      <button type="button" onClick={() => { setDetailsTf(tf); setMenuId(null); }}>{locale === "ar" ? "التفاصيل" : "Details"}</button>
+                      {tf.isMember ? <><button type="button" onClick={() => { setActiveMembersTf(tf); setMenuId(null); }}>{locale === "ar" ? "الأعضاء" : "Members"}</button><button type="button" onClick={() => openRename(tf)}>{label("files.rename")}</button><button type="button" className="danger" onClick={() => remove(tf)}>{label("files.delete")}</button></> : null}
+                    </div>
+                  ) : null}
+                </article>
+              );
+            })}
+          </div>
         </div>
       ) : (
         <div className="team-folders-table-wrap min-h-0 min-w-0 flex-1 overflow-auto">

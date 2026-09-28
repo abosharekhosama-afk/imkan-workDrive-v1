@@ -116,6 +116,15 @@ export default function TemplatesPage() {
     libraryBundleRef.current.clear();
   };
 
+  useEffect(() => {
+    const lib = params.get("library") as TemplateLibrary | null;
+    const typeParam = params.get("type") as TemplateType | null;
+    if (lib === "PERSONAL" || lib === "ORGANIZATION" || lib === "PUBLIC") setLibrary(lib);
+    else if (!params.get("type")) setLibrary("PERSONAL");
+    if (typeParam === "DOCUMENT" || typeParam === "SPREADSHEET" || typeParam === "PRESENTATION") setType(typeParam);
+    else setType(undefined);
+  }, [params]);
+
   const cacheKey = useMemo(() => templatesCacheKey({ library, type, categoryId, q, sort }), [library, type, categoryId, q, sort]);
 
   const applyLibraryData = useCallback((items: TemplateRecord[], cats: TemplateCategory[], capabilities: import("@/lib/api/templates").TemplateLibraryCapabilities) => {

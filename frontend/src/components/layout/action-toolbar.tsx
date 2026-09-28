@@ -351,7 +351,7 @@ export function ActionToolbar({
           </div>
         ) : null}
 
-        {onColumns ? (
+        {onColumns && context !== "files" ? (
           <>
             <button id="tb-cols-btn" type="button" onClick={() => toggle("columns")} aria-expanded={openMenu === "columns"} aria-haspopup="menu"
               className={`wd-icon-btn ${openMenu === "columns" ? "bg-[var(--wd-active)] text-[color:var(--wd-primary-ink)]" : ""}`} title={label("view.columns")} aria-label={label("view.columns")}>
