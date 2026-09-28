@@ -31,6 +31,7 @@ import { TemplatesModule } from './templates/templates.module';
 import { OfficeModule } from './office/office.module';
 import { OfficeEmailModule } from './office-email/office-email.module';
 import { AiModule } from './ai/ai.module';
+import { CollectionsModule } from './collections/collections.module';
 
 @Module({
   imports: [
@@ -63,6 +64,7 @@ import { AiModule } from './ai/ai.module';
     OfficeModule,
     OfficeEmailModule,
     AiModule,
+    CollectionsModule,
   ],
   controllers: [AppController],
   providers: [AppService],
