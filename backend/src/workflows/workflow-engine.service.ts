@@ -12,6 +12,7 @@ import { CustomFunctionExecutor } from './custom-function.executor';
 import { ConnectionsService } from '../connections/connections.service';
 import { TemplatesService } from '../templates/templates.service';
 import { OfficeEmailService } from '../office-email/office-email.service';
+import { MetadataService } from '../metadata/metadata.service';
 
 export type WorkflowFileEvent = {
   eventType?: string; fileId: string; resourceId?: string; name: string; mimeType?: string | null; fileType?: string | null; size?: string;
@@ -31,7 +32,16 @@ type RunResult = { actions?: unknown[]; fieldValues?: Record<string, unknown>; c
 @Injectable()
 export class WorkflowEngineService implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(WorkflowEngineService.name); private timer?: NodeJS.Timeout; private processing = false; private readonly workerId = `workdrive-workflow-${randomUUID()}`;
-  constructor(private readonly prisma: PrismaService, private readonly shares: SharesService, private readonly functionExecutor: CustomFunctionExecutor, private readonly permissions: PermissionService, private readonly connections: ConnectionsService, private readonly email: OfficeEmailService, @Inject(forwardRef(() => TemplatesService)) private readonly templates: TemplatesService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly shares: SharesService,
+    private readonly functionExecutor: CustomFunctionExecutor,
+    private readonly permissions: PermissionService,
+    private readonly connections: ConnectionsService,
+    private readonly email: OfficeEmailService,
+    @Inject(forwardRef(() => TemplatesService)) private readonly templates: TemplatesService,
+    @Inject(forwardRef(() => MetadataService)) private readonly metadata: MetadataService,
+  ) {}
   onModuleInit() { this.timer = setInterval(() => void this.drain(), 1500); void this.drain(); }
   onModuleDestroy() { if (this.timer) clearInterval(this.timer); }
   private async recordAudit(orgId: string, actorId: string | null, action: string, resourceType: string, resourceId: string, metadata?: Record<string, unknown>) {
@@ -572,6 +582,31 @@ export class WorkflowEngineService implements OnModuleInit, OnModuleDestroy {
       case 'generate_link': case 'link': { if ((event.resourceType ?? 'FILE') === 'FOLDER') throw new Error('Link generation currently supports files only'); const created = await this.shares.createShare(user, { resourceType: 'FILE' as never, resourceId: event.fileId, permission: 'VIEW' as never, recipientUserIds: [], canDownload: config.canDownload !== false }); return { action: 'generate_link', link_url: created.link_url, resourceId: event.fileId }; }
       case 'share': { if ((event.resourceType ?? 'FILE') === 'FOLDER') throw new Error('Share action is only supported for files'); const recipientUserIds = Array.isArray(config.userIds) ? config.userIds.filter((id): id is string => typeof id === 'string') : []; const created = await this.shares.createShare(user, { resourceType: 'FILE' as never, resourceId: event.fileId, permission: (typeof config.permission === 'string' ? config.permission : 'VIEW') as never, recipientUserIds, canDownload: config.canDownload !== false }); return { action: 'share', link_url: created.link_url, recipientUserIds }; }
       case 'data_template': {
+        const mode = String(config.mode ?? 'RENDER').toUpperCase();
+        if (mode === 'ASSOCIATE') {
+          const templateId = typeof config.templateId === 'string' ? config.templateId.trim() : '';
+          if (!templateId) throw new Error('Data template association requires templateId');
+          const runSnapshot = (await this.prisma.workflowRun.findUnique({ where: { id: runId }, select: { result: true } }))?.result;
+          const fields = runSnapshot && typeof runSnapshot === 'object' && (runSnapshot as Record<string, unknown>).fieldValues && typeof (runSnapshot as Record<string, unknown>).fieldValues === 'object'
+            ? (runSnapshot as Record<string, unknown>).fieldValues as Record<string, unknown> : {};
+          const rawFields = config.customFields && typeof config.customFields === 'object' ? config.customFields : {};
+          const renderedFields = walkDynamicValues(rawFields, {
+            fileId: event.fileId, name: event.name, extension: event.extension ?? '', folderId: event.folderId ?? '',
+            mimeType: event.mimeType ?? '', fileType: event.fileType ?? '', size: event.size ?? '', userId: event.userId,
+          }, fields, { workflowId, runId, user: { id: user.sub } });
+          const binding = (event.resourceType ?? 'FILE') === 'FOLDER'
+            ? await this.metadata.associateFolder(user, event.fileId, templateId, renderedFields, workflowId)
+            : await this.metadata.associateFile(user, event.fileId, templateId, renderedFields, workflowId);
+          const outputFieldId = typeof config.outputFieldId === 'string' ? config.outputFieldId.trim() : '';
+          if (outputFieldId) {
+            const run = await this.prisma.workflowRun.findUnique({ where: { id: runId }, select: { result: true } });
+            const previous = run?.result && typeof run.result === 'object' ? run.result as Record<string, unknown> : {};
+            const fv = previous.fieldValues && typeof previous.fieldValues === 'object' ? previous.fieldValues as Record<string, unknown> : {};
+            await this.prisma.workflowRun.update({ where: { id: runId }, data: { result: { ...previous, fieldValues: { ...fv, [outputFieldId]: binding.id } } as unknown as Prisma.InputJsonValue } });
+          }
+          return { action: 'data_template', mode, templateId, bindingId: binding.id, customFields: renderedFields, outputFieldId: outputFieldId || null };
+        }
+
         const templateId = typeof config.templateId === 'string' ? config.templateId : null;
         const templateVersionId = typeof config.templateVersionId === 'string' ? config.templateVersionId : null;
         let template = typeof config.template === 'string' ? config.template : '';
@@ -584,11 +619,19 @@ export class WorkflowEngineService implements OnModuleInit, OnModuleDestroy {
           template = version.template; templateFormat = version.format;
         }
         if (!template) throw new Error('Data template requires template content');
-        const runSnapshot = (await this.prisma.workflowRun.findUnique({ where: { id: runId }, select: { result: true } }))?.result;
+        const runSnapshot = (await this.prisma.workflowRun.findUnique({ where: { id: runId, }, select: { result: true } }))?.result;
         const rendered = this.renderTemplate(template, event, runSnapshot, { workflowId, runId, user: { id: user.sub } });
         if (templateFormat === 'JSON') { try { JSON.parse(String(rendered)); } catch { throw new Error('Rendered JSON data template is invalid'); } }
         const outputFieldId = typeof config.outputFieldId === 'string' ? config.outputFieldId : null;
-        if (outputFieldId) { const run = await this.prisma.workflowRun.findUnique({ where: { id: runId }, select: { result: true } }); const previous = run?.result && typeof run.result === 'object' ? run.result as Record<string, unknown> : {}; const fv = previous.fieldValues && typeof previous.fieldValues === 'object' ? previous.fieldValues as Record<string, unknown> : {}; await this.prisma.workflowRun.update({ where: { id: runId }, data: { result: { ...previous, fieldValues: { ...fv, [outputFieldId]: rendered } } as unknown as Prisma.InputJsonValue } }); }
+        if (outputFieldId) {
+          const run = await this.prisma.workflowRun.findUnique({ where: { id: runId }, select: { result: true } });
+          const previous = run?.result && typeof run.result === 'object' ? run.result as Record<string, unknown> : {};
+          const fv = previous.fieldValues && typeof previous.fieldValues === 'object' ? previous.fieldValues as Record<string, unknown> : {};
+          await this.prisma.workflowRun.update({
+            where: { id: runId },
+            data: { result: ({ ...previous, fieldValues: { ...fv, [outputFieldId]: rendered } } as unknown as Prisma.InputJsonValue) },
+          });
+        }
         return { action: 'data_template', rendered, format: templateFormat, templateId, templateVersionId, outputFieldId };
       }
       case 'custom_function': {
@@ -602,15 +645,26 @@ export class WorkflowEngineService implements OnModuleInit, OnModuleDestroy {
           const run = await this.prisma.workflowRun.findUnique({ where: { id: runId }, select: { result: true } });
           const result = run?.result && typeof run.result === 'object' ? run.result as Record<string, unknown> : {};
           const fields = result.fieldValues && typeof result.fieldValues === 'object' ? result.fieldValues as Record<string, unknown> : {};
-          const output = await this.functionExecutor.execute(user, fn.id, version.id, version.definition, { file: { id: event.fileId, name: event.name, extension: event.extension ?? '', folderId: event.folderId ?? '', mimeType: event.mimeType ?? '', fileType: event.fileType ?? '', size: event.size ?? '' }, workflow: { id: workflowId, runId }, user: { id: user.sub }, now: new Date().toISOString(), fields }, { runId, idempotencyKey: `workflow-function:${runId}:${workflowId}:${fn.id}:${version.id}` });
+          const fileInput = { id: event.fileId, name: event.name, extension: event.extension ?? '', folderId: event.folderId ?? '', mimeType: event.mimeType ?? '', fileType: event.fileType ?? '', size: event.size ?? '' };
+          const inputBindings = config.inputBindings && typeof config.inputBindings === 'object' ? config.inputBindings as Record<string, unknown> : {};
+          const boundFields: Record<string, unknown> = { ...fields };
+          for (const [inputKey, expression] of Object.entries(inputBindings)) {
+            boundFields[inputKey] = resolveDynamicValue(String(expression ?? ''), event, fields, { workflowId, runId, user: { id: user.sub } });
+          }
+          const output = await this.functionExecutor.execute(user, fn.id, version.id, version.definition, { file: fileInput, workflow: { id: workflowId, runId }, user: { id: user.sub }, now: new Date().toISOString(), fields: boundFields }, { runId, idempotencyKey: `workflow-function:${runId}:${workflowId}:${fn.id}:${version.id}` });
           const mergedFields = { ...fields, ...(output as any).fields };
+          const outputMappings = config.outputMappings && typeof config.outputMappings === 'object' ? config.outputMappings as Record<string, unknown> : {};
+          for (const [outputKey, targetField] of Object.entries(outputMappings)) {
+            const target = String(targetField ?? '').trim();
+            if (target && Object.prototype.hasOwnProperty.call((output as any).fields ?? {}, outputKey)) mergedFields[target] = (output as any).fields[outputKey];
+          }
           await this.prisma.workflowRun.update({ where: { id: runId }, data: { result: { ...result, fieldValues: mergedFields, customFunction: { functionId: fn.id, versionId: version.id, output: output as any } } as unknown as Prisma.InputJsonValue } });
           return { action: 'custom_function', functionId: fn.id, functionVersionId: version.id, output };
         }
         const key = String(config.functionKey ?? '').trim();
         if (!['set_workflow_field','notify_owner','tag_from_extension'].includes(key)) throw new Error('Unsupported or unsafe custom function');
         if (key === 'set_workflow_field') { const fieldId = String(config.fieldId ?? '').trim(); if (!fieldId) throw new Error('set_workflow_field requires fieldId'); const value = config.value ?? ''; const run = await this.prisma.workflowRun.findUnique({ where: { id: runId }, select: { result: true } }); const previous = run?.result && typeof run.result === 'object' ? run.result as Record<string, unknown> : {}; const fv = previous.fieldValues && typeof previous.fieldValues === 'object' ? previous.fieldValues as Record<string, unknown> : {}; await this.prisma.workflowRun.update({ where: { id: runId }, data: { result: { ...previous, fieldValues: { ...fv, [fieldId]: value } } as unknown as Prisma.InputJsonValue } }); return { action: 'custom_function', key, fieldId, value }; }
-        if (key === 'tag_from_extension') { if ((event.resourceType ?? 'FILE') === 'FOLDER') throw new Error('tag_from_extension supports files only'); const tagName = String(event.extension ?? 'file').replace(/^\./, '').toLowerCase(); const tag = await this.prisma.tag.upsert({ where: { orgId_name: { orgId: user.org_id, name: tagName } }, create: { orgId: user.org_id, name: tagName }, update: {} }); await this.prisma.fileTag.upsert({ where: { fileId_tagId: { fileId: event.fileId, tagId: tag.id } }, create: { fileId: event.fileId, tagId: tag.id }, update: {} }); return { action: 'custom_function', key, tag: tagName }; }
+        if (key === 'tag_from_extension') { if ((event.resourceType ?? 'FILE') === 'FOLDER') throw new Error('tag_from_extension supports files only'); const tagName = String(event.extension ?? 'file').replace(/^\./, '').toLowerCase(); const tag = await this.prisma.tag.upsert({ where: { orgId_name: { orgId: user.org_id, name: tagName } }, create: { id: randomUUID(), orgId: user.org_id, name: tagName }, update: {} }); await this.prisma.fileTag.upsert({ where: { fileId_tagId: { fileId: event.fileId, tagId: tag.id } }, create: { fileId: event.fileId, tagId: tag.id }, update: {} }); return { action: 'custom_function', key, tag: tagName }; }
         const ownerId = event.resourceType === 'FOLDER' ? (await this.prisma.folder.findFirst({ where: { id: event.fileId, orgId: user.org_id }, select: { ownerId: true } }))?.ownerId : (await this.prisma.file.findFirst({ where: { id: event.fileId, orgId: user.org_id }, select: { ownerId: true } }))?.ownerId;
         if (!ownerId) throw new Error('Resource owner not found'); await this.prisma.notification.create({ data: { orgId: user.org_id, userId: ownerId, type: 'SYSTEM', title: String(config.title ?? 'Workflow update'), body: String(config.body ?? `Workflow updated ${event.name}`), resourceType: (event.resourceType ?? 'FILE') as 'FILE'|'FOLDER', resourceId: event.fileId } }); return { action: 'custom_function', key, ownerId };
       }

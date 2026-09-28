@@ -8,5 +8,6 @@ import { ConnectionsModule } from '../connections/connections.module';
 import { TemplatesModule } from '../templates/templates.module';
 import { OfficeEmailModule } from '../office-email/office-email.module';
 import { CloudImportModule } from '../cloud-import/cloud-import.module';
-@Module({ imports: [SharesModule, ConnectionsModule, OfficeEmailModule, forwardRef(() => TemplatesModule), forwardRef(() => CloudImportModule)], controllers: [WorkflowsController], providers: [WorkflowsService, WorkflowEngineService, CustomFunctionExecutor], exports: [WorkflowEngineService] })
+import { MetadataModule } from '../metadata/metadata.module';
+@Module({ imports: [SharesModule, ConnectionsModule, OfficeEmailModule, forwardRef(() => TemplatesModule), forwardRef(() => CloudImportModule), forwardRef(() => MetadataModule)], controllers: [WorkflowsController], providers: [WorkflowsService, WorkflowEngineService, CustomFunctionExecutor], exports: [WorkflowEngineService] })
 export class WorkflowsModule {}

@@ -48,6 +48,13 @@ export class CustomFunctionExecutor {
     try {
       const d = this.validateDefinition(definition);
       const fields: Record<string, unknown> = { ...input.fields };
+      const declaredInputs = Array.isArray((d as Record<string, unknown>).inputs) ? (d as Record<string, unknown>).inputs as Array<Record<string, unknown>> : [];
+      for (const port of declaredInputs) {
+        const key = String(port.key ?? '').trim();
+        if (port.required === true && (fields[key] === undefined || fields[key] === null || fields[key] === '')) {
+          throw new BadRequestException(`Missing required function input: ${key}`);
+        }
+      }
       const notifications: Array<Record<string, unknown>> = [];
       const tags: string[] = [];
       for (let operationIndex = 0; operationIndex < (d.operations as SafeOperation[]).length; operationIndex++) {

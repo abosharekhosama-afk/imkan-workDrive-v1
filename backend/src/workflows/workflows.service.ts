@@ -712,7 +712,7 @@ export class WorkflowsService {
       { key: 'notify_owner', name: 'Notify resource owner', description: 'Send a notification to the file or folder owner' },
       { key: 'tag_from_extension', name: 'Tag from extension', description: 'Create/apply a tag using the file extension' },
     ];
-    const custom = await this.prisma.workflowFunction.findMany({ where: { orgId: user.org_id, enabled: true }, include: { activeVersion: { select: { id: true, version: true, status: true, runtime: true, timeoutMs: true, memoryLimitMb: true } } }, orderBy: { name: 'asc' } });
+    const custom = await this.prisma.workflowFunction.findMany({ where: { orgId: user.org_id, enabled: true }, include: { activeVersion: { select: { id: true, version: true, status: true, runtime: true, timeoutMs: true, memoryLimitMb: true, definition: true } } }, orderBy: { name: 'asc' } });
     return { builtIns, custom };
   }
 
@@ -720,7 +720,24 @@ export class WorkflowsService {
     if (!definition || typeof definition !== 'object') throw new BadRequestException('Function definition is required');
     const operations = (definition as Record<string, unknown>).operations;
     if (!Array.isArray(operations) || operations.length < 1 || operations.length > 30) throw new BadRequestException('A function must contain between 1 and 30 operations');
-    const allowed = new Set(['SET_FIELD','COPY_VALUE','CONCAT','LOWERCASE','UPPERCASE','NUMBER','ADD','SUBTRACT','MULTIPLY','DIVIDE','NOTIFY_OWNER','ADD_TAG','IF','HTTP_REQUEST']);
+    const inputs = (definition as Record<string, unknown>).inputs;
+    const outputs = (definition as Record<string, unknown>).outputs;
+    const validatePorts = (ports: unknown, label: string) => {
+      if (ports === undefined) return [];
+      if (!Array.isArray(ports) || ports.length > 30) throw new BadRequestException(`${label} must be an array with at most 30 items`);
+      const seen = new Set<string>();
+      for (const raw of ports) {
+        if (!raw || typeof raw !== 'object') throw new BadRequestException(`Invalid ${label} item`);
+        const key = String((raw as Record<string, unknown>).key ?? '').trim();
+        if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(key)) throw new BadRequestException(`${label} keys must be valid identifiers`);
+        if (seen.has(key)) throw new BadRequestException(`Duplicate ${label} key: ${key}`);
+        seen.add(key);
+      }
+      return ports;
+    };
+    validatePorts(inputs, 'inputs');
+    validatePorts(outputs, 'outputs');
+    const allowed = new Set(['SET_FIELD','COPY_VALUE','CONCAT','LOWERCASE','UPPERCASE','NUMBER','ADD','SUBTRACT','MULTIPLY','DIVIDE','NOTIFY_OWNER','ADD_TAG','IF','HTTP_REQUEST','CONNECTION_READ']);
     for (const item of operations) {
       const op = String((item as Record<string, unknown>)?.op ?? '').toUpperCase();
       if (!allowed.has(op)) throw new BadRequestException(`Unsupported or unsafe operation: ${op}`);
