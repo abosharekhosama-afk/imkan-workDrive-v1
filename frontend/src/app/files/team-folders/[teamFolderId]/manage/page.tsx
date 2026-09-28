@@ -410,7 +410,7 @@ export default function TeamFolderManagePage() {
                   <select value={inviteRole} onChange={(e) => setInviteRole(e.target.value as TeamFolderRole)} className="h-11 self-end border border-slate-200 px-3 text-[12px] outline-none">
                     <option value="EDITOR">Editor</option><option value="VIEWER">Viewer</option><option value="ORGANIZER">Organizer</option><option value="ADMIN">Admin</option>
                   </select>
-                  <button type="button" onClick={() => void addMember()} disabled={!selectedUser || busy} className="h-11 self-end rounded-md bg-[color:var(--wd-primary)] text-[13px] font-semibold text-white disabled:opacity-50">{locale === "ar" ? "إضافة" : "Add"}</button>
+                  <button type="button" onClick={() => void addMember()} disabled={!selectedUser || busy} className="wd-pill wd-pill-new h-11 self-end disabled:opacity-50">{locale === "ar" ? "إضافة" : "Add"}</button>
                 </div>
               ) : null}
               {canManage ? (
@@ -430,7 +430,7 @@ export default function TeamFolderManagePage() {
                     <select value={groupRole} onChange={(e) => setGroupRole(e.target.value as TeamFolderRole)} className="h-11 self-end rounded-md border border-slate-200 px-3 text-[12px] outline-none">
                       <option value="EDITOR">Editor</option><option value="VIEWER">Viewer</option><option value="COMMENTER">Commenter</option><option value="ORGANIZER">Organizer</option><option value="ADMIN">Admin</option>
                     </select>
-                    <button type="button" onClick={() => void addGroup()} disabled={!selectedGroup || busy} className="h-11 self-end rounded-md bg-[color:var(--wd-primary)] text-[12px] font-semibold text-white disabled:opacity-50">{locale === "ar" ? "إضافة" : "Add"}</button>
+                    <button type="button" onClick={() => void addGroup()} disabled={!selectedGroup || busy} className="wd-pill wd-pill-new h-11 self-end disabled:opacity-50">{locale === "ar" ? "إضافة" : "Add"}</button>
                   </div>
                 </div>
               ) : null}

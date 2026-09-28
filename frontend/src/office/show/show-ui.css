@@ -517,16 +517,25 @@
 }
 
 .imkan-show .tool {
-  border: 1px solid var(--show-border-strong);
-  border-radius: 2px;
-  padding: 4px 8px;
-  background: #fff;
-  font-size: 11px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 32px;
+  height: 32px;
+  border: 0;
+  border-radius: var(--wd-pill-radius, 16px);
+  padding: 7px 14px;
+  background: transparent;
+  color: var(--wd-primary-ink, var(--show-text));
+  font-size: 12px;
+  font-weight: 500;
+  box-shadow: inset 0 0 0 1px var(--wd-active, var(--show-border-strong));
   cursor: pointer;
+  transition: background-color var(--wd-dur, 150ms) var(--wd-ease, ease), color var(--wd-dur, 150ms) var(--wd-ease, ease), box-shadow var(--wd-dur, 150ms) var(--wd-ease, ease);
 }
 
 .imkan-show .tool:hover {
-  background: var(--show-hover);
+  background: var(--wd-menu-hover, var(--show-hover));
 }
 
 @media (max-width: 960px) {

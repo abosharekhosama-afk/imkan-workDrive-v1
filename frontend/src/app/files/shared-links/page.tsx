@@ -57,7 +57,7 @@ export default function SharedLinksPage() {
             onClick={() => {
               window.dispatchEvent(new Event("workdrive:trigger-create-folder"));
             }}
-            className="inline-flex items-center gap-1 rounded-md bg-[#1B66EA] px-4 py-1.5 text-[13px] font-medium text-white hover:bg-[#1556C7]"
+            className="wd-pill wd-pill-new inline-flex items-center gap-1"
           >
             + {label("menu.newFolder")}
           </button>

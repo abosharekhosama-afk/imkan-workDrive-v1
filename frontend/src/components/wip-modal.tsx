@@ -47,7 +47,7 @@ export function WipHost() {
           <button
             type="button"
             onClick={() => setFeature(null)}
-            className="mt-5 w-full rounded-xl bg-[#1B66EA] px-4 py-2.5 text-[13.5px] font-medium text-white hover:bg-[#1558D6]"
+            className="imkan-button mt-5 w-full"
           >
             {closeText}
           </button>
