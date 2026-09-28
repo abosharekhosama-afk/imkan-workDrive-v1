@@ -16,6 +16,7 @@ export function SelectionBar({
   onDownload,
   onAction,
   onClear,
+  isFollowingSelected = false,
 }: {
   folderCount: number;
   fileCount: number;
@@ -27,6 +28,7 @@ export function SelectionBar({
   onDownload: () => void;
   onAction: (key: SelectionBarActionKey) => void;
   onClear: () => void;
+  isFollowingSelected?: boolean;
 }) {
   const { label } = useLocale();
   const [shareOpen, setShareOpen] = useState(false);
@@ -43,17 +45,19 @@ export function SelectionBar({
       { key: "moveTo", labelKey: "menu.moveTo" as const, hint: "Z", disabled: !canMutate || needsSingle },
       { key: "copyTo", labelKey: "menu.copyTo" as const, hint: "C", disabled: !canMutate || needsSingle },
       { key: "assignWorkflow", labelKey: "menu.assignWorkflow" as const, disabled: !canMutate || needsSingle },
-      { key: "organize", labelKey: "menu.organize" as const, disabled: !canMutate || needsSingle },
+      { key: "organize", labelKey: "menu.organize" as const, chevron: true, disabled: !canMutate, submenuItems: [
+        { key: "associateDataTemplate", labelKey: "menu.associateDataTemplate" as const },
+      ] },
       "sep" as const,
       { key: "searchInFold", labelKey: "menu.searchInFold" as const },
       { key: "download", labelKey: "sel.download" as const, hint: "⌃S", disabled: fileCount === 0 },
       { key: "rename", labelKey: "menu.rename" as const, disabled: !canMutate || needsSingle },
-      { key: "followUpdates", labelKey: "menu.followUpdates" as const, disabled: needsSingle },
+      { key: "followUpdates", labelKey: isFollowingSelected ? "menu.following" : "menu.followUpdates", disabled: false },
       { key: "moreOptions", labelKey: "menu.moreOptions" as const, disabled: needsSingle },
       "sep" as const,
       { key: "moveToTrash", labelKey: "menu.moveToTrash" as const, danger: true, disabled: !canMutate },
     ],
-    [canMutate, canShare, fileCount, needsSingle],
+    [canMutate, canShare, fileCount, needsSingle, isFollowingSelected],
   );
   if (total === 0) return null;
   const text = (folderCount > 0 && fileCount === 0
@@ -94,7 +98,8 @@ export function SelectionBar({
             if (k === "share" || k === "addMembers") onShare("invite");
             else if (k === "copy" || k === "copyPermalink") onCopyLink();
             else if (k === "download") onDownload();
-            else onAction(k as SelectionBarActionKey);
+            else if (k === "organize:associateDataTemplate") onAction("organize");
+            else if (!k.includes(":")) onAction(k as SelectionBarActionKey);
           }}
           items={moreItems} />
         <button type="button" onClick={onClear} aria-label={label("sel.clear")} title="Esc"

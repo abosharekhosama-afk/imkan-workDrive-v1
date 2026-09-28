@@ -14,6 +14,7 @@ export type MenuItem = {
   disabled?: boolean;
   icon?: React.ReactNode;
   chevron?: boolean;
+  submenuItems?: Array<MenuItem | "sep">;
 };
 export function ZohoMenu({ open, onClose, onSelect, items, labelledBy, align = "start", width = "w-56", widthPx }: {
   open: boolean; onClose: () => void; onSelect: (key: string) => void;
@@ -24,10 +25,11 @@ export function ZohoMenu({ open, onClose, onSelect, items, labelledBy, align = "
   const ref = useRef<HTMLDivElement | null>(null);
   const [pos, setPos] = useState<{ top: number; start: number } | null>(null);
   const [activeKey, setActiveKey] = useState<string | null>(null);
+  const [submenuPos, setSubmenuPos] = useState<{ top: number; start: number } | null>(null);
   const anchorRef = useRef<Element | null>(null);
   const menuW = widthPx ?? 240;
   useEffect(() => {
-    if (!open) { setPos(null); setActiveKey(null); anchorRef.current = null; return; }
+    if (!open) { setPos(null); setActiveKey(null); setSubmenuPos(null); anchorRef.current = null; return; }
     const el = document.getElementById(labelledBy);
     anchorRef.current = el;
     const place = () => {
@@ -77,13 +79,26 @@ export function ZohoMenu({ open, onClose, onSelect, items, labelledBy, align = "
         }
         const m = it as MenuItem;
         const hasDesc = Boolean(m.descKey);
+        const hasSubmenu = Boolean(m.submenuItems?.length);
+        const openSubmenu = (target: HTMLElement) => {
+          if (!hasSubmenu) { setActiveKey(m.key); return; }
+          const r = target.getBoundingClientRect();
+          const subW = 250;
+          const isRtl = typeof document !== "undefined" && document.documentElement.dir === "rtl";
+          const start = isRtl ? Math.max(8, r.left - subW - 4) : Math.min(r.right + 4, window.innerWidth - subW - 8);
+          const top = Math.min(Math.max(8, r.top), Math.max(8, window.innerHeight - 300));
+          setActiveKey(m.key);
+          setSubmenuPos({ top, start });
+        };
         return (
           <button key={m.key} type="button" role="menuitem" disabled={m.disabled}
             data-active={activeKey === m.key || undefined}
             data-danger={m.danger || undefined}
-            onMouseEnter={() => setActiveKey(m.key)}
-            onMouseLeave={() => setActiveKey((k) => (k === m.key ? null : k))}
-            onClick={() => { onSelect(m.key); onClose(); }}
+            onMouseEnter={(e) => openSubmenu(e.currentTarget)}
+            onClick={(e) => {
+              if (hasSubmenu) { e.preventDefault(); openSubmenu(e.currentTarget); return; }
+              onSelect(m.key); onClose();
+            }}
             className={`wd-menu-item disabled:opacity-40 ${hasDesc ? "min-h-[49px] py-2" : "min-h-[34px]"}`}>
             <span className="flex w-6 shrink-0 items-center justify-center" aria-hidden="true">
               {m.icon ?? (m.checked ? <span className="text-[13px] font-bold text-[color:var(--wd-primary)]">✓</span> : null)}
@@ -92,13 +107,31 @@ export function ZohoMenu({ open, onClose, onSelect, items, labelledBy, align = "
               <span className="block truncate text-[14px] font-normal leading-4">{label(m.labelKey)}</span>
               {m.descKey ? <span className="mt-0.5 block truncate text-[12px] font-normal leading-4 text-slate-500">{label(m.descKey)}</span> : null}
             </span>
-            {m.chevron ? <span className="shrink-0 text-slate-500" aria-hidden="true">›</span> : null}
+            {(m.chevron || hasSubmenu) ? <span className="shrink-0 text-slate-500" aria-hidden="true">›</span> : null}
             {m.hint ? (
               <span className={m.hintPill ? "shrink-0 rounded-md bg-slate-100 px-1.5 py-0.5 text-[11px] font-medium text-slate-500" : "shrink-0 text-[12px] text-slate-500"}>{m.hint}</span>
             ) : null}
           </button>
         );
       })}
+      {activeKey && submenuPos ? (() => {
+        const parent = items.find((item) => item !== "sep" && typeof item === "object" && "key" in item && item.key === activeKey) as MenuItem | undefined;
+        if (!parent?.submenuItems?.length) return null;
+        return (
+          <div role="menu" className="wd-menu fixed z-[91] w-[250px] overflow-hidden" style={{ top: submenuPos.top, ...(rtl ? { right: window.innerWidth - submenuPos.start - 250 } : { left: submenuPos.start }) }}
+            onMouseLeave={() => { setActiveKey(null); setSubmenuPos(null); }}>
+            {parent.submenuItems.map((child, i) => child === "sep" ? <div key={`sub-sep-${i}`} className="wd-menu-sep" role="separator" /> : (
+              <button key={child.key} type="button" role="menuitem" disabled={child.disabled} data-danger={child.danger || undefined}
+                onClick={() => { onSelect(`${parent.key}:${child.key}`); onClose(); }}
+                className="wd-menu-item min-h-[34px] disabled:opacity-40">
+                <span className="flex w-6 shrink-0 items-center justify-center">{child.icon ?? (child.checked ? <span className="text-[13px] font-bold text-[color:var(--wd-primary)]">✓</span> : null)}</span>
+                <span className="min-w-0 flex-1"><span className="block truncate text-[14px]">{label(child.labelKey)}</span>{child.descKey ? <span className="block truncate text-[12px] text-slate-500">{label(child.descKey)}</span> : null}</span>
+                {child.hint ? <span className="shrink-0 text-[12px] text-slate-500">{child.hint}</span> : null}
+              </button>
+            ))}
+          </div>
+        );
+      })() : null}
     </div>,
     document.body
   );
