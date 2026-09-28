@@ -2618,6 +2618,7 @@ model CollectionSubmission {
   submitterEmail String? @map("submitter_email") @db.VarChar(320)
   fileCount    Int      @default(0) @map("file_count")
   uploadVersionId String? @map("upload_version_id") @db.Char(36)
+  fileId          String?  @map("file_id") @db.Char(36)
   status       String   @default("RECEIVED") @db.VarChar(20)
   submittedAt  DateTime @default(now()) @map("submitted_at")
   collection   FileCollection @relation(fields: [collectionId], references: [id], onDelete: Cascade)
