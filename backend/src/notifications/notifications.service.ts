@@ -1,5 +1,6 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { Subject, filter } from 'rxjs';
+import { NotificationPriority, NotificationType, ResourceType } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import type { AccessTokenPayload } from '../auth/jwt.types';
 
@@ -28,6 +29,32 @@ export class NotificationsService {
   async unreadCount(user: AccessTokenPayload) { return { count: await this.prisma.notification.count({where:{orgId:user.org_id,userId:user.sub,readAt:null}}) }; }
   async markRead(user: AccessTokenPayload,id:string) { const n=await this.prisma.notification.updateMany({where:{id,orgId:user.org_id,userId:user.sub},data:{readAt:new Date()}}); if(!n.count) throw new NotFoundException('Notification not found'); return {ok:true}; }
   async markAllRead(user: AccessTokenPayload) { await this.prisma.notification.updateMany({where:{orgId:user.org_id,userId:user.sub,readAt:null},data:{readAt:new Date()}}); return {ok:true}; }
+
+  async createUserNotification(input: {
+    orgId: string;
+    userId: string;
+    type: NotificationType;
+    title: string;
+    body?: string | null;
+    resourceType?: ResourceType | null;
+    resourceId?: string | null;
+    priority?: NotificationPriority;
+  }) {
+    const row = await this.prisma.notification.create({
+      data: {
+        orgId: input.orgId,
+        userId: input.userId,
+        type: input.type,
+        title: input.title,
+        body: input.body ?? null,
+        priority: input.priority ?? NotificationPriority.NORMAL,
+        resourceType: input.resourceType ?? null,
+        resourceId: input.resourceId ?? null,
+      },
+    });
+    streams.next({ userId: input.userId, notification: row });
+    return row;
+  }
 
   async getOfficePreferences(user: AccessTokenPayload) {
     return this.prisma.officeNotificationPreference.upsert({

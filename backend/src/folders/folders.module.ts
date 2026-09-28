@@ -6,9 +6,10 @@ import { StorageModule } from '../storage/storage.module';
 import { RecentModule } from '../recent/recent.module';
 import { WorkflowsModule } from '../workflows/workflows.module';
 import { MetadataModule } from '../metadata/metadata.module';
+import { FollowsModule } from '../follows/follows.module';
 
 @Module({
-  imports: [StorageModule, RecentModule, WorkflowsModule, MetadataModule],
+  imports: [StorageModule, RecentModule, WorkflowsModule, MetadataModule, FollowsModule],
   controllers: [FoldersController],
   providers: [FoldersService],
 })

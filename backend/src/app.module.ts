@@ -14,6 +14,7 @@ import { SharesModule } from './shares/shares.module';
 import { StorageModule } from './storage/storage.module';
 import { TeamFoldersModule } from './team-folders/team-folders.module';
 import { FavoritesModule } from './favorites/favorites.module';
+import { FollowsModule } from './follows/follows.module';
 import { RecentModule } from './recent/recent.module';
 import { AdminModule } from './admin/admin.module';
 import { QuotaModule } from './quota/quota.module';
@@ -45,6 +46,7 @@ import { AiModule } from './ai/ai.module';
     AuditModule,
     TeamFoldersModule,
     FavoritesModule,
+    FollowsModule,
     RecentModule,
     NotificationsModule,
     CommentsModule,

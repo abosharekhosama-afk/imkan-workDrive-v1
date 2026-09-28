@@ -4,9 +4,10 @@ import { SharesController } from './shares.controller';
 import { SharesService } from './shares.service';
 import { OfficeEmailModule } from '../office-email/office-email.module';
 import { DlpModule } from '../dlp/dlp.module';
+import { FollowsModule } from '../follows/follows.module';
 
 @Module({
-  imports: [StorageModule, OfficeEmailModule, DlpModule],
+  imports: [StorageModule, OfficeEmailModule, DlpModule, FollowsModule],
   controllers: [SharesController],
   providers: [SharesService],
   exports: [SharesService], // <-- أضف هذا السطر

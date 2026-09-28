@@ -94,6 +94,9 @@ interface FileTableProps {
   folderUpdatedAt?: ReadonlyMap<string, string | null>;
   onToast?: (message: string) => void;
   onAssignWorkflow?: (resourceType: "FILE" | "FOLDER", resourceId: string, resourceName: string) => void;
+  onOrganize?: (resourceType: "FILE" | "FOLDER", resourceId: string) => void;
+  onFollowUpdates?: (resourceType: "FILE" | "FOLDER", resourceId: string, resourceName: string) => void;
+  followIds?: Set<string>;
   workflowStatuses?: ReadonlyMap<string, WorkflowResourceStatus>;
   onWorkflowStatusClick?: (status: WorkflowResourceStatus, resourceName: string) => void;
   compact?: boolean;
@@ -135,6 +138,9 @@ export function FileTable({
   folderUpdatedAt,
   onToast,
   onAssignWorkflow,
+  onOrganize,
+  onFollowUpdates,
+  followIds = new Set(),
   workflowStatuses,
   onWorkflowStatusClick,
   compact = false,
@@ -261,6 +267,9 @@ export function FileTable({
                     onCopy: onCopy && canMutate ? () => onCopy("FOLDER", folder.id, folder.name) : undefined,
                 onFavoriteToggle: onFavorite ? () => onFavorite("FOLDER", folder.id) : undefined,
                 onDelete: canMutate ? () => onDelete("FOLDER", folder.id) : undefined, onAssignWorkflow: onAssignWorkflow && canMutate ? () => onAssignWorkflow("FOLDER", folder.id, folder.name) : undefined,
+                onOrganize: onOrganize && canMutate ? () => onOrganize("FOLDER", folder.id) : undefined,
+                onFollowUpdates: onFollowUpdates ? () => onFollowUpdates("FOLDER", folder.id, folder.name) : undefined,
+                isFollowingUpdates: followIds.has(folder.id),
               }}
               onCopyLink={onCopyLink ? () => onCopyLink(folder.id) : undefined}
               onToast={onToast}
@@ -307,6 +316,9 @@ export function FileTable({
                     onCopy: onCopy && canMutate ? () => onCopy("FOLDER", folder.id, folder.name) : undefined,
                     onFavoriteToggle: onFavorite ? () => onFavorite("FOLDER", folder.id) : undefined,
                     onDelete: canMutate ? () => onDelete("FOLDER", folder.id) : undefined, onAssignWorkflow: onAssignWorkflow && canMutate ? () => onAssignWorkflow("FOLDER", folder.id, folder.name) : undefined,
+                    onOrganize: onOrganize && canMutate ? () => onOrganize("FOLDER", folder.id) : undefined,
+                    onFollowUpdates: onFollowUpdates ? () => onFollowUpdates("FOLDER", folder.id, folder.name) : undefined,
+                    isFollowingUpdates: followIds.has(folder.id),
                   }}
                 />
               </td>
@@ -316,7 +328,7 @@ export function FileTable({
             <tr key={file.id} draggable={Boolean(canMutate)} onDragStart={(e) => { e.dataTransfer.effectAllowed="move"; e.dataTransfer.setData("application/x-workdrive", JSON.stringify({type:"FILE",id:file.id,name:file.name})); }} onContextMenu={(e) => { e.preventDefault(); setCtxMenu({ x: e.clientX, y: e.clientY, node: (<FileContextMenu
               onToast={onToast}
               handlers={{ onOpen: onOpen ? () => onOpen("FILE", file.id, file.name) : undefined, onInspect: onInspect ? () => onInspect("FILE", file.id, file.name) : undefined, onPreview: onPreview ? () => onPreview("FILE", file.id, file.name, file.mimeType ?? undefined, file.size ?? undefined) : undefined, onDownload: () => onDownload(file.id), onShare: canShare ? () => onShare("FILE", file.id) : undefined, onRename: canMutate ? () => onRename("FILE", file.id, file.name) : undefined, onMove: onMove && canMutate ? () => onMove("FILE", file.id, file.name) : undefined,
-                    onCopy: onCopy && canMutate ? () => onCopy("FILE", file.id, file.name) : undefined, onFavoriteToggle: onFavorite ? () => onFavorite("FILE", file.id) : undefined, onVersionHistory: onVersionHistory ? () => onVersionHistory("FILE", file.id, file.name, file.mimeType ?? undefined, file.size ?? undefined) : undefined, onDelete: canMutate ? () => onDelete("FILE", file.id) : undefined, onAssignWorkflow: onAssignWorkflow && canMutate ? () => onAssignWorkflow("FILE", file.id, file.name) : undefined }}
+                    onCopy: onCopy && canMutate ? () => onCopy("FILE", file.id, file.name) : undefined, onFavoriteToggle: onFavorite ? () => onFavorite("FILE", file.id) : undefined, onVersionHistory: onVersionHistory ? () => onVersionHistory("FILE", file.id, file.name, file.mimeType ?? undefined, file.size ?? undefined) : undefined, onDelete: canMutate ? () => onDelete("FILE", file.id) : undefined, onAssignWorkflow: onAssignWorkflow && canMutate ? () => onAssignWorkflow("FILE", file.id, file.name) : undefined, onOrganize: onOrganize && canMutate ? () => onOrganize("FILE", file.id) : undefined, onFollowUpdates: onFollowUpdates ? () => onFollowUpdates("FILE", file.id, file.name) : undefined, isFollowingUpdates: followIds.has(file.id) }}
               onCopyLink={onCopyLink ? () => onCopyLink(file.id) : undefined}
               x={e.clientX} y={e.clientY} onClose={() => setCtxMenu(null)}
             />)}); }} className="wd-list-row group relative cursor-grab active:cursor-grabbing" data-compact={compact || undefined} data-selected={selectedIds.has(file.id) || undefined} onClick={(e) => inspectFromRowClick(e, "FILE", file.id, file.name)}>
@@ -364,6 +376,9 @@ export function FileTable({
                     onFavoriteToggle: onFavorite ? () => onFavorite("FILE", file.id) : undefined,
                     onVersionHistory: onVersionHistory ? () => onVersionHistory("FILE", file.id, file.name, file.mimeType ?? undefined, file.size ?? undefined) : undefined,
                     onDelete: canMutate ? () => onDelete("FILE", file.id) : undefined, onAssignWorkflow: onAssignWorkflow && canMutate ? () => onAssignWorkflow("FILE", file.id, file.name) : undefined,
+                    onOrganize: onOrganize && canMutate ? () => onOrganize("FILE", file.id) : undefined,
+                    onFollowUpdates: onFollowUpdates ? () => onFollowUpdates("FILE", file.id, file.name) : undefined,
+                    isFollowingUpdates: followIds.has(file.id),
                   }}
                 />
               </td>

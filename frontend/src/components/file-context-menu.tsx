@@ -8,6 +8,7 @@ import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useLocale } from "./locale-provider";
 import type { FileActionHandlers } from "./file-actions-menu";
+import { followUpdatesMenuLabel } from "../lib/follow-updates-logic";
 
 type SubItem = { key: string; label: string; onSelect?: () => void };
 type Item = {
@@ -74,13 +75,13 @@ export function FileContextMenu({
       { key: "move", label: `${D("moveTo")} (Z)`, hint: "Z", onSelect: onMove ?? (() => toast("moveTo")) },
       { key: "copy", label: `${D("copyTo")} (C)`, hint: "C", onSelect: handlers.onCopy ?? (() => toast("copyTo")) },
       { key: "workflow", label: D("assignWorkflow"), onSelect: handlers.onAssignWorkflow ?? (() => toast("assignWorkflow")) },
-      { key: "organize", label: D("organize"), onSelect: () => toast("organize") },
+      { key: "organize", label: D("organize"), onSelect: handlers.onOrganize ?? (() => toast("organize")) },
     ],
     [
       { key: "search", label: D("searchInFold"), onSelect: () => toast("searchInFold") },
       { key: "download", label: `${D("download")} (⌃S)`, hint: "⌃S", onSelect: onDownload ?? (() => toast("download")) },
       { key: "rename", label: D("rename"), onSelect: onRename ?? (() => toast("rename")) },
-      { key: "follow", label: D("followUpdates"), onSelect: () => toast("followUpdates") },
+      { key: "follow", label: label(followUpdatesMenuLabel(Boolean(handlers.isFollowingUpdates))), onSelect: handlers.onFollowUpdates ?? (() => toast("followUpdates")) },
       { key: "more", label: D("moreOptions"), onSelect: () => toast("moreOptions") },
     ],
     [

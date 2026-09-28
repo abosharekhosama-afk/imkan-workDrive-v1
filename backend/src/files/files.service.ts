@@ -44,6 +44,7 @@ import { classifyFileType, extractExtension } from '../common/file-classificatio
 import { WorkflowEngineService } from '../workflows/workflow-engine.service';
 import { MetadataService } from '../metadata/metadata.service';
 import { DlpService } from '../dlp/dlp.service';
+import { FollowsService } from '../follows/follows.service';
 
 export type UploadRequestResponse = {
   upload_url: string;
@@ -160,6 +161,7 @@ export class FilesService {
     @Inject(forwardRef(() => WorkflowEngineService)) private readonly workflowEngine: WorkflowEngineService,
     private readonly dlp: DlpService,
     private readonly metadata: MetadataService,
+    private readonly follows: FollowsService,
   ) {}
 
   async requestUpload(
@@ -586,6 +588,7 @@ export class FilesService {
     }
     await this.metadata.assertFileMandateSatisfied(user, session.fileId);
     void this.dlp.classifyFile(user, session.fileId).catch(() => undefined);
+    this.dispatchFollowFileEvent(user, session.fileId, AuditAction.UPLOAD_VERSION);
     return { file_id: session.fileId, upload_id: session.versionId, status: 'complete' };
   }
 
@@ -1547,6 +1550,7 @@ export class FilesService {
     });
     if (mandate) await this.metadata.associateFile(user, copied.id, mandate.templateId, mandate.values);
     this.dispatchWorkflowFileEvent(user, 'copy', copied);
+    this.dispatchFollowFileEvent(user, newFileId, AuditAction.COPY);
     // Do not return the Prisma model directly: File.size is a BigInt and
     // Express JSON serialization would throw after the transaction has already
     // committed, making a successful copy look like a failed request.
@@ -1662,6 +1666,20 @@ export class FilesService {
 
   private async recordActivity(orgId: string, fileId: string, userId: string, action: AuditAction, metadata: Record<string, unknown> = {}) {
     await this.prisma.fileActivity.create({ data: { orgId, fileId, userId, action, metadata: metadata as any } });
+    const file = await this.prisma.file.findFirst({
+      where: { id: fileId, orgId },
+      select: { name: true, folderId: true },
+    });
+    if (!file) return;
+    void this.follows.notifyResourceEvent({
+      orgId,
+      resourceType: ResourceType.FILE,
+      resourceId: fileId,
+      folderId: file.folderId,
+      actorUserId: userId,
+      action,
+      resourceName: file.name,
+    }).catch(() => undefined);
   }
 
   private async purgeFileVersionObjects(user: AccessTokenPayload, fileId: string, versions: Array<{ storageObjectId: string }>) {
@@ -1722,6 +1740,7 @@ export class FilesService {
       await tx.auditLog.create({ data: { orgId: user.org_id, actorId: user.sub, action: 'FILE_RESTORED', resourceType: 'FILE', resourceId: id } });
       return updated;
     });
+    this.dispatchFollowFileEvent(user, id, AuditAction.RESTORE);
     return { id: restored.id, restored: true };
   }
 
@@ -1746,7 +1765,27 @@ export class FilesService {
       await tx.fileActivity.create({ data: { orgId: user.org_id, fileId: id, userId: user.sub, action: AuditAction.DELETE, metadata: { trash: true } } });
       await tx.auditLog.create({ data: { orgId: user.org_id, actorId: user.sub, action: 'FILE_TRASHED', resourceType: 'FILE', resourceId: id } });
     });
+    this.dispatchFollowFileEvent(user, id, AuditAction.DELETE);
     return { id, trashed: true, expiresAt: expiresAt.toISOString() };
+  }
+
+  private dispatchFollowFileEvent(user: AccessTokenPayload, fileId: string, action: AuditAction) {
+    void (async () => {
+      const file = await this.prisma.file.findFirst({
+        where: { id: fileId, orgId: user.org_id },
+        select: { name: true, folderId: true },
+      });
+      if (!file) return;
+      await this.follows.notifyResourceEvent({
+        orgId: user.org_id,
+        resourceType: ResourceType.FILE,
+        resourceId: fileId,
+        folderId: file.folderId,
+        actorUserId: user.sub,
+        action,
+        resourceName: file.name,
+      });
+    })().catch(() => undefined);
   }
 
   private async requireMutableFile<T extends { id: string; orgId: string; ownerId: string; folder?: { teamFolderId?: string | null } | null }>(

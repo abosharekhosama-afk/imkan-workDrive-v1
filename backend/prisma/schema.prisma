@@ -329,6 +329,7 @@ model Organization {
   auditLogs           AuditLog[]
   officeAuditPolicy   OfficeAuditPolicy?
   favorites           Favorite[]
+  resourceFollows     ResourceFollow[]
   accessEvents        AccessEvent[]
   sessions            Session[]
   notifications       Notification[]
@@ -413,6 +414,7 @@ model User {
   auditLogs              AuditLog[]
   officeAuditPoliciesUpdated OfficeAuditPolicy[] @relation("OfficeAuditPolicyUpdater")
   favorites              Favorite[]
+  resourceFollows        ResourceFollow[]
   accessEvents           AccessEvent[]
   shareRecipients        FileShareRecipient[]
   folderShareRecipients   FolderShareRecipient[]
@@ -1423,6 +1425,23 @@ model Favorite {
   @@unique([userId, resourceType, resourceId])
   @@index([orgId, userId])
   @@map("favorites")
+}
+
+model ResourceFollow {
+  id           String       @id @default(uuid()) @db.Char(36)
+  orgId        String       @map("org_id") @db.Char(36)
+  userId       String       @map("user_id") @db.Char(36)
+  resourceType ResourceType @map("resource_type")
+  resourceId   String       @map("resource_id") @db.Char(36)
+  createdAt    DateTime     @default(now()) @map("created_at")
+
+  organization Organization @relation(fields: [orgId], references: [id])
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, resourceType, resourceId])
+  @@index([orgId, userId])
+  @@index([orgId, resourceType, resourceId])
+  @@map("resource_follows")
 }
 
 model AccessEvent {

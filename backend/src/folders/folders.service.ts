@@ -19,6 +19,10 @@ import type { BulkFolderOperationInput, FolderMoveCopyInput } from './operation.
 import { randomUUID } from 'node:crypto';
 import { WorkflowEngineService } from '../workflows/workflow-engine.service';
 import { MetadataService } from '../metadata/metadata.service';
+import { FollowsService } from '../follows/follows.service';
+import { AuditAction } from '@prisma/client';
+import { FollowsService } from '../follows/follows.service';
+import { AuditAction } from '@prisma/client';
 
 @Injectable()
 export class FoldersService {
@@ -29,6 +33,7 @@ export class FoldersService {
     @Inject(STORAGE_SERVICE) private readonly storage: StorageService,
     private readonly workflowEngine: WorkflowEngineService,
     private readonly metadata: MetadataService,
+    private readonly follows: FollowsService,
   ) {}
 
 
@@ -46,6 +51,14 @@ export class FoldersService {
     if (mandate) await this.metadata.associateFolder(user, id, mandate.templateId, mandate.values);
     await this.prisma.auditLog.create({ data: { orgId: user.org_id, actorId: user.sub, action: 'FOLDER_MOVED', resourceType: 'FOLDER', resourceId: id } });
     this.dispatchWorkflowFolderEvent(user, 'move', updated);
+    void this.follows.notifyResourceEvent({
+      orgId: user.org_id,
+      resourceType: ResourceType.FOLDER,
+      resourceId: updated.id,
+      actorUserId: user.sub,
+      action: AuditAction.MOVE,
+      resourceName: updated.name,
+    }).catch(() => undefined);
     return updated;
   }
 
@@ -300,6 +313,14 @@ export class FoldersService {
       },
     });
     this.dispatchWorkflowFolderEvent(user, 'rename', updated);
+    void this.follows.notifyResourceEvent({
+      orgId: user.org_id,
+      resourceType: ResourceType.FOLDER,
+      resourceId: updated.id,
+      actorUserId: user.sub,
+      action: AuditAction.UPDATE,
+      resourceName: updated.name,
+    }).catch(() => undefined);
     return updated;
   }
 

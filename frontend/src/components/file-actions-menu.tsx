@@ -4,6 +4,7 @@ import { useLocale } from "./locale-provider";
 
 import { ActionDropdown, type ActionDropdownItem } from "./action-dropdown";
 import type { RowActionContext } from "./file-row-actions-logic";
+import { followUpdatesMenuLabel } from "../lib/follow-updates-logic";
 
 export interface FileActionHandlers {
   onOpen?: () => void;
@@ -16,6 +17,9 @@ export interface FileActionHandlers {
   onMove?: () => void;
   onCopy?: () => void;
   onFavoriteToggle?: () => void;
+  onOrganize?: () => void;
+  onFollowUpdates?: () => void;
+  isFollowingUpdates?: boolean;
   onVersionHistory?: () => void;
   onDelete?: () => void;
   onAssignWorkflow?: () => void;
@@ -57,9 +61,16 @@ export function FileActionsMenu({ context, handlers, onCopyLink }: FileActionsMe
   if (handlers.onMove) push({ label: `${label("menu.moveTo")} (Z)`, onSelect: handlers.onMove, dividerBefore: true });
   if (handlers.onCopy) push({ label: `${label("menu.copyTo")} (C)`, onSelect: handlers.onCopy });
   if (handlers.onAssignWorkflow) push({ label: label("menu.assignWorkflow"), onSelect: handlers.onAssignWorkflow });
+  if (handlers.onOrganize) push({ label: label("menu.organize"), onSelect: handlers.onOrganize });
 
   if (handlers.onDownload) push({ label: `${label("menu.download")} (⌃S)`, onSelect: handlers.onDownload, dividerBefore: true });
   if (handlers.onRename) push({ label: label("menu.rename"), onSelect: handlers.onRename });
+  if (handlers.onFollowUpdates) {
+    push({
+      label: label(followUpdatesMenuLabel(Boolean(handlers.isFollowingUpdates))),
+      onSelect: handlers.onFollowUpdates,
+    });
+  }
   if (handlers.onVersionHistory) {
     push({ label: label("files.versionHistory"), onSelect: handlers.onVersionHistory });
   }

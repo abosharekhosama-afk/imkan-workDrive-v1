@@ -28,6 +28,7 @@ import { STORAGE_SERVICE, type StorageService } from '../storage/storage.types';
 import type { CreateShareInput } from './create-share.schema';
 import { OfficeEmailService } from '../office-email/office-email.service';
 import { DlpService } from '../dlp/dlp.service';
+import { FollowsService } from '../follows/follows.service';
 
 export type CreateShareResponse = {
   link_url: string;
@@ -59,6 +60,7 @@ export class SharesService {
     @Inject(STORAGE_SERVICE) private readonly storage: StorageService,
     private readonly email: OfficeEmailService,
     private readonly dlp: DlpService,
+    private readonly follows: FollowsService,
   ) {}
 
   async createShare(user: AccessTokenPayload, input: CreateShareInput): Promise<CreateShareResponse> {
@@ -130,6 +132,15 @@ Open the shared resource: ${linkUrl}` ,
       });
       emailed = input.emailRecipients.length;
     }
+    void this.follows.notifyResourceEvent({
+      orgId: user.org_id,
+      resourceType: input.resourceType,
+      resourceId: input.resourceId,
+      folderId: input.resourceType === ResourceType.FILE ? (resource as { folderId?: string | null }).folderId ?? null : null,
+      actorUserId: user.sub,
+      action: AuditAction.SHARE,
+      resourceName: resource.name,
+    }).catch(() => undefined);
     return { link_url: linkUrl, emailed };
   }
 
