@@ -25,7 +25,7 @@ export class CollectionsService {
     const folder = await this.prisma.folder.findFirst({ where: { id: folderId, orgId: user.org_id } });
     if (!folder) throw new NotFoundException('Destination folder not found');
     const token = randomBytes(32).toString('base64url');
-    const row = await this.prisma.fileCollection.create({ data: { orgId: user.org_id, createdById: user.sub, folderId, name, description: body.description ? String(body.description).slice(0, 4000) : null, type: body.type === 'INTERNAL' ? 'INTERNAL' : 'EXTERNAL', tokenHash: this.hash(token), expiresAt: body.expiresAt ? new Date(body.expiresAt) : null, maxFiles: body.maxFiles == null ? null : Math.max(1, Math.min(1000, Number(body.maxFiles))), maxFileSizeBytes: body.maxFileSizeBytes == null ? null : BigInt(body.maxFileSizeBytes), collectName: body.collectName !== false, collectEmail: Boolean(body.collectEmail), separateFolderPerUser: Boolean(body.separateFolderPerUser) }, include: { folder: { select: { id: true, name: true } } } });
+    const row = await this.prisma.fileCollection.create({ data: { orgId: user.org_id, createdById: user.sub, folderId, name, description: body.description ? String(body.description).slice(0, 4000) : null, notes: body.notes ? String(body.notes).slice(0, 4000) : null, type: body.type === 'INTERNAL' ? 'INTERNAL' : 'EXTERNAL', tokenHash: this.hash(token), expiresAt: body.expiresAt ? new Date(body.expiresAt) : null, maxFiles: body.maxFiles == null ? null : Math.max(1, Math.min(1000, Number(body.maxFiles))), maxFileSizeBytes: body.maxFileSizeBytes == null ? null : BigInt(body.maxFileSizeBytes), collectName: body.collectName !== false, collectEmail: Boolean(body.collectEmail), collectPhone: Boolean(body.collectPhone), sameNameAsVersion: Boolean(body.sameNameAsVersion), notifyOnSubmission: body.notifyOnSubmission !== false, separateFolderPerUser: Boolean(body.separateFolderPerUser) }, include: { folder: { select: { id: true, name: true } } } });
     const { tokenHash, ...safe } = row;
     return { ...safe, token, publicPath: `/collect/${token}` };
   }
@@ -56,21 +56,35 @@ export class CollectionsService {
     const sha256 = String(body?.sha256 ?? '').toLowerCase();
     if (!name || name.length > 191 || !Number.isSafeInteger(size) || size < 1) throw new BadRequestException('Invalid file details');
     if (row.maxFileSizeBytes && BigInt(size) > row.maxFileSizeBytes) throw new BadRequestException('File exceeds the collection size limit');
-    const existing = await this.prisma.collectionSubmission.aggregate({ where: { collectionId: row.id }, _sum: { fileCount: true } });
-    if (row.maxFiles && (existing._sum.fileCount ?? 0) >= row.maxFiles) throw new BadRequestException('Collection file limit reached');
+    const submitterName = row.collectName ? String(body?.submitterName ?? '').trim().slice(0, 180) || null : null;
+    const submitterEmail = row.collectEmail ? String(body?.submitterEmail ?? '').trim().slice(0, 320) || null : null;
+    const submitterPhone = row.collectPhone ? String(body?.submitterPhone ?? '').trim().slice(0, 40) || null : null;
+    if (row.maxFiles) {
+      const identityWhere = submitterEmail ? { submitterEmail } : submitterPhone ? { submitterPhone } : submitterName ? { submitterName } : null;
+      if (!identityWhere) throw new BadRequestException('A submitter identity is required when a per-user file limit is enabled');
+      const existing = await this.prisma.collectionSubmission.aggregate({ where: { collectionId: row.id, ...identityWhere }, _sum: { fileCount: true } });
+      if ((existing._sum.fileCount ?? 0) >= row.maxFiles) throw new BadRequestException('Per-user file limit reached');
+    }
     if (!/^[a-f0-9]{64}$/.test(sha256)) throw new BadRequestException('A valid SHA-256 checksum is required');
     let destinationFolderId = row.folderId;
     if (row.separateFolderPerUser) {
       const parent = await this.prisma.folder.findFirst({ where: { id: row.folderId, orgId: row.orgId }, select: { id: true, teamFolderId: true } });
       if (!parent) throw new NotFoundException('Collection destination folder not found');
-      const rawLabel = (row.collectName ? String(body?.submitterName ?? '') : '') || (row.collectEmail ? String(body?.submitterEmail ?? '') : '') || 'External submitter';
+      const rawLabel = submitterName || submitterEmail || submitterPhone || 'External submitter';
       const safeLabel = rawLabel.normalize('NFKC').replace(/[\\/\0-\x1f]/g, '-').trim().slice(0, 90) || 'External submitter';
-      const existingCount = await this.prisma.folder.count({ where: { orgId: row.orgId, parentId: parent.id, name: { startsWith: safeLabel } } });
-      const folderName = existingCount ? `${safeLabel} (${existingCount + 1})` : safeLabel;
-      const created = await this.prisma.folder.create({ data: { orgId: row.orgId, teamFolderId: parent.teamFolderId, parentId: parent.id, name: folderName, ownerId: row.createdById } });
-      destinationFolderId = created.id;
+      const identityWhere = submitterEmail ? { submitterEmail } : submitterPhone ? { submitterPhone } : submitterName ? { submitterName } : null;
+      const previous = identityWhere ? await this.prisma.collectionSubmission.findFirst({ where: { collectionId: row.id, ...identityWhere, status: 'RECEIVED', fileId: { not: null } }, orderBy: { submittedAt: 'desc' }, select: { fileId: true } }) : null;
+      const previousFile = previous?.fileId ? await this.prisma.file.findFirst({ where: { id: previous.fileId, orgId: row.orgId }, select: { folderId: true } }) : null;
+      const reusableFolder = previousFile?.folderId ? await this.prisma.folder.findFirst({ where: { id: previousFile.folderId, orgId: row.orgId, parentId: parent.id }, select: { id: true } }) : null;
+      if (reusableFolder) destinationFolderId = reusableFolder.id;
+      else {
+        const existingCount = await this.prisma.folder.count({ where: { orgId: row.orgId, parentId: parent.id, name: { startsWith: safeLabel } } });
+        const folderName = existingCount ? `${safeLabel} (${existingCount + 1})` : safeLabel;
+        const created = await this.prisma.folder.create({ data: { orgId: row.orgId, teamFolderId: parent.teamFolderId, parentId: parent.id, name: folderName, ownerId: row.createdById } });
+        destinationFolderId = created.id;
+      }
     }
-    const submission = await this.prisma.collectionSubmission.create({ data: { collectionId: row.id, submitterName: row.collectName ? String(body?.submitterName ?? '').slice(0,180) || null : null, submitterEmail: row.collectEmail ? String(body?.submitterEmail ?? '').slice(0,320) || null : null, fileCount: 1, status: 'UPLOADING' } });
+    const submission = await this.prisma.collectionSubmission.create({ data: { collectionId: row.id, submitterName, submitterEmail, submitterPhone, fileCount: 1, status: 'UPLOADING' } });
     const user = { sub: row.createdById, org_id: row.orgId, email: 'collection-upload@internal.invalid', role: 'ADMIN' };
     try {
       const upload = await this.files.requestUpload(user, { name, folderId: destinationFolderId, size, mimeType, sha256 });
@@ -87,6 +101,9 @@ export class CollectionsService {
     const user = { sub: row.createdById, org_id: row.orgId, email: 'collection-upload@internal.invalid', role: 'ADMIN' };
     const result = await this.files.completeUpload(user, uploadId);
     await this.prisma.collectionSubmission.update({ where: { id: submission.id }, data: { fileCount: 1, fileId: result.file_id, status: 'RECEIVED', submittedAt: new Date() } });
+    if (row.notifyOnSubmission) {
+      await this.prisma.notification.create({ data: { orgId: row.orgId, userId: row.createdById, type: 'SYSTEM', title: 'New collection submission', body: `${submission.submitterName || submission.submitterEmail || 'A user'} submitted a file to ${row.name}.`, resourceType: 'FILE', resourceId: result.file_id } }).catch(() => undefined);
+    }
     return { completed: true, submissionId, file: result };
   }
   async submissions(user: AccessTokenPayload, id: string) {
@@ -103,6 +120,6 @@ export class CollectionsService {
     if (!token || token.length > 100) throw new NotFoundException('Collection not found');
     const row = await this.prisma.fileCollection.findUnique({ where: { tokenHash: this.hash(token) }, include: { organization: { select: { name: true } } } });
     if (!row || row.status !== 'ACTIVE' || (row.expiresAt && row.expiresAt <= new Date())) throw new NotFoundException('This collection is unavailable');
-    return { name: row.name, description: row.description, type: row.type, organizationName: row.organization.name, collectName: row.collectName, collectEmail: row.collectEmail, maxFiles: row.maxFiles, maxFileSizeBytes: row.maxFileSizeBytes?.toString() ?? null };
+    return { name: row.name, description: row.description, type: row.type, organizationName: row.organization.name, collectName: row.collectName, collectEmail: row.collectEmail, collectPhone: row.collectPhone, maxFiles: row.maxFiles, maxFileSizeBytes: row.maxFileSizeBytes?.toString() ?? null };
   }
 }
