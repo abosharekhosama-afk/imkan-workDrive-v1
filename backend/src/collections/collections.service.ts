@@ -29,6 +29,15 @@ export class CollectionsService {
     const { tokenHash, ...safe } = row;
     return { ...safe, token, publicPath: `/collect/${token}` };
   }
+  async regenerateLink(user: AccessTokenPayload, id: string) {
+    await this.assertManager(user);
+    const current = await this.prisma.fileCollection.findFirst({ where: { id, orgId: user.org_id } });
+    if (!current) throw new NotFoundException('Collection not found');
+    if (current.status !== 'ACTIVE') throw new BadRequestException('Enable the collection before generating a link');
+    const token = randomBytes(32).toString('base64url');
+    await this.prisma.fileCollection.update({ where: { id }, data: { tokenHash: this.hash(token) } });
+    return { token, publicPath: `/collect/${token}` };
+  }
   async update(user: AccessTokenPayload, id: string, body: any) {
     await this.assertManager(user);
     const current = await this.prisma.fileCollection.findFirst({ where: { id, orgId: user.org_id } });
@@ -38,6 +47,10 @@ export class CollectionsService {
     if (body.description !== undefined) data.description = body.description ? String(body.description).slice(0,4000) : null;
     if (body.status !== undefined) { if (!['ACTIVE','DISABLED','COMPLETED'].includes(body.status)) throw new BadRequestException('Invalid status'); data.status = body.status; }
     if (body.expiresAt !== undefined) data.expiresAt = body.expiresAt ? new Date(body.expiresAt) : null;
+    if (body.notes !== undefined) data.notes = body.notes ? String(body.notes).slice(0,4000) : null;
+    if (body.maxFiles !== undefined) data.maxFiles = body.maxFiles == null ? null : Math.max(1, Math.min(1000, Number(body.maxFiles)));
+    if (body.maxFileSizeBytes !== undefined) data.maxFileSizeBytes = body.maxFileSizeBytes == null ? null : BigInt(body.maxFileSizeBytes);
+    for (const key of ['collectName','collectEmail','collectPhone','sameNameAsVersion','notifyOnSubmission','separateFolderPerUser']) if (body[key] !== undefined) data[key] = Boolean(body[key]);
     return this.prisma.fileCollection.update({ where: { id }, data, select: { id:true,name:true,status:true,description:true,expiresAt:true,updatedAt:true } });
   }
   async remove(user: AccessTokenPayload, id: string) { await this.assertManager(user); const row = await this.prisma.fileCollection.findFirst({ where: { id, orgId: user.org_id } }); if (!row) throw new NotFoundException('Collection not found'); await this.prisma.fileCollection.delete({ where: { id } }); return { deleted: true, id }; }
