@@ -372,6 +372,7 @@ model Organization {
   templates           Template[]
   dataTemplates       FileDataTemplate[]
   dataTemplateBindings FileDataTemplateBinding[]
+  fileCollections FileCollection[]
 
   workflows Workflow[]
   workflowRuns WorkflowRun[] @relation("OrganizationWorkflowRuns")
@@ -559,6 +560,7 @@ model Folder {
   permissions  FolderPermission[]
   shares       FolderShare[]
   dataTemplateBindings FileDataTemplateBinding[]
+  fileCollections FileCollection[]
 
   @@index([orgId, parentId])
   @@index([orgId, teamFolderId])
@@ -2582,4 +2584,42 @@ model WorkflowFunctionExecution {
 enum WorkflowStatus {
   DRAFT
   ACTIVE
+}
+
+model FileCollection {
+  id                    String   @id @default(uuid()) @db.Char(36)
+  orgId                 String   @map("org_id") @db.Char(36)
+  createdById           String   @map("created_by_id") @db.Char(36)
+  folderId              String   @map("folder_id") @db.Char(36)
+  name                  String   @db.VarChar(180)
+  description           String?  @db.Text
+  type                  String   @default("EXTERNAL") @db.VarChar(20)
+  tokenHash             String   @unique @map("token_hash") @db.Char(64)
+  status                String   @default("ACTIVE") @db.VarChar(20)
+  expiresAt             DateTime? @map("expires_at")
+  maxFiles              Int?     @map("max_files")
+  maxFileSizeBytes      BigInt?  @map("max_file_size_bytes")
+  collectName           Boolean  @default(true) @map("collect_name")
+  collectEmail          Boolean  @default(false) @map("collect_email")
+  separateFolderPerUser Boolean  @default(false) @map("separate_folder_per_user")
+  createdAt             DateTime @default(now()) @map("created_at")
+  updatedAt             DateTime @updatedAt @map("updated_at")
+  organization          Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  folder                Folder @relation(fields: [folderId], references: [id], onDelete: Cascade)
+  submissions           CollectionSubmission[]
+  @@index([orgId, status, createdAt])
+  @@map("file_collections")
+}
+
+model CollectionSubmission {
+  id           String   @id @default(uuid()) @db.Char(36)
+  collectionId String   @map("collection_id") @db.Char(36)
+  submitterName String? @map("submitter_name") @db.VarChar(180)
+  submitterEmail String? @map("submitter_email") @db.VarChar(320)
+  fileCount    Int      @default(0) @map("file_count")
+  status       String   @default("RECEIVED") @db.VarChar(20)
+  submittedAt  DateTime @default(now()) @map("submitted_at")
+  collection   FileCollection @relation(fields: [collectionId], references: [id], onDelete: Cascade)
+  @@index([collectionId, submittedAt])
+  @@map("collection_submissions")
 }
