@@ -132,6 +132,9 @@ Open the shared resource: ${linkUrl}` ,
       });
       emailed = input.emailRecipients.length;
     }
+    const resourceName = input.resourceType === ResourceType.FILE
+      ? (await this.prisma.file.findUnique({ where: { id: input.resourceId }, select: { name: true } }))?.name
+      : (await this.prisma.folder.findUnique({ where: { id: input.resourceId }, select: { name: true } }))?.name;
     void this.follows.notifyResourceEvent({
       orgId: user.org_id,
       resourceType: input.resourceType,
@@ -139,7 +142,7 @@ Open the shared resource: ${linkUrl}` ,
       folderId: input.resourceType === ResourceType.FILE ? (resource as { folderId?: string | null }).folderId ?? null : null,
       actorUserId: user.sub,
       action: AuditAction.SHARE,
-      resourceName: resource.name,
+      resourceName: resourceName ?? '',
     }).catch(() => undefined);
     return { link_url: linkUrl, emailed };
   }
