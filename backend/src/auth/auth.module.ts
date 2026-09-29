@@ -5,9 +5,10 @@ import { AuthService } from '../auth.service';
 import { AuthController } from './auth.controller';
 import { JwtAuthGuard } from './jwt-auth.guard';
 import { TenantContextInterceptor } from './tenant-context.interceptor';
+import { MailModule } from '../mail/mail.module';
 
 @Module({
-  imports: [ConfigModule.forRoot({ isGlobal: true })],
+  imports: [ConfigModule.forRoot({ isGlobal: true }), MailModule],
   controllers: [AuthController],
   providers: [
     AuthService,

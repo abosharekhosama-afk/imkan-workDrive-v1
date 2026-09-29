@@ -1,10 +1,13 @@
 "use client";
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
+import { AuthShell } from "../../../components/auth/auth-shell";
+import { useLocale } from "../../../components/locale-provider";
 import { persistBrowserAccessToken } from "../../../components/auth-gate-logic";
 
 export default function AuthCallback() {
   const router = useRouter();
+  const { label } = useLocale();
   useEffect(() => {
     const token = new URLSearchParams(window.location.search).get("token");
     if (token) {
@@ -15,11 +18,8 @@ export default function AuthCallback() {
     router.replace("/auth/login");
   }, [router]);
   return (
-    <main className="auth-page">
-      <section className="auth-card auth-loading">
-        <div className="auth-logo">I</div>
-        <p>Completing sign-in…</p>
-      </section>
-    </main>
+    <AuthShell title={label("auth.completing")}>
+      <p className="wd-auth-sub">{label("auth.completing")}</p>
+    </AuthShell>
   );
 }

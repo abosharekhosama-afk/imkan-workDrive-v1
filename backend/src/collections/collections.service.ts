@@ -1,11 +1,15 @@
 import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { createHash, randomBytes } from 'node:crypto';
 import { PrismaService } from '../prisma/prisma.service';
 import type { AccessTokenPayload } from '../auth/jwt.types';
 import { FilesService } from '../files/files.service';
+import { MailService } from '../mail/mail.service';
+import { collectionInviteEmail, collectionSubmissionEmail } from '../mail/email-templates';
+import { parseInviteEmails } from './collection-email-logic';
 @Injectable()
 export class CollectionsService {
-  constructor(private readonly prisma: PrismaService, private readonly files: FilesService) {}
+  constructor(private readonly prisma: PrismaService, private readonly files: FilesService, private readonly mail: MailService, private readonly config: ConfigService) {}
   private hash(token: string) { return createHash('sha256').update(token).digest('hex'); }
   private async assertManager(user: AccessTokenPayload) {
     const settings = await this.prisma.adminConsoleSetting.findUnique({ where: { orgId: user.org_id } });
@@ -54,6 +58,40 @@ export class CollectionsService {
     return this.prisma.fileCollection.update({ where: { id }, data, select: { id:true,name:true,status:true,description:true,expiresAt:true,updatedAt:true } });
   }
   async remove(user: AccessTokenPayload, id: string) { await this.assertManager(user); const row = await this.prisma.fileCollection.findFirst({ where: { id, orgId: user.org_id } }); if (!row) throw new NotFoundException('Collection not found'); await this.prisma.fileCollection.delete({ where: { id } }); return { deleted: true, id }; }
+
+  async emailLink(user: AccessTokenPayload, id: string, body: { emails?: string[] | string; message?: string; token?: string }) {
+    await this.assertManager(user);
+    const collection = await this.prisma.fileCollection.findFirst({ where: { id, orgId: user.org_id }, include: { organization: { select: { name: true } } } });
+    if (!collection) throw new NotFoundException('Collection not found');
+    if (collection.status !== 'ACTIVE') throw new BadRequestException('Enable the collection before emailing the link');
+    const token = String(body?.token ?? '').trim();
+    if (!token || this.hash(token) !== collection.tokenHash) throw new BadRequestException('Collection link is out of date. Generate the link again.');
+    const parsed = parseInviteEmails(body?.emails);
+    if (!parsed.emails.length) throw new BadRequestException('Add at least one valid email address');
+    const requester = await this.prisma.user.findUnique({ where: { id: user.sub }, select: { name: true, email: true } });
+    const requesterName = requester?.name?.trim() || requester?.email || 'A teammate';
+    const message = body?.message ? String(body.message).trim().slice(0, 2000) : '';
+    const link = `${this.frontendUrl()}/collect/${token}`;
+    let delivered = true;
+    for (const email of parsed.emails) {
+      const rendered = collectionInviteEmail({
+        collectionName: collection.name,
+        requesterName,
+        organizationName: collection.organization.name,
+        description: collection.description,
+        message,
+        link,
+        expiresAt: collection.expiresAt,
+        signInRequired: collection.type === 'INTERNAL',
+      });
+      const sent = await this.mail.send({ to: email, ...rendered });
+      if (!sent.delivered) delivered = false;
+      await this.prisma.collectionEmailInvite.create({ data: { collectionId: collection.id, email, message: message || null, delivered: sent.delivered } });
+    }
+    return { sent: parsed.emails.length, delivered, invalid: parsed.invalid };
+  }
+
+  private frontendUrl() { return (this.config.get<string>('FRONTEND_URL') ?? 'http://localhost:3000').replace(/\/$/, ''); }
 
   private async resolvePublic(token: string) {
     if (!token || token.length > 100) throw new NotFoundException('Collection not found');
@@ -115,7 +153,14 @@ export class CollectionsService {
     const result = await this.files.completeUpload(user, uploadId);
     await this.prisma.collectionSubmission.update({ where: { id: submission.id }, data: { fileCount: 1, fileId: result.file_id, status: 'RECEIVED', submittedAt: new Date() } });
     if (row.notifyOnSubmission) {
-      await this.prisma.notification.create({ data: { orgId: row.orgId, userId: row.createdById, type: 'SYSTEM', title: 'New collection submission', body: `${submission.submitterName || submission.submitterEmail || 'A user'} submitted a file to ${row.name}.`, resourceType: 'FILE', resourceId: result.file_id } }).catch(() => undefined);
+      const who = submission.submitterName || submission.submitterEmail || 'A user';
+      await this.prisma.notification.create({ data: { orgId: row.orgId, userId: row.createdById, type: 'SYSTEM', title: 'New collection submission', body: `${who} submitted a file to ${row.name}.`, resourceType: 'FILE', resourceId: result.file_id } }).catch(() => undefined);
+      const owner = await this.prisma.user.findUnique({ where: { id: row.createdById }, select: { email: true } });
+      const file = await this.prisma.file.findFirst({ where: { id: result.file_id, orgId: row.orgId }, select: { name: true, folderId: true } });
+      if (owner?.email) {
+        const rendered = collectionSubmissionEmail({ collectionName: row.name, submitter: who, fileName: file?.name || 'a file', folderUrl: `${this.frontendUrl()}/files/${file?.folderId || row.folderId}` });
+        await this.mail.send({ to: owner.email, ...rendered }).catch(() => undefined);
+      }
     }
     return { completed: true, submissionId, file: result };
   }

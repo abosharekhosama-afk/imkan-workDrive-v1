@@ -25,9 +25,22 @@ async function request<T>(path: string, body?: unknown): Promise<T> {
   return response.json() as Promise<T>;
 }
 
-export function login(email: string, password: string) { return request<AuthResult>('/auth/login', { email, password }); }
+export type OtpChallenge = {
+  otp_required: true;
+  challenge_id: string;
+  masked_email: string;
+  expires_in: number;
+  purpose: "LOGIN" | "SIGNUP" | "PASSWORDLESS";
+  dev_code?: string;
+};
+
+export function login(email: string, password: string) { return request<OtpChallenge>('/auth/login', { email, password }); }
+export function verifyLoginOtp(challengeId: string, code: string) { return request<AuthResult>('/auth/login/verify', { challengeId, code }); }
+export function requestLoginOtp(email: string) { return request<OtpChallenge>('/auth/login/otp', { email }); }
+export function resendOtp(challengeId: string) { return request<OtpChallenge>('/auth/otp/resend', { challengeId }); }
 export function redeemOAuthResume(code: string) { return request<AuthResult>('/auth/oauth-resume', { code }); }
-export function signup(name: string, email: string, password: string, inviteToken?: string) { return request<AuthResult>('/auth/signup', { name, email, password, ...(inviteToken ? { inviteToken } : {}) }); }
+export function signup(name: string, email: string, password: string, inviteToken?: string) { return request<OtpChallenge>('/auth/signup', { name, email, password, ...(inviteToken ? { inviteToken } : {}) }); }
+export function verifySignupOtp(challengeId: string, code: string) { return request<AuthResult>('/auth/signup/verify', { challengeId, code }); }
 export async function googleUrl() { return request<{ url: string }>('/auth/google'); }
 export class SessionCheckError extends Error {
   status: number;

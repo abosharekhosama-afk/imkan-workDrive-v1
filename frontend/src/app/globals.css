@@ -4329,3 +4329,33 @@ html[data-theme="dark"] .zoho-admin-input{background:var(--wd-bg);color:var(--wd
 @media (max-width:680px){
   .imkan-modal-surface.imkan-transfer-modal{width:calc(100vw - 16px);max-height:94vh}
 }
+
+.wd-auth-page{min-height:100vh;display:grid;place-items:center;padding:32px 16px;background:var(--wd-canvas,#f3f5f7)}
+.wd-auth-card{width:min(460px,100%);background:var(--wd-bg,#fff);border:1px solid var(--wd-line,#e4e7ea);border-radius:16px;padding:36px 40px 28px;box-shadow:0 18px 50px color-mix(in srgb, var(--wd-text,#1c1e21) 8%, transparent)}
+.wd-auth-brand{display:flex;align-items:center;justify-content:center;gap:10px;margin-bottom:22px;color:var(--imkan-color-primary,#00a884);font-size:13px;font-weight:700;letter-spacing:.08em}
+.wd-auth-mark{display:grid;place-items:center;width:34px;height:34px;border-radius:8px;background:var(--imkan-color-primary,#00a884);color:#fff;font-weight:800}
+.wd-auth-card h1{margin:0;text-align:center;font-size:26px;line-height:1.25;font-weight:650;color:var(--wd-text,#1c1e21)}
+.wd-auth-sub{margin:8px 0 0;text-align:center;color:var(--wd-muted,#5f6368);font-size:13px;line-height:1.5}
+.wd-auth-form{display:grid;gap:14px;margin-top:22px}
+.wd-auth-form label{display:grid;gap:6px;font-size:12px;font-weight:650;color:var(--wd-text,#1c1e21)}
+.wd-auth-input{height:44px;width:100%;border:1px solid var(--wd-line,#d7dbe0);border-radius:8px;padding:0 12px;background:var(--wd-bg,#fff);color:var(--wd-text,#1c1e21);font-size:14px}
+.wd-auth-input:focus{outline:2px solid color-mix(in srgb, var(--imkan-color-primary,#00a884) 35%, transparent);border-color:var(--imkan-color-primary,#00a884)}
+.wd-auth-submit{height:44px;border:0;border-radius:8px;background:var(--imkan-color-primary,#00a884);color:#fff;font-size:14px;font-weight:700;cursor:pointer}
+.wd-auth-submit:disabled{opacity:.6;cursor:default}
+.wd-auth-divider{display:grid;grid-template-columns:1fr auto 1fr;align-items:center;gap:12px;color:var(--wd-muted,#5f6368);font-size:12px}
+.wd-auth-divider:before,.wd-auth-divider:after{content:"";height:1px;background:var(--wd-line,#e4e7ea)}
+.wd-auth-google{height:44px;display:flex;align-items:center;justify-content:center;gap:10px;border-radius:8px;border:1px solid var(--wd-line,#d7dbe0);background:var(--wd-bg,#fff);color:var(--wd-text,#1c1e21);font-size:14px;font-weight:650;cursor:pointer}
+.wd-auth-google:hover{background:var(--wd-hover,#f6f7f8)}
+.wd-auth-footer{margin-top:18px;text-align:center;font-size:13px;color:var(--wd-muted,#5f6368)}
+.wd-auth-footer a,.wd-auth-row a,.wd-auth-row button,.wd-auth-text,.wd-auth-identity button,.wd-auth-password button{color:var(--imkan-color-primary,#00a884);background:none;border:0;padding:0;font-size:12px;font-weight:650;cursor:pointer}
+.wd-auth-identity,.wd-auth-row{display:flex;align-items:center;justify-content:space-between;gap:12px;font-size:13px}
+.wd-auth-identity{padding:8px 10px;border-radius:8px;background:color-mix(in srgb, var(--imkan-color-primary,#00a884) 8%, transparent)}
+.wd-auth-password{position:relative;display:block}
+.wd-auth-password .wd-auth-input{padding-inline-end:92px}
+.wd-auth-password button{position:absolute;inset-inline-end:10px;top:50%;transform:translateY(-50%)}
+.wd-auth-otp{display:flex;justify-content:center;gap:8px}
+.wd-auth-otp-box{width:46px;height:52px;text-align:center;font-size:22px;font-weight:700;border:1px solid var(--wd-line,#d7dbe0);border-radius:8px;background:var(--wd-bg,#fff);color:var(--wd-text,#1c1e21)}
+.wd-auth-otp-box:focus{outline:2px solid color-mix(in srgb, var(--imkan-color-primary,#00a884) 35%, transparent);border-color:var(--imkan-color-primary,#00a884)}
+.wd-auth-note{margin-top:14px;padding:10px 12px;border-radius:8px;background:color-mix(in srgb, var(--imkan-color-primary,#00a884) 10%, transparent);color:var(--wd-text,#1c1e21);font-size:13px;line-height:1.45}
+.wd-auth-text{justify-self:center}
+@media (max-width:640px){.wd-auth-card{padding:28px 18px}.wd-auth-otp-box{width:40px;height:46px}}

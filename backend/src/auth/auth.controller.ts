@@ -9,7 +9,11 @@ import { AuthService } from '../auth.service';
 export class AuthController {
   constructor(private readonly auth: AuthService) {}
   @Public() @Post('signup') signup(@Body() body: { name: string; email: string; password: string; inviteToken?: string }) { return this.auth.signup(body); }
+  @Public() @Post('signup/verify') verifySignup(@Body() body: { challengeId: string; code: string }, @Req() req: Request) { return this.auth.verifySignupOtp(body, { ipAddress: req.ip, userAgent: req.headers['user-agent'] }); }
   @Public() @Post('login') login(@Body() body: { email: string; password: string; organizationId?: string }, @Req() req: Request) { return this.auth.login(body, { ipAddress: req.ip, userAgent: req.headers['user-agent'] }); }
+  @Public() @Post('login/verify') verifyLogin(@Body() body: { challengeId: string; code: string }, @Req() req: Request) { return this.auth.verifyLoginOtp(body, { ipAddress: req.ip, userAgent: req.headers['user-agent'] }); }
+  @Public() @Post('login/otp') requestLoginOtp(@Body() body: { email: string }) { return this.auth.requestPasswordlessOtp(body.email); }
+  @Public() @Post('otp/resend') resendOtp(@Body() body: { challengeId: string }) { return this.auth.resendOtp(body.challengeId); }
   @Public() @Post('oauth-resume') oauthResume(@Body() body: { code?: string }) { return this.auth.redeemOAuthResumeCode(String(body?.code ?? '')); }
   @Post('logout') logout(@CurrentUser() user: AccessTokenPayload) { return this.auth.logout(user); }
   @Post('logout-all') logoutAll(@CurrentUser() user: AccessTokenPayload) { return this.auth.logoutAll(user); }

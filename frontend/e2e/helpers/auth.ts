@@ -26,8 +26,19 @@ async function request<T>(path: string, body?: unknown): Promise<T> {
   return response.json() as Promise<T>;
 }
 
-export function login(email: string, password: string) { return request<AuthResult>('/auth/login', { email, password }); }
-export function signup(name: string, email: string, password: string, inviteToken?: string) { return request<AuthResult>('/auth/signup', { name, email, password, ...(inviteToken ? { inviteToken } : {}) }); }
+type OtpChallenge = { otp_required: true; challenge_id: string; dev_code?: string };
+
+async function finishOtp(started: OtpChallenge, verifyPath: string): Promise<AuthResult> {
+  if (!started.dev_code) throw new Error("Email verification code is required");
+  return request<AuthResult>(verifyPath, { challengeId: started.challenge_id, code: started.dev_code });
+}
+
+export async function login(email: string, password: string) {
+  return finishOtp(await request<OtpChallenge>('/auth/login', { email, password }), '/auth/login/verify');
+}
+export async function signup(name: string, email: string, password: string, inviteToken?: string) {
+  return finishOtp(await request<OtpChallenge>('/auth/signup', { name, email, password, ...(inviteToken ? { inviteToken } : {}) }), '/auth/signup/verify');
+}
 export async function googleUrl() { return request<{ url: string }>('/auth/google'); }
 
 export async function me(token: string) {

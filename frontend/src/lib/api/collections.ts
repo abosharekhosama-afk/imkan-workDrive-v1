@@ -9,3 +9,4 @@ export type CollectionSubmission = {id:string;submitterName:string|null;submitte
 export function listCollectionSubmissions(id:string){return apiRequest<CollectionSubmission[]>(`/collections/${id}/submissions`);}
 
 export function regenerateCollectionLink(id:string){ return apiRequest<{token:string;publicPath:string}>(`/collections/${id}/link`,{method:'POST'}); }
+export function emailCollectionLink(id:string,input:{emails:string;message?:string;token:string}){ return apiRequest<{sent:number;delivered:boolean;invalid:string[]}>(`/collections/${id}/email`,{method:'POST',body:JSON.stringify(input)}); }

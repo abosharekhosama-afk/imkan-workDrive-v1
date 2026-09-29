@@ -1,12 +1,26 @@
 import { randomUUID } from 'node:crypto';
 import { createHash, randomBytes, scrypt as scryptCallback, timingSafeEqual } from 'node:crypto';
 import { promisify } from 'node:util';
-import { ConflictException, ForbiddenException, Injectable, UnauthorizedException, BadRequestException, NotFoundException } from '@nestjs/common';
+import { ConflictException, ForbiddenException, Injectable, UnauthorizedException, BadRequestException, NotFoundException, HttpException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import * as jwt from 'jsonwebtoken';
-import { InvitationStatus, OrgRole, MembershipStatus } from '@prisma/client';
+import { InvitationStatus, OrgRole, MembershipStatus, EmailOtpPurpose, Prisma } from '@prisma/client';
 import { PrismaService } from './prisma/prisma.service';
 import type { AccessTokenPayload } from './auth/jwt.types';
+import { MailService } from './mail/mail.service';
+import { passwordResetEmail, verificationCodeEmail } from './mail/email-templates';
+import {
+  OTP_MAX_ATTEMPTS,
+  OTP_TTL_MS,
+  OTP_WINDOW_LIMIT,
+  OTP_WINDOW_MS,
+  generateOtpCode,
+  hashOtpCode,
+  maskEmail,
+  otpCodesMatch,
+  type OtpChallengeResult,
+  type OtpPurpose,
+} from './mail/otp-logic';
 import {
   ACCOUNT_CREATION_ERROR_CODE,
   SUPER_ADMIN_ONLY_MESSAGE,
@@ -28,9 +42,9 @@ type MembershipInfo = {
 
 @Injectable()
 export class AuthService {
-  constructor(private readonly prisma: PrismaService, private readonly config: ConfigService) { }
+  constructor(private readonly prisma: PrismaService, private readonly config: ConfigService, private readonly mail: MailService) { }
 
-  async signup(input: { name: string; email: string; password: string; inviteToken?: string }): Promise<AuthResult> {
+  async signup(input: { name: string; email: string; password: string; inviteToken?: string }): Promise<OtpChallengeResult> {
     const name = input.name.trim();
     const email = input.email.trim().toLowerCase();
     if (name.length < 2 || name.length > 120) throw new BadRequestException('Name must be between 2 and 120 characters');
@@ -38,6 +52,7 @@ export class AuthService {
     if (input.password.length < 8) throw new BadRequestException('Password must be at least 8 characters');
 
     const existing = await this.prisma.user.findFirst({ where: { email } });
+    if (!input.inviteToken && existing) throw new ConflictException('This email is already registered');
     const passwordHash = await this.hash(input.password);
 
     if (input.inviteToken) {
@@ -46,13 +61,46 @@ export class AuthService {
         where: { tokenHash, email, acceptedAt: null, revokedAt: null, expiresAt: { gt: new Date() } }
       });
       if (!invitation) throw new BadRequestException('Invitation is invalid, expired, or does not match this email');
+    }
+
+    return this.issueEmailOtp({
+      email,
+      purpose: 'SIGNUP',
+      userId: existing?.id,
+      payload: { name, passwordHash, ...(input.inviteToken ? { inviteToken: input.inviteToken } : {}) },
+      action: 'Confirm your email to create your IMKAN WorkDrive account.',
+    });
+  }
+
+  async verifySignupOtp(input: { challengeId: string; code: string }, context?: { ipAddress?: string; userAgent?: string }): Promise<AuthResult> {
+    const challenge = await this.consumeOtp(input.challengeId, input.code, [EmailOtpPurpose.SIGNUP]);
+    const payload = this.readSignupPayload(challenge.payload);
+    return this.finalizeSignup(challenge.email, payload, context);
+  }
+
+  private async finalizeSignup(
+    email: string,
+    input: { name: string; passwordHash: string; inviteToken?: string },
+    context?: { ipAddress?: string; userAgent?: string },
+  ): Promise<AuthResult> {
+    const name = input.name;
+    const passwordHash = input.passwordHash;
+    const existing = await this.prisma.user.findFirst({ where: { email } });
+    if (input.inviteToken) {
+      const tokenHash = this.hashToken(input.inviteToken);
+      const invitation = await this.prisma.organizationInvitation.findFirst({
+        where: { tokenHash, email, acceptedAt: null, revokedAt: null, expiresAt: { gt: new Date() } },
+      });
+      if (!invitation) throw new BadRequestException('Invitation is invalid, expired, or does not match this email');
 
       const user = await this.prisma.$transaction(async (tx) => {
         let createdUser = existing;
         if (!createdUser) {
-          createdUser = await tx.user.create({ data: { email, name, passwordHash, status: 'ACTIVE' } });
+          createdUser = await tx.user.create({ data: { email, name, passwordHash, status: 'ACTIVE', emailVerifiedAt: new Date() } });
         } else if (!createdUser.passwordHash) {
-          await tx.user.update({ where: { id: createdUser.id }, data: { passwordHash, name: createdUser.name ?? name, status: 'ACTIVE' } });
+          await tx.user.update({ where: { id: createdUser.id }, data: { passwordHash, name: createdUser.name ?? name, status: 'ACTIVE', emailVerifiedAt: createdUser.emailVerifiedAt ?? new Date() } });
+        } else if (!createdUser.emailVerifiedAt) {
+          await tx.user.update({ where: { id: createdUser.id }, data: { emailVerifiedAt: new Date() } });
         }
 
         const membership = await tx.organizationMembership.create({
@@ -73,12 +121,13 @@ export class AuthService {
 
         return { user: createdUser, membership };
       });
-      return this.issue(user.user, user.membership);
+      return this.issue(user.user, user.membership, context);
     }
 
+    if (existing) throw new ConflictException('This email is already registered');
     const organization = await this.prisma.organization.create({ data: { name: `${name}'s Workspace` } });
     const user = await this.prisma.$transaction(async (tx) => {
-      const created = await tx.user.create({ data: { email, name, passwordHash, status: 'ACTIVE' } });
+      const created = await tx.user.create({ data: { email, name, passwordHash, status: 'ACTIVE', emailVerifiedAt: new Date() } });
 
       const membership = await tx.organizationMembership.create({
         data: {
@@ -96,7 +145,7 @@ export class AuthService {
 
       return { user: created, membership };
     });
-    return this.issue(user.user, user.membership);
+    return this.issue(user.user, user.membership, context);
   }
 
   /**
@@ -143,11 +192,11 @@ export class AuthService {
       const result = await this.prisma.$transaction(async (tx) => {
         let target = existingUser;
         if (!target) {
-          target = await tx.user.create({ data: { email, name, passwordHash, status: 'ACTIVE' } });
+          target = await tx.user.create({ data: { email, name, passwordHash, status: 'ACTIVE', emailVerifiedAt: new Date() } });
         } else if (!target.passwordHash) {
           target = await tx.user.update({
             where: { id: target.id },
-            data: { passwordHash, name: target.name ?? name },
+            data: { passwordHash, name: target.name ?? name, emailVerifiedAt: target.emailVerifiedAt ?? new Date() },
           });
         }
 
@@ -210,39 +259,61 @@ export class AuthService {
     });
   }
 
-  async login(input: { email: string; password: string; organizationId?: string }, context?: { ipAddress?: string; userAgent?: string }): Promise<AuthResult> {
+  async login(input: { email: string; password: string; organizationId?: string }, _context?: { ipAddress?: string; userAgent?: string }): Promise<OtpChallengeResult> {
     const email = input.email.trim().toLowerCase();
     const user = await this.prisma.user.findFirst({ where: { email } });
     if (!user?.passwordHash || user.status !== 'ACTIVE' || !(await this.verify(input.password, user.passwordHash))) {
       throw new UnauthorizedException('Invalid email or password');
     }
+    await this.requireActiveMembership(user.id, input.organizationId);
+    return this.issueEmailOtp({
+      email,
+      purpose: 'LOGIN',
+      userId: user.id,
+      payload: input.organizationId ? { organizationId: input.organizationId } : undefined,
+      action: 'Use this code to finish signing in to IMKAN WorkDrive.',
+    });
+  }
 
-    let membership;
-    if (input.organizationId) {
-      membership = await this.prisma.organizationMembership.findFirst({
-        where: { userId: user.id, organizationId: input.organizationId, status: MembershipStatus.ACTIVE },
-      });
-      if (!membership) throw new UnauthorizedException('No active membership in the specified organization');
-    } else {
-      membership = await this.prisma.organizationMembership.findFirst({
-        where: { userId: user.id, isPrimary: true, status: MembershipStatus.ACTIVE },
-        orderBy: { joinedAt: 'desc' },
-      });
-      if (!membership) {
-        membership = await this.prisma.organizationMembership.findFirst({
-          where: { userId: user.id, status: MembershipStatus.ACTIVE },
-          orderBy: { joinedAt: 'desc' },
-        });
-      }
-    }
+  async requestPasswordlessOtp(emailInput: string): Promise<OtpChallengeResult> {
+    const email = emailInput.trim().toLowerCase();
+    const user = await this.prisma.user.findFirst({ where: { email, status: 'ACTIVE' } });
+    if (!user) throw new NotFoundException('No account was found for this email');
+    await this.requireActiveMembership(user.id);
+    return this.issueEmailOtp({
+      email,
+      purpose: 'PASSWORDLESS',
+      userId: user.id,
+      action: 'Use this code to sign in to IMKAN WorkDrive.',
+    });
+  }
 
-    if (!membership) throw new UnauthorizedException('No active organization membership found');
-
-    await this.prisma.user.update({ where: { id: user.id }, data: { currentOrganizationId: membership.organizationId, lastLoginAt: new Date() } });
-
+  async verifyLoginOtp(input: { challengeId: string; code: string }, context?: { ipAddress?: string; userAgent?: string }): Promise<AuthResult> {
+    const challenge = await this.consumeOtp(input.challengeId, input.code, [EmailOtpPurpose.LOGIN, EmailOtpPurpose.PASSWORDLESS]);
+    if (!challenge.userId) throw new UnauthorizedException('The verification code is invalid or expired');
+    const user = await this.prisma.user.findFirst({ where: { id: challenge.userId, status: 'ACTIVE' } });
+    if (!user) throw new UnauthorizedException('The verification code is invalid or expired');
+    const membership = await this.requireActiveMembership(user.id, this.readOrganizationId(challenge.payload));
+    await this.prisma.user.update({ where: { id: user.id }, data: { currentOrganizationId: membership.organizationId, lastLoginAt: new Date(), emailVerifiedAt: user.emailVerifiedAt ?? new Date() } });
     const result = await this.issue(user, membership, context);
-    await this.prisma.securityEvent.create({ data: { orgId: membership.organizationId, userId: user.id, severity: 'INFO', eventType: 'LOGIN_SUCCESS', ipAddress: context?.ipAddress, metadata: { userAgent: context?.userAgent } } });
+    await this.prisma.securityEvent.create({ data: { orgId: membership.organizationId, userId: user.id, severity: 'INFO', eventType: 'LOGIN_SUCCESS', ipAddress: context?.ipAddress, metadata: { userAgent: context?.userAgent, method: challenge.purpose } } });
     return result;
+  }
+
+  async resendOtp(challengeId: string): Promise<OtpChallengeResult> {
+    const row = await this.prisma.emailOtpChallenge.findFirst({ where: { id: challengeId } });
+    if (!row || row.usedAt) throw new BadRequestException('This verification request is no longer active');
+    if (row.createdAt.getTime() < Date.now() - 30 * 60 * 1000) throw new BadRequestException('Request a new verification code from the sign-in page');
+    const action = row.purpose === EmailOtpPurpose.SIGNUP
+      ? 'Confirm your email to create your IMKAN WorkDrive account.'
+      : 'Use this code to finish signing in to IMKAN WorkDrive.';
+    return this.issueEmailOtp({
+      email: row.email,
+      purpose: row.purpose,
+      userId: row.userId ?? undefined,
+      payload: row.payload === null ? undefined : row.payload as Prisma.InputJsonValue,
+      action,
+    });
   }
 
   async switchOrganization(user: AccessTokenPayload, organizationId: string): Promise<AuthResult> {
@@ -285,7 +356,10 @@ export class AuthService {
     if (!user) return { ok: true };
     const raw = randomBytes(32).toString('hex');
     await this.prisma.passwordResetToken.create({ data: { userId: user.id, tokenHash: this.hashToken(raw), expiresAt: new Date(Date.now() + 30 * 60 * 1000) } });
-    return { ok: true, reset_token: this.config.get('NODE_ENV') === 'production' ? undefined : raw };
+    const link = `${this.frontendUrl()}/auth/reset-password?token=${encodeURIComponent(raw)}`;
+    const message = passwordResetEmail({ link });
+    const sent = await this.mail.send({ to: email, ...message });
+    return { ok: true, reset_token: !sent.delivered && this.config.get('NODE_ENV') !== 'production' ? raw : undefined };
   }
 
   async resetPassword(token: string, password: string) {
@@ -446,12 +520,12 @@ export class AuthService {
     let user = await this.prisma.user.findFirst({ where: { googleId: profile.sub } });
     if (!user) {
       user = await this.prisma.user.findFirst({ where: { email } });
-      if (user) user = await this.prisma.user.update({ where: { id: user.id }, data: { googleId: profile.sub, name: user.name ?? profile.name ?? null } });
+      if (user) user = await this.prisma.user.update({ where: { id: user.id }, data: { googleId: profile.sub, name: user.name ?? profile.name ?? null, emailVerifiedAt: user.emailVerifiedAt ?? new Date() } });
     }
     if (!user) {
       const organization = await this.prisma.organization.create({ data: { name: `${profile.name?.trim() || email.split('@')[0]}'s Workspace` } });
       const result = await this.prisma.$transaction(async (tx) => {
-        const created = await tx.user.create({ data: { email, name: profile.name?.trim() || email.split('@')[0], googleId: profile.sub, status: 'ACTIVE' } });
+        const created = await tx.user.create({ data: { email, name: profile.name?.trim() || email.split('@')[0], googleId: profile.sub, status: 'ACTIVE', emailVerifiedAt: new Date() } });
         const membership = await tx.organizationMembership.create({
           data: { userId: created.id, organizationId: organization.id, role: OrgRole.MEMBER, status: MembershipStatus.ACTIVE, isPrimary: true },
         });
@@ -471,10 +545,10 @@ export class AuthService {
         orderBy: { joinedAt: 'desc' },
       });
       if (!membership) throw new UnauthorizedException('No active organization membership');
-      await this.prisma.user.update({ where: { id: user.id }, data: { currentOrganizationId: membership.organizationId } });
+      await this.prisma.user.update({ where: { id: user.id }, data: { currentOrganizationId: membership.organizationId, emailVerifiedAt: user.emailVerifiedAt ?? new Date() } });
       return this.issue(user, membership);
     }
-    await this.prisma.user.update({ where: { id: user.id }, data: { currentOrganizationId: primaryMembership.organizationId, lastLoginAt: new Date() } });
+    await this.prisma.user.update({ where: { id: user.id }, data: { currentOrganizationId: primaryMembership.organizationId, lastLoginAt: new Date(), emailVerifiedAt: user.emailVerifiedAt ?? new Date() } });
     return this.issue(user, primaryMembership);
   }
 
@@ -515,6 +589,105 @@ export class AuthService {
     });
     if (!membership) throw new UnauthorizedException('No active organization membership');
     return this.issue(user, membership, { userAgent: 'oauth-return' });
+  }
+
+  private async requireActiveMembership(userId: string, organizationId?: string) {
+    if (organizationId) {
+      const membership = await this.prisma.organizationMembership.findFirst({
+        where: { userId, organizationId, status: MembershipStatus.ACTIVE },
+      });
+      if (!membership) throw new UnauthorizedException('No active membership in the specified organization');
+      return membership;
+    }
+    const primary = await this.prisma.organizationMembership.findFirst({
+      where: { userId, isPrimary: true, status: MembershipStatus.ACTIVE },
+      orderBy: { joinedAt: 'desc' },
+    });
+    if (primary) return primary;
+    const fallback = await this.prisma.organizationMembership.findFirst({
+      where: { userId, status: MembershipStatus.ACTIVE },
+      orderBy: { joinedAt: 'desc' },
+    });
+    if (!fallback) throw new UnauthorizedException('No active organization membership found');
+    return fallback;
+  }
+
+  private otpPepper(): string {
+    return this.config.get<string>('JWT_SECRET') ?? 'imkan-otp';
+  }
+
+  private async issueEmailOtp(input: {
+    email: string;
+    purpose: OtpPurpose;
+    userId?: string;
+    payload?: Prisma.InputJsonValue;
+    action: string;
+  }): Promise<OtpChallengeResult> {
+    const since = new Date(Date.now() - OTP_WINDOW_MS);
+    const recent = await this.prisma.emailOtpChallenge.count({
+      where: { email: input.email, purpose: input.purpose, createdAt: { gt: since } },
+    });
+    if (recent >= OTP_WINDOW_LIMIT) throw new HttpException('Too many verification codes. Try again in a few minutes.', 429);
+    const code = generateOtpCode();
+    const id = randomUUID();
+    await this.prisma.$transaction([
+      this.prisma.emailOtpChallenge.updateMany({
+        where: { email: input.email, purpose: input.purpose, usedAt: null },
+        data: { usedAt: new Date() },
+      }),
+      this.prisma.emailOtpChallenge.create({
+        data: {
+          id,
+          email: input.email,
+          userId: input.userId ?? null,
+          purpose: input.purpose,
+          codeHash: hashOtpCode(code, this.otpPepper()),
+          payload: input.payload,
+          expiresAt: new Date(Date.now() + OTP_TTL_MS),
+        },
+      }),
+    ]);
+    const rendered = verificationCodeEmail({ code, minutes: Math.round(OTP_TTL_MS / 60_000), action: input.action });
+    const sent = await this.mail.send({ to: input.email, ...rendered });
+    return {
+      otp_required: true,
+      challenge_id: id,
+      masked_email: maskEmail(input.email),
+      expires_in: Math.floor(OTP_TTL_MS / 1000),
+      purpose: input.purpose,
+      ...(!sent.delivered && this.config.get('NODE_ENV') !== 'production' ? { dev_code: code } : {}),
+    };
+  }
+
+  private async consumeOtp(challengeId: string, code: string, purposes: EmailOtpPurpose[]) {
+    const row = await this.prisma.emailOtpChallenge.findFirst({ where: { id: challengeId } });
+    if (!row || row.usedAt || row.expiresAt.getTime() <= Date.now() || !purposes.includes(row.purpose)) {
+      throw new UnauthorizedException('The verification code is invalid or expired');
+    }
+    if (row.attempts >= OTP_MAX_ATTEMPTS) throw new UnauthorizedException('Too many incorrect codes. Request a new one.');
+    if (!otpCodesMatch(code, row.codeHash, this.otpPepper())) {
+      const attempts = row.attempts + 1;
+      await this.prisma.emailOtpChallenge.update({
+        where: { id: row.id },
+        data: { attempts, ...(attempts >= OTP_MAX_ATTEMPTS ? { usedAt: new Date() } : {}) },
+      });
+      throw new UnauthorizedException('The verification code is incorrect');
+    }
+    await this.prisma.emailOtpChallenge.update({ where: { id: row.id }, data: { usedAt: new Date() } });
+    return row;
+  }
+
+  private readSignupPayload(value: Prisma.JsonValue): { name: string; passwordHash: string; inviteToken?: string } {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) throw new BadRequestException('Signup challenge is invalid');
+    const row = value as Record<string, Prisma.JsonValue>;
+    if (typeof row.name !== 'string' || typeof row.passwordHash !== 'string') throw new BadRequestException('Signup challenge is invalid');
+    return { name: row.name, passwordHash: row.passwordHash, inviteToken: typeof row.inviteToken === 'string' ? row.inviteToken : undefined };
+  }
+
+  private readOrganizationId(value: Prisma.JsonValue): string | undefined {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return undefined;
+    const id = (value as Record<string, Prisma.JsonValue>).organizationId;
+    return typeof id === 'string' ? id : undefined;
   }
 
   private async issue(user: { id: string; name: string | null; email: string }, membership: MembershipInfo, context?: { ipAddress?: string; userAgent?: string }): Promise<AuthResult> {

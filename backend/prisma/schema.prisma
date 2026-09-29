@@ -393,6 +393,7 @@ model User {
   name                 String?
   passwordHash         String?    @map("password_hash")
   googleId             String?    @unique @map("google_id")
+  emailVerifiedAt      DateTime?  @map("email_verified_at")
   status               UserStatus @default(ACTIVE)
   avatarUrl            String?    @map("avatar_url")
   lastLoginAt          DateTime?  @map("last_login_at")
@@ -427,6 +428,7 @@ model User {
   officeEmailSettingsUpdated   OfficeEmailSettings[] @relation("OfficeEmailSettingsUpdater")
   comments               Comment[]
   resetTokens            PasswordResetToken[]
+  emailOtpChallenges     EmailOtpChallenge[]
   invitationsSent        OrganizationInvitation[] @relation("InvitationSender")
   trashDeletedBy         TrashEntry[]           @relation("TrashEntryDeletedBy")
   trashRestoredBy        TrashEntry[]           @relation("TrashEntryRestoredBy")
@@ -1545,6 +1547,30 @@ model Session {
   @@map("sessions")
 }
 
+enum EmailOtpPurpose {
+  LOGIN
+  SIGNUP
+  PASSWORDLESS
+}
+
+model EmailOtpChallenge {
+  id        String         @id @default(uuid()) @db.Char(36)
+  email     String         @db.VarChar(191)
+  userId    String?        @map("user_id") @db.Char(36)
+  purpose   EmailOtpPurpose
+  codeHash  String         @map("code_hash") @db.Char(64)
+  payload   Json?
+  expiresAt DateTime       @map("expires_at")
+  usedAt    DateTime?      @map("used_at")
+  attempts  Int            @default(0)
+  createdAt DateTime       @default(now()) @map("created_at")
+  user      User?          @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([email, purpose, createdAt])
+  @@index([userId])
+  @@map("email_otp_challenges")
+}
+
 model PasswordResetToken {
   id        String    @id @default(uuid()) @db.Char(36)
   userId    String    @map("user_id") @db.Char(36)
@@ -2614,8 +2640,22 @@ model FileCollection {
   organization          Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
   folder                Folder @relation(fields: [folderId], references: [id], onDelete: Cascade)
   submissions           CollectionSubmission[]
+  emailInvites          CollectionEmailInvite[]
   @@index([orgId, status, createdAt])
   @@map("file_collections")
+}
+
+model CollectionEmailInvite {
+  id           String         @id @default(uuid()) @db.Char(36)
+  collectionId String         @map("collection_id") @db.Char(36)
+  email        String         @db.VarChar(320)
+  message      String?        @db.Text
+  delivered    Boolean        @default(false)
+  sentAt       DateTime       @default(now()) @map("sent_at")
+  collection   FileCollection @relation(fields: [collectionId], references: [id], onDelete: Cascade)
+
+  @@index([collectionId, sentAt])
+  @@map("collection_email_invites")
 }
 
 model CollectionSubmission {

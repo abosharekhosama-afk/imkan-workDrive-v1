@@ -1,3 +1,45 @@
 "use client";
-import Link from "next/link"; import {useState,type FormEvent} from "react"; import {forgotPassword} from "../../../lib/api/auth";
-export default function ForgotPassword(){const [email,setEmail]=useState("");const [done,setDone]=useState(false);const [token,setToken]=useState("");const [error,setError]=useState("");async function submit(e:FormEvent){e.preventDefault();setError("");try{const r=await forgotPassword(email);setToken(r.reset_token||"");setDone(true)}catch{setError("Unable to process the request.")}}return <main className="auth-page"><section className="auth-card"><div className="auth-brand"><span className="auth-logo">I</span><div><strong>IMKAN</strong><span>WorkDrive</span></div></div><div className="auth-heading"><h1>Reset your password</h1><p>Enter your account email to start a secure password reset.</p></div>{done?<div className="imkan-alert">If the account exists, reset instructions have been generated.{token?<><br/><Link href={`/auth/reset-password?token=${encodeURIComponent(token)}`}>Continue to reset password</Link></>:null}</div>:<form onSubmit={submit} className="auth-form"><label>Email<input className="imkan-input" type="email" required value={email} onChange={e=>setEmail(e.target.value)}/></label>{error&&<div className="imkan-alert imkan-alert-danger">{error}</div>}<button className="imkan-button">Send reset request</button></form>}<p className="auth-switch"><Link href="/auth/login">Back to sign in</Link></p></section></main>}
+
+import Link from "next/link";
+import { useState, type FormEvent } from "react";
+import { AuthShell } from "../../../components/auth/auth-shell";
+import { useLocale } from "../../../components/locale-provider";
+import { forgotPassword } from "../../../lib/api/auth";
+
+export default function ForgotPassword() {
+  const { label } = useLocale();
+  const [email, setEmail] = useState("");
+  const [done, setDone] = useState(false);
+  const [token, setToken] = useState("");
+  const [error, setError] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  async function submit(event: FormEvent) {
+    event.preventDefault();
+    setBusy(true);
+    setError("");
+    try {
+      const result = await forgotPassword(email);
+      setToken(result.reset_token || "");
+      setDone(true);
+    } catch {
+      setError("Unable to process the request.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <AuthShell title={label("auth.resetTitle")} subtitle={done ? label("auth.resetSent") : label("auth.resetHint")} footer={<Link href="/auth/login">{label("auth.back")}</Link>}>
+      {done ? (
+        token ? <p className="wd-auth-note">{label("auth.devCode")} <Link href={`/auth/reset-password?token=${encodeURIComponent(token)}`}>{label("auth.resetTitle")}</Link></p> : null
+      ) : (
+        <form className="wd-auth-form" onSubmit={submit}>
+          <label>{label("auth.email")}<input className="wd-auth-input" type="email" required value={email} onChange={(event) => setEmail(event.target.value)} autoComplete="email" /></label>
+          {error ? <div className="imkan-alert imkan-alert-danger">{error}</div> : null}
+          <button className="wd-auth-submit" disabled={busy}>{label("auth.sendReset")}</button>
+        </form>
+      )}
+    </AuthShell>
+  );
+}

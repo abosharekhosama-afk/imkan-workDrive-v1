@@ -1,5 +1,182 @@
 "use client";
-import Link from "next/link"; import {Suspense,useState,type FormEvent} from "react"; import {useRouter,useSearchParams} from "next/navigation"; import {googleUrl,login,saveSession} from "../../../lib/api/auth"; import {useLocale} from "../../../components/locale-provider";
-function LoginForm(){const router=useRouter();const params=useSearchParams();const{label}=useLocale();const[email,setEmail]=useState("");const[password,setPassword]=useState("");const[error,setError]=useState("");const[busy,setBusy]=useState(false);async function submit(e:FormEvent){e.preventDefault();setBusy(true);setError("");try{const result=await login(email,password);saveSession(result);router.replace(params.get("next") || (params.get("inviteToken") ? `/organization/invitations/accept?token=${encodeURIComponent(params.get("inviteToken") || "")}` : "/files"))}catch(err){setError(err instanceof Error&&err.message?err.message:"Unable to sign in. Check your email and password.")}finally{setBusy(false)}}async function google(){setBusy(true);try{window.location.href=(await googleUrl()).url}catch{setError("Google sign-in is not configured.");setBusy(false)}}return <main className="auth-page"><section className="auth-card"><div className="auth-brand"><span className="auth-logo">I</span><div><strong>IMKAN WorkDrive</strong><span>Secure cloud workspace</span></div></div><div className="auth-heading"><p className="imkan-meta">Welcome back</p><h1>{label("auth.signIn")}</h1><p>{label("auth.signInDescription")}</p></div><form onSubmit={submit} className="auth-form"><label>{label("auth.email")}<input className="imkan-input" type="email" required value={email} onChange={e=>setEmail(e.target.value)} autoComplete="email"/></label><label>{label("auth.password")}<input className="imkan-input" type="password" required minLength={8} value={password} onChange={e=>setPassword(e.target.value)} autoComplete="current-password"/></label>{error&&<div className="imkan-alert imkan-alert-danger">{error}</div>}<button className="imkan-button auth-submit" disabled={busy}>{busy?"Signing in…":label("auth.signIn")}</button></form><div className="auth-divider"><span>or</span></div><button className="google-button" onClick={google} disabled={busy}><span>G</span> {label("auth.continueGoogle")}</button><p className="auth-switch"><Link href="/auth/forgot-password">Forgot password?</Link></p><p className="auth-switch">{label("auth.noAccount")} <Link href="/auth/signup">{label("auth.createAccount")}</Link></p></section></main>}
 
-export default function LoginPage(){return <Suspense fallback={<main className="auth-page"/>}><LoginForm/></Suspense>}
+import Link from "next/link";
+import { Suspense, useRef, useState, type FormEvent } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { AuthShell } from "../../../components/auth/auth-shell";
+import { GoogleButton } from "../../../components/auth/google-button";
+import { OtpCodeInput } from "../../../components/auth/otp-code-input";
+import { useLocale } from "../../../components/locale-provider";
+import { googleUrl, login, requestLoginOtp, resendOtp, saveSession, verifyLoginOtp, type OtpChallenge } from "../../../lib/api/auth";
+import { emptyOtpDigits, otpValue } from "../../../lib/auth-otp-logic";
+
+function destination(params: URLSearchParams) {
+  return params.get("next") || (params.get("inviteToken") ? `/organization/invitations/accept?token=${encodeURIComponent(params.get("inviteToken") || "")}` : "/files");
+}
+
+function LoginForm() {
+  const router = useRouter();
+  const params = useSearchParams();
+  const { label } = useLocale();
+  const [step, setStep] = useState<"email" | "password" | "otp">("email");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
+  const [challenge, setChallenge] = useState<OtpChallenge | null>(null);
+  const [digits, setDigits] = useState(emptyOtpDigits());
+  const [error, setError] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [resendIn, setResendIn] = useState(0);
+  const cooldown = useRef<number | null>(null);
+
+  function startCooldown() {
+    if (cooldown.current) window.clearInterval(cooldown.current);
+    setResendIn(30);
+    cooldown.current = window.setInterval(() => {
+      setResendIn((current) => {
+        if (current <= 1) {
+          if (cooldown.current) window.clearInterval(cooldown.current);
+          cooldown.current = null;
+          return 0;
+        }
+        return current - 1;
+      });
+    }, 1000);
+  }
+
+  async function google() {
+    setBusy(true);
+    setError("");
+    try {
+      window.location.href = (await googleUrl()).url;
+    } catch {
+      setError(label("auth.googleUnavailable"));
+      setBusy(false);
+    }
+  }
+
+  async function openOtp(next: OtpChallenge) {
+    setChallenge(next);
+    setDigits(emptyOtpDigits());
+    setStep("otp");
+    startCooldown();
+  }
+
+  async function submitEmail(event: FormEvent) {
+    event.preventDefault();
+    setError("");
+    setStep("password");
+  }
+
+  async function submitPassword(event: FormEvent) {
+    event.preventDefault();
+    setBusy(true);
+    setError("");
+    try {
+      await openOtp(await login(email, password));
+    } catch (err) {
+      setError(err instanceof Error && err.message ? err.message : "Unable to sign in. Check your email and password.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function submitOtp(event: FormEvent) {
+    event.preventDefault();
+    if (!challenge || otpValue(digits).length < 6) return;
+    setBusy(true);
+    setError("");
+    try {
+      saveSession(await verifyLoginOtp(challenge.challenge_id, otpValue(digits)));
+      router.replace(destination(params));
+    } catch (err) {
+      setError(err instanceof Error && err.message ? err.message : "The verification code is incorrect.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function useOtpInstead() {
+    setBusy(true);
+    setError("");
+    try {
+      await openOtp(await requestLoginOtp(email));
+    } catch (err) {
+      setError(err instanceof Error && err.message ? err.message : "Unable to send a verification code.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function resend() {
+    if (!challenge || resendIn > 0) return;
+    setBusy(true);
+    setError("");
+    try {
+      await openOtp(await resendOtp(challenge.challenge_id));
+    } catch (err) {
+      setError(err instanceof Error && err.message ? err.message : "Unable to resend the code.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const notice = params.get("expired") ? label("auth.sessionExpired") : params.get("reset") ? label("auth.passwordUpdated") : "";
+
+  return (
+    <AuthShell
+      title={step === "otp" ? label("auth.otpTitle") : label("auth.signIn")}
+      subtitle={step === "otp" ? `${label("auth.otpSent")} ${challenge?.masked_email ?? ""}` : label("auth.signInDescription")}
+      footer={step === "email" ? <p>{label("auth.noAccount")} <Link href="/auth/signup">{label("auth.createAccount")}</Link></p> : null}
+    >
+      {notice ? <div className="wd-auth-note">{notice}</div> : null}
+      {step === "email" ? (
+        <form className="wd-auth-form" onSubmit={submitEmail}>
+          <label>{label("auth.email")}
+            <input className="wd-auth-input" type="email" required autoComplete="email" value={email} onChange={(event) => setEmail(event.target.value)} />
+          </label>
+          {error ? <div className="imkan-alert imkan-alert-danger">{error}</div> : null}
+          <button className="wd-auth-submit" type="submit">{label("auth.next")}</button>
+          <div className="wd-auth-divider"><span>{label("auth.signInUsing")}</span></div>
+          <GoogleButton label={label("auth.continueGoogle")} disabled={busy} onClick={google} />
+        </form>
+      ) : null}
+      {step === "password" ? (
+        <form className="wd-auth-form" onSubmit={submitPassword}>
+          <div className="wd-auth-identity">
+            <span>{email}</span>
+            <button type="button" onClick={() => { setStep("email"); setPassword(""); setError(""); }}>{label("auth.change")}</button>
+          </div>
+          <label>{label("auth.password")}
+            <span className="wd-auth-password">
+              <input className="wd-auth-input" type={showPassword ? "text" : "password"} required minLength={8} autoComplete="current-password" value={password} onChange={(event) => setPassword(event.target.value)} />
+              <button type="button" onClick={() => setShowPassword((value) => !value)}>{showPassword ? label("auth.hidePassword") : label("auth.showPassword")}</button>
+            </span>
+          </label>
+          <div className="wd-auth-row">
+            <Link href="/auth/forgot-password">{label("auth.forgotPassword")}</Link>
+            <button type="button" onClick={useOtpInstead} disabled={busy}>{label("auth.signInWithOtp")}</button>
+          </div>
+          {error ? <div className="imkan-alert imkan-alert-danger">{error}</div> : null}
+          <button className="wd-auth-submit" type="submit" disabled={busy}>{busy ? "…" : label("auth.signIn")}</button>
+        </form>
+      ) : null}
+      {step === "otp" && challenge ? (
+        <form className="wd-auth-form" onSubmit={submitOtp}>
+          {challenge.dev_code ? <div className="wd-auth-note">{label("auth.devCode")} <strong>{challenge.dev_code}</strong></div> : null}
+          <OtpCodeInput digits={digits} onChange={setDigits} disabled={busy} />
+          {error ? <div className="imkan-alert imkan-alert-danger">{error}</div> : null}
+          <button className="wd-auth-submit" type="submit" disabled={busy || otpValue(digits).length < 6}>{busy ? "…" : label("auth.verify")}</button>
+          <div className="wd-auth-row">
+            <button type="button" onClick={() => { setStep("password"); setError(""); }}>{label("auth.back")}</button>
+            <button type="button" onClick={resend} disabled={busy || resendIn > 0}>{resendIn > 0 ? `${label("auth.resendIn")} ${resendIn}` : label("auth.resend")}</button>
+          </div>
+        </form>
+      ) : null}
+    </AuthShell>
+  );
+}
+
+export default function LoginPage() {
+  return <Suspense fallback={<main className="wd-auth-page" />}><LoginForm /></Suspense>;
+}

@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useLocale } from "../../../components/locale-provider";
-import { createCollection, deleteCollection, listCollections, listCollectionSubmissions, regenerateCollectionLink, updateCollection, type FileCollection, type CollectionSubmission } from "../../../lib/api/collections";
+import { createCollection, deleteCollection, emailCollectionLink, listCollections, listCollectionSubmissions, regenerateCollectionLink, updateCollection, type FileCollection, type CollectionSubmission } from "../../../lib/api/collections";
 import { createFolder, getFolder, listRootContents } from "../../../lib/api/folders";
 import type { FolderRecord } from "../../../lib/api/types";
 
@@ -61,6 +61,10 @@ export default function CollectionsPage() {
   const [linkUrl, setLinkUrl] = useState("");
   const [linkBusy, setLinkBusy] = useState(false);
   const [linkTokens, setLinkTokens] = useState<Record<string,string>>({});
+  const [emailTo, setEmailTo] = useState("");
+  const [emailMessage, setEmailMessage] = useState("");
+  const [emailBusy, setEmailBusy] = useState(false);
+  const [emailNotice, setEmailNotice] = useState("");
   const [detail, setDetail] = useState<FileCollection | null>(null);
   const [settings, setSettings] = useState<FileCollection | null>(null);
   const [settingsName, setSettingsName] = useState("");
@@ -94,7 +98,11 @@ export default function CollectionsPage() {
         sameNameAsVersion,
         notifyOnSubmission,
       });
-      setToken(result.token); setLinkTokens(current=>({...current,[result.id]:result.token})); setShow(false); resetForm(); await refresh();
+      setLinkTokens(current=>({...current,[result.id]:result.token}));
+      setLinkUrl(`${window.location.origin}${result.publicPath}`);
+      setLinkCollection({ ...result, submissionsCount: 0, filesCount: 0 });
+      setEmailTo(""); setEmailMessage(""); setEmailNotice("");
+      setShow(false); resetForm(); await refresh();
     } catch (e) { setError(e instanceof Error ? e.message : (ar ? "تعذر إنشاء المجموعة" : "Unable to create collection")); }
     finally { setCreating(false); }
   }
@@ -125,7 +133,19 @@ export default function CollectionsPage() {
     finally { setCreatingFolder(false); }
   }
 
-  async function showCollectionLink(row: FileCollection, email = false) {
+  async function sendCollectionEmail() {
+    if (!linkCollection || !linkUrl || emailBusy) return;
+    const token = linkUrl.split("/collect/")[1] ?? "";
+    setEmailBusy(true); setEmailNotice("");
+    try {
+      const result = await emailCollectionLink(linkCollection.id, { emails: emailTo, message: emailMessage.trim(), token });
+      const invalid = result.invalid.length ? ` ${text("Skipped", "تم تجاهل")}: ${result.invalid.join(", ")}` : "";
+      setEmailNotice((result.delivered ? text(`Email sent to ${result.sent}.`, `تم إرسال البريد إلى ${result.sent}.`) : text("Email was not delivered because SMTP is not configured.", "لم يُسلَّم البريد لأن خادم SMTP غير مهيأ.")) + invalid);
+      if (result.delivered) setEmailTo("");
+    } catch (e) { setEmailNotice(e instanceof Error ? e.message : text("Unable to send the collection email.", "تعذر إرسال بريد المجموعة.")); }
+    finally { setEmailBusy(false); }
+  }
+  async function showCollectionLink(row: FileCollection) {
     setMenuFor(null); setLinkCollection(row); setLinkUrl(""); setLinkBusy(true);
     try {
       let token = linkTokens[row.id];
@@ -136,7 +156,7 @@ export default function CollectionsPage() {
       }
       const url = `${window.location.origin}/collect/${token}`;
       setLinkUrl(url);
-      if (email) window.location.href = `mailto:?subject=${encodeURIComponent(row.name)}&body=${encodeURIComponent(url)}`;
+      setEmailTo(""); setEmailMessage(""); setEmailNotice("");
     } catch (e) { setError(e instanceof Error ? e.message : text("Unable to generate collection link", "تعذر إنشاء رابط المجموعة")); setLinkCollection(null); }
     finally { setLinkBusy(false); }
   }
@@ -198,13 +218,13 @@ export default function CollectionsPage() {
           <div className="space-y-1"><label className={checkRow}><input className={check} type="checkbox" checked={sizeLimitEnabled} onChange={e=>setSizeLimitEnabled(e.target.checked)}/><span>{text("Set a limit on upload size", "تحديد الحد الأقصى لحجم الملف")} <span className="text-slate-500">({text("default: 100 MB", "الافتراضي: 100 ميجابايت")})</span> <InfoTip text={text("Maximum size allowed for each uploaded file.", "أقصى حجم مسموح به لكل ملف مرفوع.")}/></span></label>{sizeLimitEnabled&&<div className="relative ms-6 w-40"><button type="button" onClick={()=>setSizeMenuOpen(v=>!v)} className="wd-pill wd-pill-record flex w-full items-center justify-between" aria-expanded={sizeMenuOpen}><span>{selectedSizeLabel}</span><span>⌄</span></button>{sizeMenuOpen&&<div className="wd-menu absolute start-0 top-full z-[260] mt-1 w-full">{SIZE_OPTIONS.map(o=><button key={o.value} type="button" className="wd-menu-item" data-active={maxFileSizeBytes===o.value} onClick={()=>{setMaxFileSizeBytes(o.value);setSizeMenuOpen(false);}}>{o.label}</button>)}</div>}</div>}</div>
           <div className="space-y-1"><label className={checkRow}><input className={check} type="checkbox" checked={expiryEnabled} onChange={e=>setExpiryEnabled(e.target.checked)}/><span>{text("Set expiration", "تحديد تاريخ انتهاء الصلاحية")} <InfoTip text={text("The collection link stops accepting uploads after this date.", "يتوقف رابط المجموعة عن قبول الملفات بعد هذا التاريخ.")}/></span></label>{expiryEnabled&&<div className="ms-6"><input aria-label={text("Expiration date", "تاريخ الانتهاء")} type="datetime-local" className="wd-input max-w-[250px]" value={expiresAt} onChange={e=>setExpiresAt(e.target.value)} min={new Date().toISOString().slice(0,16)}/></div>}</div>
           {type==="INTERNAL"&&<label className={checkRow}><input className={check} type="checkbox" checked={sameNameAsVersion} onChange={e=>setSameNameAsVersion(e.target.checked)}/><span>{text("Upload files with the same name as versions to an existing file", "رفع الملفات التي تحمل الاسم نفسه كإصدارات لملف موجود")} <InfoTip text={text("Use the existing file's version history when the name matches.", "استخدم سجل إصدارات الملف الموجود عند تطابق الاسم.")}/></span></label>}
-          <label className={checkRow}><input className={check} type="checkbox" checked={notifyOnSubmission} onChange={e=>setNotifyOnSubmission(e.target.checked)}/><span>{text("Notify me on every user submission", "إشعاري عند كل عملية إرسال من المستخدمين")} <InfoTip text={text("Send a notification to the collection owner when files are submitted.", "إرسال إشعار إلى مالك المجموعة عند إرسال الملفات.")}/></span></label>
+          <label className={checkRow}><input className={check} type="checkbox" checked={notifyOnSubmission} onChange={e=>setNotifyOnSubmission(e.target.checked)}/><span>{text("Notify me by email and in the app on every user submission", "إشعاري بالبريد وفي التطبيق عند كل عملية إرسال")}</span></label>
         </div>
         <div className="mt-6 flex justify-end gap-2 border-t border-slate-100 pt-4"><button type="button" className="wd-secondary-button" onClick={()=>setShow(false)}>{text("Cancel", "إلغاء")}</button><button type="button" className="wd-primary-button min-w-16 disabled:cursor-not-allowed disabled:opacity-50" disabled={!name.trim()||!folderId||creating||(expiryEnabled&&!expiresAt)} onClick={()=>void create()}>{creating?text("Creating…", "جارٍ الإنشاء…"):text("Create", "إنشاء")}</button></div>
       </section>
     </div>}
 
-    {linkCollection&&<div className="fixed inset-0 z-[300] flex items-center justify-center bg-slate-950/50 p-4" onMouseDown={e=>{if(e.target===e.currentTarget)setLinkCollection(null);}}><section dir={ar?"rtl":"ltr"} role="dialog" aria-modal="true" className="w-full max-w-[470px] overflow-hidden rounded-xl border border-slate-200 bg-white shadow-2xl"><header className="flex items-center justify-between px-6 py-4"><h2 className="text-[17px] font-semibold">{text("Collect Files", "جمع الملفات")} ▣ {linkCollection.name}</h2><button onClick={()=>setLinkCollection(null)} className="text-xl text-slate-500">×</button></header><div className="px-6 pb-5"><p className="mb-3 text-[13px] text-slate-600">{text("Copy and share this collection link", "انسخ رابط المجموعة وشاركه") } ↗</p><div className="flex overflow-hidden rounded-xl border border-slate-300"><input readOnly value={linkBusy?text("Generating link…","جارٍ إنشاء الرابط…"):linkUrl} className="min-w-0 flex-1 px-3 py-2 text-[12px]" dir="ltr"/><button disabled={!linkUrl} onClick={()=>void navigator.clipboard.writeText(linkUrl)} className="border-s border-slate-300 px-4 text-[12px] text-blue-700 disabled:opacity-40">{text("Copy","نسخ")}</button></div><p className="mt-3 text-[11px] text-slate-500">{text("Created by you", "أنشأتها أنت")} · {new Date(linkCollection.createdAt).toLocaleString(ar?"ar":"en")}</p></div><footer className="flex items-center justify-between border-t border-slate-100 px-6 py-4"><button onClick={()=>{const subject=encodeURIComponent(linkCollection.name);const body=encodeURIComponent(linkUrl);window.location.href=`mailto:?subject=${subject}&body=${body}`;}} disabled={!linkUrl} className="text-[12px] font-medium text-blue-700 disabled:opacity-40">{text("Email collection link","إرسال رابط المجموعة بالبريد")}</button><button onClick={()=>{setLinkCollection(null);openSettings(linkCollection);}} className="text-[12px] font-medium text-blue-700">{text("Link Settings","إعدادات الرابط")}</button></footer></section></div>}
+    {linkCollection&&<div className="fixed inset-0 z-[300] flex items-center justify-center bg-slate-950/50 p-4" onMouseDown={e=>{if(e.target===e.currentTarget)setLinkCollection(null);}}><section dir={ar?"rtl":"ltr"} role="dialog" aria-modal="true" className="w-full max-w-[470px] overflow-hidden rounded-xl border border-slate-200 bg-white shadow-2xl"><header className="flex items-center justify-between px-6 py-4"><h2 className="text-[17px] font-semibold">{text("Collect Files", "جمع الملفات")} ▣ {linkCollection.name}</h2><button onClick={()=>setLinkCollection(null)} className="text-xl text-slate-500">×</button></header><div className="px-6 pb-5"><p className="mb-3 text-[13px] text-slate-600">{text("Copy and share this collection link", "انسخ رابط المجموعة وشاركه") } ↗</p><div className="flex overflow-hidden rounded-xl border border-slate-300"><input readOnly value={linkBusy?text("Generating link…","جارٍ إنشاء الرابط…"):linkUrl} className="min-w-0 flex-1 px-3 py-2 text-[12px]" dir="ltr"/><button disabled={!linkUrl} onClick={()=>void navigator.clipboard.writeText(linkUrl)} className="border-s border-slate-300 px-4 text-[12px] text-blue-700 disabled:opacity-40">{text("Copy","نسخ")}</button></div><p className="mt-3 text-[11px] text-slate-500">{text("Created by you", "أنشأتها أنت")} · {new Date(linkCollection.createdAt).toLocaleString(ar?"ar":"en")}</p><div className="mt-4 border-t border-slate-100 pt-4"><p className="mb-2 text-[13px] font-medium text-slate-800">{text("Email collection link", "إرسال رابط المجموعة بالبريد")}</p><textarea className="wd-input min-h-[64px] w-full" value={emailTo} onChange={e=>setEmailTo(e.target.value)} placeholder={text("Add email addresses, separated by commas", "أضف عناوين البريد، مفصولة بفواصل")}/><textarea className="wd-input mt-2 min-h-[64px] w-full" value={emailMessage} onChange={e=>setEmailMessage(e.target.value)} placeholder={text("Add a message (optional)", "أضف رسالة (اختياري)")} maxLength={2000}/>{emailNotice&&<p className="mt-2 text-[12px] text-slate-600">{emailNotice}</p>}</div></div><footer className="flex items-center justify-between border-t border-slate-100 px-6 py-4"><button onClick={()=>void sendCollectionEmail()} disabled={!linkUrl||emailBusy||!emailTo.trim()} className="text-[12px] font-medium text-blue-700 disabled:opacity-40">{emailBusy?text("Sending…","جارٍ الإرسال…"):text("Send email","إرسال البريد")}</button><button onClick={()=>{setLinkCollection(null);openSettings(linkCollection);}} className="text-[12px] font-medium text-blue-700">{text("Link Settings","إعدادات الرابط")}</button></footer></section></div>}
     {settings&&<div className="fixed inset-0 z-[300] flex items-center justify-center bg-slate-950/50 p-4"><section dir={ar?"rtl":"ltr"} role="dialog" aria-modal="true" className="w-full max-w-lg rounded-xl bg-white p-6 shadow-2xl"><header className="mb-5 flex items-center justify-between"><h2 className="text-lg font-semibold">{text("Collection settings","إعدادات المجموعة")}</h2><button onClick={()=>setSettings(null)} className="text-xl text-slate-500">×</button></header><div className="space-y-4"><label className="block text-[12px]">{text("Collection name","اسم المجموعة")}<input className="wd-input mt-1 w-full" value={settingsName} onChange={e=>setSettingsName(e.target.value)}/></label><label className="block text-[12px]">{text("Description","الوصف")}<textarea className="wd-input mt-1 w-full" value={settingsDescription} onChange={e=>setSettingsDescription(e.target.value)}/></label><label className="block text-[12px]">{text("Expiration","تاريخ الانتهاء")}<input type="datetime-local" className="wd-input mt-1 w-full" value={settingsExpires} onChange={e=>setSettingsExpires(e.target.value)}/></label><p className="text-[11px] text-slate-500">{text("Changing link settings does not change the destination folder.","تغيير إعدادات الرابط لا يغير مجلد الوجهة.")}</p></div><footer className="mt-6 flex justify-end gap-2"><button className="wd-secondary-button" onClick={()=>setSettings(null)}>{text("Cancel","إلغاء")}</button><button className="wd-primary-button" disabled={!settingsName.trim()||settingsBusy} onClick={()=>void saveSettings()}>{settingsBusy?text("Saving…","جارٍ الحفظ…"):text("Save","حفظ")}</button></footer></section></div>}
     {detail&&<div className="fixed inset-0 z-[230] flex flex-col bg-white" dir={ar?"rtl":"ltr"}><header className="flex min-h-[76px] items-center gap-3 border-b border-slate-200 px-4 sm:px-7"><span className="flex h-10 w-10 items-center justify-center rounded-lg bg-slate-100">▣</span><div className="min-w-0 flex-1"><h2 className="truncate text-[14px] font-semibold">{detail.name}</h2><p className="text-[11px] text-slate-500">{text("Created by you on","أنشأتها في")} {new Date(detail.createdAt).toLocaleString(ar?"ar":"en")}</p></div><button onClick={()=>void openSubmissions(detail)} className="flex items-center gap-2 rounded-full bg-blue-500 px-3 py-2 text-[11px] text-white"><span>↑</span>{detail.submissionsCount} {text("users submitted","مستخدم أرسل")}</button><span className="hidden items-center gap-2 rounded-full bg-blue-500 px-3 py-2 text-[11px] text-white sm:flex">▤ {detail.filesCount} {text("files uploaded","ملف مرفوع")}</span><button onClick={()=>setDetail(null)} className="ms-2 text-2xl text-slate-500">×</button></header><div className="flex justify-end p-4"><button onClick={()=>{window.location.href=detail.folder.id?`/files/${encodeURIComponent(detail.folder.id)}`:"/files";}} className="wd-primary-button">{text("Open folder","فتح المجلد")}</button></div><div className="flex flex-1 items-center justify-center text-center text-[13px] text-slate-500">{detail.submissionsCount===0?text("No user submissions made yet","لم يتم استلام أي ملفات بعد"):text("Select the submissions count to review received files","اختر عدد الإرسالات لمراجعة الملفات المستلمة")}</div></div>}
 

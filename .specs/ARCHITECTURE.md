@@ -152,7 +152,9 @@ imkan-workDrive-v1-2-release/
 
 ### Core Models
 - **Organization**: Multi-tenant organization entity
-- **User**: User accounts with auth
+- **User**: User accounts with auth, optional Google id, and `emailVerifiedAt`
+- **EmailOtpChallenge**: One-time email verification codes for login, signup, and passwordless sign-in
+- **CollectionEmailInvite**: Emails sent with a Collect Files upload link
 - **OrganizationMembership**: User-Org link (roles: SUPER_ADMIN, ADMIN, MEMBER)
 - **Folder**: Hierarchical folder structure (types: PERSONAL, TEAM_FOLDER_ROOT, TEAM_FOLDER_SUB, etc.)
 - **File**: File records with metadata (status: ACTIVE, TRASHED, ARCHIVED, PURGED)
@@ -200,12 +202,16 @@ The frontend uses a centralized `apiRequest<T>()` wrapper:
 
 ## 7. Authentication Flow
 
-1. User submits credentials → POST `/auth/login`
-2. Server returns `{ access_token, user }`
-3. Client saves to localStorage + cookie
-4. Subsequent requests include `Authorization: Bearer <token>`
-5. 401 responses trigger automatic redirect to login screen
-6. DevAuthToolbar (non-production) provides test user login
+1. User submits credentials → POST `/auth/login` (or POST `/auth/login/otp` for a code-only sign-in)
+2. Server emails a 6-digit code and returns `{ otp_required, challenge_id, masked_email }`
+3. User submits the code → POST `/auth/login/verify`, which returns `{ access_token, user }`
+4. Signup uses the same email-code step via POST `/auth/signup` then POST `/auth/signup/verify`
+5. Google sign-in uses GET `/auth/google` and treats a verified Google email as confirmed
+6. Password reset emails a link through the shared mail service (`SMTP_*`, `MAIL_FROM`)
+7. Client saves the token to localStorage + cookie
+8. Subsequent requests include `Authorization: Bearer <token>`
+9. 401 responses trigger automatic redirect to login screen
+10. DevAuthToolbar (non-production) provides test user login. When SMTP is unset outside production, the API includes `dev_code` so local sign-in can continue.
 
 ---
 
