@@ -174,6 +174,7 @@ function OperationEditor({
         <span className="ml-auto text-[8px] uppercase tracking-wider text-slate-400">SAFE</span>
         <button type="button" className="wd-icon-btn" onClick={onRemove}>×</button>
       </div>
+      <div className="border-b border-slate-100 bg-slate-50 px-3 py-2 text-[9px] leading-4 text-slate-600">{OPERATION_ITEMS.find((x) => x[0] === op)?.[3] ?? (ar ? "اضبط حقول العملية ثم استخدم الناتج في المخرجات." : "Configure this step, then expose its result through Outputs.")}</div>
       <div className="grid gap-3 p-3 sm:grid-cols-2">
         {(op === "SET_FIELD" || op === "COPY_VALUE" || ["CONCAT","LOWERCASE","UPPERCASE","NUMBER","ADD","SUBTRACT","MULTIPLY","DIVIDE"].includes(op)) && fieldInput(ar ? "الحقل الناتج" : "Output field", "field")}
         {["COPY_VALUE","CONCAT","LOWERCASE","UPPERCASE","NUMBER","ADD","SUBTRACT","MULTIPLY","DIVIDE"].includes(op) && <label className="workflow-action-field"><span>{ar ? "القيمة الأولى" : "Left value"}</span>{dynamicInput("left", "{{file.name}} or {{workflow.field}}")}</label>}
@@ -181,11 +182,19 @@ function OperationEditor({
         {["CONCAT","ADD","SUBTRACT","MULTIPLY","DIVIDE"].includes(op) && <label className="workflow-action-field"><span>{ar ? "القيمة الثانية" : "Right value"}</span>{dynamicInput("right", "{{workflow.amount}}")}</label>}
         {op === "CONCAT" && <label className="workflow-action-field"><span>{ar ? "الفاصل" : "Separator"}</span>{dynamicInput("separator", " ")}</label>}
         {op === "IF" && <>
-          <label className="workflow-action-field"><span>{ar ? "الشرط" : "Condition"}</span>{dynamicInput("condition", "{{workflow.approved}}")}</label>
-          <div className="sm:col-span-2 grid gap-2 sm:grid-cols-2">
-            <div className="rounded-xl border border-emerald-200 bg-emerald-50/50 p-2"><div className="mb-1 text-[9px] font-semibold text-emerald-800">{ar ? "Then" : "Then"}</div>{dynamicInput("then", JSON.stringify({ op: "SET_FIELD", field: "result", value: "yes" }))}</div>
-            <div className="rounded-xl border border-amber-200 bg-amber-50/50 p-2"><div className="mb-1 text-[9px] font-semibold text-amber-800">{ar ? "Else" : "Else"}</div>{dynamicInput("else", JSON.stringify({ op: "SET_FIELD", field: "result", value: "no" }))}</div>
+          <div className="sm:col-span-2 rounded-xl border border-indigo-100 bg-indigo-50/60 p-3 text-[9px] leading-4 text-indigo-900">
+            {ar ? "الشرط يُقيّم كقيمة صحيحة/خاطئة. كل فرع يعيّن حقلاً واحداً فقط؛ استخدم {{inputKey}} أو {{fields.fieldName}} للوصول إلى البيانات." : "The condition is evaluated as true/false. Each branch sets one field. Use {{inputKey}} or {{fields.fieldName}} to read data."}
           </div>
+          <label className="workflow-action-field sm:col-span-2"><span>{ar ? "القيمة التي يتم اختبارها" : "Condition value"}</span>{dynamicInput("condition", "{{fields.approved}}")}</label>
+          {(["then", "else"] as const).map((branch) => {
+            const raw = operation[branch] && typeof operation[branch] === "object" ? operation[branch] as Record<string, unknown> : {};
+            const updateBranch = (key: "field" | "value", value: string) => set(branch, { op: "SET_FIELD", field: String(raw.field ?? "result"), value: raw.value ?? "", [key]: value });
+            return <div key={branch} className={`rounded-xl border p-3 ${branch === "then" ? "border-emerald-200 bg-emerald-50/50" : "border-amber-200 bg-amber-50/50"}`}>
+              <div className={`mb-2 text-[10px] font-semibold ${branch === "then" ? "text-emerald-800" : "text-amber-800"}`}>{branch === "then" ? (ar ? "إذا تحقق الشرط (Then)" : "If true (Then)") : (ar ? "إذا لم يتحقق (Else)" : "If false (Else)")}</div>
+              <label className="workflow-action-field"><span>{ar ? "اكتب النتيجة في الحقل" : "Write result to field"}</span><input className="wf-input" value={String(raw.field ?? "result")} onChange={(e) => updateBranch("field", e.target.value)} /></label>
+              <label className="workflow-action-field mt-2"><span>{ar ? "القيمة التي سيتم تعيينها" : "Value to set"}</span><input className="wf-input" value={String(raw.value ?? "")} onChange={(e) => updateBranch("value", e.target.value)} placeholder={ar ? "مثال: approved" : "Example: approved"} /></label>
+            </div>;
+          })}
         </>}
         {op === "HTTP_REQUEST" && <>
           <label className="workflow-action-field sm:col-span-2"><span>{ar ? "Connection" : "Connection"}</span><ImkanOptionPicker value={String(operation.connectionId ?? "")} onChange={(v) => set("connectionId", v)} options={connections.map(c => ({ value: c.id, label: c.name }))} ariaLabel={ar ? "الاتصال" : "Connection"} fullWidth allowEmpty emptyLabel={ar ? "اختر اتصالاً" : "Select connection"} placeholder={ar ? "اختر اتصالاً" : "Select connection"} /></label>
@@ -238,6 +247,16 @@ function FunctionBuilder({ draft, setDraft, ar, connections, onSave, onCancel, b
           <button type="button" className="wd-icon-btn" onClick={onCancel}>×</button>
         </header>
         <div className="min-h-0 flex-1 overflow-y-auto p-3 sm:p-5">
+          <section className="mb-4 rounded-2xl border border-indigo-200 bg-indigo-50/70 p-4">
+            <div className="flex items-start gap-3">
+              <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-white text-lg text-indigo-700">ƒ</span>
+              <div className="min-w-0">
+                <h3 className="text-[12px] font-semibold text-indigo-950">{ar ? "كيف تعمل هذه الدالة؟" : "How this function works"}</h3>
+                <p className="mt-1 text-[10px] leading-5 text-indigo-900">{ar ? "الدالة تستقبل مدخلات من الـ Workflow، تنفذ العمليات بالترتيب من الأعلى إلى الأسفل، ثم تعيد المخرجات لتستخدمها الخطوات التالية. مثال: أدخل status، حوّله إلى أحرف صغيرة، وأعد normalized_status." : "A function receives inputs from a workflow, runs the steps from top to bottom, then returns outputs for later workflow actions. Example: receive status, lowercase it, and return normalized_status."}</p>
+                <div className="mt-2 flex flex-wrap items-center gap-1 text-[9px] font-semibold text-indigo-800"><span className="rounded-lg bg-white px-2 py-1">{ar ? "مدخلات" : "Inputs"}</span><span>→</span><span className="rounded-lg bg-white px-2 py-1">{ar ? "عمليات بالترتيب" : "Ordered steps"}</span><span>→</span><span className="rounded-lg bg-white px-2 py-1">{ar ? "مخرجات" : "Outputs"}</span><span>→</span><span className="rounded-lg bg-white px-2 py-1">{ar ? "ربطها في Workflow" : "Map in workflow"}</span></div>
+              </div>
+            </div>
+          </section>
           <div className="grid gap-3 lg:grid-cols-[300px_minmax(0,1fr)]">
             <aside className="space-y-3">
               <section className="rounded-2xl border border-slate-200 bg-slate-50/70 p-3">
@@ -250,13 +269,13 @@ function FunctionBuilder({ draft, setDraft, ar, connections, onSave, onCancel, b
               </section>
               <section className="rounded-2xl border border-sky-200 bg-sky-50/60 p-3">
                 <div className="mb-1 text-[10px] font-semibold text-sky-900">{ar ? "١ · المدخلات" : "1 · Inputs"}</div>
-                <p className="mb-2 text-[8.5px] leading-4 text-sky-800">{ar ? "هذه هي القيم التي ستظهر للمستخدم عند إضافة الدالة إلى Workflow." : "These are the arguments exposed when the function is added to a workflow."}</p>
+                <p className="mb-2 text-[8.5px] leading-4 text-sky-800">{ar ? "هذه بيانات تستقبلها الدالة. عند إضافتها إلى Workflow ستربط كل مدخل بحقل أو قيمة ديناميكية. المفتاح مثل status هو الاسم الذي تستخدمه العمليات بصيغة {{status}}." : "Values the function receives. When used in a workflow, map each input to a field or dynamic value. Use its key in steps as {{status}}."}</p>
                 <div className="space-y-2">{definition.inputs.map((p, i) => <PortEditor key={`${p.key}-${i}`} port={p} ar={ar} onChange={(v) => updatePort("inputs", i, v)} onRemove={() => removePort("inputs", i)} />)}</div>
                 <button type="button" className="mt-2 wd-pill wd-pill-record" onClick={() => addPort("inputs")}>＋ {ar ? "إضافة إدخال" : "Add input"}</button>
               </section>
               <section className="rounded-2xl border border-emerald-200 bg-emerald-50/60 p-3">
                 <div className="mb-1 text-[10px] font-semibold text-emerald-900">{ar ? "٣ · المخرجات" : "3 · Outputs"}</div>
-                <p className="mb-2 text-[8.5px] leading-4 text-emerald-800">{ar ? "سمِّ القيم التي سيعيدها الـ Function إلى Workflow." : "Name the values the function returns to the workflow."}</p>
+                <p className="mb-2 text-[8.5px] leading-4 text-emerald-800">{ar ? "هذه هي النتائج التي تريد إرجاعها. اجعل مفتاح المخرج مطابقاً لحقل الناتج في العملية (Output field)، ثم اربطه في إعدادات إجراء Custom Function داخل Workflow." : "Values returned to the workflow. Make each output key match an operation’s Output field, then map it in the Custom Function action."}</p>
                 <div className="space-y-2">{definition.outputs.map((p, i) => <PortEditor key={`${p.key}-${i}`} port={p} ar={ar} onChange={(v) => updatePort("outputs", i, v)} onRemove={() => removePort("outputs", i)} />)}</div>
                 <button type="button" className="mt-2 wd-pill wd-pill-record" onClick={() => addPort("outputs")}>＋ {ar ? "إضافة مخرج" : "Add output"}</button>
               </section>
@@ -275,6 +294,9 @@ function FunctionBuilder({ draft, setDraft, ar, connections, onSave, onCancel, b
                   ))}
                 </div>
               </div>
+              <div className="mt-2 rounded-xl border border-slate-200 bg-white p-2 text-[8.5px] leading-4 text-slate-600">
+                <b className="text-slate-800">{ar ? "تذكير بالربط" : "Output contract"}:</b> {ar ? "أي قيمة تريد إرجاعها يجب أن يكون لها حقل ناتج بنفس المفتاح في قسم المخرجات. مثال: العملية تكتب normalized_status ← أضف مخرجاً بالمفتاح normalized_status." : "Every returned value needs an output with the same key as the operation field. Example: step writes normalized_status → add an output named normalized_status."}
+              </div>
               <div className="mt-3 min-h-24 space-y-2 rounded-2xl border-2 border-dashed border-transparent p-1 transition hover:border-violet-200" onDragOver={(e) => e.preventDefault()} onDrop={() => { if (dragOperation) addOperation(dragOperation); setDragOperation(null); }}>
                 {definition.operations.map((op, i) => (
                   <OperationEditor key={`${i}-${op.op}`} operation={op} index={i} ar={ar} connections={connections}
@@ -292,7 +314,7 @@ function FunctionBuilder({ draft, setDraft, ar, connections, onSave, onCancel, b
           </div>
         </div>
         <footer className="flex shrink-0 items-center justify-between gap-2 border-t border-slate-100 px-4 py-3">
-          <div className="text-[8.5px] text-slate-400">{ar ? "SAFE runtime · بدون JavaScript عشوائي · حتى 30 عملية" : "SAFE runtime · no arbitrary JavaScript · up to 30 operations"}</div>
+          <div className="text-[8.5px] leading-4 text-slate-500">{ar ? "تذكير: احفظ كمسودة أولاً، اختبر الإصدار، ثم انشره ليظهر داخل Workflow. القيم الديناميكية تُكتب مثل {{status}}." : "Next: save as draft, test the version, then publish it to make it available in workflows. Dynamic values use syntax like {{status}}."}</div>
           <div className="flex gap-2"><button type="button" className="wd-pill wd-pill-record" onClick={onCancel}>{ar ? "إلغاء" : "Cancel"}</button><button type="button" className="wd-pill wd-pill-new disabled:opacity-40" disabled={!valid || busy} onClick={onSave}>{busy ? (ar ? "جارٍ الحفظ…" : "Saving…") : (ar ? "حفظ كمسودة" : "Save as draft")}</button></div>
         </footer>
       </div>
@@ -315,6 +337,9 @@ export default function WorkflowFunctionsPage({ standalone = false }: { standalo
   const [executions, setExecutions] = useState<any[]>([]);
   const [editName, setEditName] = useState("");
   const [editingFunctionId, setEditingFunctionId] = useState<string | null>(null);
+  const [search, setSearch] = useState("");
+  const [testInputText, setTestInputText] = useState(JSON.stringify({ file: { id: "test-file", name: "contract.pdf", extension: ".pdf", fileType: "PDF", mimeType: "application/pdf" }, fields: { status: "Pending", amount: 2500 } }, null, 2));
+  const [testInputError, setTestInputError] = useState("");
 
   useEffect(() => { void listConnections({ status: "ACTIVE" }).then(setConnections).catch(() => undefined); }, []);
   const load = () => void listWorkflowFunctions().then(r => setRows(r.custom || [])).catch(e => setError(e instanceof Error ? e.message : "Unable to load functions"));
@@ -368,15 +393,17 @@ export default function WorkflowFunctionsPage({ standalone = false }: { standalo
     catch (e) { setError(e instanceof Error ? e.message : "Unable to publish"); } finally { setBusy(false); }
   };
   const test = async (f: WorkflowFunction, versionId?: string) => {
-    setBusy(true); setError("");
+    setBusy(true); setError(""); setTestInputError("");
     try {
-      setResult(await testWorkflowFunction(f.id, {
-        file: { id: "test-file", name: "contract.pdf", extension: ".pdf", fileType: "PDF", mimeType: "application/pdf" },
-        fields: { status: "Pending", amount: 2500 },
-      }, versionId));
-    } catch (e) { setError(e instanceof Error ? e.message : "Function test failed"); }
-    finally { setBusy(false); }
+      const input = JSON.parse(testInputText);
+      if (!input || typeof input !== "object" || Array.isArray(input)) throw new Error("Test input must be a JSON object");
+      setResult(await testWorkflowFunction(f.id, input as Record<string, unknown>, versionId));
+    } catch (e) {
+      if (e instanceof SyntaxError) setTestInputError(ar ? "صيغة JSON غير صحيحة. راجع الأقواس والفواصل." : "Invalid JSON. Check braces and commas.");
+      else setError(e instanceof Error ? e.message : "Function test failed");
+    } finally { setBusy(false); }
   };
+  const filteredRows = rows.filter(f => `${f.name} ${f.key} ${f.description ?? ""}`.toLowerCase().includes(search.toLowerCase()));
 
   const Shell = ({ children }: { children: ReactNode }) => standalone
     ? <>{children}</>
@@ -390,7 +417,11 @@ export default function WorkflowFunctionsPage({ standalone = false }: { standalo
             <WorkflowHelp compact helpKey="workflow.functions" title={ar ? "ما هي الدوال المخصصة؟" : "What are Custom Functions?"} description={ar ? "منطق قابل لإعادة الاستخدام يُبنى بصرياً، ثم يُربط بمدخلات ومخرجات داخل Workflow." : "Reusable logic built visually, then connected to workflow inputs and outputs."} />
             <span className="text-[10px] text-slate-500">{rows.length} {ar ? "دوال" : "functions"}</span>
           </div>
-          <button className="wd-pill wd-pill-new" onClick={() => { setEditingFunctionId(null); setDraft({ ...STARTER, definition: cloneDefinition(STARTER.definition) }); setOpen(true); }}>＋ {ar ? "دالة جديدة" : "New function"}</button>
+          <button className="wd-pill wd-pill-new" onClick={() => { setEditingFunctionId(null); setDraft({ ...STARTER, name: "", key: "", description: "", definition: { inputs: [], operations: [], outputs: [] } }); setOpen(true); }}>＋ {ar ? "دالة جديدة" : "New function"}</button>
+        </div>
+        <div className="mt-4 flex flex-wrap items-center gap-3 rounded-xl border border-slate-200 bg-slate-50 p-3">
+          <div className="min-w-[220px] flex-1"><label className="mb-1 block text-[9px] font-semibold text-slate-500">{ar ? "البحث عن دالة" : "Search functions"}</label><input className="wf-input" value={search} onChange={e => setSearch(e.target.value)} placeholder={ar ? "ابحث بالاسم أو المفتاح أو الوصف…" : "Search by name, key, or description…"} /></div>
+          <div className="text-[9px] text-slate-500">{ar ? `${filteredRows.length} من ${rows.length}` : `${filteredRows.length} of ${rows.length}`}</div>
         </div>
         <div className="mt-4"><WorkflowConceptGuide ar={ar} /></div>
         <div className="mt-4 grid gap-3 sm:grid-cols-3">
@@ -398,9 +429,9 @@ export default function WorkflowFunctionsPage({ standalone = false }: { standalo
           <div className="wd-card p-3"><div className="text-[9px] uppercase tracking-[.14em] text-slate-400">{ar ? "Builder" : "Builder"}</div><div className="mt-1 text-[12px] font-semibold">{ar ? "سحب وإفلات" : "Drag & drop"}</div></div>
           <div className="wd-card p-3"><div className="text-[9px] uppercase tracking-[.14em] text-slate-400">{ar ? "Contracts" : "Contracts"}</div><div className="mt-1 text-[12px] font-semibold">{ar ? "Inputs → Operations → Outputs" : "Inputs → Operations → Outputs"}</div></div>
         </div>
-        {rows.length === 0
-          ? <div className="wd-card mt-4 border-dashed p-10 text-center"><h2 className="text-[13px] font-semibold">{ar ? "لا توجد دوال مخصصة" : "No custom functions"}</h2><p className="mt-1 text-[10px] text-slate-500">{ar ? "أنشئ أول دالة من المصمم البصري." : "Create your first function from the visual builder."}</p></div>
-          : <div className="mt-4 grid gap-4 sm:grid-cols-2 xl:grid-cols-3">{rows.map(f =>
+        {filteredRows.length === 0
+          ? <div className="wd-card mt-4 border-dashed p-10 text-center"><h2 className="text-[13px] font-semibold">{rows.length === 0 ? (ar ? "لا توجد دوال مخصصة بعد" : "No custom functions yet") : (ar ? "لا توجد نتائج مطابقة" : "No matching functions")}</h2><p className="mt-1 text-[10px] text-slate-500">{rows.length === 0 ? (ar ? "ابدأ بإنشاء دالة، أضف مدخلاتها وعملياتها ومخرجاتها، ثم اختبرها وانشرها." : "Create a function, define its inputs, steps and outputs, then test and publish it.") : (ar ? "جرّب كلمة بحث أخرى." : "Try another search term.")}</p></div>
+          : <div className="mt-4 grid gap-4 sm:grid-cols-2 xl:grid-cols-3">{filteredRows.map(f =>
             <article key={f.id} className="wd-card flex min-h-[210px] flex-col p-4">
               <div className="flex items-start justify-between"><div className="wf-icon">ƒ</div><span className="rounded-full bg-slate-100 px-2 py-1 text-[8px]">v{f.activeVersion?.version ?? 1}</span></div>
               <h3 className="mt-3 text-[12.5px] font-semibold">{f.name}</h3><p className="mt-1 text-[10px] leading-5 text-slate-500">{f.description || f.key}</p>
@@ -408,7 +439,15 @@ export default function WorkflowFunctionsPage({ standalone = false }: { standalo
             </article>
           )}</div>}
         {error && <div className="mt-4 rounded-xl bg-red-50 p-3 text-[10px] text-red-700">{error}</div>}
-        {result && <div className="wd-card mt-4 p-4"><div className="text-[10px] font-semibold">{ar ? "نتيجة الاختبار" : "Test result"}</div><pre className="mt-2 max-h-64 overflow-auto rounded-xl bg-slate-50 p-3 text-[9px] whitespace-pre-wrap">{JSON.stringify(result, null, 2)}</pre></div>}
+        <section className="wd-card mt-4 p-4">
+          <div className="flex flex-wrap items-center justify-between gap-2"><div><div className="text-[11px] font-semibold">{ar ? "بيانات الاختبار" : "Test input"}</div><p className="mt-1 text-[9px] text-slate-500">{ar ? "عدّل JSON لتجربة سيناريو خاص بك. هذه بيانات اختبار فقط ولا تغيّر ملفاتك." : "Edit this JSON to test your own scenario. Test data only; it does not change your files."}</p></div><button className="wd-pill wd-pill-record" onClick={() => setTestInputText(JSON.stringify({ file: { id: "test-file", name: "contract.pdf", extension: ".pdf", fileType: "PDF", mimeType: "application/pdf" }, fields: { status: "Pending", amount: 2500 } }, null, 2))}>{ar ? "استعادة المثال" : "Reset example"}</button></div>
+          <textarea className="wf-input mt-3 min-h-36 font-mono text-[10px]" value={testInputText} onChange={e => setTestInputText(e.target.value)} spellCheck={false} />
+          {testInputError && <p className="mt-2 text-[10px] text-red-600">{testInputError}</p>}
+        </section>
+        {result && <div className="wd-card mt-4 p-4">
+          <div className="flex flex-wrap items-center justify-between gap-2"><div className="text-[10px] font-semibold">{ar ? "نتيجة الاختبار" : "Test result"}</div><span className="rounded-full bg-emerald-50 px-2 py-1 text-[9px] font-semibold text-emerald-700">{ar ? "اكتمل التنفيذ" : "Execution completed"}</span></div>
+          {Array.isArray((result as Record<string, unknown>)?.trace) && <section className="mt-3"><div className="mb-2 text-[9px] font-semibold text-slate-600">{ar ? "تتبّع خطوات التنفيذ" : "Execution trace"}</div><div className="space-y-2">{((result as Record<string, unknown>).trace as Array<Record<string, unknown>>).map((step, index) => <div key={`${String(step.step)}-${index}`} className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2"><div className="flex items-center gap-2"><span className="grid h-6 w-6 place-items-center rounded-lg bg-white text-[9px] font-semibold">{String(step.step ?? index + 1)}</span><div><div className="text-[9px] font-semibold">{String(step.operation ?? "Operation")}</div><div className="text-[8px] text-slate-500">{ar ? "الحقول المتغيرة" : "Changed fields"}: {Array.isArray(step.changedFields) ? step.changedFields.map(String).join(", ") || "—" : "—"}</div></div></div><div className="flex items-center gap-2"><span className="text-[8px] text-slate-500">{String(step.durationMs ?? 0)} ms</span><span className="rounded-full bg-emerald-100 px-2 py-1 text-[8px] font-semibold text-emerald-700">{String(step.status ?? "SUCCESS")}</span></div></div>)}</div></section>}
+          <div className="mt-3 text-[9px] font-semibold text-slate-600">{ar ? "المخرجات" : "Output"}</div><pre className="mt-2 max-h-64 overflow-auto rounded-xl bg-slate-50 p-3 text-[9px] whitespace-pre-wrap">{JSON.stringify(result, null, 2)}</pre></div>}
       </div>
     </main>
 
