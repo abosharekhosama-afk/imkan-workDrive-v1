@@ -620,7 +620,7 @@ html[data-theme="dark"] .zoho-icon-btn:hover{background:var(--wd-hover);color:#d
 .zoho-content button:not(.wd-icon-btn):not([role="switch"]):not(.wd-check):not(.wd-menu-item),
 .zoho-content a.imkan-button,
 .zoho-content a.wd-pill,
-.admin-console-shell button:not(.wd-icon-btn):not([role="switch"]):not(.wd-menu-item):not(.admin-activity-tab),
+.admin-console-shell button:not(.wd-icon-btn):not([role="switch"]):not(.wd-menu-item):not(.admin-activity-tab):not(.team-manage-tab):not(.team-folder-pin):not(.team-folder-members):not(.team-folder-more):not(.team-filter-trigger):not(.team-view-trigger):not(.admin-audit-new-report),
 .admin-console-shell a.imkan-button {
   border-radius: var(--wd-pill-radius, 16px);
   transition: background-color var(--wd-dur) var(--wd-ease), color var(--wd-dur) var(--wd-ease), box-shadow var(--wd-dur) var(--wd-ease);
@@ -1755,6 +1755,90 @@ html[data-theme="dark"] .zoho-workflow-status-badge{border-color:#38414d;backgro
 .team-folder-pin{opacity:0;transition:opacity .14s ease}.team-folder-row:hover .team-folder-pin,.team-folder-pin.is-pinned,.team-folder-pin:focus{opacity:1}.team-folder-pin:hover{background:#fafbfc;border-color:#c7cdd3}
 .team-folder-pin.is-pinned{color:#30363b}
 .team-folder-pin-label{white-space:nowrap}
+.team-manage-nav{
+  display:grid;
+  grid-template-columns:repeat(7,minmax(0,1fr));
+  border-bottom:1px solid #e2e8f0;
+  background:#fff;
+}
+.team-manage-tab{
+  display:flex;
+  min-height:90px;
+  flex-direction:column;
+  align-items:center;
+  justify-content:center;
+  gap:8px;
+  border-inline-end:1px solid #e2e8f0;
+  border-top:2px solid transparent;
+  border-radius:0 !important;
+  height:auto !important;
+  min-width:0;
+  padding:8px;
+  background:transparent;
+  box-shadow:none !important;
+  text-align:center;
+  font-size:13px;
+  line-height:1.25;
+  color:#555;
+  transition:background-color .15s ease,color .15s ease,border-color .15s ease;
+}
+.team-manage-tab:last-child{border-inline-end:0}
+.team-manage-tab:hover{background:#f8fafc;color:#334155}
+.team-manage-tab.is-active{
+  border-top-color:#2457B8;
+  background:#fff;
+  color:#2457B8;
+  font-weight:600;
+}
+.admin-console-shell .team-folder-pin,
+.admin-console-shell .team-folder-members,
+.admin-console-shell .team-folder-more,
+.zoho-content .team-folder-pin,
+.zoho-content .team-folder-members,
+.zoho-content .team-folder-more{
+  border-radius:17px !important;
+  height:34px !important;
+  min-height:34px !important;
+  font-size:12px !important;
+  font-weight:500 !important;
+  box-shadow:none !important;
+}
+.admin-console-shell .team-folder-pin,
+.zoho-content .team-folder-pin{
+  height:36px !important;
+  min-height:36px !important;
+  min-width:92px !important;
+  border:1px solid #d9dde1 !important;
+  border-radius:19px !important;
+  background:#fff !important;
+  padding:0 12px !important;
+}
+.admin-console-shell .team-folder-members,
+.zoho-content .team-folder-members{
+  border:0 !important;
+  background:transparent !important;
+  min-width:112px !important;
+  cursor:default !important;
+}
+.admin-console-shell .team-manage-nav,
+.zoho-content .team-manage-nav{
+  border-radius:0 !important;
+  overflow:visible !important;
+}
+.admin-console-shell .team-manage-tab,
+.zoho-content .team-manage-tab{
+  border-radius:0 !important;
+  height:auto !important;
+  min-height:90px !important;
+  padding:8px !important;
+  box-shadow:none !important;
+  white-space:normal !important;
+}
+html[dir="rtl"] .team-folder-menu,
+html[dir="rtl"] .team-folder-menu button{
+  direction:rtl;
+  text-align:start;
+}
 .team-folder-more{
   display:flex;
   width:32px;
@@ -2094,6 +2178,36 @@ html[data-theme="dark"] .zoho-workflow-status-badge{border-color:#38414d;backgro
   height: 100%;
   min-height: 0;
 }
+.workdrive-main-scroll > .imkan-workspace-layout:has(.workflow-ui) {
+  height: auto;
+  min-height: 0;
+}
+.workflow-ui.workflow-builder-scroll {
+  min-height: 100%;
+}
+.workflow-ui.workflow-builder-scroll .workflow-builder-header {
+  position: static;
+}
+.workflow-ui.workflow-builder-scroll .workflow-design-step,
+.workflow-ui.workflow-builder-scroll .workflow-design-shell,
+.workflow-ui.workflow-builder-scroll .workflow-design-grid.wd-card {
+  flex: none;
+  min-height: 0;
+  height: auto;
+  overflow: visible;
+}
+.workflow-ui.workflow-builder-scroll .workflow-inspector {
+  overflow: visible;
+  max-height: none;
+}
+.workflow-ui.workflow-builder-scroll .workflow-canvas-pane {
+  overflow: visible !important;
+  height: auto !important;
+  min-height: 560px;
+}
+.workflow-ui.workflow-builder-scroll .workflow-design-grid.wd-card > .min-w-0.flex-1 {
+  min-height: 560px;
+}
 /* Workflow workspace cards — keep all workflow surfaces on the same WorkDrive card language. */
 .workflow-ui .workflow-design-shell {
   flex: 1 1 auto;
@@ -2117,6 +2231,15 @@ html[data-theme="dark"] .zoho-workflow-status-badge{border-color:#38414d;backgro
 }
 .workflow-ui .wd-card > .wd-card-head {
   border-bottom-color: var(--wd-line);
+}
+html[dir="rtl"] .wd-menu-item .shrink-0:last-child,
+html[dir="rtl"] .action-dropdown-submenu-chevron{
+  transform:scaleX(-1);
+}
+html[dir="rtl"] .imkan-option-picker-menu,
+html[dir="rtl"] .wd-menu{
+  direction:rtl;
+  text-align:start;
 }
 html[data-theme="dark"] .workflow-ui .wd-card {
   background: var(--wd-bg);
@@ -4154,9 +4277,14 @@ html[data-theme="dark"] .imkan-connections-page .connections-detail-overlay{back
   line-height: 1.35;
   color: #64748b;
 }
-.admin-console-shell .admin-activity-tab.is-active b {
-  background: #eef4ff;
-  color: #175cd3;
+.admin-console-shell .admin-audit-new-report{
+  min-width:168px;
+  height:auto !important;
+  min-height:40px !important;
+  padding:10px 22px !important;
+  border-radius:9999px !important;
+  white-space:nowrap;
+  line-height:1.2;
 }
 .zoho-admin-input{display:block;width:100%;height:38px;border:1px solid #d8dadd;border-radius:8px;background:#fff;padding:0 12px;font-size:12px;color:#202124;outline:none;transition:border-color .15s,box-shadow .15s}.zoho-admin-input:focus{border-color:#5c8fe8;box-shadow:0 0 0 3px rgba(47,110,229,.10)}.zoho-admin-input:disabled{background:#f7f7f7;color:#777}.zoho-admin-primary{display:inline-flex;height:36px;align-items:center;justify-content:center;border-radius:7px;background:var(--wd-primary,#2f6ee5);padding:0 17px;font-size:11px;font-weight:600;color:#fff}.zoho-admin-primary:disabled{opacity:.5;cursor:not-allowed}
 .admin-console-shell,.admin-console-shell button,.admin-console-shell input,.admin-console-shell textarea,.admin-console-shell select,.admin-console-shell a{font-family:var(--user-font-family),"IBM Plex Sans Arabic",Arial,system-ui,sans-serif!important}

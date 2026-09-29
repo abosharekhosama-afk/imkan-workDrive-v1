@@ -350,10 +350,10 @@ export default function TeamFolderManagePage() {
   const rootHref = folder?.rootFolderId ? `/files/${encodeURIComponent(folder.rootFolderId)}` : adminBase;
 
   return (
-    <section className="flex h-full min-h-0 min-w-0 flex-col overflow-hidden bg-white">
-      <nav className="grid shrink-0 grid-cols-7 border-b border-slate-200">
+    <section className="min-w-0 bg-white">
+      <nav className="team-manage-nav">
         {tabs.map((item) => (
-          <button key={item.key} type="button" onClick={() => selectTab(item.key)} className={`flex min-h-[90px] flex-col items-center justify-center gap-2 border-e border-slate-200 px-2 text-center text-[13px] transition ${tab === item.key ? "border-t-2 border-t-[#2457B8] bg-white text-[#2457B8]" : "border-t-2 border-t-transparent text-[#555] hover:bg-slate-50"}`}>
+          <button key={item.key} type="button" onClick={() => selectTab(item.key)} className={`team-manage-tab ${tab === item.key ? "is-active" : ""}`}>
             <Icon name={item.icon} />
             <span>{locale === "ar" ? item.ar : item.en}</span>
           </button>
@@ -362,7 +362,7 @@ export default function TeamFolderManagePage() {
 
       {error ? <div className="mx-auto mt-4 w-full max-w-[930px] rounded-lg bg-red-50 px-4 py-3 text-[13px] text-red-700" role="alert">{error}</div> : null}
 
-      <main className="min-h-0 flex-1 overflow-auto">
+      <main className="w-full">
         <div className="mx-auto w-full max-w-[930px] px-8 pb-14 pt-8">
           {tab === "details" ? (
             <div className="grid grid-cols-[1fr_1fr] gap-12 max-[760px]:grid-cols-1">

@@ -42,6 +42,7 @@ export function FileContextMenu({
   onClose: () => void;
 }) {
   const { label } = useLocale();
+  const rtl = typeof document !== "undefined" && document.documentElement.dir === "rtl";
   const ref = useRef<HTMLDivElement | null>(null);
 
   const D = (k: keyof typeof DIC) => label(DIC[k]);
@@ -116,9 +117,11 @@ export function FileContextMenu({
   const top = Math.min(Math.max(8, y), Math.max(8, window.innerHeight - estH - 8));
   const share = sections[1]?.[0];
   const openSub = subOpen && Boolean(share?.submenuItems);
+  const subLeft = rtl ? left - 244 - 2 : left + menuW + 2;
+  const subLeftClamped = Math.min(Math.max(8, subLeft), Math.max(8, window.innerWidth - 244 - 8));
 
   return createPortal(
-    <div ref={ref} role="menu" style={{ left, top, width: menuW }}
+    <div ref={ref} role="menu" style={{ left, top, width: menuW }} dir={rtl ? "rtl" : "ltr"}
       className="wd-menu fixed z-[95] overflow-hidden">
       {sections.map((group, gi) => (
         <div key={`g-${gi}`} className={gi > 0 ? "wd-menu-sep !my-1" : ""}>
@@ -137,14 +140,14 @@ export function FileContextMenu({
               data-danger={it.danger || undefined}
               className="wd-menu-item min-h-[34px] text-start">
               <span className="min-w-0 flex-1 truncate">{it.label}</span>
-              {it.submenu ? <span className="shrink-0 text-[#4F4F4F]">▸</span> : it.hint ? <span className="shrink-0 text-[12px] text-[#4F4F4F]">{it.hint}</span> : null}
+              {it.submenu ? <span className={`shrink-0 text-[#4F4F4F] ${rtl ? "rotate-180" : ""}`}>▸</span> : it.hint ? <span className="shrink-0 text-[12px] text-[#4F4F4F]">{it.hint}</span> : null}
             </button>
           ))}
         </div>
       ))}
       {openSub && share.submenuItems ? (
-        <div className="wd-menu fixed z-[96]"
-          style={{ left: left + menuW + 2, top: top + 36, width: 244 }}>
+        <div className="wd-menu fixed z-[96]" dir={rtl ? "rtl" : "ltr"}
+          style={{ left: subLeftClamped, top: top + 36, width: 244 }}>
           {share.submenuItems.map((si) => (
             <button key={si.key} type="button" role="menuitem"
               onClick={(event) => {

@@ -179,6 +179,7 @@ export function ImkanOptionPicker<T extends string>({
           className={menuClasses}
           role="listbox"
           aria-label={ariaLabel}
+          dir={locale === "ar" ? "rtl" : "ltr"}
           style={{
             position: "fixed",
             top: menuPosition.top,

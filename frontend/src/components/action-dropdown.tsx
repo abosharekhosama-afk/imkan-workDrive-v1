@@ -79,7 +79,7 @@ function groupItems(items: ActionDropdownItem[]): ActionGroup[] {
   return groups;
 }
 
-function RenderItem({ item, close }: { item: ActionDropdownItem; close: () => void }) {
+function RenderItem({ item, close, rtl }: { item: ActionDropdownItem; close: () => void; rtl: boolean }) {
   const [subOpen, setSubOpen] = useState(false);
   if (!item.submenu) {
     return (
@@ -126,10 +126,10 @@ function RenderItem({ item, close }: { item: ActionDropdownItem; close: () => vo
       >
         <span className="w-5" />
         <span className="flex-1 truncate">{item.label}</span>
-        <span aria-hidden="true" className="text-[length:var(--imkan-font-size-secondary)]">›</span>
+        <span aria-hidden="true" className={`action-dropdown-submenu-chevron text-[length:var(--imkan-font-size-secondary)] ${rtl ? "rotate-180" : ""}`}>›</span>
       </button>
       {subOpen ? (
-        <div className="wd-menu absolute left-full top-0 min-w-[220px]" role="menu">
+        <div className={`wd-menu absolute top-0 min-w-[220px] ${rtl ? "end-full me-0.5" : "start-full ms-0.5"}`} role="menu">
           {item.submenu.map((sub) => (
               <button
                 type="button"
@@ -154,7 +154,8 @@ function RenderItem({ item, close }: { item: ActionDropdownItem; close: () => vo
 }
 
 export function ActionDropdown({ label, items, trigger }: ActionDropdownProps) {
-  const { label: t } = useLocale();
+  const { label: t, locale } = useLocale();
+  const rtl = locale === "ar";
   const groupedItems = groupItems(items);
   const [open, setOpen] = useState(false);
 
@@ -190,7 +191,8 @@ export function ActionDropdown({ label, items, trigger }: ActionDropdownProps) {
           onMouseDown={(event) => event.stopPropagation()}
           onClick={(event) => event.stopPropagation()}
           side="bottom"
-          align="end"
+          align={rtl ? "start" : "end"}
+          dir={rtl ? "rtl" : "ltr"}
           sideOffset={4}
           collisionPadding={16}
           avoidCollisions
@@ -201,7 +203,7 @@ export function ActionDropdown({ label, items, trigger }: ActionDropdownProps) {
           {groupedItems.map((group, groupIndex) => (
             <div key={groupIndex} className={groupIndex > 0 ? "border-t border-[color:var(--imkan-color-border)] pt-1" : ""}>
               {group.items.map((item) => (
-                <RenderItem key={item.label} item={item} close={() => setOpen(false)} />
+                <RenderItem key={item.label} item={item} close={() => setOpen(false)} rtl={rtl} />
               ))}
             </div>
           ))}

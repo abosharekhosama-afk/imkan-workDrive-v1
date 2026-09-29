@@ -20,7 +20,8 @@ export function TeamFolderActionMenu({ open, anchorEl, onClose, children }: {
     const place = () => {
       const rect = anchorEl.getBoundingClientRect();
       const width = 180;
-      let start = rect.right - width;
+      const isRtl = document.documentElement.dir === "rtl";
+      let start = isRtl ? rect.left : rect.right - width;
       start = Math.min(Math.max(8, start), window.innerWidth - width - 8);
       setPos({ top: rect.bottom + 6, start });
     };
@@ -62,7 +63,7 @@ export function TeamFolderActionMenu({ open, anchorEl, onClose, children }: {
   };
 
   return createPortal(
-    <div ref={ref} role="menu" data-team-folder-menu className="team-folder-menu team-folder-menu--portal fixed z-[160]" style={style}>
+    <div ref={ref} role="menu" dir={rtl ? "rtl" : "ltr"} data-team-folder-menu className="team-folder-menu team-folder-menu--portal fixed z-[160]" style={style}>
       {children}
     </div>,
     document.body,

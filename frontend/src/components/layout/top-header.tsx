@@ -62,8 +62,9 @@ export function TopHeader({ adminMode = false }: { adminMode?: boolean }) {
     window.addEventListener("workdrive:focus-search", onFocusSearch);
     return () => window.removeEventListener("workdrive:focus-search", onFocusSearch);
   }, []);
-  const isTeamManageRoute = /^\/files\/team-folders\/[^/]+\/manage/.test(pathname);
-  const isTeamFoldersDirectory = pathname === "/files/team-folders";
+  const isTeamManageRoute = /^\/(?:files|admin)\/team-folders\/[^/]+\/manage/.test(pathname);
+  const isTeamFoldersDirectory = pathname === "/files/team-folders" || pathname === "/admin/team-folders";
+  const teamFoldersBase = pathname.startsWith("/admin/") ? "/admin/team-folders" : "/files/team-folders";
   const isFolderRoute = /^\/files\/[^/]+$/.test(pathname);
   const teamContext = isTeamManageRoute || (isFolderRoute && Boolean(scope.folderId));
 
@@ -148,12 +149,12 @@ export function TopHeader({ adminMode = false }: { adminMode?: boolean }) {
                 {teamTabs.map(([key, text]) => (
                   <button key={key} type="button" role="menuitem" onClick={() => {
                     setManageOpen(false);
-                    if (key === 'details') router.push(`/files/team-folders/${encodeURIComponent(teamFolder.id)}/manage?tab=details`);
-                    else router.push(`/files/team-folders/${encodeURIComponent(teamFolder.id)}/manage?tab=${key}`);
+                    if (key === 'details') router.push(`${teamFoldersBase}/${encodeURIComponent(teamFolder.id)}/manage?tab=details`);
+                    else router.push(`${teamFoldersBase}/${encodeURIComponent(teamFolder.id)}/manage?tab=${key}`);
                   }}>{text}</button>
                 ))}
                 <div className="team-context-menu-sep" />
-                <button type="button" role="menuitem" onClick={() => { setManageOpen(false); router.push(teamFolder.rootFolderId ? `/files/${teamFolder.rootFolderId}` : '/files/team-folders'); }}>Open files</button>
+                <button type="button" role="menuitem" onClick={() => { setManageOpen(false); router.push(teamFolder.rootFolderId ? `/files/${teamFolder.rootFolderId}` : teamFoldersBase); }}>Open files</button>
               </div>
             ) : null}
           </div>
@@ -184,7 +185,7 @@ export function TopHeader({ adminMode = false }: { adminMode?: boolean }) {
             <AccountMenu name={name} avatarUrl={avatarUrl} adminMode={adminMode} />
           </div>
         ) : null}
-        <Link href={isTeamManageRoute ? '/files/team-folders' : '/files'} className="team-context-close" aria-label="Close">×</Link>
+        <Link href={isTeamManageRoute ? teamFoldersBase : '/files'} className="team-context-close" aria-label="Close">×</Link>
         {searchOpen ? <HeaderSearchOverlay onClose={() => setSearchOpen(false)} inputRef={searchInputRef} /> : null}
       </header>
     );
