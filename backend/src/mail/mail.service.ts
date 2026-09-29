@@ -1,6 +1,7 @@
 import { Injectable, Logger, ServiceUnavailableException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { sendSmtp, type SmtpMessage } from './smtp-transport';
+import { sendBrevo } from './brevo-transport';
+import type { SmtpMessage } from './smtp-transport';
 
 @Injectable()
 export class MailService {
@@ -9,29 +10,28 @@ export class MailService {
   constructor(private readonly config: ConfigService) {}
 
   isConfigured(): boolean {
-    return Boolean(this.config.get<string>('SMTP_HOST')?.trim() && this.config.get<string>('MAIL_FROM')?.trim());
+    return Boolean(
+      this.config.get<string>('BREVO_API_KEY')?.trim() &&
+      this.config.get<string>('MAIL_FROM')?.trim(),
+    );
   }
 
   async send(message: SmtpMessage): Promise<{ delivered: boolean }> {
-    if (!this.isConfigured()) {
+    const apiKey = this.config.get<string>('BREVO_API_KEY')?.trim();
+    const from = this.config.get<string>('MAIL_FROM')?.trim();
+    if (!apiKey || !from) {
       if (this.config.get<string>('NODE_ENV') === 'production') {
         throw new ServiceUnavailableException('Email delivery is not configured');
       }
-      this.logger.warn(`SMTP is not configured. Email to ${message.to} was not delivered. Subject: ${message.subject}`);
+      this.logger.warn('Brevo email delivery is not configured; message was not delivered.');
       return { delivered: false };
     }
 
-    const port = Number(this.config.get<string>('SMTP_PORT') ?? '587');
-    const secureFlag = this.config.get<string>('SMTP_SECURE');
-    const secure = secureFlag === 'true' || port === 465;
-    await sendSmtp(
+    await sendBrevo(
       {
-        host: this.config.get<string>('SMTP_HOST')!.trim(),
-        port,
-        secure,
-        user: this.config.get<string>('SMTP_USER')?.trim() || undefined,
-        pass: this.config.get<string>('SMTP_PASS') ?? undefined,
-        from: this.config.get<string>('MAIL_FROM')!.trim(),
+        apiKey,
+        from,
+        fromName: this.config.get<string>('MAIL_FROM_NAME')?.trim() || 'IMKAN WorkDrive',
       },
       message,
     );
