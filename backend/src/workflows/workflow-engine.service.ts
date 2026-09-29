@@ -651,6 +651,26 @@ export class WorkflowEngineService implements OnModuleInit, OnModuleDestroy {
           for (const [inputKey, expression] of Object.entries(inputBindings)) {
             boundFields[inputKey] = resolveDynamicValue(String(expression ?? ''), event, fields, { workflowId, runId, user: { id: user.sub } });
           }
+          const definition = version.definition && typeof version.definition === 'object' ? version.definition as Record<string, unknown> : {};
+          const declaredInputs = Array.isArray(definition.inputs) ? definition.inputs as Array<Record<string, unknown>> : [];
+          for (const port of declaredInputs) {
+            const key = String(port.key ?? '').trim();
+            if (!key) continue;
+            const value = boundFields[key];
+            if (port.required === true && (value === undefined || value === null || value === '')) {
+              throw new Error(`Custom Function input "${key}" is required. Configure its mapping in the workflow action.`);
+            }
+            if (value === undefined || value === null || value === '') continue;
+            const type = String(port.type ?? 'ANY').toUpperCase();
+            const valid = type === 'ANY' || type === 'STRING' || type === 'TEXT' ? (type === 'ANY' || typeof value === 'string')
+              : type === 'NUMBER' ? (typeof value === 'number' || (typeof value === 'string' && value.trim() !== '' && Number.isFinite(Number(value))))
+              : type === 'BOOLEAN' ? (typeof value === 'boolean' || value === 'true' || value === 'false')
+              : type === 'OBJECT' ? (typeof value === 'object' && !Array.isArray(value))
+              : type === 'ARRAY' ? Array.isArray(value) : true;
+            if (!valid) throw new Error(`Custom Function input "${key}" expects ${type.toLowerCase()} but received an incompatible value.`);
+            if (type === 'NUMBER' && typeof value === 'string') boundFields[key] = Number(value);
+            if (type === 'BOOLEAN' && typeof value === 'string') boundFields[key] = value === 'true';
+          }
           const output = await this.functionExecutor.execute(user, fn.id, version.id, version.definition, { file: fileInput, workflow: { id: workflowId, runId }, user: { id: user.sub }, now: new Date().toISOString(), fields: boundFields }, { runId, idempotencyKey: `workflow-function:${runId}:${workflowId}:${fn.id}:${version.id}` });
           const mergedFields = { ...fields, ...(output as any).fields };
           const outputMappings = config.outputMappings && typeof config.outputMappings === 'object' ? config.outputMappings as Record<string, unknown> : {};
