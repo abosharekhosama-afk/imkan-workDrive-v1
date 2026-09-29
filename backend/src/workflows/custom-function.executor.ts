@@ -57,9 +57,13 @@ export class CustomFunctionExecutor {
       }
       const notifications: Array<Record<string, unknown>> = [];
       const tags: string[] = [];
+      // Safe, value-redacted execution trace for the function test/debug experience.
+      const trace: Array<Record<string, unknown>> = [];
       for (let operationIndex = 0; operationIndex < (d.operations as SafeOperation[]).length; operationIndex++) {
         const raw = (d.operations as SafeOperation[])[operationIndex];
+        const stepStarted = Date.now();
         const op = String(raw.op).toUpperCase();
+        const fieldsBefore = JSON.stringify(fields);
         const left = this.value(raw.left, { ...input, fields });
         const right = this.value(raw.right, { ...input, fields });
         switch (op) {
@@ -79,8 +83,11 @@ export class CustomFunctionExecutor {
           case 'CONNECTION_READ': { const resource = await this.connections.readResource(user, String(raw.connectionId ?? ''), String(this.value(raw.resourceId ?? '', { ...input, fields }) ?? '')); fields[String(raw.outputField ?? '_file')] = resource; break; }
           case 'IF': { const condition = Boolean(this.value(raw.condition, { ...input, fields })); const branch = condition ? raw.then : raw.else; if (branch && typeof branch === 'object') { const nested = this.validateDefinition({ operations: [branch] }); for (const nestedOp of nested.operations as SafeOperation[]) { if (String(nestedOp.op).toUpperCase() !== 'SET_FIELD') throw new Error('IF branches currently support SET_FIELD only'); fields[String(nestedOp.field)] = this.value(nestedOp.value, { ...input, fields }); } } break; }
         }
+        const beforeFields = JSON.parse(fieldsBefore) as Record<string, unknown>;
+        const changedFields = Object.keys(fields).filter((key) => JSON.stringify(fields[key]) !== JSON.stringify(beforeFields[key]));
+        trace.push({ step: operationIndex + 1, operation: op, status: 'SUCCESS', durationMs: Date.now() - stepStarted, changedFields });
       }
-      const output = { fields, notifications, tags };
+      const output = { fields, notifications, tags, trace };
       const durationMs = Date.now() - started;
       await this.prisma.workflowFunctionExecution.update({ where: { id: record.id }, data: { status: 'SUCCESS', durationMs, outputSummary: this.summary(output) as any, completedAt: new Date() } });
       return output;
