@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type DragEvent, type ReactNode } from "react";
 import { WorkflowShell } from "@/components/workflow-shell";
 import { WorkflowHelp } from "@/components/workflow-help";
 import { WorkflowConceptGuide } from "@/components/workflow-concept-guide";
@@ -224,6 +224,9 @@ function FunctionBuilder({ draft, setDraft, ar, connections, onSave, onSaveAndTe
 }) {
   const [dragIndex, setDragIndex] = useState<number | null>(null);
   const [dragOperation, setDragOperation] = useState<string | null>(null);
+  // Keep the dragged operation outside React state as well: browsers may clear
+  // DataTransfer before drop (notably in touch/mobile webviews).
+  const dragOperationRef = useRef<string | null>(null);
   const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
   const [panel, setPanel] = useState<"blocks" | "inputs" | "outputs" | "details">("blocks");
   const [advanced, setAdvanced] = useState(false);
@@ -236,9 +239,24 @@ function FunctionBuilder({ draft, setDraft, ar, connections, onSave, onSaveAndTe
   const removePort = (kind: "inputs" | "outputs", index: number) => updateDef({ [kind]: definition[kind].filter((_, i) => i !== index) });
   const addOperation = (op: string) => {
     const next = [...definition.operations, emptyOperation(op)];
+    const nextIndex = next.length - 1;
     updateDef({ operations: next });
-    setSelectedIndex(next.length - 1);
+    // Open the configuration form immediately after either click or drop.
+    setSelectedIndex(nextIndex);
     setPanel("blocks");
+  };
+  const beginOperationDrag = (op: string, event: DragEvent<HTMLButtonElement>) => {
+    dragOperationRef.current = op;
+    setDragOperation(op);
+    event.dataTransfer.effectAllowed = "copy";
+    event.dataTransfer.setData("text/plain", op);
+  };
+  const finishOperationDrop = (event: DragEvent<HTMLDivElement>) => {
+    event.preventDefault();
+    const op = event.dataTransfer.getData("text/plain") || dragOperationRef.current || dragOperation;
+    if (op) addOperation(op);
+    dragOperationRef.current = null;
+    setDragOperation(null);
   };
   const reorder = (from: number, to: number) => {
     if (from === to || from < 0 || to < 0) return;
@@ -305,10 +323,10 @@ function FunctionBuilder({ draft, setDraft, ar, connections, onSave, onSaveAndTe
                 onRemove={() => { updateDef({ operations: definition.operations.filter((_, i) => i !== (selectedIndex ?? 0)) }); setSelectedIndex(null); }}
                 onDragStart={() => setDragIndex(selectedIndex)} onDrop={() => { if (dragIndex !== null) reorder(dragIndex, selectedIndex ?? 0); setDragIndex(null); }} /> : null}
               {panel === "blocks" && !selected && <>
-                <p className="mb-3 text-[11px] leading-5 text-slate-500">{ar ? "اسحب الإجراء إلى محرر الكود لإضافته. ستظهر إعداداته هنا مباشرة." : "Drag an action into the code editor. Its input fields will appear here."}</p>
+                <p className="mb-3 text-[11px] leading-5 text-slate-500">{ar ? "اسحب الإجراء إلى محرر الكود لإضافته، أو اضغط عليه في الأجهزة اللمسية. ستظهر حقول إدخاله هنا مباشرة." : "Drag an action into the code editor (or tap it on touch devices). Its input fields will open here."}</p>
                 {OP_GROUPS.map(group => <section key={group.label} className="mb-4">
                   <div className="mb-2 text-[9px] font-semibold uppercase tracking-wider text-slate-500">{ar ? group.arLabel : group.label}</div>
-                  <div className="grid grid-cols-1 gap-1.5">{group.items.map(item => <button key={item[0]} type="button" draggable onDragStart={e => { setDragOperation(item[0]); e.dataTransfer.setData("text/plain", item[0]); }} onDragEnd={() => setDragOperation(null)} onClick={() => addOperation(item[0])} className="flex items-center gap-2 border border-[#e2e2e2] bg-[#fafafa] px-3 py-2 text-start text-[11px] hover:border-[#b6c9e8] hover:bg-[#f3f7fc]"><span className="text-slate-400">⠿</span><span>{ar ? item[2] : item[1]}</span><span className="ms-auto text-[10px] text-slate-400">＋</span></button>)}</div>
+                  <div className="grid grid-cols-1 gap-1.5">{group.items.map(item => <button key={item[0]} type="button" draggable onDragStart={e => beginOperationDrag(item[0], e)} onDragEnd={() => { /* clear after drop has had a chance to read the payload */ window.setTimeout(() => { dragOperationRef.current = null; setDragOperation(null); }, 0); }} onClick={() => addOperation(item[0])} className="flex items-center gap-2 border border-[#e2e2e2] bg-[#fafafa] px-3 py-2 text-start text-[11px] hover:border-[#b6c9e8] hover:bg-[#f3f7fc]"><span className="text-slate-400">⠿</span><span>{ar ? item[2] : item[1]}</span><span className="ms-auto text-[10px] text-slate-400">＋</span></button>)}</div>
                 </section>)}
               </>}
               {panel === "inputs" && <><p className="mb-3 text-[11px] text-slate-500">{ar ? "القيم التي تستقبلها الدالة من الـ Workflow." : "Values passed into this function by a workflow."}</p><div className="space-y-2">{definition.inputs.map((p, i) => <PortEditor key={`${p.key}-${i}`} port={p} ar={ar} onChange={v => updatePort("inputs", i, v)} onRemove={() => removePort("inputs", i)} />)}</div><button type="button" className="mt-3 rounded border border-slate-300 px-3 py-2 text-[11px]" onClick={() => addPort("inputs")}>＋ {ar ? "إضافة مدخل" : "Add input"}</button></>}
@@ -318,7 +336,7 @@ function FunctionBuilder({ draft, setDraft, ar, connections, onSave, onSaveAndTe
           </aside>
           <main className="flex min-w-0 flex-1 flex-col bg-white">
             <div className="flex h-[50px] shrink-0 items-center justify-between border-b border-[#e6e6e6] px-4"><div className="text-[12px] font-medium">{ar ? "محرر البرنامج النصي" : "Script Editor"}</div><div className="text-[10px] text-slate-400">{ar ? "اسحب إجراءً إلى هنا" : "Drag an action here"}</div></div>
-            <div className="min-h-0 flex-1 overflow-auto bg-white" onDragOver={e => { e.preventDefault(); e.dataTransfer.dropEffect = "copy"; }} onDrop={e => { e.preventDefault(); const op = e.dataTransfer.getData("text/plain") || dragOperation; if (op) addOperation(op); setDragOperation(null); }}>
+            <div className="min-h-0 flex-1 overflow-auto bg-white" onDragOver={e => { e.preventDefault(); e.dataTransfer.dropEffect = "copy"; }} onDrop={finishOperationDrop}>
               <div className="min-h-full font-mono text-[12px] leading-[22px]">
                 {codeRows.map((row, lineIndex) => {
                   const operationIndex = row.operationIndex;
