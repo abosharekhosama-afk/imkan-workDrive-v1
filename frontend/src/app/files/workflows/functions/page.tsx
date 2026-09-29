@@ -219,11 +219,13 @@ function OperationEditor({
   );
 }
 
-function FunctionBuilder({ draft, setDraft, ar, connections, onSave, onCancel, busy }: {
-  draft: Draft; setDraft: (d: Draft) => void; ar: boolean; connections: Connection[]; onSave: () => void; onCancel: () => void; busy: boolean;
+function FunctionBuilder({ draft, setDraft, ar, connections, onSave, onSaveAndTest, onCancel, busy }: {
+  draft: Draft; setDraft: (d: Draft) => void; ar: boolean; connections: Connection[]; onSave: () => void; onSaveAndTest: () => void; onCancel: () => void; busy: boolean;
 }) {
   const [dragIndex, setDragIndex] = useState<number | null>(null);
   const [dragOperation, setDragOperation] = useState<string | null>(null);
+  const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
+  const [panel, setPanel] = useState<"blocks" | "inputs" | "outputs" | "details">("blocks");
   const [advanced, setAdvanced] = useState(false);
   const definition = draft.definition;
   const updateDef = (patch: Partial<FunctionDefinition>) => setDraft({ ...draft, definition: { ...definition, ...patch } });
@@ -232,91 +234,104 @@ function FunctionBuilder({ draft, setDraft, ar, connections, onSave, onCancel, b
   };
   const addPort = (kind: "inputs" | "outputs") => updateDef({ [kind]: [...definition[kind], { key: kind === "inputs" ? `input_${definition.inputs.length + 1}` : `output_${definition.outputs.length + 1}`, label: kind === "inputs" ? `Input ${definition.inputs.length + 1}` : `Output ${definition.outputs.length + 1}`, type: "text", required: false }] });
   const removePort = (kind: "inputs" | "outputs", index: number) => updateDef({ [kind]: definition[kind].filter((_, i) => i !== index) });
-  const addOperation = (op: string) => updateDef({ operations: [...definition.operations, emptyOperation(op)] });
+  const addOperation = (op: string) => {
+    const next = [...definition.operations, emptyOperation(op)];
+    updateDef({ operations: next });
+    setSelectedIndex(next.length - 1);
+    setPanel("blocks");
+  };
   const reorder = (from: number, to: number) => {
     if (from === to || from < 0 || to < 0) return;
     const next = [...definition.operations];
     const [item] = next.splice(from, 1); next.splice(to, 0, item); updateDef({ operations: next });
+    setSelectedIndex(to);
   };
+  const codeFor = (op: Operation, index: number) => {
+    const name = OPERATION_ITEMS.find(x => x[0] === op.op)?.[1] ?? op.op;
+    const field = String(op.field ?? op.outputField ?? `step_${index + 1}`);
+    if (op.op === "IF") return [`if (${String(op.condition ?? "condition")}) {`, `    ${String((op.then as Record<string, unknown> | undefined)?.field ?? "result")} = ${JSON.stringify((op.then as Record<string, unknown> | undefined)?.value ?? "")};`, `} else {`, `    ${String((op.else as Record<string, unknown> | undefined)?.field ?? "result")} = ${JSON.stringify((op.else as Record<string, unknown> | undefined)?.value ?? "")};`, `}`];
+    if (op.op === "HTTP_REQUEST") return [`${field} = invokeAPI(${JSON.stringify(op.connectionId || "<connection>")}, ${JSON.stringify(op.method ?? "GET")}, ${JSON.stringify(op.path ?? "/")});`];
+    if (op.op === "CONNECTION_READ") return [`${field} = connection.get(${JSON.stringify(op.resourceId ?? "")});`];
+    if (op.op === "SET_FIELD") return [`${field} = ${JSON.stringify(op.value ?? "")};`];
+    if (["ADD", "SUBTRACT", "MULTIPLY", "DIVIDE"].includes(op.op)) {
+      const symbols: Record<string,string> = { ADD: "+", SUBTRACT: "-", MULTIPLY: "*", DIVIDE: "/" };
+      return [`${field} = ${String(op.left ?? "0")} ${symbols[op.op]} ${String(op.right ?? "0")};`];
+    }
+    if (op.op === "CONCAT") return [`${field} = ${String(op.left ?? "")}.toString() + ${JSON.stringify(op.separator ?? " ")} + ${String(op.right ?? "")}.toString();`];
+    if (op.op === "LOWERCASE") return [`${field} = ${String(op.left ?? "value")}.toLowerCase();`];
+    if (op.op === "UPPERCASE") return [`${field} = ${String(op.left ?? "value")}.toUpperCase();`];
+    if (op.op === "NUMBER") return [`${field} = toNumber(${String(op.left ?? "value")});`];
+    if (op.op === "NOTIFY_OWNER") return [`notifyOwner(${JSON.stringify(op.title ?? "")}, ${JSON.stringify(op.body ?? "")});`];
+    if (op.op === "ADD_TAG") return [`addTag(${JSON.stringify(op.tag ?? "")});`];
+    return [`// ${name}`];
+  };
+  const codeRows: Array<{ line: string; operationIndex: number | null }> = [
+    { line: `void ${draft.key || "automation.Data"}()`, operationIndex: null },
+    { line: "{", operationIndex: null },
+    ...definition.operations.flatMap((op, i) => codeFor(op, i).map(line => ({ line: `    ${line}`, operationIndex: i }))),
+    { line: "}", operationIndex: null },
+  ];
   const valid = draft.name.trim() && draft.key.trim() && definition.operations.length > 0 && definition.operations.length <= 30 && definition.inputs.every(p => /^[A-Za-z_][A-Za-z0-9_]*$/.test(p.key)) && definition.outputs.every(p => /^[A-Za-z_][A-Za-z0-9_]*$/.test(p.key));
+  const selected = selectedIndex !== null ? definition.operations[selectedIndex] : null;
+  const nav = [
+    ["blocks", "▣", ar ? "الإجراءات" : "Blocks"], ["inputs", "⇥", ar ? "المدخلات" : "Inputs"],
+    ["outputs", "⇤", ar ? "المخرجات" : "Outputs"], ["details", "⚙", ar ? "التفاصيل" : "Details"],
+  ] as const;
   return (
-    <div className="fixed inset-0 z-[260] bg-slate-950/45 p-2 sm:p-5">
-      <div className="mx-auto flex h-full max-h-[96vh] w-[min(1120px,100%)] flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl" dir={ar ? "rtl" : "ltr"}>
-        <header className="flex shrink-0 items-center justify-between border-b border-slate-100 px-4 py-3 sm:px-5">
-          <div><div className="text-[9px] font-semibold uppercase tracking-[.15em] text-violet-600">{ar ? "مصمم الدالة الآمنة" : "Safe Function Builder"}</div><h2 className="mt-0.5 text-[16px] font-semibold">{ar ? "أنشئ الدالة بالسحب والإفلات" : "Build your function with drag & drop"}</h2><p className="text-[9px] text-slate-500">{ar ? "ابدأ بالمدخلات، اسحب العمليات إلى المسار، ثم عرّف المخرجات." : "Define inputs, drag operations into the flow, then map outputs."}</p></div>
-          <button type="button" className="wd-icon-btn" onClick={onCancel}>×</button>
+    <div className="fixed inset-0 z-[260] bg-white">
+      <div className="flex h-full min-h-0 flex-col text-[#333]" dir={ar ? "rtl" : "ltr"}>
+        <header className="flex h-[54px] shrink-0 items-center gap-3 border-b border-[#dedede] bg-white px-3">
+          <span className="text-[18px] font-semibold">ƒx</span><span className="h-5 w-px bg-slate-200" />
+          <input aria-label={ar ? "اسم الدالة" : "Function name"} className="h-8 w-48 border-0 bg-transparent text-[13px] font-medium outline-none" value={draft.name} onChange={e => setDraft({ ...draft, name: e.target.value })} placeholder={ar ? "اسم الدالة" : "Function name"} />
+          <span className="hidden min-w-0 flex-1 truncate text-[11px] text-slate-400 sm:block">{draft.key || "automation.Data"}</span>
+          <div className="ml-auto flex shrink-0 items-center gap-2">
+            <button type="button" className="rounded-full border border-slate-300 px-3 py-1.5 text-[11px]" onClick={onCancel}>{ar ? "إلغاء" : "Cancel"}</button>
+            <button type="button" className="rounded-full border border-blue-300 px-3 py-1.5 text-[11px] text-blue-700" disabled={!valid || busy} onClick={onSaveAndTest}>{busy ? (ar ? "جارٍ الحفظ…" : "Saving…") : (ar ? "حفظ واختبار" : "Save and test")}</button>
+            <button type="button" className="rounded-full bg-[#2875d7] px-4 py-1.5 text-[11px] font-semibold text-white disabled:opacity-40" disabled={!valid || busy} onClick={onSave}>{ar ? "حفظ" : "Save"}</button>
+          </div>
         </header>
-        <div className="min-h-0 flex-1 overflow-y-auto p-3 sm:p-5">
-          <section className="mb-4 rounded-2xl border border-indigo-200 bg-indigo-50/70 p-4">
-            <div className="flex items-start gap-3">
-              <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-white text-lg text-indigo-700">ƒ</span>
-              <div className="min-w-0">
-                <h3 className="text-[12px] font-semibold text-indigo-950">{ar ? "كيف تعمل هذه الدالة؟" : "How this function works"}</h3>
-                <p className="mt-1 text-[10px] leading-5 text-indigo-900">{ar ? "الدالة تستقبل مدخلات من الـ Workflow، تنفذ العمليات بالترتيب من الأعلى إلى الأسفل، ثم تعيد المخرجات لتستخدمها الخطوات التالية. مثال: أدخل status، حوّله إلى أحرف صغيرة، وأعد normalized_status." : "A function receives inputs from a workflow, runs the steps from top to bottom, then returns outputs for later workflow actions. Example: receive status, lowercase it, and return normalized_status."}</p>
-                <div className="mt-2 flex flex-wrap items-center gap-1 text-[9px] font-semibold text-indigo-800"><span className="rounded-lg bg-white px-2 py-1">{ar ? "مدخلات" : "Inputs"}</span><span>→</span><span className="rounded-lg bg-white px-2 py-1">{ar ? "عمليات بالترتيب" : "Ordered steps"}</span><span>→</span><span className="rounded-lg bg-white px-2 py-1">{ar ? "مخرجات" : "Outputs"}</span><span>→</span><span className="rounded-lg bg-white px-2 py-1">{ar ? "ربطها في Workflow" : "Map in workflow"}</span></div>
+        <div className="flex min-h-0 flex-1">
+          <nav className="flex w-[48px] shrink-0 flex-col items-center gap-2 border-e border-[#dedede] bg-[#f7f7f7] py-3">
+            {nav.map(([key, glyph, label]) => <button key={key} type="button" title={label} onClick={() => { setPanel(key); if (key !== "blocks") setSelectedIndex(null); }} className={`grid h-9 w-9 place-items-center rounded-md text-[17px] ${panel === key ? "bg-[#e7e7e7] text-[#333]" : "text-slate-500 hover:bg-slate-100"}`}>{glyph}</button>)}
+          </nav>
+          <aside className="flex w-[min(42%,390px)] min-w-[250px] shrink-0 flex-col border-e border-[#dedede] bg-white">
+            <div className="flex h-[50px] shrink-0 items-center justify-between border-b border-[#e6e6e6] px-4">
+              <div className="min-w-0"><div className="truncate text-[14px] font-medium">{selected && panel === "blocks" ? (OPERATION_ITEMS.find(x => x[0] === selected.op)?.[1] ?? selected.op) : nav.find(x => x[0] === panel)?.[2]}</div><div className="text-[10px] text-slate-500">{selected && panel === "blocks" ? (OPERATION_ITEMS.find(x => x[0] === selected.op)?.[3] ?? "") : ""}</div></div>
+              {selected && panel === "blocks" && <button type="button" className="text-xl text-slate-400" title={ar ? "إغلاق" : "Close"} onClick={() => setSelectedIndex(null)}>×</button>}
+            </div>
+            <div className="min-h-0 flex-1 overflow-y-auto p-3">
+              {panel === "blocks" && selected && selectedIndex !== null ? <OperationEditor operation={selected} index={selectedIndex} ar={ar} connections={connections}
+                onChange={next => { const operations = [...definition.operations]; operations[selectedIndex ?? 0] = next; updateDef({ operations }); }}
+                onRemove={() => { updateDef({ operations: definition.operations.filter((_, i) => i !== (selectedIndex ?? 0)) }); setSelectedIndex(null); }}
+                onDragStart={() => setDragIndex(selectedIndex)} onDrop={() => { if (dragIndex !== null) reorder(dragIndex, selectedIndex ?? 0); setDragIndex(null); }} /> : null}
+              {panel === "blocks" && !selected && <>
+                <p className="mb-3 text-[11px] leading-5 text-slate-500">{ar ? "اسحب الإجراء إلى محرر الكود لإضافته. ستظهر إعداداته هنا مباشرة." : "Drag an action into the code editor. Its input fields will appear here."}</p>
+                {OP_GROUPS.map(group => <section key={group.label} className="mb-4">
+                  <div className="mb-2 text-[9px] font-semibold uppercase tracking-wider text-slate-500">{ar ? group.arLabel : group.label}</div>
+                  <div className="grid grid-cols-1 gap-1.5">{group.items.map(item => <button key={item[0]} type="button" draggable onDragStart={e => { setDragOperation(item[0]); e.dataTransfer.setData("text/plain", item[0]); }} onDragEnd={() => setDragOperation(null)} onClick={() => addOperation(item[0])} className="flex items-center gap-2 border border-[#e2e2e2] bg-[#fafafa] px-3 py-2 text-start text-[11px] hover:border-[#b6c9e8] hover:bg-[#f3f7fc]"><span className="text-slate-400">⠿</span><span>{ar ? item[2] : item[1]}</span><span className="ms-auto text-[10px] text-slate-400">＋</span></button>)}</div>
+                </section>)}
+              </>}
+              {panel === "inputs" && <><p className="mb-3 text-[11px] text-slate-500">{ar ? "القيم التي تستقبلها الدالة من الـ Workflow." : "Values passed into this function by a workflow."}</p><div className="space-y-2">{definition.inputs.map((p, i) => <PortEditor key={`${p.key}-${i}`} port={p} ar={ar} onChange={v => updatePort("inputs", i, v)} onRemove={() => removePort("inputs", i)} />)}</div><button type="button" className="mt-3 rounded border border-slate-300 px-3 py-2 text-[11px]" onClick={() => addPort("inputs")}>＋ {ar ? "إضافة مدخل" : "Add input"}</button></>}
+              {panel === "outputs" && <><p className="mb-3 text-[11px] text-slate-500">{ar ? "القيم التي ستعيدها الدالة إلى الـ Workflow." : "Values returned from this function to the workflow."}</p><div className="space-y-2">{definition.outputs.map((p, i) => <PortEditor key={`${p.key}-${i}`} port={p} ar={ar} onChange={v => updatePort("outputs", i, v)} onRemove={() => removePort("outputs", i)} />)}</div><button type="button" className="mt-3 rounded border border-slate-300 px-3 py-2 text-[11px]" onClick={() => addPort("outputs")}>＋ {ar ? "إضافة مخرج" : "Add output"}</button></>}
+              {panel === "details" && <div className="space-y-3"><label className="block text-[11px]">{ar ? "اسم العرض" : "Display name"}<input className="wf-input mt-1" value={draft.name} onChange={e => setDraft({ ...draft, name: e.target.value })} /></label><label className="block text-[11px]">{ar ? "معرّف الدالة" : "Function identifier"}<input className="wf-input mt-1" value={draft.key} onChange={e => setDraft({ ...draft, key: e.target.value })} /></label><label className="block text-[11px]">{ar ? "الوصف" : "Description"}<textarea className="wf-input mt-1 min-h-20" value={draft.description} onChange={e => setDraft({ ...draft, description: e.target.value })} /></label><button type="button" className="text-[11px] text-blue-700" onClick={() => setAdvanced(v => !v)}>{ar ? "التعريف المتقدم JSON" : "Advanced JSON definition"}</button>{advanced && <textarea className="wf-input min-h-56 font-mono text-[10px]" value={JSON.stringify(definition, null, 2)} onChange={e => { try { updateDef(cloneDefinition(JSON.parse(e.target.value))); } catch { /* retain last valid definition */ } }} />}</div>}
+            </div>
+          </aside>
+          <main className="flex min-w-0 flex-1 flex-col bg-white">
+            <div className="flex h-[50px] shrink-0 items-center justify-between border-b border-[#e6e6e6] px-4"><div className="text-[12px] font-medium">{ar ? "محرر البرنامج النصي" : "Script Editor"}</div><div className="text-[10px] text-slate-400">{ar ? "اسحب إجراءً إلى هنا" : "Drag an action here"}</div></div>
+            <div className="min-h-0 flex-1 overflow-auto bg-white" onDragOver={e => { e.preventDefault(); e.dataTransfer.dropEffect = "copy"; }} onDrop={e => { e.preventDefault(); const op = e.dataTransfer.getData("text/plain") || dragOperation; if (op) addOperation(op); setDragOperation(null); }}>
+              <div className="min-h-full font-mono text-[12px] leading-[22px]">
+                {codeRows.map((row, lineIndex) => {
+                  const operationIndex = row.operationIndex;
+                  const belongsToOperation = operationIndex !== null;
+                  const isSelected = belongsToOperation && selectedIndex === operationIndex;
+                  return <button key={`${lineIndex}-${row.line}`} type="button" onClick={() => { if (operationIndex !== null) { setSelectedIndex(operationIndex); setPanel("blocks"); } }} className={`flex w-full min-h-[22px] items-start text-start ${isSelected ? "bg-[#e8f1ff]" : belongsToOperation ? "hover:bg-slate-50" : ""}`}><span className="sticky left-0 w-10 shrink-0 select-none pe-3 text-right text-[10px] text-slate-400">{lineIndex + 1}</span><span className="min-w-0 whitespace-pre-wrap break-words px-2 text-[#77649a]">{row.line}</span></button>;
+                })}
+                {definition.operations.length === 0 && <div className="mx-12 mt-5 border border-dashed border-[#c9c9c9] p-5 text-[11px] text-slate-400">{ar ? "اسحب إجراءً من اللوحة اليسرى وأفلته هنا. ستظهر حقول إدخال البيانات في اللوحة اليسرى." : "Drag an action from the left panel and drop it here. Its data-entry fields will open in the left panel."}</div>}
               </div>
             </div>
-          </section>
-          <div className="grid gap-3 lg:grid-cols-[300px_minmax(0,1fr)]">
-            <aside className="space-y-3">
-              <section className="rounded-2xl border border-slate-200 bg-slate-50/70 p-3">
-                <div className="mb-2 text-[10px] font-semibold">{ar ? "معلومات الدالة" : "Function details"}</div>
-                <div className="space-y-2">
-                  <input className="wf-input" value={draft.name} onChange={(e) => setDraft({ ...draft, name: e.target.value })} placeholder={ar ? "اسم الدالة" : "Function name"} />
-                  <input className="wf-input" value={draft.key} onChange={(e) => setDraft({ ...draft, key: e.target.value })} placeholder="unique_key" />
-                  <textarea className="wf-input min-h-16" value={draft.description} onChange={(e) => setDraft({ ...draft, description: e.target.value })} placeholder={ar ? "وصف" : "Description"} />
-                </div>
-              </section>
-              <section className="rounded-2xl border border-sky-200 bg-sky-50/60 p-3">
-                <div className="mb-1 text-[10px] font-semibold text-sky-900">{ar ? "١ · المدخلات" : "1 · Inputs"}</div>
-                <p className="mb-2 text-[8.5px] leading-4 text-sky-800">{ar ? "هذه بيانات تستقبلها الدالة. عند إضافتها إلى Workflow ستربط كل مدخل بحقل أو قيمة ديناميكية. المفتاح مثل status هو الاسم الذي تستخدمه العمليات بصيغة {{status}}." : "Values the function receives. When used in a workflow, map each input to a field or dynamic value. Use its key in steps as {{status}}."}</p>
-                <div className="space-y-2">{definition.inputs.map((p, i) => <PortEditor key={`${p.key}-${i}`} port={p} ar={ar} onChange={(v) => updatePort("inputs", i, v)} onRemove={() => removePort("inputs", i)} />)}</div>
-                <button type="button" className="mt-2 wd-pill wd-pill-record" onClick={() => addPort("inputs")}>＋ {ar ? "إضافة إدخال" : "Add input"}</button>
-              </section>
-              <section className="rounded-2xl border border-emerald-200 bg-emerald-50/60 p-3">
-                <div className="mb-1 text-[10px] font-semibold text-emerald-900">{ar ? "٣ · المخرجات" : "3 · Outputs"}</div>
-                <p className="mb-2 text-[8.5px] leading-4 text-emerald-800">{ar ? "هذه هي النتائج التي تريد إرجاعها. اجعل مفتاح المخرج مطابقاً لحقل الناتج في العملية (Output field)، ثم اربطه في إعدادات إجراء Custom Function داخل Workflow." : "Values returned to the workflow. Make each output key match an operation’s Output field, then map it in the Custom Function action."}</p>
-                <div className="space-y-2">{definition.outputs.map((p, i) => <PortEditor key={`${p.key}-${i}`} port={p} ar={ar} onChange={(v) => updatePort("outputs", i, v)} onRemove={() => removePort("outputs", i)} />)}</div>
-                <button type="button" className="mt-2 wd-pill wd-pill-record" onClick={() => addPort("outputs")}>＋ {ar ? "إضافة مخرج" : "Add output"}</button>
-              </section>
-            </aside>
-            <section className="min-w-0">
-              <div className="sticky top-0 z-10 rounded-2xl border border-violet-200 bg-violet-50/95 p-3 backdrop-blur">
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  <div><div className="text-[10px] font-semibold text-violet-900">{ar ? "٢ · مسار التنفيذ" : "2 · Execution flow"}</div><div className="text-[8.5px] text-violet-800">{ar ? "اسحب العملية إلى المسار أو أضفها بالضغط. يمكنك إعادة ترتيبها." : "Drag an operation into the flow or click Add. Reorder steps by dragging."}</div></div>
-                  <span className="rounded-full bg-white px-2 py-1 text-[8px] font-semibold text-violet-700">{definition.operations.length}/30</span>
-                </div>
-                <div className="mt-2 flex flex-wrap gap-1.5">
-                  {OPERATION_ITEMS.map((x) => (
-                    <button key={x[0]} type="button" draggable onDragStart={() => setDragOperation(x[0])} onDragEnd={() => setDragOperation(null)} onClick={() => addOperation(x[0])} onDragOver={(e) => e.preventDefault()} onDrop={() => addOperation(x[0])} className="rounded-lg border border-violet-200 bg-white px-2.5 py-1.5 text-[8.5px] font-medium text-violet-800 hover:bg-violet-100">
-                      ＋ {ar ? x[2] : x[1]}
-                    </button>
-                  ))}
-                </div>
-              </div>
-              <div className="mt-2 rounded-xl border border-slate-200 bg-white p-2 text-[8.5px] leading-4 text-slate-600">
-                <b className="text-slate-800">{ar ? "تذكير بالربط" : "Output contract"}:</b> {ar ? "أي قيمة تريد إرجاعها يجب أن يكون لها حقل ناتج بنفس المفتاح في قسم المخرجات. مثال: العملية تكتب normalized_status ← أضف مخرجاً بالمفتاح normalized_status." : "Every returned value needs an output with the same key as the operation field. Example: step writes normalized_status → add an output named normalized_status."}
-              </div>
-              <div className="mt-3 min-h-24 space-y-2 rounded-2xl border-2 border-dashed border-transparent p-1 transition hover:border-violet-200" onDragOver={(e) => e.preventDefault()} onDrop={() => { if (dragOperation) addOperation(dragOperation); setDragOperation(null); }}>
-                {definition.operations.map((op, i) => (
-                  <OperationEditor key={`${i}-${op.op}`} operation={op} index={i} ar={ar} connections={connections}
-                    onChange={(next) => { const operations = [...definition.operations]; operations[i] = next; updateDef({ operations }); }}
-                    onRemove={() => updateDef({ operations: definition.operations.filter((_, idx) => idx !== i) })}
-                    onDragStart={() => setDragIndex(i)} onDrop={() => { if (dragIndex !== null && dragIndex >= 0) reorder(dragIndex, i); setDragIndex(null); }} />
-                ))}
-                {definition.operations.length === 0 && <div className="rounded-2xl border-2 border-dashed border-violet-200 bg-violet-50/30 p-12 text-center text-[10px] text-slate-400">{ar ? "اسحب عملية هنا أو اختر عملية من الأعلى." : "Drop an operation here or choose one above."}</div>}
-              </div>
-              <div className="mt-3 rounded-2xl border border-slate-200 bg-slate-50 p-3">
-                <button type="button" className="text-[9px] font-semibold text-slate-700" onClick={() => setAdvanced(v => !v)}>▸ {ar ? "التعريف المتقدم JSON" : "Advanced JSON definition"}</button>
-                {advanced && <textarea className="wf-input mt-2 min-h-56 font-mono text-[9px]" value={JSON.stringify(definition, null, 2)} onChange={(e) => { try { updateDef(cloneDefinition(JSON.parse(e.target.value))); } catch { /* keep last valid JSON */ } }} />}
-              </div>
-            </section>
-          </div>
+            <div className="flex h-8 shrink-0 items-center justify-between border-t border-[#e6e6e6] bg-[#fafafa] px-3 text-[10px] text-slate-500"><span>{ar ? `${definition.operations.length} إجراء` : `${definition.operations.length} actions`}</span><span>{ar ? "SAFE Runtime" : "SAFE Runtime"}</span></div>
+          </main>
         </div>
-        <footer className="flex shrink-0 items-center justify-between gap-2 border-t border-slate-100 px-4 py-3">
-          <div className="text-[8.5px] leading-4 text-slate-500">{ar ? "تذكير: احفظ كمسودة أولاً، اختبر الإصدار، ثم انشره ليظهر داخل Workflow. القيم الديناميكية تُكتب مثل {{status}}." : "Next: save as draft, test the version, then publish it to make it available in workflows. Dynamic values use syntax like {{status}}."}</div>
-          <div className="flex gap-2"><button type="button" className="wd-pill wd-pill-record" onClick={onCancel}>{ar ? "إلغاء" : "Cancel"}</button><button type="button" className="wd-pill wd-pill-new disabled:opacity-40" disabled={!valid || busy} onClick={onSave}>{busy ? (ar ? "جارٍ الحفظ…" : "Saving…") : (ar ? "حفظ كمسودة" : "Save as draft")}</button></div>
-        </footer>
       </div>
     </div>
   );
@@ -345,11 +360,14 @@ export default function WorkflowFunctionsPage({ standalone = false }: { standalo
   const load = () => void listWorkflowFunctions().then(r => setRows(r.custom || [])).catch(e => setError(e instanceof Error ? e.message : "Unable to load functions"));
   useEffect(load, []);
 
-  const create = async () => {
+  const create = async (testAfterSave = false) => {
     setBusy(true); setError("");
     try {
+      const testInput = testAfterSave ? JSON.parse(testInputText) as Record<string, unknown> : null;
+      if (testAfterSave && (!testInput || typeof testInput !== "object" || Array.isArray(testInput))) throw new Error("Test input must be a JSON object");
       if (editingFunctionId) {
         const created = await createWorkflowFunctionVersion(editingFunctionId, { definition: draft.definition });
+        if (testAfterSave && testInput) setResult(await testWorkflowFunction(editingFunctionId, testInput, created.id));
         setOpen(false); setEditingFunctionId(null); load();
         const target = rows.find((f) => f.id === editingFunctionId);
         if (target) await showVersions(target);
@@ -357,6 +375,7 @@ export default function WorkflowFunctionsPage({ standalone = false }: { standalo
         setVersions((prev) => [created, ...prev]);
       } else {
         const created = await createWorkflowFunction(draft);
+        if (testAfterSave && testInput) setResult(await testWorkflowFunction(created.id, testInput));
         setOpen(false); load();
         await showVersions(created);
       }
@@ -423,21 +442,43 @@ export default function WorkflowFunctionsPage({ standalone = false }: { standalo
           <div className="min-w-[220px] flex-1"><label className="mb-1 block text-[9px] font-semibold text-slate-500">{ar ? "البحث عن دالة" : "Search functions"}</label><input className="wf-input" value={search} onChange={e => setSearch(e.target.value)} placeholder={ar ? "ابحث بالاسم أو المفتاح أو الوصف…" : "Search by name, key, or description…"} /></div>
           <div className="text-[9px] text-slate-500">{ar ? `${filteredRows.length} من ${rows.length}` : `${filteredRows.length} of ${rows.length}`}</div>
         </div>
-        <div className="mt-4"><WorkflowConceptGuide ar={ar} /></div>
-        <div className="mt-4 grid gap-3 sm:grid-cols-3">
-          <div className="wd-card p-3"><div className="text-[9px] uppercase tracking-[.14em] text-slate-400">{ar ? "Runtime" : "Runtime"}</div><div className="mt-1 text-[12px] font-semibold">SAFE</div></div>
-          <div className="wd-card p-3"><div className="text-[9px] uppercase tracking-[.14em] text-slate-400">{ar ? "Builder" : "Builder"}</div><div className="mt-1 text-[12px] font-semibold">{ar ? "سحب وإفلات" : "Drag & drop"}</div></div>
-          <div className="wd-card p-3"><div className="text-[9px] uppercase tracking-[.14em] text-slate-400">{ar ? "Contracts" : "Contracts"}</div><div className="mt-1 text-[12px] font-semibold">{ar ? "Inputs → Operations → Outputs" : "Inputs → Operations → Outputs"}</div></div>
+        <div className="mt-4 grid min-h-[520px] gap-4 lg:grid-cols-[220px_minmax(0,1fr)]">
+          <aside className="rounded-xl border border-slate-200 bg-[#fafbfc] p-3">
+            <div className="mb-3 text-[10px] font-semibold text-slate-500">{ar ? "مساحات الأسماء" : "NAMESPACES"}</div>
+            <button className="flex w-full items-center justify-between rounded-lg bg-white px-3 py-2 text-left text-[11px] font-semibold text-slate-800 shadow-sm ring-1 ring-slate-200">
+              <span>{ar ? "كل الدوال" : "All Functions"}</span><span className="text-[9px] text-slate-500">{rows.length}</span>
+            </button>
+            <div className="mt-5 border-t border-slate-200 pt-3">
+              <div className="mb-2 text-[9px] font-semibold text-slate-400">{ar ? "إدارة" : "MANAGE"}</div>
+              <div className="rounded-lg px-3 py-2 text-[10px] text-slate-600">{ar ? "الدوال المنشورة والمسودات" : "Published & drafts"}</div>
+              <div className="rounded-lg px-3 py-2 text-[10px] text-slate-600">{ar ? "سجل التنفيذ" : "Execution history"}</div>
+            </div>
+            <div className="mt-5 rounded-lg border border-dashed border-slate-300 p-3 text-[9px] leading-4 text-slate-500">
+              {ar ? "تُجمع الدوال ذات الصلة ضمن مساحة اسم واحدة لتسهيل تنظيمها وإعادة استخدامها." : "Group related functions in a namespace to organize and reuse them."}
+            </div>
+          </aside>
+          <section className="min-w-0">
+            <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+              <div><h2 className="text-[15px] font-semibold text-slate-900">{ar ? "كل الدوال" : "All Functions"}</h2><p className="mt-1 text-[10px] text-slate-500">{ar ? "إدارة الدوال القابلة لإعادة الاستخدام في سير العمل." : "Manage reusable functions across your workflows."}</p></div>
+              <div className="flex items-center gap-2"><span className="text-[9px] text-slate-500">{filteredRows.length} {ar ? "نتيجة" : "results"}</span><button className="wd-pill wd-pill-new" onClick={() => { setEditingFunctionId(null); setDraft({ ...STARTER, name: "", key: "", description: "", definition: { inputs: [], operations: [], outputs: [] } }); setOpen(true); }}>＋ {ar ? "إنشاء دالة" : "Create Function"}</button></div>
+            </div>
+            <div className="mb-3 flex flex-wrap items-center gap-2">
+              <input className="wf-input min-w-[220px] flex-1" value={search} onChange={e => setSearch(e.target.value)} placeholder={ar ? "ابحث بالاسم أو مساحة الاسم أو نوع الإرجاع..." : "Search by function name, namespace, or return type..."} />
+              <button className="wd-pill wd-pill-record" onClick={() => setSearch("")}>{ar ? "مسح" : "Clear"}</button>
+            </div>
+            {filteredRows.length === 0 ? <div className="rounded-xl border border-dashed border-slate-300 p-12 text-center"><h3 className="text-[13px] font-semibold">{rows.length === 0 ? (ar ? "لا توجد دوال بعد" : "No functions yet") : (ar ? "لا توجد نتائج" : "No results")}</h3><p className="mt-2 text-[10px] text-slate-500">{ar ? "أنشئ دالتك الأولى لتعريف المدخلات ومنطق التنفيذ والمخرجات." : "Create your first function to define inputs, logic, and outputs."}</p><button className="mt-4 wd-pill wd-pill-new" onClick={() => { setEditingFunctionId(null); setDraft({ ...STARTER, name: "", key: "", description: "", definition: { inputs: [], operations: [], outputs: [] } }); setOpen(true); }}>＋ {ar ? "دالة جديدة" : "New Function"}</button></div>
+            : <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
+              <div className="grid grid-cols-[minmax(180px,2fr)_minmax(100px,1fr)_minmax(100px,1fr)_auto] gap-3 border-b border-slate-200 bg-[#f8f9fb] px-4 py-3 text-[9px] font-semibold uppercase tracking-wide text-slate-500">
+                <span>{ar ? "اسم الدالة" : "Function Name"}</span><span>{ar ? "نوع الإرجاع" : "Return Type"}</span><span>{ar ? "الإصدار" : "Version"}</span><span>{ar ? "الإجراءات" : "Actions"}</span>
+              </div>
+              {filteredRows.map(f => <article key={f.id} className="group grid grid-cols-[minmax(180px,2fr)_minmax(100px,1fr)_minmax(100px,1fr)_auto] items-center gap-3 border-b border-slate-100 px-4 py-3 last:border-0 hover:bg-[#f7fbff]">
+                <div className="flex min-w-0 items-center gap-3"><span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg border border-slate-200 bg-white text-base text-indigo-600">ƒ</span><div className="min-w-0"><button className="block max-w-full truncate text-left text-[11px] font-semibold text-slate-800 hover:text-indigo-700" onClick={() => void showVersions(f)}>{f.name}</button><div className="truncate text-[9px] text-slate-500">{f.description || f.key}</div><div className="mt-0.5 text-[8px] text-slate-400">{f.key}</div></div></div>
+                <span className="text-[10px] text-slate-600">{f.kind || "Custom"}</span><span className="text-[10px] text-slate-600">v{f.activeVersion?.version ?? 1} <span className="ml-1 rounded-full bg-emerald-50 px-2 py-0.5 text-[8px] text-emerald-700">{f.activeVersion ? (ar ? "نشطة" : "Active") : (ar ? "مسودة" : "Draft")}</span></span>
+                <div className="flex items-center justify-end gap-1 opacity-100 sm:opacity-70 sm:group-hover:opacity-100"><button title={ar ? "اختبار" : "Test"} className="wd-icon-btn" onClick={() => void test(f)}>▶</button><button title={ar ? "الإصدارات" : "Versions"} className="wd-icon-btn" onClick={() => void showVersions(f)}>◷</button></div>
+              </article>)}
+            </div>}
+          </section>
         </div>
-        {filteredRows.length === 0
-          ? <div className="wd-card mt-4 border-dashed p-10 text-center"><h2 className="text-[13px] font-semibold">{rows.length === 0 ? (ar ? "لا توجد دوال مخصصة بعد" : "No custom functions yet") : (ar ? "لا توجد نتائج مطابقة" : "No matching functions")}</h2><p className="mt-1 text-[10px] text-slate-500">{rows.length === 0 ? (ar ? "ابدأ بإنشاء دالة، أضف مدخلاتها وعملياتها ومخرجاتها، ثم اختبرها وانشرها." : "Create a function, define its inputs, steps and outputs, then test and publish it.") : (ar ? "جرّب كلمة بحث أخرى." : "Try another search term.")}</p></div>
-          : <div className="mt-4 grid gap-4 sm:grid-cols-2 xl:grid-cols-3">{filteredRows.map(f =>
-            <article key={f.id} className="wd-card flex min-h-[210px] flex-col p-4">
-              <div className="flex items-start justify-between"><div className="wf-icon">ƒ</div><span className="rounded-full bg-slate-100 px-2 py-1 text-[8px]">v{f.activeVersion?.version ?? 1}</span></div>
-              <h3 className="mt-3 text-[12.5px] font-semibold">{f.name}</h3><p className="mt-1 text-[10px] leading-5 text-slate-500">{f.description || f.key}</p>
-              <div className="mt-auto flex flex-wrap gap-1.5 pt-4"><button className="wd-pill wd-pill-record" onClick={() => void test(f)}>{ar ? "اختبار" : "Test"}</button><button className="wd-pill wd-pill-record" onClick={() => void showVersions(f)}>{ar ? "الإصدارات" : "Versions"}</button></div>
-            </article>
-          )}</div>}
         {error && <div className="mt-4 rounded-xl bg-red-50 p-3 text-[10px] text-red-700">{error}</div>}
         <section className="wd-card mt-4 p-4">
           <div className="flex flex-wrap items-center justify-between gap-2"><div><div className="text-[11px] font-semibold">{ar ? "بيانات الاختبار" : "Test input"}</div><p className="mt-1 text-[9px] text-slate-500">{ar ? "عدّل JSON لتجربة سيناريو خاص بك. هذه بيانات اختبار فقط ولا تغيّر ملفاتك." : "Edit this JSON to test your own scenario. Test data only; it does not change your files."}</p></div><button className="wd-pill wd-pill-record" onClick={() => setTestInputText(JSON.stringify({ file: { id: "test-file", name: "contract.pdf", extension: ".pdf", fileType: "PDF", mimeType: "application/pdf" }, fields: { status: "Pending", amount: 2500 } }, null, 2))}>{ar ? "استعادة المثال" : "Reset example"}</button></div>
@@ -451,7 +492,7 @@ export default function WorkflowFunctionsPage({ standalone = false }: { standalo
       </div>
     </main>
 
-    {open && <FunctionBuilder draft={draft} setDraft={setDraft} ar={ar} connections={connections} busy={busy} onCancel={() => setOpen(false)} onSave={() => void create()} />}
+    {open && <FunctionBuilder draft={draft} setDraft={setDraft} ar={ar} connections={connections} busy={busy} onCancel={() => { setOpen(false); setEditingFunctionId(null); }} onSave={() => void create(false)} onSaveAndTest={() => void create(true)} />}
 
     {selected && <div className="fixed inset-0 z-[240] flex items-center justify-center bg-slate-950/40 p-4">
       <div className="wf-modal w-[min(900px,96vw)] max-h-[90vh] overflow-y-auto p-5" dir={ar ? "rtl" : "ltr"}>
