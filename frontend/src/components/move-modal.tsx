@@ -7,6 +7,7 @@ import { friendlyErrorMessageKey } from "../lib/friendly-error";
 import { Icons } from "./layout/icons";
 import { ImkanOptionPicker, toImkanPickerOptions } from "./imkan-option-picker";
 import { getTransferDataTemplateMandate, type DataTemplate } from "../lib/api/metadata";
+import { resolveDataTemplateSchema } from "../lib/data-template-logic";
 
 type FlatFolder = { id: string; name: string; depth: number };
 
@@ -58,14 +59,19 @@ export function MoveModal({ resourceName, resourceType = "FILE", resourceId, mod
   };
   useEffect(() => {
     let active = true;
-    setMandate(null); setMandateFields({});
-    if (destination === null) return () => { active = false; };
+    setMandate(null);
+    setMandateFields({});
+    if (destination === null) {
+      setMandateLoading(false);
+      return () => { active = false; };
+    }
     setMandateLoading(true);
     void getTransferDataTemplateMandate(destination, resourceType === "FOLDER" ? "FOLDERS" : "FILES").then((result) => {
       if (!active) return;
-      setMandate(result.enabled ? result.template : null);
+      const template = result.enabled ? result.template : null;
+      setMandate(template);
       const initial: Record<string, unknown> = {};
-      (result.template?.schema ?? []).forEach((field) => { if (field.type === "boolean") initial[field.key] = false; });
+      resolveDataTemplateSchema(template).forEach((field) => { if (field.type === "boolean") initial[field.key] = false; });
       setMandateFields(initial);
     }).catch(() => { if (active) setMandate(null); }).finally(() => { if (active) setMandateLoading(false); });
     return () => { active = false; };
@@ -96,15 +102,19 @@ export function MoveModal({ resourceName, resourceType = "FILE", resourceId, mod
   async function submit() {
     setSubmitting(true); setError(null);
     try {
-      if (mandate) {
-        const missing = (mandate.schema ?? []).filter((field) => field.required && (mandateFields[field.key] === undefined || mandateFields[field.key] === null || String(mandateFields[field.key]).trim() === ""));
+      const schema = resolveDataTemplateSchema(mandate);
+      if (mandate && schema.length) {
+        const missing = schema.filter((field) => field.required && (mandateFields[field.key] === undefined || mandateFields[field.key] === null || String(mandateFields[field.key]).trim() === ""));
         if (missing.length) throw new Error(`Required Data Template fields: ${missing.map((field) => field.label).join(", ")}`);
       }
-      await onMove(destination, mandate?.id, mandate ? mandateFields : undefined); onClose();
+      await onMove(destination, mandate?.id, mandate && schema.length ? mandateFields : undefined);
+      onClose();
     }
     catch (cause) { setError(label(friendlyErrorMessageKey(cause))); }
     finally { setSubmitting(false); }
   }
+
+  const mandateSchema = resolveDataTemplateSchema(mandate);
 
   const title = mode === "copy" ? `${label("menu.copyTo")} ${resourceName}` : `${label("files.moveTitle")} ${resourceName}`;
 return (
@@ -158,7 +168,10 @@ return (
                             className={`flex min-h-10 w-full items-center gap-3 rounded-lg px-3 py-2 text-start text-[13px] ${selected ? "bg-[var(--wd-primary-light)] font-medium text-[color:var(--wd-primary-ink)]" : "text-slate-700 hover:bg-slate-50"}`}
                             style={{ paddingInlineStart: 12 + folder.depth * 20 }}>
                             <Icons.folder size={15} className="shrink-0 text-[color:var(--wd-primary)]" />
-                            <span className="flex-1 truncate">{folder.name}</span>
+                            <span className="min-w-0 flex-1">
+                              <span className="block truncate">{folder.name}</span>
+                              {selected && mandate?.name ? <span className="mt-0.5 block truncate text-[10px] font-medium text-[color:var(--wd-primary)]">{mandate.name}</span> : null}
+                            </span>
                             {selected ? <Icons.check size={14} className="text-[color:var(--wd-primary)]" /> : null}
                           </button>
                         </li>
@@ -183,8 +196,8 @@ return (
               {mandateLoading ? <div className="rounded-xl border border-slate-200 bg-white px-4 py-5 text-[12px] text-slate-500">{locale === "ar" ? "جارٍ تحميل الخصائص…" : "Loading properties…"}</div> : null}
               {!mandateLoading && !mandate ? <div className="flex min-h-[300px] items-center justify-center rounded-xl border border-dashed border-slate-300 bg-white p-6 text-center"><div><span className="mx-auto flex h-12 w-12 items-center justify-center rounded-xl bg-slate-100 text-slate-400"><Icons.props size={22} /></span><p className="mt-3 text-[12px] font-medium text-slate-700">{locale === "ar" ? "لا توجد خصائص مطلوبة" : "No required properties"}</p><p className="mt-1 text-[11px] leading-5 text-slate-500">{locale === "ar" ? "اختر مجلدًا عليه Data Template إلزامي لعرض الحقول هنا." : "Choose a destination with a mandated Data Template to show its fields here."}</p></div></div> : null}
               {mandate ? <div className="rounded-2xl border border-[color:var(--wd-primary)]/20 bg-white p-4 shadow-sm">
-                <div className="flex items-start justify-between gap-3 border-b border-slate-100 pb-3"><div className="min-w-0"><h4 className="truncate text-[14px] font-semibold text-slate-900">{mandate.name}</h4><p className="mt-1 text-[11px] text-slate-500">{locale === "ar" ? "أدخل الخصائص المطلوبة قبل المتابعة." : "Enter the required properties before continuing."}</p></div><span className="shrink-0 rounded-full bg-[var(--wd-primary-light)] px-2.5 py-1 text-[10px] font-semibold text-[color:var(--wd-primary-ink)]">{mandate.schema.length} {locale === "ar" ? "حقول" : "fields"}</span></div>
-                <div className="mt-4 grid gap-4">{mandate.schema.map((field) => <label key={field.key} className="text-[11px] font-medium text-slate-700">{field.label}{field.required ? <span className="ms-1 text-red-500">*</span> : null}
+                <div className="flex items-start justify-between gap-3 border-b border-slate-100 pb-3"><div className="min-w-0"><h4 className="truncate text-[14px] font-semibold text-slate-900">{mandate.name}</h4><p className="mt-1 text-[11px] text-slate-500">{locale === "ar" ? "أدخل الخصائص المطلوبة قبل المتابعة." : "Enter the required properties before continuing."}</p></div><span className="shrink-0 rounded-full bg-[var(--wd-primary-light)] px-2.5 py-1 text-[10px] font-semibold text-[color:var(--wd-primary-ink)]">{mandateSchema.length} {locale === "ar" ? "حقول" : "fields"}</span></div>
+                <div className="mt-4 grid gap-4">{mandateSchema.map((field) => <label key={field.key} className="text-[11px] font-medium text-slate-700">{field.label}{field.required ? <span className="ms-1 text-red-500">*</span> : null}
                   {field.type === "boolean" ? <span className="mt-2 flex h-10 items-center rounded-lg border border-slate-200 bg-slate-50 px-3"><input type="checkbox" checked={Boolean(mandateFields[field.key])} onChange={(e) => setMandateFields((v) => ({ ...v, [field.key]: e.target.checked }))} className="me-2" />{locale === "ar" ? "نعم" : "Yes"}</span> : field.type === "select" || field.type === "radio" ? <div className="mt-2"><ImkanOptionPicker value={String(mandateFields[field.key] ?? "")} onChange={(next) => setMandateFields((v) => ({ ...v, [field.key]: next }))} options={toImkanPickerOptions(field.options ?? [])} ariaLabel={field.label} fullWidth allowEmpty emptyLabel="—" placeholder={locale === "ar" ? "اختر" : "Select"} /></div> : <input type={field.type === "number" ? "number" : field.type === "date" ? "date" : field.type === "datetime" ? "datetime-local" : field.type === "email" ? "email" : "text"} value={String(mandateFields[field.key] ?? "")} onChange={(e) => setMandateFields((v) => ({ ...v, [field.key]: field.type === "number" ? (e.target.value === "" ? "" : Number(e.target.value)) : e.target.value }))} className="mt-2 h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-[12px] outline-none focus:border-[color:var(--wd-primary)]" />}
                 </label>)}</div>
               </div> : null}

@@ -39,6 +39,7 @@ import {
 } from "./view-mode-logic";
 import { getWorkspacePolicy } from "../lib/api/organization";
 import { getTransferDataTemplateMandate, listDataTemplates, type DataTemplate } from "../lib/api/metadata";
+import { resolveDataTemplateSchema } from "../lib/data-template-logic";
 
 import { canMutateContent, canShareContent } from "../lib/permissions";
 import { listSharedByMe } from "../lib/api/shared";
@@ -965,7 +966,8 @@ export function FileBrowser({
             if (!name) return;
             const mandateValues = newFolderMandate ? newFolderFields : undefined;
             if (newFolderMandate) {
-              const missing = newFolderMandate.schema.filter((field) => field.required && (mandateValues?.[field.key] === undefined || mandateValues?.[field.key] === null || String(mandateValues?.[field.key]).trim() === ""));
+              const schema = resolveDataTemplateSchema(newFolderMandate);
+              const missing = schema.filter((field) => field.required && (mandateValues?.[field.key] === undefined || mandateValues?.[field.key] === null || String(mandateValues?.[field.key]).trim() === ""));
               if (missing.length) { setError(`Required Data Template fields: ${missing.map((field) => field.label).join(", ")}`); return; }
             }
             await createFolder(name, folderId, newFolderMandate?.id, mandateValues);
@@ -976,7 +978,7 @@ export function FileBrowser({
           className="text-[length:var(--imkan-font-size-ui)]"
         >
           {newFolderMandateLoading ? <div className="mb-3 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-[11px] text-slate-500">{label("common.loading")}</div> : null}
-          {newFolderMandate ? <div className="mb-3 rounded-lg border border-blue-100 bg-blue-50/60 p-3"><div className="text-[11px] font-semibold text-slate-800">{locale === "ar" ? "خصائص Data Template المطلوبة" : "Required Data Template properties"}</div><div className="mt-1 text-[10px] text-slate-500">{newFolderMandate.name}</div><div className="mt-3 space-y-2">{newFolderMandate.schema.map((field) => <label key={field.key} className="block text-[10px] text-slate-600">{field.label}{field.required ? " *" : ""}{field.type === "boolean" ? <input type="checkbox" checked={Boolean(newFolderFields[field.key])} onChange={(e)=>setNewFolderFields(v=>({...v,[field.key]:e.target.checked}))} className="ms-2" /> : field.type === "select" || field.type === "radio" ? <select value={String(newFolderFields[field.key] ?? "")} onChange={(e)=>setNewFolderFields(v=>({...v,[field.key]:e.target.value}))} className="mt-1 w-full rounded border border-slate-200 bg-white px-2 py-1.5 text-[11px]"><option value="">—</option>{(field.options ?? []).map((o)=><option key={o} value={o}>{o}</option>)}</select> : <input type={field.type === "number" ? "number" : field.type === "date" ? "date" : field.type === "datetime" ? "datetime-local" : field.type === "email" ? "email" : "text"} value={String(newFolderFields[field.key] ?? "")} onChange={(e)=>setNewFolderFields(v=>({...v,[field.key]:field.type === "number" ? Number(e.target.value) : e.target.value}))} className="mt-1 w-full rounded border border-slate-200 px-2 py-1.5 text-[11px]" />}</label>)}</div></div> : null}
+          {newFolderMandate ? <div className="mb-3 rounded-lg border border-blue-100 bg-blue-50/60 p-3"><div className="text-[11px] font-semibold text-slate-800">{locale === "ar" ? "خصائص Data Template المطلوبة" : "Required Data Template properties"}</div><div className="mt-1 text-[10px] text-slate-500">{newFolderMandate.name}</div><div className="mt-3 space-y-2">{resolveDataTemplateSchema(newFolderMandate).map((field) => <label key={field.key} className="block text-[10px] text-slate-600">{field.label}{field.required ? " *" : ""}{field.type === "boolean" ? <input type="checkbox" checked={Boolean(newFolderFields[field.key])} onChange={(e)=>setNewFolderFields(v=>({...v,[field.key]:e.target.checked}))} className="ms-2" /> : field.type === "select" || field.type === "radio" ? <select value={String(newFolderFields[field.key] ?? "")} onChange={(e)=>setNewFolderFields(v=>({...v,[field.key]:e.target.value}))} className="mt-1 w-full rounded border border-slate-200 bg-white px-2 py-1.5 text-[11px]"><option value="">—</option>{(field.options ?? []).map((o)=><option key={o} value={o}>{o}</option>)}</select> : <input type={field.type === "number" ? "number" : field.type === "date" ? "date" : field.type === "datetime" ? "datetime-local" : field.type === "email" ? "email" : "text"} value={String(newFolderFields[field.key] ?? "")} onChange={(e)=>setNewFolderFields(v=>({...v,[field.key]:field.type === "number" ? Number(e.target.value) : e.target.value}))} className="mt-1 w-full rounded border border-slate-200 px-2 py-1.5 text-[11px]" />}</label>)}</div></div> : null}
           <label className="mb-3 flex flex-col gap-1">
             {label("files.folderName")}
             <input

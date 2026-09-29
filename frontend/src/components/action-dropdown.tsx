@@ -57,7 +57,8 @@ const actionIcons: Record<string, React.ReactNode> = {
 };
 
 function getIconForLabel(label: string): React.ReactNode | undefined {
-  return actionIcons[label];
+  const base = label.replace(/\s*\([^)]*\)\s*$/, "").trim();
+  return actionIcons[label] ?? actionIcons[base];
 }
 
 function groupItems(items: ActionDropdownItem[]): ActionGroup[] {

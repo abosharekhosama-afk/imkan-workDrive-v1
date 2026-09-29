@@ -35,7 +35,13 @@ export function ZohoMenu({ open, onClose, onSelect, items, labelledBy, align = "
     const place = () => {
       const r = el?.getBoundingClientRect();
       if (!r) return;
-      let start = align === "end" ? r.right - menuW : r.left;
+      const isRtl = typeof document !== "undefined" && document.documentElement.dir === "rtl";
+      let start: number;
+      if (align === "end") {
+        start = isRtl ? r.left : r.right - menuW;
+      } else {
+        start = isRtl ? r.right - menuW : r.left;
+      }
       start = Math.min(Math.max(8, start), window.innerWidth - menuW - 8);
       setPos({ top: r.bottom + 4, start });
     };

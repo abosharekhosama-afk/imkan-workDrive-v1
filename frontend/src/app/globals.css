@@ -894,6 +894,8 @@ button.wd-name-link{background:none;border:0;padding:0;font:inherit;color:inheri
 .zoho-global-search kbd{font-size:9px;color:#8b929e;border:1px solid var(--wd-line);border-radius:4px;padding:2px 5px;background:#fff;white-space:nowrap}
 .zoho-search-glyph{font-size:13px;line-height:1}
 .zoho-global-search.expanded .zoho-search-panel{position:absolute;top:calc(100% + 6px);inset-inline-start:0;width:min(430px,88vw);max-height:min(440px,60vh);overflow:auto;background:#fff;border:1px solid var(--wd-line);border-radius:8px;box-shadow:0 18px 48px rgba(20,30,40,.16);padding:6px;z-index:70}
+.wd-folder-empty-shell .imkan-panel{border:0;background:transparent;box-shadow:none}
+.wd-folder-empty-shell .imkan-badge{display:none}
 .zoho-search-filters{display:flex;align-items:center;gap:6px;padding:4px 4px 8px;border-bottom:1px solid var(--wd-line)}
 .zoho-filter-chip{border:1px solid transparent;background:transparent;border-radius:14px;font-size:10.5px;padding:4px 10px;cursor:pointer;color:#5c6570}
 .zoho-filter-chip:hover{background:var(--wd-hover)}

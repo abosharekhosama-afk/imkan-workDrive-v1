@@ -230,7 +230,11 @@ export function FileTable({
   };
 
   if (folders.length === 0 && files.length === 0) {
-    return <EmptyState title={emptyTitle?? label("files.empty")} description={emptyDescription} action={emptyAction} />;
+    return (
+      <div className="wd-folder-empty-shell flex min-h-[calc(100vh-16rem)] w-full flex-col items-center justify-center">
+        <EmptyState title={emptyTitle ?? label("files.empty")} description={emptyDescription} action={emptyAction} />
+      </div>
+    );
   }
 
   return (

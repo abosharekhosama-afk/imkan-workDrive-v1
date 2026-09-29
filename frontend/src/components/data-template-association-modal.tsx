@@ -5,6 +5,7 @@ import { Modal } from "./modal";
 import { useLocale } from "./locale-provider";
 import { ImkanOptionPicker, toImkanPickerOptions } from "./imkan-option-picker";
 import { associateFileDataTemplate, associateFolderDataTemplate, type DataTemplate } from "../lib/api/metadata";
+import { resolveDataTemplateSchema } from "../lib/data-template-logic";
 import type { ResourceType } from "../lib/api/types";
 
 export type DataTemplateTarget = { type: ResourceType; id: string; name: string };
@@ -19,7 +20,7 @@ export function DataTemplateAssociationModal({ targets, dataTemplates, onClose, 
 
   useEffect(() => { setTemplateId(""); setValues({}); setError(null); }, [targets.map((t) => `${t.type}:${t.id}`).join("|")]);
 
-  const fields = template?.fields || template?.schema || [];
+  const fields = resolveDataTemplateSchema(template);
   const missing = fields.filter((field) => field.required && (values[field.key] === undefined || values[field.key] === null || String(values[field.key]).trim() === ""));
 
   async function associate() {

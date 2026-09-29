@@ -4,6 +4,7 @@ import { Icons } from "./icons";
 import { ZohoMenu } from "./zoho-menu";
 import { useMemo, useState } from "react";
 import type { SelectionBarActionKey } from "../../lib/selection-bar-actions-logic";
+import { FileMenuIcons } from "../../lib/file-menu-icons";
 
 export function SelectionBar({
   folderCount,
@@ -37,25 +38,25 @@ export function SelectionBar({
   const needsSingle = !singleSelected;
   const moreItems = useMemo(
     () => [
-      { key: "openNewTab", labelKey: "menu.openNewTab" as const, disabled: needsSingle },
+      { key: "openNewTab", labelKey: "menu.openNewTab" as const, icon: FileMenuIcons.openNewTab, disabled: needsSingle },
       "sep" as const,
-      { key: "share", labelKey: "menu.shareMenu" as const, chevron: true, disabled: !canShare || needsSingle },
-      { key: "copyPermalink", labelKey: "menu.copyPermalink" as const, disabled: !canShare || needsSingle },
+      { key: "share", labelKey: "menu.shareMenu" as const, icon: FileMenuIcons.shareMenu, chevron: true, disabled: !canShare || needsSingle },
+      { key: "copyPermalink", labelKey: "menu.copyPermalink" as const, icon: FileMenuIcons.copyPermalink, disabled: !canShare || needsSingle },
       "sep" as const,
-      { key: "moveTo", labelKey: "menu.moveTo" as const, hint: "Z", disabled: !canMutate || needsSingle },
-      { key: "copyTo", labelKey: "menu.copyTo" as const, hint: "C", disabled: !canMutate || needsSingle },
-      { key: "assignWorkflow", labelKey: "menu.assignWorkflow" as const, disabled: !canMutate || needsSingle },
-      { key: "organize", labelKey: "menu.organize" as const, chevron: true, disabled: !canMutate, submenuItems: [
-        { key: "associateDataTemplate", labelKey: "menu.associateDataTemplate" as const },
+      { key: "moveTo", labelKey: "menu.moveTo" as const, icon: FileMenuIcons.moveTo, hint: "Z", disabled: !canMutate || needsSingle },
+      { key: "copyTo", labelKey: "menu.copyTo" as const, icon: FileMenuIcons.copyTo, hint: "C", disabled: !canMutate || needsSingle },
+      { key: "assignWorkflow", labelKey: "menu.assignWorkflow" as const, icon: FileMenuIcons.assignWorkflow, disabled: !canMutate || needsSingle },
+      { key: "organize", labelKey: "menu.organize" as const, icon: FileMenuIcons.organize, chevron: true, disabled: !canMutate, submenuItems: [
+        { key: "associateDataTemplate", labelKey: "menu.associateDataTemplate" as const, icon: FileMenuIcons.associateDataTemplate },
       ] },
       "sep" as const,
-      { key: "searchInFold", labelKey: "menu.searchInFold" as const },
-      { key: "download", labelKey: "sel.download" as const, hint: "⌃S", disabled: fileCount === 0 },
-      { key: "rename", labelKey: "menu.rename" as const, disabled: !canMutate || needsSingle },
-      { key: "followUpdates", labelKey: (isFollowingSelected ? "menu.unfollowUpdates" : "menu.followUpdates") as const, disabled: false },
-      { key: "moreOptions", labelKey: "menu.moreOptions" as const, disabled: needsSingle },
+      { key: "searchInFold", labelKey: "menu.searchInFold" as const, icon: FileMenuIcons.searchInFold },
+      { key: "download", labelKey: "sel.download" as const, icon: FileMenuIcons.download, hint: "⌃S", disabled: fileCount === 0 },
+      { key: "rename", labelKey: "menu.rename" as const, icon: FileMenuIcons.rename, disabled: !canMutate || needsSingle },
+      { key: "followUpdates", labelKey: (isFollowingSelected ? "menu.unfollowUpdates" : "menu.followUpdates") as const, icon: isFollowingSelected ? FileMenuIcons.unfollowUpdates : FileMenuIcons.followUpdates, disabled: false },
+      { key: "moreOptions", labelKey: "menu.moreOptions" as const, icon: FileMenuIcons.moreOptions, disabled: needsSingle },
       "sep" as const,
-      { key: "moveToTrash", labelKey: "menu.moveToTrash" as const, danger: true, disabled: !canMutate },
+      { key: "moveToTrash", labelKey: "menu.moveToTrash" as const, icon: FileMenuIcons.moveToTrash, danger: true, disabled: !canMutate },
     ],
     [canMutate, canShare, fileCount, needsSingle, isFollowingSelected],
   );
@@ -83,8 +84,8 @@ export function SelectionBar({
             else if (k === "copy") onCopyLink();
           }}
           items={[
-            { key: "addMembers", labelKey: "menu.addMembers" },
-            { key: "externalShareLink", labelKey: "menu.externalShareLink" },
+            { key: "addMembers", labelKey: "menu.addMembers", icon: FileMenuIcons.addMembers },
+            { key: "externalShareLink", labelKey: "menu.externalShareLink", icon: FileMenuIcons.externalShareLink },
           ]} />
         <button type="button" onClick={onCopyLink} title={label("menu.copyLink")} aria-label={label("menu.copyLink")}
           className="flex h-7 w-7 items-center justify-center rounded-full text-[color:var(--wd-primary-ink)] hover:bg-[var(--wd-active)]"><Icons.link size={14} /></button>

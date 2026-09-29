@@ -82,7 +82,12 @@ function computeMenuPosition(trigger: HTMLElement, menuWidth: "default" | "wide"
   const gap = 6;
   const maxHeight = Math.max(160, window.innerHeight - rect.bottom - gap - viewportPadding);
   const isRtl = typeof document !== "undefined" && document.documentElement.dir === "rtl";
-  let left = isRtl ? rect.right - width : rect.left;
+  let left: number;
+  if (isRtl) {
+    left = Math.max(viewportPadding, rect.right - width);
+  } else {
+    left = rect.left;
+  }
   if (left + width > window.innerWidth - viewportPadding) {
     left = Math.max(viewportPadding, window.innerWidth - width - viewportPadding);
   }

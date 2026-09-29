@@ -10,10 +10,11 @@ import { useLocale } from "./locale-provider";
 import type { FileActionHandlers } from "./file-actions-menu";
 import type { ShareLaunchMode } from "../lib/share-launch-logic";
 import { followUpdatesMenuLabel } from "../lib/follow-updates-logic";
+import { FileMenuIcons } from "../lib/file-menu-icons";
 
-type SubItem = { key: string; label: string; onSelect?: () => void };
+type SubItem = { key: string; label: string; icon?: React.ReactNode; onSelect?: () => void };
 type Item = {
-  key: string; label: string; onSelect?: () => void; danger?: boolean; hint?: string;
+  key: string; label: string; icon?: React.ReactNode; onSelect?: () => void; danger?: boolean; hint?: string;
   submenu?: boolean; submenuItems?: SubItem[];
 };
 
@@ -61,37 +62,37 @@ export function FileContextMenu({
 
   const sections: Item[][] = [
     [
-      { key: "openNewTab", label: D("openNewTab"), onSelect: open ?? (() => toast("openNewTab")) },
-      { key: "properties", label: D("properties"), onSelect: handlers.onInspect ?? (() => toast("properties")) },
+      { key: "openNewTab", label: D("openNewTab"), icon: FileMenuIcons.openNewTab, onSelect: open ?? (() => toast("openNewTab")) },
+      { key: "properties", label: D("properties"), icon: FileMenuIcons.properties, onSelect: handlers.onInspect ?? (() => toast("properties")) },
     ],
     [
       {
-        key: "share", label: D("shareMenu"), submenu: true,
+        key: "share", label: D("shareMenu"), submenu: true, icon: FileMenuIcons.shareMenu,
         submenuItems: [
-          { key: "addMembers", label: D("addMembers"), onSelect: shareInvite ?? (() => toast("addMembers")) },
-          { key: "external", label: D("externalShareLink"), onSelect: shareLink ?? (() => toast("externalShareLink")) },
-          { key: "downloadLink", label: D("downloadLink"), onSelect: shareDownloadLink ?? (() => toast("downloadLink")) },
-          { key: "embed", label: D("embedCode"), onSelect: shareEmbed ?? (() => toast("embedCode")) },
-          { key: "support", label: D("shareToSupport"), onSelect: () => toast("shareToSupport") },
+          { key: "addMembers", label: D("addMembers"), icon: FileMenuIcons.addMembers, onSelect: shareInvite ?? (() => toast("addMembers")) },
+          { key: "external", label: D("externalShareLink"), icon: FileMenuIcons.externalShareLink, onSelect: shareLink ?? (() => toast("externalShareLink")) },
+          { key: "downloadLink", label: D("downloadLink"), icon: FileMenuIcons.downloadLink, onSelect: shareDownloadLink ?? (() => toast("downloadLink")) },
+          { key: "embed", label: D("embedCode"), icon: FileMenuIcons.embedCode, onSelect: shareEmbed ?? (() => toast("embedCode")) },
+          { key: "support", label: D("shareToSupport"), icon: FileMenuIcons.shareToSupport, onSelect: () => toast("shareToSupport") },
         ],
       },
-      { key: "copyPermalink", label: D("copyPermalink"), onSelect: onCopyLink ?? (() => toast("copyPermalink")) },
+      { key: "copyPermalink", label: D("copyPermalink"), icon: FileMenuIcons.copyPermalink, onSelect: onCopyLink ?? (() => toast("copyPermalink")) },
     ],
     [
-      { key: "move", label: `${D("moveTo")} (Z)`, hint: "Z", onSelect: onMove ?? (() => toast("moveTo")) },
-      { key: "copy", label: `${D("copyTo")} (C)`, hint: "C", onSelect: handlers.onCopy ?? (() => toast("copyTo")) },
-      { key: "workflow", label: D("assignWorkflow"), onSelect: handlers.onAssignWorkflow ?? (() => toast("assignWorkflow")) },
-      { key: "organize", label: D("organize"), onSelect: handlers.onOrganize ?? (() => toast("organize")) },
+      { key: "move", label: `${D("moveTo")} (Z)`, hint: "Z", icon: FileMenuIcons.moveTo, onSelect: onMove ?? (() => toast("moveTo")) },
+      { key: "copy", label: `${D("copyTo")} (C)`, hint: "C", icon: FileMenuIcons.copyTo, onSelect: handlers.onCopy ?? (() => toast("copyTo")) },
+      { key: "workflow", label: D("assignWorkflow"), icon: FileMenuIcons.assignWorkflow, onSelect: handlers.onAssignWorkflow ?? (() => toast("assignWorkflow")) },
+      { key: "organize", label: D("organize"), icon: FileMenuIcons.organize, onSelect: handlers.onOrganize ?? (() => toast("organize")) },
     ],
     [
-      { key: "search", label: D("searchInFold"), onSelect: () => toast("searchInFold") },
-      { key: "download", label: `${D("download")} (⌃S)`, hint: "⌃S", onSelect: onDownload ?? (() => toast("download")) },
-      { key: "rename", label: D("rename"), onSelect: onRename ?? (() => toast("rename")) },
-      { key: "follow", label: label(followUpdatesMenuLabel(Boolean(handlers.isFollowingUpdates))), onSelect: handlers.onFollowUpdates ?? (() => toast("followUpdates")) },
-      { key: "more", label: D("moreOptions"), onSelect: () => toast("moreOptions") },
+      { key: "search", label: D("searchInFold"), icon: FileMenuIcons.searchInFold, onSelect: () => toast("searchInFold") },
+      { key: "download", label: `${D("download")} (⌃S)`, hint: "⌃S", icon: FileMenuIcons.download, onSelect: onDownload ?? (() => toast("download")) },
+      { key: "rename", label: D("rename"), icon: FileMenuIcons.rename, onSelect: onRename ?? (() => toast("rename")) },
+      { key: "follow", label: label(followUpdatesMenuLabel(Boolean(handlers.isFollowingUpdates))), icon: handlers.isFollowingUpdates ? FileMenuIcons.unfollowUpdates : FileMenuIcons.followUpdates, onSelect: handlers.onFollowUpdates ?? (() => toast("followUpdates")) },
+      { key: "more", label: D("moreOptions"), icon: FileMenuIcons.moreOptions, onSelect: () => toast("moreOptions") },
     ],
     [
-      { key: "delete", label: D("moveToTrash"), danger: true, onSelect: onDelete ?? (() => toast("moveToTrash")) },
+      { key: "delete", label: D("moveToTrash"), icon: FileMenuIcons.moveToTrash, danger: true, onSelect: onDelete ?? (() => toast("moveToTrash")) },
     ],
   ];
 
@@ -144,6 +145,7 @@ export function FileContextMenu({
               data-active={it.submenu && openSub ? true : undefined}
               data-danger={it.danger || undefined}
               className="wd-menu-item min-h-[34px] text-start">
+              <span className="flex w-6 shrink-0 items-center justify-center" aria-hidden="true">{it.icon ?? null}</span>
               <span className="min-w-0 flex-1 truncate">{it.label}</span>
               {it.submenu ? <span className={`shrink-0 text-[#4F4F4F] ${rtl ? "rotate-180" : ""}`}>▸</span> : it.hint ? <span className="shrink-0 text-[12px] text-[#4F4F4F]">{it.hint}</span> : null}
             </button>
@@ -162,7 +164,8 @@ export function FileContextMenu({
               si.onSelect?.();
             }}
               className="wd-menu-item min-h-[34px] text-start">
-              <span className="min-w-0 flex-1 truncate">{si.label}</span>
+                <span className="flex w-6 shrink-0 items-center justify-center" aria-hidden="true">{si.icon ?? null}</span>
+                <span className="min-w-0 flex-1 truncate">{si.label}</span>
             </button>
           ))}
         </div>
