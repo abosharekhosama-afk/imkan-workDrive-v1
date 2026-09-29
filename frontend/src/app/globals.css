@@ -616,10 +616,16 @@ html[data-theme="dark"] .zoho-icon-btn:hover{background:var(--wd-hover);color:#d
 .zoho-content .imkan-workspace-content{padding:0!important}
 .zoho-content .imkan-page{max-width:none}
 .zoho-content h1{font-size:18px!important;color:#262b31}
-/* WorkDrive surfaces: unify interactive controls to the pill radius/hover language. */
-.zoho-content button:not(.wd-icon-btn):not([role="switch"]):not(.wd-check):not(.wd-menu-item),
-.zoho-content a.imkan-button,
-.zoho-content a.wd-pill,
+/* WorkDrive surfaces: unify interactive controls to the pill radius/hover language.
+   Connections workspace keeps Zoho flat controls — scoped out via @scope limit. */
+@scope (.zoho-content) to (.imkan-connections-page) {
+  button:not(.wd-icon-btn):not([role="switch"]):not(.wd-check):not(.wd-menu-item),
+  a.imkan-button,
+  a.wd-pill {
+    border-radius: var(--wd-pill-radius, 16px);
+    transition: background-color var(--wd-dur) var(--wd-ease), color var(--wd-dur) var(--wd-ease), box-shadow var(--wd-dur) var(--wd-ease);
+  }
+}
 .admin-console-shell button:not(.wd-icon-btn):not([role="switch"]):not(.wd-menu-item):not(.admin-activity-tab):not(.team-manage-tab):not(.team-folder-pin):not(.team-folder-members):not(.team-folder-more):not(.team-filter-trigger):not(.team-view-trigger):not(.admin-audit-new-report),
 .admin-console-shell a.imkan-button {
   border-radius: var(--wd-pill-radius, 16px);
@@ -3158,46 +3164,14 @@ html[data-theme="dark"] .workflow-ui .workflow-picker-search{background:var(--wd
   .workflow-user-menu{width:min(310px,calc(100vw - 28px))}
 }
 
-/* Connections workspace — preserve Zoho light surfaces; dark mode overrides below. */
-.imkan-connections-page {
-  color: var(--wd-text);
-  background: #fff !important;
-}
-.imkan-connections-page .connections-sidebar {
-  background: #F7FAFE !important;
-  border-color: #E5EAF0 !important;
-}
-.imkan-connections-page .connections-sidebar button {
-  border-radius: 0;
-  height: auto;
-  min-height: 0;
-  box-shadow: none;
-  font-weight: inherit;
-}
-.imkan-connections-page .connections-header {
-  border-color: #E5EAF0;
-  background: #fff;
-}
-.imkan-connections-page .connections-card,
-.imkan-connections-page .connections-panel,
-.imkan-connections-page .connections-picker,
-.imkan-connections-page .connections-menu,
-.imkan-connections-page .connections-search {
-  background: #fff !important;
-  color: inherit;
-}
-.imkan-connections-page .connections-input {
-  background: #fff;
-  color: var(--wd-text);
-  border-color: #E5EAF0;
-}
-.imkan-connections-page .connections-input::placeholder,
-.imkan-connections-page input::placeholder {
-  color: #98A2B3;
-}
-.imkan-connections-page .connections-empty {
-  color: inherit;
-}
+/* Connections workspace — theme/font aware surface layer (Zoho parity). */
+.imkan-connections-page{font-family:var(--user-font-family),Arial,system-ui,sans-serif;color:var(--wd-text);background:var(--wd-canvas)!important}
+.imkan-connections-page .connections-sidebar{background:color-mix(in srgb,var(--wd-bg) 94%,var(--wd-primary) 6%);border-color:var(--wd-line)}
+.imkan-connections-page .connections-header{border-color:var(--wd-line);background:var(--wd-bg)}
+.imkan-connections-page .connections-card,.imkan-connections-page .connections-panel,.imkan-connections-page .connections-picker,.imkan-connections-page .connections-menu,.imkan-connections-page .connections-search{background:var(--wd-bg)!important;color:var(--wd-text)}
+.imkan-connections-page .connections-input{background:var(--wd-bg);color:var(--wd-text);border-color:var(--wd-line)}
+.imkan-connections-page .connections-input::placeholder,.imkan-connections-page input::placeholder{color:var(--wd-text-muted)}
+.imkan-connections-page .connections-empty{color:var(--wd-text)}
 html[data-theme="dark"] .imkan-connections-page .connections-card,
 html[data-theme="dark"] .imkan-connections-page .connections-panel,
 html[data-theme="dark"] .imkan-connections-page .connections-picker,
