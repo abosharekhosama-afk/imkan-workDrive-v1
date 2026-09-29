@@ -158,6 +158,8 @@
 | 001 | Team Folders ACL | ✅ Implemented |
 | 002 | File Preview UI | ✅ Implemented |
 | 003 | Version History UI | ✅ Implemented |
+| — | Admin Console Data Loss Prevention (Zoho policies, labels, region rules) | ✅ Implemented |
+| — | Admin Console Data Loss Prevention (Zoho policies, labels, region rules) | ✅ Implemented |
 
 ---
 

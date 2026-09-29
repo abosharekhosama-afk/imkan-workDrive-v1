@@ -14,6 +14,9 @@ export class EnterpriseController {
 
   @Get('dlp/labels') dlpLabels(@CurrentUser() u: AccessTokenPayload) { return this.dlp.listLabels(u); }
   @Post('dlp/labels') createDlpLabel(@CurrentUser() u: AccessTokenPayload, @Body() b: any) { return this.dlp.createLabel(u, b); }
+  @Patch('dlp/labels/:id') updateDlpLabel(@CurrentUser() u: AccessTokenPayload, @Param('id') id: string, @Body() b: any) { return this.dlp.updateLabel(u, id, b); }
+  @Get('dlp/labels/:id/files') dlpLabelFiles(@CurrentUser() u: AccessTokenPayload, @Param('id') id: string) { return this.dlp.labelFiles(u, id); }
+  @Delete('dlp/labels/:id/files/:fileId') detachDlpLabel(@CurrentUser() u: AccessTokenPayload, @Param('id') id: string, @Param('fileId') fileId: string) { return this.dlp.adminDetachLabel(u, id, fileId); }
   @Delete('dlp/labels/:id') deleteDlpLabel(@CurrentUser() u: AccessTokenPayload, @Param('id') id: string) { return this.dlp.deleteLabel(u, id); }
   @Get('dlp/policies') dlpPolicies(@CurrentUser() u: AccessTokenPayload) { return this.dlp.listPolicies(u); }
   @Post('dlp/policies') createDlpPolicy(@CurrentUser() u: AccessTokenPayload, @Body() b: any) { return this.dlp.createPolicy(u, b); }

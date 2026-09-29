@@ -23,10 +23,13 @@ export const getSecurityCenter=()=>apiRequest<SecurityCenter>('/admin/enterprise
 export const revokeAdminSession=(id:string)=>apiRequest<{ok:boolean}>(`/admin/enterprise/sessions/${id}`,{method:'DELETE'});
 
 export type DlpLabel = { id:string; name:string; description?:string|null; color?:string|null; actions:string[]; manualOnly:boolean; _count?:{files:number} };
-export type DlpPolicy = { id:string; name:string; description?:string|null; enabled:boolean; scopeType:string; folderIds:string[]; keywords:string[]; extensions:string[]; caseSensitive:boolean; labelId:string; label?:DlpLabel };
+export type DlpPolicy = { id:string; name:string; description?:string|null; enabled:boolean; scopeType:string; folderIds:string[]; keywords:string[]; extensions:string[]; sensitiveTypes:string[]; caseSensitive:boolean; labelId:string; label?:DlpLabel; createdAt?:string };
 export const getDlpLabels=()=>apiRequest<DlpLabel[]>('/admin/enterprise/dlp/labels');
 export const createDlpLabel=(body:any)=>apiRequest<DlpLabel>('/admin/enterprise/dlp/labels',{method:'POST',body:JSON.stringify(body)});
+export const updateDlpLabel=(id:string,body:any)=>apiRequest<DlpLabel>(`/admin/enterprise/dlp/labels/${id}`,{method:'PATCH',body:JSON.stringify(body)});
 export const deleteDlpLabel=(id:string)=>apiRequest<{ok:boolean}>(`/admin/enterprise/dlp/labels/${id}`,{method:'DELETE'});
+export const getDlpLabelFiles=(id:string)=>apiRequest<Array<{id:string;fileId:string;source:string;file:{id:string;name:string;extension:string|null}|null}>>(`/admin/enterprise/dlp/labels/${id}/files`);
+export const detachDlpLabelFile=(labelId:string,fileId:string)=>apiRequest<{ok:boolean}>(`/admin/enterprise/dlp/labels/${labelId}/files/${fileId}`,{method:'DELETE'});
 export const getDlpPolicies=()=>apiRequest<DlpPolicy[]>('/admin/enterprise/dlp/policies');
 export const createDlpPolicy=(body:any)=>apiRequest<DlpPolicy>('/admin/enterprise/dlp/policies',{method:'POST',body:JSON.stringify(body)});
 export const updateDlpPolicy=(id:string,body:any)=>apiRequest<DlpPolicy>(`/admin/enterprise/dlp/policies/${id}`,{method:'PATCH',body:JSON.stringify(body)});
