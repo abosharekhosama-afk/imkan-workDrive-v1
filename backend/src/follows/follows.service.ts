@@ -94,17 +94,11 @@ export class FollowsService {
       include: { user: { select: { id: true, email: true, name: true } } },
     });
 
-    const folderFollowers = input.resourceType === ResourceType.FILE && input.folderId
-      ? await this.prisma.resourceFollow.findMany({
-          where: {
-            orgId: input.orgId,
-            resourceType: ResourceType.FOLDER,
-            resourceId: input.folderId,
-            userId: { not: input.actorUserId },
-          },
-          include: { user: { select: { id: true, email: true, name: true } } },
-        })
-      : [];
+    const folderFollowers = await this.loadAncestorFolderFollowers(
+      input.orgId,
+      input.resourceType === ResourceType.FILE ? input.folderId : input.resourceId,
+      input.actorUserId,
+    );
 
     const followers = new Map<string, { notifyBell: boolean; notifyEmail: boolean; email: string | null; name: string | null }>();
     for (const row of [...direct, ...folderFollowers]) {
@@ -138,6 +132,32 @@ export class FollowsService {
         }).catch(() => undefined);
       }
     }));
+  }
+
+  /** Notify followers of the resource and every ancestor folder (Zoho-style propagation). */
+  private async loadAncestorFolderFollowers(orgId: string, folderId: string | null | undefined, actorUserId: string) {
+    if (!folderId) return [];
+    const folderIds: string[] = [];
+    let current: string | null = folderId;
+    while (current) {
+      folderIds.push(current);
+      const row: { parentId: string | null } | null = await this.prisma.folder.findFirst({
+        where: { id: current, orgId },
+        select: { parentId: true },
+      });
+      if (!row?.parentId) break;
+      current = row.parentId;
+    }
+    if (!folderIds.length) return [];
+    return this.prisma.resourceFollow.findMany({
+      where: {
+        orgId,
+        resourceType: ResourceType.FOLDER,
+        resourceId: { in: folderIds },
+        userId: { not: actorUserId },
+      },
+      include: { user: { select: { id: true, email: true, name: true } } },
+    });
   }
 
   private buildNotificationPayload(input: FollowEventInput): { title: string; body: string; type: NotificationType } | null {

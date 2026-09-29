@@ -105,6 +105,12 @@ export class SharesService {
       where: { userId: { in: uniqueRecipientIds }, organizationId: user.org_id, status: MembershipStatus.ACTIVE }, select: { userId: true },
     }) : [];
     if (recipients.length !== uniqueRecipientIds.length) throw new NotFoundException('One or more share recipients were not found in this organization');
+
+    const existing = await this.findActiveOwnerShare(user, input.resourceType, input.resourceId);
+    if (existing) {
+      return this.mergeIntoExistingShare(user, existing, input, recipients);
+    }
+
     const linkToken = createShareToken();
     const passwordHash = input.password ? await hashSecret(input.password) : null;
 
@@ -242,13 +248,14 @@ Open the shared resource: ${linkUrl}` ,
         })),
         expiresAt: row.expiresAt,
         revokedAt: row.revokedAt,
+        canDownload: row.canDownload,
       });
     }
 
     const folderRows = await this.prisma.folderShare.findMany({ where: { orgId: user.org_id, createdById: user.sub }, include: { folder: { select: { id: true, name: true } }, recipients: { include: { user: { select: { id: true, name: true, email: true } } } } } });
     for (const row of folderRows) {
       if (!row.recipients.length && !row.linkToken) continue;
-      result.push({ id: row.id, resourceType: ResourceType.FOLDER, resourceId: row.folderId, linkUrl: `${this.config.get<string>('PUBLIC_APP_URL') ?? ''}/share/public?token=${encodeURIComponent(row.linkToken)}`, name: row.folder?.name ?? null, status: row.status, permission: row.permission, recipients: row.recipients.map((r: any) => ({ userId: r.userId, permission: r.permission, user: r.user })), expiresAt: row.expiresAt, revokedAt: row.revokedAt });
+      result.push({ id: row.id, resourceType: ResourceType.FOLDER, resourceId: row.folderId, linkUrl: `${this.config.get<string>('PUBLIC_APP_URL') ?? ''}/share/public?token=${encodeURIComponent(row.linkToken)}`, name: row.folder?.name ?? null, status: row.status, permission: row.permission, recipients: row.recipients.map((r: any) => ({ userId: r.userId, permission: r.permission, user: r.user })), expiresAt: row.expiresAt, revokedAt: row.revokedAt, canDownload: row.canDownload });
     }
     return result;
   }
@@ -531,6 +538,95 @@ Open the shared resource: ${linkUrl}` ,
 
   private isInactive(expiresAt: Date | null): boolean {
     return Boolean(expiresAt && expiresAt.getTime() <= Date.now());
+  }
+
+  private async findActiveOwnerShare(user: AccessTokenPayload, resourceType: ResourceType, resourceId: string) {
+    const now = new Date();
+    if (resourceType === ResourceType.FILE) {
+      return this.prisma.fileShare.findFirst({
+        where: {
+          orgId: user.org_id,
+          createdById: user.sub,
+          fileId: resourceId,
+          status: ShareStatus.ACTIVE,
+          OR: [{ expiresAt: null }, { expiresAt: { gt: now } }],
+        },
+        include: { recipients: true },
+        orderBy: { createdAt: 'desc' },
+      });
+    }
+    return this.prisma.folderShare.findFirst({
+      where: {
+        orgId: user.org_id,
+        createdById: user.sub,
+        folderId: resourceId,
+        status: ShareStatus.ACTIVE,
+        OR: [{ expiresAt: null }, { expiresAt: { gt: now } }],
+      },
+      include: { recipients: true },
+      orderBy: { createdAt: 'desc' },
+    });
+  }
+
+  private async mergeIntoExistingShare(
+    user: AccessTokenPayload,
+    existing: { id: string; linkToken: string; fileId?: string; folderId?: string; recipients: Array<{ userId: string }> },
+    input: CreateShareInput,
+    recipients: Array<{ userId: string }>,
+  ): Promise<CreateShareResponse> {
+    const passwordHash = input.password ? await hashSecret(input.password) : undefined;
+    const shareData = {
+      permission: input.permission as SharePermission,
+      expiresAt: input.expiresAt ?? null,
+      canDownload: input.canDownload,
+      ...(passwordHash ? { passwordHash } : {}),
+    };
+    const existingRecipientIds = new Set(existing.recipients.map((row) => row.userId));
+    const newRecipients = recipients.filter((row) => !existingRecipientIds.has(row.userId));
+
+    await this.prisma.$transaction(async (tx) => {
+      if (input.resourceType === ResourceType.FILE) {
+        await tx.fileShare.update({ where: { id: existing.id }, data: shareData });
+        if (newRecipients.length) {
+          await tx.fileShareRecipient.createMany({
+            data: newRecipients.map((row) => ({
+              orgId: user.org_id,
+              shareId: existing.id,
+              userId: row.userId,
+              permission: input.permission as SharePermission,
+            })),
+            skipDuplicates: true,
+          });
+        }
+      } else {
+        await tx.folderShare.update({ where: { id: existing.id }, data: shareData });
+        if (newRecipients.length) {
+          await tx.folderShareRecipient.createMany({
+            data: newRecipients.map((row) => ({
+              orgId: user.org_id,
+              shareId: existing.id,
+              userId: row.userId,
+              permission: input.permission as SharePermission,
+            })),
+            skipDuplicates: true,
+          });
+        }
+      }
+    });
+
+    const base = this.config.get<string>('PUBLIC_APP_URL') ?? '';
+    const linkUrl = `${base}/share/public?token=${encodeURIComponent(existing.linkToken)}`;
+    let emailed = 0;
+    if (input.emailRecipients?.length) {
+      await this.email.send(user, {
+        to: input.emailRecipients,
+        subject: 'A file has been shared with you on IMKAN WorkDrive',
+        text: `A file has been shared with you on IMKAN WorkDrive.\n\nOpen the shared resource: ${linkUrl}`,
+        html: `<p>A file has been shared with you on <strong>IMKAN WorkDrive</strong>.</p><p><a href="${linkUrl}">Open the shared resource</a></p>`,
+      });
+      emailed = input.emailRecipients.length;
+    }
+    return { link_url: linkUrl, emailed };
   }
 
   private async loadOwnedResource(

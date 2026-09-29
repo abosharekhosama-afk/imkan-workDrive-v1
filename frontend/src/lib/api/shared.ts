@@ -41,3 +41,13 @@ export function updateShareRecipientPermission(shareId: string, userId: string, 
     body: JSON.stringify({ permission }),
   });
 }
+
+export function removeShareRecipient(shareId: string, userId: string): Promise<{ shareId: string; userId: string; removed: boolean }> {
+  return apiRequest(`/shares/${encodeURIComponent(shareId)}/recipients/${encodeURIComponent(userId)}`, {
+    method: "DELETE",
+  });
+}
+
+export function revokeShare(shareId: string): Promise<{ id: string; revoked: boolean }> {
+  return apiRequest(`/shares/${encodeURIComponent(shareId)}`, { method: "DELETE" });
+}

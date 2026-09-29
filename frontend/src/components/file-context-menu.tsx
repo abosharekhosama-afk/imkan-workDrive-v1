@@ -8,6 +8,7 @@ import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useLocale } from "./locale-provider";
 import type { FileActionHandlers } from "./file-actions-menu";
+import type { ShareLaunchMode } from "../lib/share-launch-logic";
 import { followUpdatesMenuLabel } from "../lib/follow-updates-logic";
 
 type SubItem = { key: string; label: string; onSelect?: () => void };
@@ -49,6 +50,10 @@ export function FileContextMenu({
   const toast = (k: keyof typeof DIC) => onToast?.(D(k));
   const open = handlers.onOpen;
   const onShare = handlers.onShare;
+  const shareInvite = () => onShare?.("invite");
+  const shareLink = () => onShare?.("link");
+  const shareDownloadLink = () => onShare?.("downloadLink");
+  const shareEmbed = () => onShare?.("embed");
   const onMove = handlers.onMove;
   const onDownload = handlers.onDownload;
   const onRename = handlers.onRename;
@@ -63,10 +68,10 @@ export function FileContextMenu({
       {
         key: "share", label: D("shareMenu"), submenu: true,
         submenuItems: [
-          { key: "addMembers", label: D("addMembers"), onSelect: onShare ?? (() => toast("addMembers")) },
-          { key: "external", label: D("externalShareLink"), onSelect: onShare ?? (() => toast("externalShareLink")) },
-          { key: "downloadLink", label: D("downloadLink"), onSelect: onShare ?? (() => toast("downloadLink")) },
-          { key: "embed", label: D("embedCode"), onSelect: onShare ?? (() => toast("embedCode")) },
+          { key: "addMembers", label: D("addMembers"), onSelect: shareInvite ?? (() => toast("addMembers")) },
+          { key: "external", label: D("externalShareLink"), onSelect: shareLink ?? (() => toast("externalShareLink")) },
+          { key: "downloadLink", label: D("downloadLink"), onSelect: shareDownloadLink ?? (() => toast("downloadLink")) },
+          { key: "embed", label: D("embedCode"), onSelect: shareEmbed ?? (() => toast("embedCode")) },
           { key: "support", label: D("shareToSupport"), onSelect: () => toast("shareToSupport") },
         ],
       },

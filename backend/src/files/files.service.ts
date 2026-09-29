@@ -733,6 +733,12 @@ export class FilesService {
       resourceType: 'FILE',
     }).catch(() => undefined);
 
+    this.dispatchFollowFileEvent(
+      user,
+      version.fileId,
+      version.versionNumber === 1 ? AuditAction.CREATE : AuditAction.UPLOAD_VERSION,
+    );
+
     // Enterprise foundation: enqueue a pending malware scan and apply the
     // organization's optional version-retention limit. The scan is deliberately
     // asynchronous; until a clean result exists, production deployments should

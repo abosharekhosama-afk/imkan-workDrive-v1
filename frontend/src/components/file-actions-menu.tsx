@@ -6,12 +6,14 @@ import { ActionDropdown, type ActionDropdownItem } from "./action-dropdown";
 import type { RowActionContext } from "./file-row-actions-logic";
 import { followUpdatesMenuLabel } from "../lib/follow-updates-logic";
 
+import type { ShareLaunchMode } from "../lib/share-launch-logic";
+
 export interface FileActionHandlers {
   onOpen?: () => void;
   onPreview?: () => void;
   onInspect?: () => void;
   onDownload?: () => void;
-  onShare?: () => void;
+  onShare?: (mode?: ShareLaunchMode) => void;
   onCopyLink?: () => void;
   onRename?: () => void;
   onMove?: () => void;

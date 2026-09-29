@@ -52,7 +52,7 @@ export function SelectionBar({
       { key: "searchInFold", labelKey: "menu.searchInFold" as const },
       { key: "download", labelKey: "sel.download" as const, hint: "⌃S", disabled: fileCount === 0 },
       { key: "rename", labelKey: "menu.rename" as const, disabled: !canMutate || needsSingle },
-      { key: "followUpdates", labelKey: isFollowingSelected ? "menu.following" : "menu.followUpdates", disabled: false },
+      { key: "followUpdates", labelKey: (isFollowingSelected ? "menu.unfollowUpdates" : "menu.followUpdates") as const, disabled: false },
       { key: "moreOptions", labelKey: "menu.moreOptions" as const, disabled: needsSingle },
       "sep" as const,
       { key: "moveToTrash", labelKey: "menu.moveToTrash" as const, danger: true, disabled: !canMutate },

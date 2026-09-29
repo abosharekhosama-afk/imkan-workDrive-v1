@@ -9,6 +9,7 @@ import type { RowActionContext } from"./file-row-actions-logic";
 import { formatBytes, resolveItemSize } from"../lib/api/quota";
 import { formatDateLocalized, latestOf } from"../lib/localized";
 import type { FileRecord, FolderRecord } from"../lib/api/types";
+import type { ShareLaunchMode } from "../lib/share-launch-logic";
 
 export interface FileGridViewProps {
   folders: FolderRecord[];
@@ -17,7 +18,7 @@ export interface FileGridViewProps {
   canShare?: boolean;
   onOpenFolder: (folderId: string) => void;
   onPreview?: (file: FileRecord) => void;
-  onShare?: (resourceType:"FILE"|"FOLDER", resourceId: string) => void;
+  onShare?: (resourceType:"FILE"|"FOLDER", resourceId: string, mode?: ShareLaunchMode) => void;
   onDownload?: (fileId: string) => void;
   onRename?: (resourceType:"FILE"|"FOLDER", resourceId: string, name: string) => void;
   onDelete?: (resourceType:"FILE"|"FOLDER", resourceId: string) => void;
@@ -86,11 +87,11 @@ export function FileGridView({
   return (
     <div className="zoho-grid-view"role="list"aria-label={label("view.grid")}>
       {folders.map((folder) => {
-        const folderContext = buildFolderContext(canMutate, false);
+        const folderContext = buildFolderContext(canMutate, canShare);
         const folderHandlers: FileActionHandlers = {
           onOpen: () => onOpenFolder(folder.id),
           onInspect: onInspect ? () => onInspect("FOLDER", folder.id, folder.name) : undefined,
-          onShare: undefined,
+          onShare: canShare && onShare ? (mode) => onShare("FOLDER", folder.id, mode) : undefined,
           onRename: canMutate && onRename ? () => onRename("FOLDER", folder.id, folder.name) : undefined,
           onMove: canMutate && onMove ? () => onMove("FOLDER", folder.id, folder.name) : undefined,
           onDelete: canMutate && onDelete ? () => onDelete("FOLDER", folder.id) : undefined,
@@ -120,7 +121,7 @@ export function FileGridView({
           onInspect: onInspect ? () => onInspect("FILE", file.id, file.name) : undefined,
           onPreview: onPreview ? () => onPreview(file) : undefined,
           onDownload: onDownload ? () => onDownload(file.id) : undefined,
-          onShare: onShare ? () => onShare("FILE", file.id) : undefined,
+          onShare: onShare ? (mode) => onShare("FILE", file.id, mode) : undefined,
           onRename: canMutate && onRename ? () => onRename("FILE", file.id, file.name) : undefined,
           onMove: canMutate && onMove ? () => onMove("FILE", file.id, file.name) : undefined,
           onFavoriteToggle: canFavorite && onFavorite ? () => onFavorite("FILE", file.id) : undefined,

@@ -25,13 +25,18 @@ export function findActiveShareForResource(
   id: string,
 ): SharedItem | null {
   const now = Date.now();
-  for (const share of shares) {
-    if (share.resourceType !== type || share.resourceId !== id) continue;
-    if (share.status && share.status !== "ACTIVE") continue;
-    if (share.expiresAt && new Date(share.expiresAt).getTime() < now) continue;
-    return share;
-  }
-  return null;
+  const matches = shares.filter((share) => {
+    if (share.resourceType !== type || share.resourceId !== id) return false;
+    if (share.status && share.status !== "ACTIVE") return false;
+    if (share.expiresAt && new Date(share.expiresAt).getTime() < now) return false;
+    return true;
+  });
+  if (!matches.length) return null;
+  return matches.sort((a, b) => {
+    const aTime = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+    const bTime = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+    return bTime - aTime;
+  })[0] ?? null;
 }
 
 /** Filter shares created by the current user for one resource. */

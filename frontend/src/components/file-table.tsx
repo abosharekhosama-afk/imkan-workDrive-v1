@@ -14,6 +14,8 @@ import type { FileRecord, FolderRecord } from "../lib/api/types";
 import type { WorkflowResourceStatus } from "../lib/api/workflows";
 import { formatBytes, resolveItemSize } from "../lib/api/quota";
 import { formatDateLocalized, latestOf } from "../lib/localized";
+import { followResourceKey } from "../lib/follow-updates-logic";
+import type { ShareLaunchMode } from "../lib/share-launch-logic";
 
 function compareText(a: string, b: string, direction: "asc" | "desc") {
   const result = a.localeCompare(b);
@@ -67,7 +69,7 @@ interface FileTableProps {
   files: FileRecord[];
   canMutate?: boolean;
   canShare?: boolean;
-  onShare: (resourceType: "FILE" | "FOLDER", resourceId: string) => void;
+  onShare: (resourceType: "FILE" | "FOLDER", resourceId: string, mode?: ShareLaunchMode) => void;
   onDownload: (fileId: string) => void;
   onRename: (resourceType: "FILE" | "FOLDER", resourceId: string, name: string) => void;
   onDelete: (resourceType: "FILE" | "FOLDER", resourceId: string) => void;
@@ -261,7 +263,7 @@ export function FileTable({
               handlers={{
                 onOpen: onOpen ? () => onOpen("FOLDER", folder.id, folder.name) : undefined,
                 onInspect: onInspect ? () => onInspect("FOLDER", folder.id, folder.name) : undefined,
-                onShare: undefined,
+                onShare: canShare ? (mode) => onShare("FOLDER", folder.id, mode) : undefined,
                 onRename: canMutate ? () => onRename("FOLDER", folder.id, folder.name) : undefined,
                 onMove: onMove && canMutate ? () => onMove("FOLDER", folder.id, folder.name) : undefined,
                     onCopy: onCopy && canMutate ? () => onCopy("FOLDER", folder.id, folder.name) : undefined,
@@ -269,7 +271,7 @@ export function FileTable({
                 onDelete: canMutate ? () => onDelete("FOLDER", folder.id) : undefined, onAssignWorkflow: onAssignWorkflow && canMutate ? () => onAssignWorkflow("FOLDER", folder.id, folder.name) : undefined,
                 onOrganize: onOrganize && canMutate ? () => onOrganize("FOLDER", folder.id) : undefined,
                 onFollowUpdates: onFollowUpdates ? () => onFollowUpdates("FOLDER", folder.id, folder.name) : undefined,
-                isFollowingUpdates: followIds.has(folder.id),
+                isFollowingUpdates: followIds.has(followResourceKey("FOLDER", folder.id)),
               }}
               onCopyLink={onCopyLink ? () => onCopyLink(folder.id) : undefined}
               onToast={onToast}
@@ -303,14 +305,14 @@ export function FileTable({
                   context={{
                     resourceType: "FOLDER",
                     canMutate,
-                    canShare: false,
+                    canShare: canShare,
                     canFavorite: onFavorite != null,
                     isFavorite: favoriteIds.has(folder.id),
                   }}
                   handlers={{
                     onOpen: onOpen ? () => onOpen("FOLDER", folder.id, folder.name) : undefined,
                     onInspect: onInspect ? () => onInspect("FOLDER", folder.id, folder.name) : undefined,
-                    onShare: undefined,
+                    onShare: canShare ? (mode) => onShare("FOLDER", folder.id, mode) : undefined,
                     onRename: canMutate ? () => onRename("FOLDER", folder.id, folder.name) : undefined,
                     onMove: onMove && canMutate ? () => onMove("FOLDER", folder.id, folder.name) : undefined,
                     onCopy: onCopy && canMutate ? () => onCopy("FOLDER", folder.id, folder.name) : undefined,
@@ -318,7 +320,7 @@ export function FileTable({
                     onDelete: canMutate ? () => onDelete("FOLDER", folder.id) : undefined, onAssignWorkflow: onAssignWorkflow && canMutate ? () => onAssignWorkflow("FOLDER", folder.id, folder.name) : undefined,
                     onOrganize: onOrganize && canMutate ? () => onOrganize("FOLDER", folder.id) : undefined,
                     onFollowUpdates: onFollowUpdates ? () => onFollowUpdates("FOLDER", folder.id, folder.name) : undefined,
-                    isFollowingUpdates: followIds.has(folder.id),
+                    isFollowingUpdates: followIds.has(followResourceKey("FOLDER", folder.id)),
                   }}
                 />
               </td>
@@ -327,8 +329,8 @@ export function FileTable({
           {sortedFiles.map((file) => (
             <tr key={file.id} draggable={Boolean(canMutate)} onDragStart={(e) => { e.dataTransfer.effectAllowed="move"; e.dataTransfer.setData("application/x-workdrive", JSON.stringify({type:"FILE",id:file.id,name:file.name})); }} onContextMenu={(e) => { e.preventDefault(); setCtxMenu({ x: e.clientX, y: e.clientY, node: (<FileContextMenu
               onToast={onToast}
-              handlers={{ onOpen: onOpen ? () => onOpen("FILE", file.id, file.name) : undefined, onInspect: onInspect ? () => onInspect("FILE", file.id, file.name) : undefined, onPreview: onPreview ? () => onPreview("FILE", file.id, file.name, file.mimeType ?? undefined, file.size ?? undefined) : undefined, onDownload: () => onDownload(file.id), onShare: canShare ? () => onShare("FILE", file.id) : undefined, onRename: canMutate ? () => onRename("FILE", file.id, file.name) : undefined, onMove: onMove && canMutate ? () => onMove("FILE", file.id, file.name) : undefined,
-                    onCopy: onCopy && canMutate ? () => onCopy("FILE", file.id, file.name) : undefined, onFavoriteToggle: onFavorite ? () => onFavorite("FILE", file.id) : undefined, onVersionHistory: onVersionHistory ? () => onVersionHistory("FILE", file.id, file.name, file.mimeType ?? undefined, file.size ?? undefined) : undefined, onDelete: canMutate ? () => onDelete("FILE", file.id) : undefined, onAssignWorkflow: onAssignWorkflow && canMutate ? () => onAssignWorkflow("FILE", file.id, file.name) : undefined, onOrganize: onOrganize && canMutate ? () => onOrganize("FILE", file.id) : undefined, onFollowUpdates: onFollowUpdates ? () => onFollowUpdates("FILE", file.id, file.name) : undefined, isFollowingUpdates: followIds.has(file.id) }}
+              handlers={{ onOpen: onOpen ? () => onOpen("FILE", file.id, file.name) : undefined, onInspect: onInspect ? () => onInspect("FILE", file.id, file.name) : undefined, onPreview: onPreview ? () => onPreview("FILE", file.id, file.name, file.mimeType ?? undefined, file.size ?? undefined) : undefined, onDownload: () => onDownload(file.id), onShare: canShare ? (mode) => onShare("FILE", file.id, mode) : undefined, onRename: canMutate ? () => onRename("FILE", file.id, file.name) : undefined, onMove: onMove && canMutate ? () => onMove("FILE", file.id, file.name) : undefined,
+                    onCopy: onCopy && canMutate ? () => onCopy("FILE", file.id, file.name) : undefined, onFavoriteToggle: onFavorite ? () => onFavorite("FILE", file.id) : undefined, onVersionHistory: onVersionHistory ? () => onVersionHistory("FILE", file.id, file.name, file.mimeType ?? undefined, file.size ?? undefined) : undefined, onDelete: canMutate ? () => onDelete("FILE", file.id) : undefined, onAssignWorkflow: onAssignWorkflow && canMutate ? () => onAssignWorkflow("FILE", file.id, file.name) : undefined, onOrganize: onOrganize && canMutate ? () => onOrganize("FILE", file.id) : undefined, onFollowUpdates: onFollowUpdates ? () => onFollowUpdates("FILE", file.id, file.name) : undefined, isFollowingUpdates: followIds.has(followResourceKey("FILE", file.id)) }}
               onCopyLink={onCopyLink ? () => onCopyLink(file.id) : undefined}
               x={e.clientX} y={e.clientY} onClose={() => setCtxMenu(null)}
             />)}); }} className="wd-list-row group relative cursor-grab active:cursor-grabbing" data-compact={compact || undefined} data-selected={selectedIds.has(file.id) || undefined} onClick={(e) => inspectFromRowClick(e, "FILE", file.id, file.name)}>
@@ -369,7 +371,7 @@ export function FileTable({
                     onInspect: onInspect ? () => onInspect("FILE", file.id, file.name) : undefined,
                     onPreview: onPreview ? () => onPreview("FILE", file.id, file.name, file.mimeType ?? undefined, file.size ?? undefined) : undefined,
                     onDownload: () => onDownload(file.id),
-                    onShare: canShare ? () => onShare("FILE", file.id) : undefined,
+                    onShare: canShare ? (mode) => onShare("FILE", file.id, mode) : undefined,
                     onRename: canMutate ? () => onRename("FILE", file.id, file.name) : undefined,
                     onMove: onMove && canMutate ? () => onMove("FILE", file.id, file.name) : undefined,
                     onCopy: onCopy && canMutate ? () => onCopy("FILE", file.id, file.name) : undefined,
@@ -378,7 +380,7 @@ export function FileTable({
                     onDelete: canMutate ? () => onDelete("FILE", file.id) : undefined, onAssignWorkflow: onAssignWorkflow && canMutate ? () => onAssignWorkflow("FILE", file.id, file.name) : undefined,
                     onOrganize: onOrganize && canMutate ? () => onOrganize("FILE", file.id) : undefined,
                     onFollowUpdates: onFollowUpdates ? () => onFollowUpdates("FILE", file.id, file.name) : undefined,
-                    isFollowingUpdates: followIds.has(file.id),
+                    isFollowingUpdates: followIds.has(followResourceKey("FILE", file.id)),
                   }}
                 />
               </td>
