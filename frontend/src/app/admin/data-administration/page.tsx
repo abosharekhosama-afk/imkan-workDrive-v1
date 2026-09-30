@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useLocale } from "@/components/locale-provider";
 import { ImkanOptionPicker } from "@/components/imkan-option-picker";
 import {
@@ -31,8 +31,8 @@ type Member = DataAdminLocations["members"][number];
 const TABS: Array<[Tab, string, string]> = [
   ["team", "Find in Team Folders", "البحث في مجلدات الفريق"],
   ["mine", "Find in My Folders", "البحث في مجلداتي"],
-  ["shared", "Shared Items", "العناصر المشتركة"],
   ["deleted", "Manage Deleted Items", "إدارة العناصر المحذوفة"],
+  ["shared", "Shared Items", "العناصر المشتركة"],
   ["large", "Large Files", "الملفات الكبيرة"],
 ];
 
@@ -72,6 +72,7 @@ export default function AdminDataAdministrationPage() {
   const { locale } = useLocale();
   const ar = locale === "ar";
   const params = useSearchParams();
+  const router = useRouter();
   const initial = params.get("tab");
   const [tab, setTab] = useState<Tab>(TABS.some(([id]) => id === initial) ? (initial as Tab) : "team");
   const [locations, setLocations] = useState<DataAdminLocations | null>(null);
@@ -112,7 +113,7 @@ export default function AdminDataAdministrationPage() {
   useEffect(() => {
     void getDataAdminLocations().then((next) => {
       setLocations(next);
-      setTeamId((current) => current || next.teamFolders[0]?.id || "");
+      setTeamId((current) => current || "all");
     }).catch((caught) => setError(explain(ar, caught)));
   }, [ar]);
 
@@ -134,7 +135,9 @@ export default function AdminDataAdministrationPage() {
           const rows = await browseDataAdmin({ scope, id, q: query || undefined, deleted: true });
           if (!cancelled) setItems(rows);
         } else if (tab === "team" && teamId) {
-          const rows = await browseDataAdmin({ scope: "team", id: teamId, q: query || undefined });
+          const folders = teamId === "all" ? (locations?.teamFolders ?? []) : (locations?.teamFolders ?? []).filter((folder) => folder.id === teamId);
+          const batches = await Promise.all(folders.map((folder) => browseDataAdmin({ scope: "team", id: folder.id, q: query || undefined })));
+          const rows = batches.flat().sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
           if (!cancelled) setItems(rows);
         } else if (tab === "mine" && memberId) {
           const rows = await browseDataAdmin({ scope: "personal", id: memberId, q: query || undefined });
@@ -151,7 +154,7 @@ export default function AdminDataAdministrationPage() {
     };
     void run();
     return () => { cancelled = true; };
-  }, [ar, tab, teamId, memberId, query, shareFilter, shareLocation, deletedLocation, refresh]);
+  }, [ar, tab, teamId, memberId, query, shareFilter, shareLocation, deletedLocation, refresh, locations]);
 
   useEffect(() => { setSelected([]); }, [tab, teamId, memberId, query, shareFilter, shareLocation, deletedLocation]);
 
@@ -223,153 +226,110 @@ export default function AdminDataAdministrationPage() {
     }
   }
 
-  const showFinder = tab === "team" || tab === "mine";
+  function openItem(item: DataAdminItem) {
+    if (tab === "deleted") return;
+    if (item.kind === "FOLDER") router.push(`/files/${encodeURIComponent(item.id)}`);
+    else window.dispatchEvent(new CustomEvent("workdrive:preview", { detail: { id: item.id, name: item.name, size: item.size ?? undefined } }));
+  }
 
   return (
-    <main className="flex h-full min-h-0 flex-col bg-[#f7f7f7]" dir={ar ? "rtl" : "ltr"}>
-      <div className="border-b border-slate-200 bg-white px-6 py-4">
-        <h1 className="text-[22px] font-semibold text-slate-950">{text(ar, "Data Administration", "إدارة البيانات")}</h1>
-        <p className="mt-1 text-[12px] text-slate-500">{text(ar, "Find files and folders, transfer ownership, manage shares, restore or permanently delete items, and review files over 100 MB.", "ابحث عن الملفات والمجلدات، وانقل الملكية، وأدر المشاركات، واستعد العناصر أو احذفها نهائياً، وراجع الملفات الأكبر من 100 ميجابايت.")}</p>
-        <div className="mt-4 flex gap-6 overflow-x-auto border-b border-slate-200">
+    <main className="flex h-full min-h-0 flex-col bg-white" dir={ar ? "rtl" : "ltr"}>
+      <div className="border-b border-slate-200 bg-white px-4 pt-4">
+        <h1 className="text-[21px] font-semibold text-[#252525]">{text(ar, "Data Administration", "إدارة البيانات")}</h1>
+        
+        <div className="mt-5 flex gap-5 overflow-x-auto border-b border-slate-200">
           {TABS.map(([id, en, arLabel]) => (
-            <button key={id} type="button" onClick={() => setTab(id)} className={`shrink-0 border-b-2 pb-2 text-[13px] ${tab === id ? "border-[#175cd3] font-semibold text-[#175cd3]" : "border-transparent text-slate-600"}`}>{text(ar, en, arLabel)}</button>
+            <button key={id} type="button" onClick={() => setTab(id)} className={`shrink-0 border-b-2 pb-3 text-[13px] ${tab === id ? "border-[#175cd3] font-semibold text-[#175cd3]" : "border-transparent text-[#555] hover:text-[#175cd3]"}`}>{text(ar, en, arLabel)}</button>
           ))}
         </div>
       </div>
 
-      <div className="flex min-h-0 flex-1">
-        {showFinder ? (
-          <aside className="flex w-[280px] shrink-0 flex-col border-e border-slate-200 bg-white">
-            <div className="border-b border-slate-100 px-4 py-3 text-[12px] font-semibold text-slate-700">{tab === "team" ? text(ar, "Team Folders", "مجلدات الفريق") : text(ar, "Members", "الأعضاء")}</div>
-            <div className="min-h-0 flex-1 overflow-y-auto p-2">
-              {tab === "team" ? locations?.teamFolders.map((folder) => (
-                <button key={folder.id} type="button" onClick={() => setTeamId(folder.id)} className={`mb-1 flex w-full rounded-lg px-3 py-2 text-start text-[13px] ${teamId === folder.id ? "bg-[#eef4ff] font-semibold text-[#175cd3]" : "text-slate-700 hover:bg-slate-50"}`}>{folder.name}</button>
-              )) : locations?.members.map((member) => (
-                <button key={member.id} type="button" onClick={() => { setPendingMember(member); setReason(""); }} className={`mb-1 flex w-full flex-col rounded-lg px-3 py-2 text-start ${memberId === member.id ? "bg-[#eef4ff]" : "hover:bg-slate-50"}`}>
-                  <span className={`text-[13px] ${memberId === member.id ? "font-semibold text-[#175cd3]" : "text-slate-800"}`}>{member.name || member.email}</span>
-                  <span className="truncate text-[11px] text-slate-500">{member.email}</span>
-                </button>
-              ))}
-              {tab === "team" && locations && !locations.teamFolders.length ? <p className="px-3 py-6 text-[12px] text-slate-400">{text(ar, "No Team Folders.", "لا توجد مجلدات فريق.")}</p> : null}
-            </div>
-          </aside>
-        ) : null}
-
-        <section className="flex min-w-0 flex-1 flex-col">
-          <div className="flex flex-wrap items-center gap-2 border-b border-slate-200 bg-white px-4 py-3">
-            <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder={text(ar, "Search by name", "بحث بالاسم")} className="h-9 min-w-[220px] flex-1 rounded-lg border border-slate-200 px-3 text-[13px] outline-none focus:border-[#175cd3]" />
-            {tab === "shared" ? (
-              <>
-                <ImkanOptionPicker value={shareFilter} onChange={setShareFilter} ariaLabel={text(ar, "Share filter", "تصفية المشاركات")} options={[
-                  { value: "all", label: text(ar, "All shared items", "كل العناصر المشتركة") },
-                  { value: "team", label: text(ar, "Shared within the team", "مشارك داخل الفريق") },
-                  { value: "internet", label: text(ar, "Anyone on the internet", "أي شخص على الإنترنت") },
-                  { value: "download", label: text(ar, "Download links", "روابط التنزيل") },
-                  { value: "external", label: text(ar, "External share links", "روابط المشاركة الخارجية") },
-                ]} />
-                <ImkanOptionPicker value={shareLocation} onChange={setShareLocation} ariaLabel={text(ar, "Location", "الموقع")} options={[
-                  { value: "all", label: text(ar, "All locations", "كل المواقع") },
-                  { value: "personal", label: text(ar, "My Folders", "مجلداتي") },
-                  ...(locations?.teamFolders.map((folder) => ({ value: folder.id, label: folder.name })) ?? []),
-                ]} />
-              </>
+      <div className="flex min-h-0 flex-1 flex-col bg-white">
+        <section className="flex min-h-0 flex-1 flex-col">
+          <div className="flex flex-wrap items-center gap-3 border-b border-slate-200 bg-white px-4 py-4">
+            {tab === "team" ? (
+              <ImkanOptionPicker value={teamId} onChange={setTeamId} ariaLabel={text(ar, "Team Folder", "مجلد الفريق")} options={[
+                { value: "all", label: text(ar, "All Team Folders", "كل مجلدات الفريق") },
+                ...(locations?.teamFolders.map((folder) => ({ value: folder.id, label: folder.name })) ?? []),
+              ]} />
             ) : null}
-            {tab === "deleted" ? (
-              <ImkanOptionPicker value={deletedLocation} onChange={setDeletedLocation} ariaLabel={text(ar, "Deleted location", "موقع المحذوفات")} options={[
+            {tab === "mine" ? (
+              <ImkanOptionPicker value={memberId} onChange={(id) => { const member = locations?.members.find((entry) => entry.id === id); if (member) { setPendingMember(member); setReason(""); } }} ariaLabel={text(ar, "Member", "العضو")} options={[
+                { value: "", label: text(ar, "Select a member", "اختر عضواً") },
+                ...(locations?.members.map((member) => ({ value: member.id, label: member.name || member.email })) ?? []),
+              ]} />
+            ) : null}
+            {tab === "deleted" ? <>
+              <span className="text-[13px] text-[#333]">{text(ar, "Show for", "عرض لـ")}</span>
+              <ImkanOptionPicker value={deletedLocation === "all" || deletedLocation === "personal" ? deletedLocation : "team"} onChange={(value) => setDeletedLocation(value === "team" ? (locations?.teamFolders[0]?.id || "all") : value)} ariaLabel={text(ar, "Deleted location type", "نوع موقع المحذوفات")} options={[
+                { value: "team", label: text(ar, "Team Folders", "مجلدات الفريق") },
+                { value: "personal", label: text(ar, "My Folders", "مجلداتي") },
+                { value: "all", label: text(ar, "All locations", "كل المواقع") },
+              ]} />
+              {deletedLocation !== "all" && deletedLocation !== "personal" ? <ImkanOptionPicker value={deletedLocation} onChange={setDeletedLocation} ariaLabel={text(ar, "Select any Team Folder", "اختر مجلد فريق")} options={locations?.teamFolders.map((folder) => ({ value: folder.id, label: folder.name })) ?? []} /> : null}
+            </> : null}
+            {tab === "shared" ? <>
+              <ImkanOptionPicker value={shareFilter} onChange={setShareFilter} ariaLabel={text(ar, "Share filter", "تصفية المشاركات")} options={[
+                { value: "all", label: text(ar, "All shared items", "كل العناصر المشتركة") },
+                { value: "external", label: text(ar, "Direct sharing to external users", "مشاركة مباشرة مع مستخدمين خارجيين") },
+                { value: "internet", label: text(ar, "Visibility to anyone on the internet", "مرئي لأي شخص على الإنترنت") },
+                { value: "download", label: text(ar, "Shared via download links", "مشاركة عبر روابط التنزيل") },
+                { value: "team", label: text(ar, "Shared within team", "مشاركة داخل الفريق") },
+              ]} />
+              <ImkanOptionPicker value={shareLocation} onChange={setShareLocation} ariaLabel={text(ar, "Location", "الموقع")} options={[
                 { value: "all", label: text(ar, "All locations", "كل المواقع") },
                 { value: "personal", label: text(ar, "My Folders", "مجلداتي") },
                 ...(locations?.teamFolders.map((folder) => ({ value: folder.id, label: folder.name })) ?? []),
               ]} />
-            ) : null}
+            </> : null}
+            {tab === "large" ? <>
+              <ImkanOptionPicker value={shareFilter} onChange={setShareFilter} ariaLabel={text(ar, "File type", "نوع الملف")} options={[{value:"all",label:text(ar,"All File Types","كل أنواع الملفات")}]} />
+              <ImkanOptionPicker value={shareLocation} onChange={setShareLocation} ariaLabel={text(ar, "Location", "الموقع")} options={[{value:"all",label:text(ar,"All locations","كل المواقع")},...(locations?.teamFolders.map((folder)=>({value:folder.id,label:folder.name}))??[])]} />
+            </> : null}
+            {tab !== "mine" ? <>
+              <input value={search} onChange={(event) => setSearch(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") setQuery(search.trim()); }} placeholder={text(ar, "Search by keywords", "بحث بالكلمات المفتاحية")} className="h-9 w-[260px] max-w-full rounded-full border border-[#d7dce2] px-4 text-[13px] outline-none focus:border-[#175cd3]" />
+              <button type="button" onClick={() => setQuery(search.trim())} className="h-9 rounded-full bg-[#8eaff5] px-5 text-[13px] font-medium text-white hover:bg-[#175cd3]">{text(ar, "Find", "بحث")}</button>
+            </> : null}
           </div>
 
-          {tab === "deleted" ? <p className="bg-[#f8fbff] px-4 py-2 text-[12px] text-slate-600">{text(ar, `Deleted items stay for ${locations?.trashDays ?? 30} days and do not count in active storage. Permanent delete cannot be undone.`, `تبقى العناصر المحذوفة ${locations?.trashDays ?? 30} يوماً ولا تُحتسب ضمن التخزين النشط. الحذف النهائي لا يمكن التراجع عنه.`)}</p> : null}
-          {tab === "large" ? <p className="bg-[#f8fbff] px-4 py-2 text-[12px] text-slate-600">{text(ar, "Files using 100 MB or more, including retained versions. Delete older versions or move the file to trash.", "الملفات التي تستخدم 100 ميجابايت أو أكثر، بما في ذلك الإصدارات المحتفظ بها. احذف الإصدارات الأقدم أو انقل الملف إلى المحذوفات.")}</p> : null}
-          {tab === "mine" && !memberId ? <p className="bg-[#f8fbff] px-4 py-2 text-[12px] text-slate-600">{text(ar, "Choose a member and enter a reason. That member is notified.", "اختر عضواً وأدخل السبب. سيتم إشعار ذلك العضو.")}</p> : null}
+          {tab === "deleted" ? <p className="border-b border-slate-100 bg-[#f8fafc] px-4 py-3 text-[12px] text-slate-600">{text(ar, `Deleted items will be permanently deleted after ${locations?.trashDays ?? 30} days.`, `سيتم حذف العناصر نهائياً بعد ${locations?.trashDays ?? 30} يوماً.`)} <span className="text-[#175cd3]">{text(ar, "Manage Data Retention Policy", "إدارة سياسة الاحتفاظ بالبيانات")}</span></p> : null}
+          {tab === "large" ? <p className="border-b border-slate-100 bg-[#f8fafc] px-4 py-3 text-[12px] text-slate-600">{text(ar, "Review files larger than 100 MB to manage storage and versions.", "راجع الملفات الأكبر من 100 ميجابايت لإدارة التخزين والإصدارات.")}</p> : null}
           {error ? <p className="bg-red-50 px-4 py-2 text-[12px] text-red-700">{error}</p> : null}
           {notice ? <p className="bg-emerald-50 px-4 py-2 text-[12px] text-emerald-700">{notice}</p> : null}
 
           {selected.length ? (
             <div className="flex flex-wrap items-center gap-2 border-b border-slate-200 bg-[#eef4ff] px-4 py-2">
               <span className="text-[12px] font-semibold text-[#175cd3]">{selected.length} {text(ar, "selected", "محدد")}</span>
-              {tab === "shared" ? (
-                <>
-                  <button type="button" disabled={selectedShares.length !== 1} onClick={() => { const share = selectedShares[0]; if (!share) return; setActiveShare(share); setPermission(share.permission); }} className="rounded-md bg-white px-3 py-1.5 text-[12px] font-semibold text-slate-700 disabled:opacity-40">{text(ar, "Share details", "تفاصيل المشاركة")}</button>
-                  <button type="button" disabled={busy} onClick={() => void act(async () => { for (const share of selectedShares) await revokeDataAdminShare(share.id, share.resourceKind); setNotice(text(ar, "Access removed.", "تمت إزالة الوصول.")); })} className="rounded-md bg-white px-3 py-1.5 text-[12px] font-semibold text-red-600">{text(ar, "Remove access", "إزالة الوصول")}</button>
-                </>
-              ) : null}
-              {tab === "deleted" ? (
-                <>
-                  <button type="button" disabled={busy} onClick={() => void act(async () => { await restoreDataAdminFiles(selected); setNotice(text(ar, "Items restored.", "تمت استعادة العناصر.")); })} className="rounded-md bg-white px-3 py-1.5 text-[12px] font-semibold text-slate-700">{text(ar, "Restore", "استعادة")}</button>
-                  <button type="button" onClick={() => setPurgeOpen(true)} className="rounded-md bg-white px-3 py-1.5 text-[12px] font-semibold text-red-600">{text(ar, "Delete permanently", "حذف نهائي")}</button>
-                </>
-              ) : null}
-              {tab !== "shared" && tab !== "deleted" ? (
-                <>
-                  <button type="button" disabled={!selectedItems.length} onClick={() => { setSharePermission("VIEW"); setShareRecipient(""); setShareDownload(true); setShareOpen(true); }} className="rounded-md bg-white px-3 py-1.5 text-[12px] font-semibold text-slate-700">{text(ar, "Share", "مشاركة")}</button>
-                  <button type="button" disabled={!selectedItems.length} onClick={() => { setTargetUserId(locations?.members[0]?.id || ""); setTransferOpen(true); }} className="rounded-md bg-white px-3 py-1.5 text-[12px] font-semibold text-slate-700">{text(ar, "Transfer ownership", "نقل الملكية")}</button>
-                  <button type="button" disabled={busy || !selectedItems.some((item) => item.kind === "FILE")} onClick={() => void act(async () => { await trashDataAdminFiles(selectedItems.filter((item) => item.kind === "FILE").map((item) => item.id)); setNotice(text(ar, "Files moved to trash.", "نُقلت الملفات إلى المحذوفات.")); })} className="rounded-md bg-white px-3 py-1.5 text-[12px] font-semibold text-slate-700">{text(ar, "Move to trash", "نقل إلى المحذوفات")}</button>
-                  {tab === "large" && selectedItems.length === 1 ? <button type="button" onClick={() => void openVersions(selectedItems[0])} className="rounded-md bg-white px-3 py-1.5 text-[12px] font-semibold text-slate-700">{text(ar, "Manage versions", "إدارة الإصدارات")}</button> : null}
-                </>
-              ) : null}
+              {tab === "shared" ? <>
+                <button type="button" disabled={selectedShares.length !== 1} onClick={() => { const share = selectedShares[0]; if (!share) return; setActiveShare(share); setPermission(share.permission); }} className="rounded-md bg-white px-3 py-1.5 text-[12px] font-semibold text-slate-700 disabled:opacity-40">{text(ar, "Share details", "تفاصيل المشاركة")}</button>
+                <button type="button" disabled={busy} onClick={() => void act(async () => { for (const share of selectedShares) await revokeDataAdminShare(share.id, share.resourceKind); setNotice(text(ar, "Access removed.", "تمت إزالة الوصول.")); })} className="rounded-md bg-white px-3 py-1.5 text-[12px] font-semibold text-red-600">{text(ar, "Remove access", "إزالة الوصول")}</button>
+              </> : null}
+              {tab === "deleted" ? <>
+                <button type="button" disabled={busy} onClick={() => void act(async () => { await restoreDataAdminFiles(selected); setNotice(text(ar, "Items restored.", "تمت استعادة العناصر.")); })} className="rounded-md bg-white px-3 py-1.5 text-[12px] font-semibold text-slate-700">{text(ar, "Restore", "استعادة")}</button>
+                <button type="button" onClick={() => setPurgeOpen(true)} className="rounded-md bg-white px-3 py-1.5 text-[12px] font-semibold text-red-600">{text(ar, "Delete permanently", "حذف نهائي")}</button>
+              </> : null}
+              {tab !== "shared" && tab !== "deleted" ? <>
+                <button type="button" disabled={!selectedItems.length} onClick={() => { setSharePermission("VIEW"); setShareRecipient(""); setShareDownload(true); setShareOpen(true); }} className="rounded-md bg-white px-3 py-1.5 text-[12px] font-semibold text-slate-700">{text(ar, "Share", "مشاركة")}</button>
+                <button type="button" disabled={!selectedItems.length} onClick={() => { setTargetUserId(locations?.members[0]?.id || ""); setTransferOpen(true); }} className="rounded-md bg-white px-3 py-1.5 text-[12px] font-semibold text-slate-700">{text(ar, "Transfer ownership", "نقل الملكية")}</button>
+                <button type="button" disabled={busy || !selectedItems.some((item) => item.kind === "FILE")} onClick={() => void act(async () => { await trashDataAdminFiles(selectedItems.filter((item) => item.kind === "FILE").map((item) => item.id)); setNotice(text(ar, "Files moved to trash.", "نُقلت الملفات إلى المحذوفات.")); })} className="rounded-md bg-white px-3 py-1.5 text-[12px] font-semibold text-slate-700">{text(ar, "Move to trash", "نقل إلى المحذوفات")}</button>
+                {tab === "large" && selectedItems.length === 1 ? <button type="button" onClick={() => void openVersions(selectedItems[0])} className="rounded-md bg-white px-3 py-1.5 text-[12px] font-semibold text-slate-700">{text(ar, "Manage versions", "إدارة الإصدارات")}</button> : null}
+              </> : null}
             </div>
           ) : null}
 
           <div className="min-h-0 flex-1 overflow-auto">
             {loading ? <p className="px-4 py-8 text-[13px] text-slate-400">{text(ar, "Loading…", "جارٍ التحميل…")}</p> : tab === "shared" ? (
               <table className="w-full min-w-[760px] border-collapse bg-white text-[13px]">
-                <thead className="sticky top-0 bg-[#f8fafc] text-[11px] uppercase tracking-wide text-slate-500">
-                  <tr>
-                    <th className="w-10 px-3 py-2"><input type="checkbox" checked={visibleIds.length > 0 && selected.length === visibleIds.length} onChange={(event) => setSelected(event.target.checked ? visibleIds : [])} /></th>
-                    <th className="px-3 py-2 text-start">{text(ar, "Name", "الاسم")}</th>
-                    <th className="px-3 py-2 text-start">{text(ar, "Share details", "تفاصيل المشاركة")}</th>
-                    <th className="px-3 py-2 text-start">{text(ar, "Location", "الموقع")}</th>
-                    <th className="px-3 py-2 text-start">{text(ar, "Owner", "المالك")}</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {shares.map((share) => (
-                    <tr key={share.id} className="border-t border-slate-100 hover:bg-slate-50">
-                      <td className="px-3 py-2"><input type="checkbox" checked={selected.includes(share.id)} onChange={(event) => setSelected((current) => event.target.checked ? [...current, share.id] : current.filter((id) => id !== share.id))} /></td>
-                      <td className="px-3 py-2 font-medium text-slate-800">{share.name}</td>
-                      <td className="px-3 py-2 text-slate-600">{shareKindLabel(share.kind, ar)} · {share.permission}{share.recipients.length ? ` · ${share.recipients.map((person) => person.email).join(", ")}` : ""}</td>
-                      <td className="px-3 py-2 text-slate-600">{share.location}</td>
-                      <td className="px-3 py-2 text-slate-600">{share.ownerName || "—"}</td>
-                    </tr>
-                  ))}
-                </tbody>
+                <thead className="sticky top-0 bg-white text-[11px] uppercase tracking-wide text-slate-500"><tr><th className="w-10 px-3 py-3"><input type="checkbox" checked={visibleIds.length > 0 && selected.length === visibleIds.length} onChange={(event) => setSelected(event.target.checked ? visibleIds : [])} /></th><th className="px-3 py-3 text-start">{text(ar,"Name","الاسم")}</th><th className="px-3 py-3 text-start">{text(ar,"Share details","تفاصيل المشاركة")}</th><th className="px-3 py-3 text-start">{text(ar,"Location","الموقع")}</th><th className="px-3 py-3 text-start">{text(ar,"Owner","المالك")}</th></tr></thead>
+                <tbody>{shares.map((share) => <tr key={share.id} onClick={() => { setActiveShare(share); setPermission(share.permission); }} className="cursor-pointer border-t border-slate-100 hover:bg-[#f7f8fa]"><td className="px-3 py-3" onClick={(e)=>e.stopPropagation()}><input type="checkbox" checked={selected.includes(share.id)} onChange={(event) => setSelected((current) => event.target.checked ? [...current, share.id] : current.filter((id) => id !== share.id))} /></td><td className="px-3 py-3 font-medium text-slate-800">{share.name}</td><td className="px-3 py-3 text-slate-600">{shareKindLabel(share.kind, ar)} · {share.permission}{share.recipients.length ? ` · ${share.recipients.map((person) => person.email).join(", ")}` : ""}</td><td className="px-3 py-3 text-slate-600">{share.location}</td><td className="px-3 py-3 text-slate-600">{share.ownerName || "—"}</td></tr>)}</tbody>
               </table>
             ) : (
               <table className="w-full min-w-[760px] border-collapse bg-white text-[13px]">
-                <thead className="sticky top-0 bg-[#f8fafc] text-[11px] uppercase tracking-wide text-slate-500">
-                  <tr>
-                    <th className="w-10 px-3 py-2"><input type="checkbox" checked={visibleIds.length > 0 && selected.length === visibleIds.length} onChange={(event) => setSelected(event.target.checked ? visibleIds : [])} /></th>
-                    <th className="px-3 py-2 text-start">{text(ar, "Name", "الاسم")}</th>
-                    <th className="px-3 py-2 text-start">{text(ar, "Owner", "المالك")}</th>
-                    <th className="px-3 py-2 text-start">{tab === "large" ? text(ar, "Storage", "التخزين") : text(ar, "Size", "الحجم")}</th>
-                    {tab === "large" ? <th className="px-3 py-2 text-start">{text(ar, "Versions", "الإصدارات")}</th> : null}
-                    <th className="px-3 py-2 text-start">{text(ar, "Location", "الموقع")}</th>
-                    <th className="px-3 py-2 text-start">{text(ar, "Modified", "آخر تعديل")}</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {items.map((item) => (
-                    <tr key={`${item.kind}-${item.id}`} className="border-t border-slate-100 hover:bg-slate-50">
-                      <td className="px-3 py-2"><input type="checkbox" checked={selected.includes(item.id)} onChange={(event) => setSelected((current) => event.target.checked ? [...current, item.id] : current.filter((id) => id !== item.id))} /></td>
-                      <td className="px-3 py-2"><span className="font-medium text-slate-800">{item.name}</span><span className="ms-2 text-[10px] uppercase text-slate-400">{item.kind === "FOLDER" ? text(ar, "Folder", "مجلد") : item.extension || text(ar, "File", "ملف")}</span></td>
-                      <td className="px-3 py-2 text-slate-600">{item.ownerName || item.ownerEmail || "—"}</td>
-                      <td className="px-3 py-2 text-slate-600">{bytes(item.size)}</td>
-                      {tab === "large" ? <td className="px-3 py-2 text-slate-600">{item.versionCount ?? 0}</td> : null}
-                      <td className="px-3 py-2 text-slate-600">{item.location}</td>
-                      <td className="px-3 py-2 text-slate-600">{when(item.deletedAt || item.updatedAt, ar)}</td>
-                    </tr>
-                  ))}
-                </tbody>
+                <thead className="sticky top-0 bg-white text-[11px] uppercase tracking-wide text-slate-500"><tr><th className="w-10 px-3 py-3"><input type="checkbox" checked={visibleIds.length > 0 && selected.length === visibleIds.length} onChange={(event) => setSelected(event.target.checked ? visibleIds : [])} /></th><th className="px-3 py-3 text-start">{text(ar,"Name","الاسم")}</th><th className="px-3 py-3 text-start">{text(ar,"Last modified","آخر تعديل")}</th>{tab === "large" ? <><th className="px-3 py-3 text-start">{text(ar,"Versions","الإصدارات")}</th><th className="px-3 py-3 text-start">{text(ar,"Storage used","المساحة المستخدمة")}</th></> : null}<th className="px-3 py-3 text-start">{text(ar,"Owner","المالك")}</th></tr></thead>
+                <tbody>{items.map((item) => <tr key={`${item.kind}-${item.id}`} onClick={() => openItem(item)} onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); openItem(item); } }} tabIndex={tab === "deleted" ? -1 : 0} className={`${tab === "deleted" ? "" : "cursor-pointer"} border-t border-slate-100 hover:bg-[#f7f8fa] focus:bg-[#eef4ff]`}><td className="px-3 py-3" onClick={(e)=>e.stopPropagation()}><input type="checkbox" checked={selected.includes(item.id)} onChange={(event) => setSelected((current) => event.target.checked ? [...current, item.id] : current.filter((id) => id !== item.id))} /></td><td className="px-3 py-3"><span className="font-medium text-[#252525]">{item.name}</span><span className="ms-2 text-[10px] uppercase text-slate-400">{item.kind === "FOLDER" ? text(ar,"Folder","مجلد") : item.extension || text(ar,"File","ملف")}</span></td><td className="px-3 py-3 text-slate-600">{when(item.deletedAt || item.updatedAt, ar)}</td>{tab === "large" ? <><td className="px-3 py-3 text-slate-600">{item.versionCount ?? 0}</td><td className="px-3 py-3 text-slate-600">{bytes(item.size)}</td></> : null}<td className="px-3 py-3 text-slate-600">{item.ownerName || item.ownerEmail || "—"}</td></tr>)}</tbody>
               </table>
             )}
-            {!loading && ((tab === "shared" && !shares.length) || (tab !== "shared" && !items.length)) ? (
-              <p className="px-4 py-10 text-center text-[13px] text-slate-400">{tab === "mine" && !memberId ? text(ar, "Select a member to continue.", "اختر عضواً للمتابعة.") : text(ar, "Nothing to show.", "لا يوجد شيء للعرض.")}</p>
-            ) : null}
+            {!loading && ((tab === "shared" && !shares.length) || (tab !== "shared" && !items.length)) ? <div className="flex min-h-[360px] items-center justify-center px-4 text-center"><div className="max-w-[560px] rounded-2xl border border-slate-100 px-10 py-8"><h2 className="text-[16px] font-semibold text-[#333]">{tab === "deleted" ? text(ar,"Discover deleted files","اكتشف الملفات المحذوفة") : tab === "large" ? text(ar,"No large files found","لم يتم العثور على ملفات كبيرة") : tab === "shared" ? text(ar,"There are no Shared Items here","لا توجد عناصر مشتركة هنا") : text(ar,"Discover files in Team Folders","اكتشف الملفات في مجلدات الفريق")}</h2><p className="mt-3 text-[13px] text-slate-600">{tab === "deleted" ? text(ar,"Find and restore all files deleted by your team members.","اعثر على الملفات التي حذفها أعضاء الفريق واستعدها.") : tab === "large" ? text(ar,"You don't have any files larger than 100 MB.","لا توجد ملفات أكبر من 100 ميجابايت.") : tab === "shared" ? text(ar,"Shared files and folders will appear here.","ستظهر الملفات والمجلدات المشتركة هنا.") : text(ar,"Find and manage files in Team Folders","اعثر على الملفات وأدرها في مجلدات الفريق")}</p></div></div> : null}
           </div>
         </section>
       </div>
