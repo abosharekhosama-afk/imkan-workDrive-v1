@@ -1,8 +1,13 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
+import { PopoverTrigger } from "@radix-ui/react-popover";
 import { useLocale } from "./locale-provider";
 import { FileIcon } from "./file-icon";
+import { ActionDropdown } from "./action-dropdown";
+import { ShareModal } from "./share-modal";
+import { DataTemplateAssociationModal } from "./data-template-association-modal";
+import { VersionHistoryDrawer } from "./files/version-history-drawer";
 import { ImageViewer } from "./preview/image-viewer";
 import { PdfViewer } from "./preview/pdf-viewer";
 import { OfficeViewer } from "./preview/office-viewer";
@@ -11,18 +16,15 @@ import { CodeViewer } from "./preview/code-viewer";
 import { ArchiveViewer } from "./preview/archive-viewer";
 import { DetailsSidebar } from "./preview/details-sidebar";
 import { FileCommentsPanel } from "./preview/file-comments-panel";
-import { DataTemplateSidebar } from "./preview/data-template-sidebar";
 import { DEFAULT_WATERMARK_CONFIG, PreviewWatermark, WatermarkSidebar, type WatermarkConfig } from "./preview/watermark-sidebar";
 import { listFileComments } from "../lib/api/comments";
 import { usePreviewUrl } from "./preview/use-preview-url";
 import { resolveMimeType } from "../lib/api/mime";
 import { getPreviewMimeCategory, isBrowserRenderableImage } from "../lib/api/preview";
 import { formatBytes } from "../lib/api/quota";
-import { requestDownload } from "../lib/api/files";
+import { getFileDlp, requestDownload, trashFile, type FileDlpDecision } from "../lib/api/files";
 import { triggerDownload } from "../lib/api/download";
-import { buildCreateShareBody, createShare } from "../lib/api/shares";
-import { normalizePublicAppUrl } from "../lib/public-url";
-import { getFileDlp, type FileDlpDecision } from "../lib/api/files";
+import { listDataTemplates, type DataTemplate } from "../lib/api/metadata";
 import { getViewPreferences } from "../lib/api/enterprise";
 import { useRouter } from "next/navigation";
 
@@ -63,11 +65,15 @@ export function FilePreviewModal({ target, onClose, onPrevFile, onNextFile, init
   const { label } = useLocale();
   const previousActiveRef = useRef<HTMLElement | null>(null);
   const printFrameRef = useRef<HTMLIFrameElement | null>(null);
-  const [panel, setPanel] = useState<"details" | "comments" | "dataTemplate" | "watermark" | "zia" | null>(initialPanel ?? null);
+  const [panel, setPanel] = useState<"details" | "comments" | "watermark" | "zia" | null>(initialPanel === "dataTemplate" ? null : initialPanel ?? null);
   const [commentCount, setCommentCount] = useState(0);
   const [toast, setToast] = useState<string | null>(null);
   const [dlp, setDlp] = useState<FileDlpDecision | null>(null);
   const [watermarkConfig, setWatermarkConfig] = useState<WatermarkConfig>(DEFAULT_WATERMARK_CONFIG);
+  const [shareOpen, setShareOpen] = useState(false);
+  const [versionOpen, setVersionOpen] = useState(false);
+  const [templateOpen, setTemplateOpen] = useState(initialPanel === "dataTemplate");
+  const [templates, setTemplates] = useState<DataTemplate[]>([]);
   const router = useRouter();
 
   const open = Boolean(target);
@@ -79,23 +85,38 @@ export function FilePreviewModal({ target, onClose, onPrevFile, onNextFile, init
   const effectiveMime = info?.mime_type ?? resolvedMime;
 
   useEffect(() => {
-    setPanel(initialPanel ?? null);
+    setPanel(initialPanel === "dataTemplate" ? null : initialPanel ?? null);
     setToast(null);
     setDlp(null);
     setWatermarkConfig(DEFAULT_WATERMARK_CONFIG);
+    setShareOpen(false);
+    setVersionOpen(false);
+    setTemplateOpen(initialPanel === "dataTemplate");
     if (!activeTarget) return;
     let live = true;
     void getFileDlp(activeTarget.id).then((value) => {
       if (!live) return;
       setDlp(value);
-      setWatermarkConfig((current) => ({ ...current, text: value.watermark.text || current.text }));
+      setWatermarkConfig((current) => ({
+        ...current,
+        enabled: value.watermark.enabled || current.enabled,
+        text: value.watermark.text || current.text,
+        kind: value.watermark.enabled ? "text" : current.kind,
+      }));
     }).catch(() => { if (live) setDlp(null); });
     void getViewPreferences().then((value) => {
-      if (!live) return;
-      if (!initialPanel) {
-        setPanel(value.previewPanel === "DETAILS" ? "details" : value.previewPanel === "COMMENTS" ? "comments" : value.previewPanel === "DATA_TEMPLATE" ? "dataTemplate" : null);
+      if (!live || initialPanel) return;
+      if (value.previewPanel === "DATA_TEMPLATE") {
+        setPanel(null);
+        setTemplateOpen(true);
+        void listDataTemplates(false).then((rows) => { if (live) setTemplates(rows); }).catch(() => undefined);
+        return;
       }
+      setPanel(value.previewPanel === "DETAILS" ? "details" : value.previewPanel === "COMMENTS" ? "comments" : null);
     }).catch(() => undefined);
+    if (initialPanel === "dataTemplate") {
+      void listDataTemplates(false).then((rows) => { if (live) setTemplates(rows); }).catch(() => undefined);
+    }
     return () => { live = false; };
   }, [activeTarget?.id, initialPanel]);
 
@@ -121,6 +142,9 @@ export function FilePreviewModal({ target, onClose, onPrevFile, onNextFile, init
   useEffect(() => {
     if (!open) return;
     const onKeyDown = (event: KeyboardEvent) => {
+      const node = event.target instanceof Element ? event.target : null;
+      const overlay = shareOpen || versionOpen || templateOpen || Boolean(node?.closest(".wd-menu, .imkan-modal-backdrop, [data-radix-popper-content-wrapper]"));
+      if (overlay) return;
       if (event.key === "Escape") {
         event.preventDefault();
         onClose();
@@ -134,7 +158,7 @@ export function FilePreviewModal({ target, onClose, onPrevFile, onNextFile, init
     };
     document.addEventListener("keydown", onKeyDown);
     return () => document.removeEventListener("keydown", onKeyDown);
-  }, [open, onClose, onPrevFile, onNextFile]);
+  }, [open, onClose, onPrevFile, onNextFile, shareOpen, versionOpen, templateOpen]);
 
   const showToast = useCallback((message: string) => {
     setToast(message);
@@ -143,22 +167,29 @@ export function FilePreviewModal({ target, onClose, onPrevFile, onNextFile, init
 
   const handleDownload = useCallback(async () => {
     if (!activeTarget) return;
-    const result = await requestDownload(activeTarget.id);
-    triggerDownload(result.download_url, activeTarget.name);
-  }, [activeTarget]);
+    try {
+      const result = await requestDownload(activeTarget.id);
+      triggerDownload(result.download_url, activeTarget.name);
+    } catch (cause) {
+      showToast(cause instanceof Error ? cause.message : label("preview.error"));
+    }
+  }, [activeTarget, label, showToast]);
 
-  const handleShare = useCallback(async () => {
+  const copyPermalink = useCallback(async () => {
     if (!activeTarget) return;
     try {
-      const result = await createShare(
-        buildCreateShareBody({ resourceType: "FILE", resourceId: activeTarget.id, canDownload: true }),
-      );
-      await navigator.clipboard.writeText(normalizePublicAppUrl(result.link_url));
-      showToast(label("preview.shareCopied"));
+      await navigator.clipboard.writeText(`${window.location.origin}/files?file=${encodeURIComponent(activeTarget.id)}`);
+      showToast(label("preview.copied"));
     } catch {
       showToast(label("preview.error"));
     }
   }, [activeTarget, label, showToast]);
+
+  const openTemplates = useCallback(() => {
+    setPanel(null);
+    setTemplateOpen(true);
+    void listDataTemplates(false).then(setTemplates).catch(() => setTemplates([]));
+  }, []);
 
   const handlePrint = useCallback(() => {
     if (!url) return;
@@ -182,7 +213,8 @@ export function FilePreviewModal({ target, onClose, onPrevFile, onNextFile, init
     printFrameRef.current = frame;
   }, [url]);
 
-  const togglePanel = useCallback((next: "details" | "comments" | "dataTemplate" | "watermark" | "zia") => {
+  const togglePanel = useCallback((next: "details" | "comments" | "watermark" | "zia") => {
+    setTemplateOpen(false);
     setPanel((current) => current === next ? null : next);
   }, []);
 
@@ -259,7 +291,14 @@ export function FilePreviewModal({ target, onClose, onPrevFile, onNextFile, init
   };
 
   const railButton = (key: "details" | "comments" | "dataTemplate" | "watermark" | "zia", icon: ReactNode, title: string) => (
-    <button type="button" className={`zoho-preview-rail-btn${panel === key ? " active" : ""}`} onClick={() => togglePanel(key)} title={title} aria-label={title} aria-pressed={panel === key}>
+    <button
+      type="button"
+      className={`zoho-preview-rail-btn${key === "dataTemplate" ? (templateOpen ? " active" : "") : panel === key ? " active" : ""}`}
+      onClick={() => { if (key === "dataTemplate") openTemplates(); else togglePanel(key); }}
+      title={title}
+      aria-label={title}
+      aria-pressed={key === "dataTemplate" ? templateOpen : panel === key}
+    >
       <span className="zoho-preview-rail-icon">{icon}</span>
       <span>{title}</span>
       {key === "comments" && commentCount > 0 ? <b className="zoho-rail-badge">{commentCount > 99 ? "99+" : commentCount}</b> : null}
@@ -278,23 +317,41 @@ export function FilePreviewModal({ target, onClose, onPrevFile, onNextFile, init
           <strong title={info?.file_name || activeTarget.name}>{info?.file_name || activeTarget.name}</strong>
         </span>
         <div className="zoho-preview-actions">
-          {category === "image" ? <button type="button" className="zoho-preview-outline-btn" onClick={() => showToast(label("preview.editImage") || "Image editor")}>✎ <span>{label("preview.editImage") || "Edit image"}</span></button> : null}
           <div className="zoho-preview-menu-wrap">
-            <button type="button" className="zoho-preview-share" onClick={() => void handleShare()}><span>⇧</span>{label("preview.share") || "Share"}<span>⌄</span></button>
+            <button type="button" className="zoho-preview-share" onClick={() => setShareOpen(true)}><span>⇧</span>{label("preview.share")}<span>⌄</span></button>
           </div>
-          <div className="zoho-preview-menu-wrap">
-            <button type="button" className="zoho-preview-outline-btn" onClick={() => {
-              if (category === "office") {
+          {category === "office" ? (
+            <div className="zoho-preview-menu-wrap">
+              <button type="button" className="zoho-preview-outline-btn" onClick={() => {
                 const ext = extension.toLowerCase();
                 if (["xls", "xlsx", "ods"].includes(ext)) openWith("sheet");
                 else if (["ppt", "pptx", "odp"].includes(ext)) openWith("show");
                 else openWith("writer");
-              } else showToast(label("preview.openWith") || "Open With");
-            }}>{label("preview.openWith") || "Open With"} <span>⌄</span></button>
-          </div>
-          <button type="button" className="zoho-preview-icon-top" onClick={() => void navigator.clipboard.writeText(`${window.location.origin}/files?file=${encodeURIComponent(activeTarget.id)}`)} aria-label={label("preview.copyLink") || "Copy link"} title={label("preview.copyLink") || "Copy link"}>↗</button>
+              }}>{label("preview.openWith")} <span>⌄</span></button>
+            </div>
+          ) : null}
+          <button type="button" className="zoho-preview-icon-top" onClick={() => void copyPermalink()} aria-label={label("preview.copyLink")} title={label("preview.copyLink")}>↗</button>
           <button type="button" className="zoho-preview-icon-top" onClick={() => void handleDownload()} aria-label={label("preview.download")} title={label("preview.download")}>⇩</button>
-          <button type="button" className="zoho-preview-icon-top" onClick={() => showToast(label("files.actions") || "More actions")} aria-label={label("files.actions") || "More actions"} title={label("files.actions") || "More actions"}>•••</button>
+          <ActionDropdown
+            label={label("files.actions")}
+            trigger={(
+              <PopoverTrigger asChild>
+                <button type="button" className="zoho-preview-icon-top" aria-label={label("files.actions")} title={label("files.actions")}>•••</button>
+              </PopoverTrigger>
+            )}
+            items={[
+              { label: label("files.download"), onSelect: () => void handleDownload() },
+              { label: label("files.share"), onSelect: () => setShareOpen(true) },
+              { label: label("preview.copyLink"), onSelect: () => void copyPermalink() },
+              { label: label("files.versionHistory"), onSelect: () => setVersionOpen(true) },
+              { label: label("preview.comments"), onSelect: () => setPanel("comments") },
+              { label: label("files.details"), onSelect: () => setPanel("details") },
+              { label: label("files.delete"), destructive: true, dividerBefore: true, onSelect: () => {
+                if (!window.confirm(label("files.deleteConfirm"))) return;
+                void trashFile(activeTarget.id).then(() => onClose()).catch((cause) => showToast(cause instanceof Error ? cause.message : label("preview.error")));
+              } },
+            ]}
+          />
           <button type="button" className="zoho-preview-icon-top close" onClick={onClose} aria-label={label("preview.close")}>×</button>
         </div>
       </header>
@@ -305,15 +362,14 @@ export function FilePreviewModal({ target, onClose, onPrevFile, onNextFile, init
           <div className="zoho-preview-body">
             <div className="zoho-preview-canvas-wrap">
               {renderStage()}
-              <PreviewWatermark enabled={Boolean(dlp?.watermark.enabled)} config={watermarkConfig} />
+              <PreviewWatermark enabled={watermarkConfig.enabled || Boolean(dlp?.watermark.enabled)} config={watermarkConfig} />
             </div>
           </div>
           {onNextFile ? <button type="button" className="zoho-preview-arrow end" onClick={onNextFile} aria-label={label("preview.nextPage")} title="Next">›</button> : null}
         </div>
 
-        {panel === "details" ? <DetailsSidebar open fileId={activeTarget.id} fileName={info?.file_name || activeTarget.name} mimeType={effectiveMime} size={effectiveSize} versionNumber={info?.version_number} updatedAt={info?.updated_at} onClose={() => setPanel(null)} /> : null}
+        {panel === "details" ? <DetailsSidebar open fileId={activeTarget.id} fileName={info?.file_name || activeTarget.name} mimeType={effectiveMime} size={effectiveSize} versionNumber={info?.version_number} updatedAt={info?.updated_at} onClose={() => setPanel(null)} onShare={() => setShareOpen(true)} onViewVersions={() => setVersionOpen(true)} /> : null}
         {panel === "comments" ? <FileCommentsPanel fileId={activeTarget.id} focusCommentId={focusCommentId} onCount={setCommentCount} onClose={() => setPanel(null)} /> : null}
-        {panel === "dataTemplate" ? <DataTemplateSidebar open fileId={activeTarget.id} onClose={() => setPanel(null)} /> : null}
         {panel === "watermark" ? <WatermarkSidebar open fileId={activeTarget.id} config={watermarkConfig} onChange={setWatermarkConfig} onClose={() => setPanel(null)} /> : null}
         {panel === "zia" ? (
           <aside className="zoho-preview-panel zoho-zia-panel" dir={label("preview.title") === "معاينة الملف" ? "rtl" : "ltr"}>
@@ -329,11 +385,36 @@ export function FilePreviewModal({ target, onClose, onPrevFile, onNextFile, init
           {railButton("watermark", <span className="rail-watermark">♢</span>, label("preview.watermark") || "Watermark")}
           {railButton("zia", <span className="rail-zia">✣</span>, "Zia")}
           <div className="zoho-preview-rail-spacer" />
-          <button type="button" className="zoho-preview-rail-plus" onClick={() => showToast(label("files.actions") || "More apps")} aria-label={label("files.actions") || "More apps"}>+</button>
+          <button type="button" className="zoho-preview-rail-plus" onClick={() => showToast(label("files.actions"))} aria-label={label("files.actions")} title={label("files.actions")}>+</button>
         </nav>
       </div>
 
       {toast ? <div className="zoho-preview-toast" role="status">{toast}</div> : null}
+      {shareOpen ? (
+        <ShareModal
+          resourceType="FILE"
+          resourceId={activeTarget.id}
+          resourceName={info?.file_name || activeTarget.name}
+          onClose={() => setShareOpen(false)}
+        />
+      ) : null}
+      <VersionHistoryDrawer
+        isOpen={versionOpen}
+        onClose={() => setVersionOpen(false)}
+        fileId={activeTarget.id}
+        fileName={info?.file_name || activeTarget.name}
+        mimeType={effectiveMime}
+        size={effectiveSize}
+        canWrite
+        onRestored={() => void refresh()}
+      />
+      {templateOpen ? (
+        <DataTemplateAssociationModal
+          targets={[{ type: "FILE", id: activeTarget.id, name: info?.file_name || activeTarget.name }]}
+          dataTemplates={templates}
+          onClose={() => setTemplateOpen(false)}
+        />
+      ) : null}
     </div>
   );
 }

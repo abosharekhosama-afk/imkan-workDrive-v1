@@ -205,7 +205,7 @@ export function ActionDropdown({ label, items, trigger }: ActionDropdownProps) {
           collisionPadding={collisionPadding}
           avoidCollisions
           sticky="always"
-          className="wd-menu z-[100] w-64"
+          className="wd-menu z-[200] w-64"
           style={{ minWidth: "252px" }}
         >
           {groupedItems.map((group, groupIndex) => (

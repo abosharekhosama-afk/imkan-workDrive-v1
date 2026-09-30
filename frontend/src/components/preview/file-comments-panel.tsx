@@ -118,7 +118,7 @@ export function FileCommentsPanel({
     return <p className="whitespace-pre-wrap text-[13px] leading-5 text-[#202124]">{commentBodyParts(text, labels).map((part, index) => part.kind === "mention" ? <span key={index} className="font-semibold text-[#2c66dd]">{part.text}</span> : <span key={index}>{part.text}</span>)}</p>;
   }
 
-  function CommentCard({ comment, nested = false }: { comment: FileComment; nested?: boolean }) {
+  function renderComment(comment: FileComment, nested = false) {
     const open = menu === comment.id;
     return (
       <article id={`file-comment-${comment.id}`} className={`group relative rounded-xl px-2 py-2 ${focusCommentId === comment.id ? "bg-[#f3f7ff]" : ""} ${nested ? "ms-8" : ""}`}>
@@ -159,9 +159,9 @@ export function FileCommentsPanel({
             ) : null}
           </div>
         </div>
-        {!nested ? comment.replies?.map((reply) => <div key={reply.id} className="mt-1"><CommentCard comment={reply} nested /></div>) : null}
+        {!nested ? comment.replies?.map((reply) => <div key={reply.id} className="mt-1">{renderComment(reply, true)}</div>) : null}
         {replyTo === comment.id ? (
-          <div className="ms-10 mt-2">
+          <div className="ms-10 mt-2" onMouseDown={(event) => event.stopPropagation()}>
             <textarea value={replyDraft} onChange={(event) => setReplyDraft(event.target.value)} rows={2} placeholder={label("preview.commentPlaceholder")} className="w-full rounded-lg border border-[#dadce0] px-2 py-1.5 text-[13px]" />
             <div className="mt-1 flex justify-end gap-2">
               <button type="button" className="text-[12px] text-[#5f6368]" onClick={() => setReplyTo(null)}>{label("preview.commentCancel")}</button>
@@ -206,7 +206,7 @@ export function FileCommentsPanel({
         </div>
       </form>
       <div className="min-h-0 flex-1 overflow-auto px-2 py-3">
-        {visible.length === 0 ? <p className="px-3 py-8 text-center text-[13px] text-[#80868b]">{label("preview.commentEmpty")}</p> : visible.map((comment) => <CommentCard key={comment.id} comment={comment} />)}
+        {visible.length === 0 ? <p className="px-3 py-8 text-center text-[13px] text-[#80868b]">{label("preview.commentEmpty")}</p> : visible.map((comment) => <div key={comment.id}>{renderComment(comment)}</div>)}
       </div>
     </aside>
   );

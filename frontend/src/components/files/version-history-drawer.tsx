@@ -314,7 +314,7 @@ export function VersionHistoryDrawer({
 
   return (
     <div
-      className="fixed inset-0 z-50"
+      className="fixed inset-0 z-[160]"
       role="dialog"
       aria-modal="true"
       aria-labelledby={titleId}

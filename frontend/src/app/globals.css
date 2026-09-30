@@ -4460,6 +4460,7 @@ html[data-theme="dark"] .zoho-admin-input{background:var(--wd-bg);color:var(--wd
 .zoho-preview-watermark>div{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-weight:600;letter-spacing:.03em;user-select:none}
 .zoho-watermark-repeat{display:grid!important;grid-template-columns:repeat(6,1fr);grid-template-rows:repeat(6,1fr);gap:58px 92px;padding:36px;align-items:center!important;justify-items:center}
 .zoho-watermark-repeat span{white-space:nowrap}
+.zoho-watermark-repeat img,.zoho-preview-watermark img{max-width:100%;object-fit:contain;pointer-events:none}
 .zoho-watermark-center{inset:50% auto auto 50%!important;transform-origin:center}
 .zoho-watermark-top-left{inset:24px auto auto 24px!important;transform-origin:top left}
 .zoho-watermark-top-center{inset:24px auto auto 50%!important;transform-origin:top center}

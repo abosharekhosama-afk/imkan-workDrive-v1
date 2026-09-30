@@ -15,6 +15,8 @@ interface DetailsSidebarProps {
   versionNumber?: number;
   updatedAt?: string | null;
   onClose?: () => void;
+  onShare?: () => void;
+  onViewVersions?: () => void;
 }
 
 function formatDateTime(value: string): string {
@@ -25,7 +27,7 @@ function formatDateTime(value: string): string {
   }
 }
 
-export function DetailsSidebar({ open, fileId, fileName, mimeType, size, versionNumber, updatedAt, onClose }: DetailsSidebarProps) {
+export function DetailsSidebar({ open, fileId, fileName, mimeType, size, versionNumber, updatedAt, onClose, onShare, onViewVersions }: DetailsSidebarProps) {
   const { locale, label } = useLocale();
   const ar = locale === "ar";
   const [activities, setActivities] = useState<FileActivityRecord[] | null>(null);
@@ -65,7 +67,7 @@ export function DetailsSidebar({ open, fileId, fileName, mimeType, size, version
         </div>
       </section>
       <section className="zoho-side-section">
-        <div className="zoho-details-label-row"><span>{ar ? "تمت المشاركة مع" : "Shared with"}</span><button type="button" onClick={() => void navigator.clipboard.writeText(permalink)}>{ar ? "مشاركة" : "Share"}</button></div>
+        <div className="zoho-details-label-row"><span>{ar ? "تمت المشاركة مع" : "Shared with"}</span><button type="button" onClick={onShare}>{ar ? "مشاركة" : "Share"}</button></div>
         <div className="zoho-details-private">⌕ <span>{ar ? "خاص، غير مشارك مع أي شخص." : "Private, not shared with anyone."}</span></div>
         <div className="zoho-details-stats"><span>◉ {views} {ar ? "مشاهدة" : "Views"}</span><span>⇩ {downloads} {ar ? "تنزيل" : "Downloads"}</span><span>▢ {comments} {ar ? "تعليقات" : "Comments"}</span></div>
       </section>
@@ -75,11 +77,7 @@ export function DetailsSidebar({ open, fileId, fileName, mimeType, size, version
         <div className="zoho-details-meta-block"><span>{ar ? "النوع" : "Type"}</span><strong>{extension === "—" ? mimeType : extension}</strong></div>
         <div className="zoho-details-meta-block"><span>{label("preview.metadata.size")}</span><strong>{formatBytes(details?.size ?? size)}</strong></div>
         <div className="zoho-details-meta-block"><span>{ar ? "آخر تعديل" : "Modified"}</span><strong>{details?.updatedAt ? formatDateTime(details.updatedAt) : updatedAt ? formatDateTime(updatedAt) : "—"}</strong></div>
-        {versionNumber ? <button type="button" className="zoho-details-versions">◷ {ar ? "عرض كل الإصدارات" : "View all versions"} · v{versionNumber}</button> : null}
-      </section>
-      <section className="zoho-side-section">
-        <h4>{label("preview.activity")}</h4>
-        {activities === null ? <div className="zoho-panel-loading"><span className="zoho-viewer-spinner" /></div> : activities.length === 0 ? <p className="zoho-side-empty">{label("preview.noActivity")}</p> : <ul className="zoho-activity-list">{activities.slice(0, 10).map((entry) => <li key={entry.id}><span className="zoho-activity-action">{entry.action.replaceAll("_", " ").toLowerCase()}</span><time dateTime={entry.created_at}>{formatDateTime(entry.created_at)}</time></li>)}</ul>}
+        <button type="button" className="zoho-details-versions" onClick={onViewVersions}>◷ {ar ? "عرض كل الإصدارات" : "View all versions"}{versionNumber ? ` · v${versionNumber}` : ""}</button>
       </section>
     </aside>
   );
