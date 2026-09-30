@@ -645,6 +645,7 @@
   "files.column.timeCreated": "تاريخ الإنشاء",
   "inspector.addDescription": "إضافة وصف",
   "inspector.addLabels": "إضافة تصنيفات",
+  "inspector.labels": "التصنيفات",
   "inspector.createdBy": "تم الإنشاء بواسطة",
   "inspector.dataTemplates": "قوالب البيانات",
   "inspector.location": "الموقع",

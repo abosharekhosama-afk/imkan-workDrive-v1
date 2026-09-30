@@ -645,6 +645,7 @@
   "files.column.timeCreated": "Time Created",
   "inspector.addDescription": "Add description",
   "inspector.addLabels": "Add labels",
+  "inspector.labels": "Labels",
   "inspector.createdBy": "Created by",
   "inspector.dataTemplates": "Data Templates",
   "inspector.location": "Location",

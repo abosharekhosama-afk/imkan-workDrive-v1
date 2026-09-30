@@ -159,7 +159,7 @@
 | 002 | File Preview UI | ✅ Implemented |
 | 003 | Version History UI | ✅ Implemented |
 | — | Admin Console Data Loss Prevention (Zoho policies, labels, region rules) | ✅ Implemented |
-| — | Admin Console Data Loss Prevention (Zoho policies, labels, region rules) | ✅ Implemented |
+| — | Inspector tabs, real detail fields, sidebar-bounded menus, and live table columns | ✅ Implemented |
 
 ---
 

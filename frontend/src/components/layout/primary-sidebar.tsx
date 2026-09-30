@@ -72,7 +72,7 @@ export function PrimarySidebar() {
       </div>
       <SidebarNav />
       {c ? null : (
-        <div className="primary-sidebar-team min-h-0 max-h-[220px] overflow-y-auto px-2 pb-1">
+        <div className="primary-sidebar-team min-h-0 px-2 pb-1">
           <div className="flex items-center">
             <Link href="/files/team-folders" onClick={close} aria-current={teamActive ? "page" : undefined}
               className={`flex h-10 min-w-0 flex-1 items-center gap-4 rounded-[16px] px-[15px] text-[14px] font-medium ${teamActive ? "bg-[var(--wd-active)] font-bold text-[#DBE3FA]" : "text-[#EEEEEE] hover:bg-white/[0.08]"}`}>
@@ -88,13 +88,10 @@ export function PrimarySidebar() {
             <div className="ms-4 flex flex-col gap-0.5 border-s border-white/10 ps-2">
               {teams.length === 0 ? (
                 <Link href="/files/team-folders" onClick={close} className="truncate rounded-md px-2 py-1.5 text-[12.5px] text-[#9CA3AF] hover:text-white">{label("nav.general")}</Link>
-              ) : teams.slice(0, 12).map((t) => (
+              ) : teams.slice(0, 1).map((t) => (
                 <Link key={t.id} href={t.rootFolderId ? `/files/${t.rootFolderId}` : "/files/team-folders"} onClick={close} title={t.name}
                   className="truncate rounded-md px-2 py-1.5 text-[12.5px] text-[#9CA3AF] hover:bg-white/[0.06] hover:text-white">{t.name}</Link>
               ))}
-              <button type="button" onClick={() => router.push("/files/team-folders")} className="flex items-center gap-1.5 rounded-md px-2 py-1.5 text-[12.5px] text-[#9CA3AF] hover:text-white">
-                <Icons.plus size={13} /> {label("files.createFolder")}
-              </button>
             </div>
           ) : null}
           <Link href="/files" onClick={close} className="flex h-10 items-center gap-4 rounded-[16px] px-[15px] text-[14px] font-medium text-[#EEEEEE] hover:bg-white/[0.08]">

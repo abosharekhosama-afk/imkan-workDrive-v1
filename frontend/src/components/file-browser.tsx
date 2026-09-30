@@ -142,7 +142,7 @@ export function FileBrowser({
   const [viewMode, setViewMode] = useState<ViewMode>("list");
   const [sortDir, setSortDir] = useState<SortDir>("desc");
   const [sortField, setSortField] = useState<ColumnKey>("name");
-  const [columns, setColumns] = useState<Partial<Record<ColumnKey, boolean>>>({ lastModified: true, timeCreated: false, size: true, type: false, extension: false });
+  const [columns, setColumns] = useState<Partial<Record<ColumnKey, boolean>>>({ lastModified: true, timeCreated: true, size: true, type: true, extension: true });
   const [filter, setFilter] = useState<FilterKey>((searchParams.get("filter") as FilterKey) || "all");
   const [advancedFilter, setAdvancedFilter] = useState<AdvancedFileFilter>({
     type: (searchParams.get("type") as AdvancedFileFilter["type"]) || "all",
@@ -452,13 +452,13 @@ export function FileBrowser({
 
   useEffect(() => {
     const fileId = searchParams.get("file");
+    if (!fileId) return;
     const commentId = searchParams.get("comment");
-    if (!fileId || !commentId) return;
     let cancelled = false;
     void getFileDetails(fileId).then((file) => {
-      if (!cancelled) void onPreview("FILE", file.id, file.name, file.mimeType ?? undefined, file.size, "comments", commentId);
+      if (!cancelled) void onPreview("FILE", file.id, file.name, file.mimeType ?? undefined, file.size, commentId ? "comments" : undefined, commentId ?? undefined);
     }).catch(() => {
-      if (!cancelled) void onPreview("FILE", fileId, "File", undefined, undefined, "comments", commentId);
+      if (!cancelled) void onPreview("FILE", fileId, "File", undefined, undefined, commentId ? "comments" : undefined, commentId ?? undefined);
     });
     return () => { cancelled = true; };
   }, [searchParams]);

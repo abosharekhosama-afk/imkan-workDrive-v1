@@ -3,6 +3,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useLocale } from "./locale-provider";
+import { clampBoxLeft, readContentLane } from "../lib/overlay-bounds-logic";
 import { Icons } from "./layout/icons";
 
 /**
@@ -75,25 +76,14 @@ type MenuPosition = {
   maxHeight: number;
 };
 
-function computeMenuPosition(trigger: HTMLElement, menuWidth: "default" | "wide"): MenuPosition {
+function computeMenuPosition(trigger: HTMLElement, menuWidth: "default" | "wide", rtl: boolean): MenuPosition {
   const rect = trigger.getBoundingClientRect();
   const width = menuWidth === "wide" ? 360 : 280;
   const viewportPadding = 12;
   const gap = 6;
   const maxHeight = Math.max(160, window.innerHeight - rect.bottom - gap - viewportPadding);
-  const isRtl = typeof document !== "undefined" && document.documentElement.dir === "rtl";
-  let left: number;
-  if (isRtl) {
-    left = Math.max(viewportPadding, rect.right - width);
-  } else {
-    left = rect.left;
-  }
-  if (left + width > window.innerWidth - viewportPadding) {
-    left = Math.max(viewportPadding, window.innerWidth - width - viewportPadding);
-  }
-  if (left < viewportPadding) {
-    left = viewportPadding;
-  }
+  const desired = rtl ? rect.right - width : rect.left;
+  const left = clampBoxLeft(desired, width, readContentLane(viewportPadding));
   return {
     top: rect.bottom + gap,
     left,
@@ -126,7 +116,7 @@ export function ImkanOptionPicker<T extends string>({
 
   const repositionMenu = () => {
     if (!rootRef.current) return;
-    setMenuPosition(computeMenuPosition(rootRef.current, menuWidth));
+    setMenuPosition(computeMenuPosition(rootRef.current, menuWidth, locale === "ar" || document.documentElement.dir === "rtl"));
   };
 
   useLayoutEffect(() => {
@@ -240,6 +230,7 @@ export function ImkanOptionPicker<T extends string>({
     <>
       <div
         ref={rootRef}
+        dir={locale === "ar" ? "rtl" : "ltr"}
         className={[
           "imkan-option-picker",
           fullWidth ? "is-full" : "",

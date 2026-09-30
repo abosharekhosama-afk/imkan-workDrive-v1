@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useLocale } from "../locale-provider";
 import type { MessageKey } from "../../i18n";
+import { clampBoxLeft, readContentLane } from "../../lib/overlay-bounds-logic";
 export type MenuItem = {
   key: string;
   labelKey: MessageKey;
@@ -42,7 +43,7 @@ export function ZohoMenu({ open, onClose, onSelect, items, labelledBy, align = "
       } else {
         start = isRtl ? r.right - menuW : r.left;
       }
-      start = Math.min(Math.max(8, start), window.innerWidth - menuW - 8);
+      start = clampBoxLeft(start, menuW, readContentLane());
       setPos({ top: r.bottom + 4, start });
     };
     place();
@@ -91,7 +92,7 @@ export function ZohoMenu({ open, onClose, onSelect, items, labelledBy, align = "
           const r = target.getBoundingClientRect();
           const subW = 250;
           const isRtl = typeof document !== "undefined" && document.documentElement.dir === "rtl";
-          const start = isRtl ? Math.max(8, r.left - subW - 4) : Math.min(r.right + 4, window.innerWidth - subW - 8);
+          const start = clampBoxLeft(isRtl ? r.left - subW - 4 : r.right + 4, subW, readContentLane());
           const top = Math.min(Math.max(8, r.top), Math.max(8, window.innerHeight - 300));
           setActiveKey(m.key);
           setSubmenuPos({ top, start });

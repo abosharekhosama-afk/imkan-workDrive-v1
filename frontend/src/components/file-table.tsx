@@ -182,23 +182,34 @@ export function FileTable({
       if (k === "lastModified") return compareDates(folderSizes ? folderDate(a.id) : a.updatedAt, folderSizes ? folderDate(b.id) : b.updatedAt, d);
       if (k === "size") return compareNumbers(folderSizes?.get(a.id), folderSizes?.get(b.id), d);
       if (k === "timeCreated") return compareDates(a.updatedAt, b.updatedAt, d);
-      if (k === "extension") return compareText(extOf(a.name), extOf(b.name), d);
+      if (k === "extension") return compareText("", "", d);
       return compareText(a.name, b.name, d);
     });
   }, [folders, sort, folderSizes, folderUpdatedAt]);
   const sortedFiles = useMemo(() => {
     const k = sort.key; const d = sort.direction;
     return [...files].sort((a, b) => {
-      if (k === "size") return compareNumbers(a.size, b.size, d);
+      if (k === "size") return compareNumbers(resolveItemSize({ size: a.size ?? null }), resolveItemSize({ size: b.size ?? null }), d);
       if (k === "lastModified") return compareDates(a.updatedAt, b.updatedAt, d);
-      if (k === "timeCreated") return compareDates(a.updatedAt, b.updatedAt, d);
-      if (k === "extension") return compareText(extOf(a.name), extOf(b.name), d);
+      if (k === "timeCreated") return compareDates(a.createdAt ?? a.updatedAt, b.createdAt ?? b.updatedAt, d);
+      if (k === "extension") return compareText(a.extension || extOf(a.name), b.extension || extOf(b.name), d);
       if (k === "type") return compareText(a.mimeType ?? "", b.mimeType ?? "", d);
       return compareText(a.name, b.name, d);
     });
   }, [files, sort]);
   const formatDate = (value?: string | null) => formatDateLocalized(value, locale);
-  const formatSize = (value?: number | null) => formatBytes(value ?? 0);
+  const formatSize = (value?: number | string | null) => formatBytes(resolveItemSize({ size: typeof value === "string" ? Number(value) : value ?? null }) ?? 0);
+  const fileTypeText = (file: FileRecord) => {
+    const raw = file.fileType && file.fileType !== "OTHER" ? file.fileType : file.mimeType;
+    if (!raw) return label("files.type.file");
+    if (raw.includes("/")) return raw;
+    return raw.charAt(0) + raw.slice(1).toLowerCase();
+  };
+  const fileExtText = (file: FileRecord) => {
+    const field = (file.extension ?? "").replace(/^\./, "").trim();
+    if (field) return field.toLowerCase();
+    return extOf(file.name) || "–";
+  };
 
   // Right-click context menu state (portal-hosted, positioned at cursor).
   const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number; node: ReactNode } | null>(null);
@@ -302,8 +313,8 @@ export function FileTable({
                 </Link>
               </td>
               <td className="wd-list-meta whitespace-nowrap px-3">{folder.ownerName ? label("files.modifiedByLine").replace("{date}", formatDate(folderDate(folder.id))).replace("{name}", folder.ownerName) : formatDate(folderDate(folder.id))}</td>
-              {colOn("timeCreated") ? <td className="wd-list-meta whitespace-nowrap px-3">{"–"}</td> : null}
-              <td className="wd-list-meta whitespace-nowrap px-3">{folderSizes?.get(folder.id) ? formatSize(folderSizes.get(folder.id)) : "–"}</td>
+              {colOn("timeCreated") ? <td className="wd-list-meta whitespace-nowrap px-3">{formatDate(folder.updatedAt)}</td> : null}
+              <td className="wd-list-meta whitespace-nowrap px-3">{formatSize(folderSizes?.get(folder.id) ?? 0)}</td>
               {colOn("type") ? <td className="wd-list-meta whitespace-nowrap px-3">{label("files.type.folder")}</td> : null}
               {colOn("extension") ? <td className="wd-list-meta whitespace-nowrap px-3">{"–"}</td> : null}
               <td className="px-3 py-2 text-end" onClick={(event) => event.stopPropagation()} onMouseDown={(event) => event.stopPropagation()}>
@@ -359,10 +370,10 @@ export function FileTable({
                 </button>
               </td>
               <td className="wd-list-meta whitespace-nowrap px-3">{file.ownerName ? label("files.modifiedByLine").replace("{date}", formatDate(file.updatedAt)).replace("{name}", file.ownerName) : formatDate(file.updatedAt)}</td>
-              {colOn("timeCreated") ? <td className="wd-list-meta whitespace-nowrap px-3">{formatDate(file.updatedAt)}</td> : null}
-              <td className="wd-list-meta whitespace-nowrap px-3">{file.size != null ? formatSize(file.size) : "–"}</td>
-              {colOn("type") ? <td className="wd-list-meta whitespace-nowrap px-3">{label("files.type.file")}</td> : null}
-              {colOn("extension") ? <td className="wd-list-meta whitespace-nowrap px-3">{extOf(file.name) ? extOf(file.name) : "–"}</td> : null}
+              {colOn("timeCreated") ? <td className="wd-list-meta whitespace-nowrap px-3">{formatDate(file.createdAt ?? file.updatedAt)}</td> : null}
+              <td className="wd-list-meta whitespace-nowrap px-3">{formatSize(file.size)}</td>
+              {colOn("type") ? <td className="wd-list-meta whitespace-nowrap px-3">{fileTypeText(file)}</td> : null}
+              {colOn("extension") ? <td className="wd-list-meta whitespace-nowrap px-3">{fileExtText(file)}</td> : null}
               <td className="px-3 py-2 text-end" onClick={(event) => event.stopPropagation()} onMouseDown={(event) => event.stopPropagation()}>
                 <FileActionsMenu
                   context={{

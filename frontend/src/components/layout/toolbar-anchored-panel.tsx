@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
+import { clampBoxLeft, readContentLane } from "../../lib/overlay-bounds-logic";
 
 type Props = {
   open: boolean;
@@ -29,8 +30,11 @@ export function ToolbarAnchoredPanel({ open, onClose, anchorId, align = "end", w
     const place = () => {
       const rect = el?.getBoundingClientRect();
       if (!rect) return;
-      let start = align === "end" ? rect.right - width : rect.left;
-      start = Math.min(Math.max(8, start), window.innerWidth - width - 8);
+      const isRtl = document.documentElement.dir === "rtl";
+      let start = align === "end"
+        ? (isRtl ? rect.left : rect.right - width)
+        : (isRtl ? rect.right - width : rect.left);
+      start = clampBoxLeft(start, width, readContentLane());
       setPos({ top: rect.bottom + 6, start });
     };
     place();

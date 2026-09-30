@@ -5,6 +5,7 @@ import { useLayoutEffect, useRef } from "react";
 import { useLocale } from "./locale-provider";
 import { FileIcon } from "./file-icon";
 import type { FileRecord, FolderRecord } from "../lib/api/types";
+import { clampBoxLeft, readContentLane } from "../lib/overlay-bounds-logic";
 
 export type SearchFilter = "all" | "files" | "folders";
 
@@ -38,12 +39,20 @@ export function GlobalSearchPanel({
     if (!open || !containerRef.current) return;
     const panel = containerRef.current.querySelector(".zoho-search-panel") as HTMLElement | null;
     if (!panel) return;
-    const sidebar = document.querySelector(".primary-sidebar, .zoho-sidebar") as HTMLElement | null;
     const containerRect = containerRef.current.getBoundingClientRect();
-    const sidebarEdge = sidebar?.getBoundingClientRect().right ?? 0;
-    const minStart = Math.max(0, sidebarEdge + 8 - containerRect.left);
-    panel.style.marginInlineStart = `${minStart}px`;
-    panel.style.maxWidth = `min(430px, calc(100vw - ${Math.max(sidebarEdge, containerRect.left) + 16}px))`;
+    const lane = readContentLane();
+    const width = Math.max(180, Math.min(430, lane.right - lane.left));
+    const rtl = document.documentElement.dir === "rtl";
+    const desired = rtl ? containerRect.right - width : containerRect.left;
+    const left = clampBoxLeft(desired, width, lane);
+    panel.style.position = "fixed";
+    panel.style.left = `${left}px`;
+    panel.style.right = "auto";
+    panel.style.insetInlineStart = "auto";
+    panel.style.marginInlineStart = "0";
+    panel.style.top = `${containerRect.bottom + 6}px`;
+    panel.style.width = `${width}px`;
+    panel.style.maxWidth = `${width}px`;
   }, [open, input, filter, folders.length, files.length]);
 
   if (!open) {

@@ -2888,7 +2888,7 @@ html[data-theme="dark"] .workflow-ui .wd-card {
 .member-setting-value{font-weight:600}
 .member-info-icon{border:0;background:transparent;padding:2px;color:#202124}
 .member-role-menu,.imkan-option-picker-menu{position:absolute;z-index:120;top:calc(100% + 6px);inset-inline-start:0;width:280px;max-width:min(280px,calc(100vw - 24px));background:#fff;border:1px solid #e5e5e5;border-radius:15px;padding:6px;box-shadow:0 8px 28px rgba(20,25,35,.13)}
-.imkan-option-picker-menu-portal{position:fixed;z-index:10050}
+.imkan-option-picker-menu-portal{position:fixed;z-index:10050;inset-inline-start:auto;inset-inline-end:auto;left:auto;right:auto}
 .imkan-option-picker.is-open{z-index:10040;position:relative}
 .member-role-menu button,.imkan-option-picker-menu button{display:block;width:100%;border:0;background:#fff;text-align:start;border-radius:11px;padding:9px 11px}
 .member-role-menu button:hover,.member-role-menu button.is-active,.imkan-option-picker-menu button:hover,.imkan-option-picker-menu button.is-active{background:#eef4ff}

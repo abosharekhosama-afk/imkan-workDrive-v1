@@ -1,5 +1,6 @@
 "use client";
 import { useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 import { useLocale } from "../locale-provider";
 import { FileTypeIcon, fileIconKind } from "../file-icon";
 import { formatDateLocalized } from "../../lib/localized";
@@ -10,6 +11,8 @@ import { useShell, type InspectorTab } from "./shell-context";
 import { Icons } from "./icons";
 import { openWip } from "../wip-modal";
 import { associateFileDataTemplate, associateFolderDataTemplate, disassociateFileDataTemplate, disassociateFolderDataTemplate, listDataTemplates, listFileDataTemplateBindings, listFolderDataTemplateBindings, type DataTemplate, type DataTemplateBinding } from "../../lib/api/metadata";
+import { getFileDetails, getFileDlp } from "../../lib/api/files";
+import { getFolder } from "../../lib/api/folders";
 import { ImkanOptionPicker, toImkanPickerOptions } from "../imkan-option-picker";
 
 function descKey(id: string) { return `wd.desc.${id}`; }
@@ -25,7 +28,7 @@ export function InspectorDock() {
   return (
     <div className="wd-rail flex shrink-0 flex-col items-center gap-1 border-s border-[color:var(--wd-line)] bg-white" role="toolbar" aria-label={label("inspector.details")}>
       {items.map((i, idx) => {
-        const pressed = i.tipKey === "nav.openDetails" && i.tab === inspectorTab && inspectorOpen;
+        const pressed = inspectorOpen && i.tipKey !== "nav.zia" && i.tab === inspectorTab;
         return (
           <button key={`${i.tipKey}-${idx}`} type="button" title={label(i.tipKey)} aria-label={label(i.tipKey)} aria-pressed={pressed}
             onClick={() => {
@@ -54,6 +57,8 @@ export function InspectorPanel({ onVersionHistory }: { onVersionHistory?: (fileI
   const [editingDesc, setEditingDesc] = useState(false);
   const [desc, setDesc] = useState("");
   const [resourceShares, setResourceShares] = useState<Awaited<ReturnType<typeof listSharedByMe>>>([]);
+  const [facts, setFacts] = useState<{ id: string; location: string | null; labels: string[]; createdAt: string | null; updatedAt: string | null } | null>(null);
+  const [primarySlot, setPrimarySlot] = useState<"details" | "dataTemplates">(inspectorTab === "dataTemplates" ? "dataTemplates" : "details");
   const resourceId = selected ? (selected.kind === "FILE" ? selected.file.id : selected.folder.id) : null;
   const resourceType = selected ? (selected.kind === "FILE" ? "FILE" as const : "FOLDER" as const) : null;
   useEffect(() => {
@@ -74,6 +79,33 @@ export function InspectorPanel({ onVersionHistory }: { onVersionHistory?: (fileI
       .catch(() => setResourceShares([]));
   }, [resourceId, resourceType]);
   useEffect(() => {
+    if (inspectorTab === "details" || inspectorTab === "dataTemplates") setPrimarySlot(inspectorTab);
+  }, [inspectorTab]);
+  useEffect(() => {
+    if (!selected || !resourceId) { setFacts(null); return; }
+    let cancel = false;
+    const id = resourceId;
+    if (selected.kind === "FILE") {
+      const file = selected.file;
+      Promise.all([getFileDetails(id).catch(() => null), getFileDlp(id).catch(() => null)]).then(([details, dlp]) => {
+        if (cancel) return;
+        const names = [...(details?.tags ?? []).map((tag) => tag.name), ...(dlp?.labels ?? []).map((item) => item.name)].filter(Boolean);
+        setFacts({ id, location: details?.location?.name ?? null, labels: [...new Set(names)], createdAt: details?.createdAt ?? file.createdAt ?? null, updatedAt: details?.updatedAt ?? file.updatedAt ?? null });
+      });
+    } else {
+      const folder = selected.folder;
+      const parentId = folder.parentId ?? null;
+      Promise.all([
+        parentId ? getFolder(parentId).then((row) => row.name).catch(() => null) : Promise.resolve(null),
+        listFolderDataTemplateBindings(id).catch(() => [] as DataTemplateBinding[]),
+      ]).then(([location, rows]) => {
+        if (cancel) return;
+        setFacts({ id, location, labels: rows.map((row) => row.template?.name).filter((name): name is string => Boolean(name)), createdAt: folder.updatedAt ?? null, updatedAt: folder.updatedAt ?? null });
+      });
+    }
+    return () => { cancel = true; };
+  }, [resourceId, selected]);
+  useEffect(() => {
     if (!resourceId) { setDesc(""); setEditingDesc(false); return; }
     try { setDesc(localStorage.getItem(descKey(resourceId)) ?? ""); } catch { setDesc(""); }
     setEditingDesc(false);
@@ -86,7 +118,17 @@ export function InspectorPanel({ onVersionHistory }: { onVersionHistory?: (fileI
   const name = selected ? (selected.kind === "FILE" ? selected.file.name : selected.folder.name) : null;
   const kind = selected ? fileIconKind(selected.kind === "FILE" ? "file" : "folder", selected.kind === "FILE" ? selected.file.mimeType : null, name ?? "") : "file";
   const closeAll = () => { setInspectorOpen(false); setMobileInspectorOpen(false); };
-  const permalink = resourceId && typeof window !== "undefined" ? `${window.location.origin}/files/${resourceId}` : "";
+  const permalinkPath = !resourceId ? "" : selected?.kind === "FILE" ? `/files?file=${resourceId}` : `/files/${resourceId}`;
+  const permalink = permalinkPath && typeof window !== "undefined" ? `${window.location.origin}${permalinkPath}` : permalinkPath;
+  const ownerName = selected ? (selected.kind === "FILE" ? selected.file.ownerName : selected.folder.ownerName) : null;
+  const fact = facts && facts.id === resourceId ? facts : null;
+  const createdAt = fact?.createdAt ?? (selected?.kind === "FILE" ? selected.file.createdAt ?? selected.file.updatedAt : selected?.folder.updatedAt);
+  const updatedAt = fact?.updatedAt ?? (selected?.kind === "FILE" ? selected.file.updatedAt : selected?.folder.updatedAt);
+  const locationName = fact ? (fact.location || label("files.rootFolder")) : label("files.rootFolder");
+  const labelText = fact && fact.labels.length > 0 ? fact.labels.join(", ") : label("inspector.addLabels");
+  const modifiedBy = ownerName
+    ? label("files.modifiedByLine").replace("{date}", formatDateLocalized(updatedAt, locale)).replace("{name}", ownerName)
+    : formatDateLocalized(updatedAt, locale);
   const copyPermalink = async () => {
     if (!permalink) return;
     try { await navigator.clipboard.writeText(permalink); } catch { /* clipboard unavailable */ }
@@ -103,7 +145,7 @@ export function InspectorPanel({ onVersionHistory }: { onVersionHistory?: (fileI
   const inner = (
     <>
       <div className="flex items-center border-b border-[#EDEDED]">
-        {(["details", "dataTemplates", "activity"] as const).map((t) => (
+        {([primarySlot, "activity"] as const).map((t) => (
           <button key={t} type="button" onClick={() => setInspectorTab(t)} aria-selected={inspectorTab === t} role="tab"
             className={`flex-1 px-3 py-2.5 text-[13px] font-medium transition-colors duration-150 ease-in-out ${inspectorTab === t ? "border-b-2 border-[var(--wd-primary)] text-[var(--wd-primary)]" : "text-[#4F4F4F] hover:text-[#212121]"}`}>
             {label(t === "details" ? "inspector.details" : t === "dataTemplates" ? "inspector.dataTemplates" : "inspector.activity")}
@@ -148,24 +190,27 @@ export function InspectorPanel({ onVersionHistory }: { onVersionHistory?: (fileI
               </div>
               <div className="flex justify-between gap-2">
                 <dt className="text-[#4F4F4F]">{label("inspector.permalink")}</dt>
-                <dd className="min-w-0 truncate">
-                  <button type="button" onClick={() => void copyPermalink()} className="inline-flex max-w-full items-center gap-1 truncate text-[var(--wd-primary)] hover:underline" title={permalink}>
-                    <Icons.link size={12} /> <span className="truncate">{permalink || "—"}</span>
+                <dd className="flex min-w-0 items-center justify-end gap-1">
+                  {permalinkPath ? (
+                    <Link href={permalinkPath} className="min-w-0 truncate text-[var(--wd-primary)] hover:underline" title={permalink}>{permalink}</Link>
+                  ) : <span>—</span>}
+                  <button type="button" onClick={() => void copyPermalink()} className="wd-icon-btn !h-6 !w-6 shrink-0" aria-label={label("menu.copyPermalink")} title={label("menu.copyPermalink")}>
+                    <Icons.copy size={13} />
                   </button>
                 </dd>
               </div>
-              <div className="flex justify-between gap-2"><dt className="text-[#4F4F4F]">{label("inspector.location")}</dt><dd className="truncate text-[#4F4F4F]">—</dd></div>
-              <div className="flex justify-between gap-2"><dt className="text-[#4F4F4F]">{label("inspector.addLabels")}</dt><dd className="truncate text-[#4F4F4F]">—</dd></div>
-              <div className="flex justify-between gap-2"><dt className="text-[#4F4F4F]">{label("inspector.type")}</dt><dd className="truncate">{selected.kind === "FILE" ? selected.file.mimeType ?? "—" : label("files.type.folder")}</dd></div>
-              <div className="flex justify-between gap-2"><dt className="text-[#4F4F4F]">{label("inspector.timeCreated")}</dt><dd className="truncate">{formatDateLocalized(selected.kind === "FILE" ? selected.file.updatedAt : selected.folder.updatedAt, locale)}</dd></div>
-              <div className="flex justify-between gap-2"><dt className="text-[#4F4F4F]">{label("inspector.modifiedBy")}</dt><dd className="truncate text-[#4F4F4F]">—</dd></div>
+              <div className="flex justify-between gap-2"><dt className="text-[#4F4F4F]">{label("inspector.location")}</dt><dd className="truncate">{locationName}</dd></div>
+              <div className="flex justify-between gap-2"><dt className="text-[#4F4F4F]">{label("inspector.labels")}</dt><dd className="truncate">{labelText}</dd></div>
+              <div className="flex justify-between gap-2"><dt className="text-[#4F4F4F]">{label("inspector.type")}</dt><dd className="truncate">{selected.kind === "FILE" ? selected.file.mimeType || selected.file.fileType || label("files.type.file") : label("files.type.folder")}</dd></div>
+              <div className="flex justify-between gap-2"><dt className="text-[#4F4F4F]">{label("inspector.timeCreated")}</dt><dd className="truncate">{formatDateLocalized(createdAt, locale)}</dd></div>
+              <div className="flex justify-between gap-2"><dt className="text-[#4F4F4F]">{label("inspector.modifiedBy")}</dt><dd className="truncate">{modifiedBy}</dd></div>
             </dl>
             {selected.kind === "FILE" ? (
               <button type="button" onClick={() => {
                 if (onVersionHistory) onVersionHistory(selected.file.id);
                 window.dispatchEvent(new CustomEvent("workdrive:version-history", { detail: { fileId: selected.file.id } }));
-              }} className="inline-flex items-center justify-between rounded-[16px] border border-[#EDEDED] px-3 py-1.5 text-[13px] hover:bg-[#F3F5F7]">
-                {label("inspector.versionHistory")} <Icons.chevR size={13} />
+              }} className="inline-flex w-full items-center justify-between rounded-[16px] border border-[color:var(--wd-primary)] px-3 py-2 text-[13px] font-medium text-[var(--wd-primary)] hover:bg-[#F0F4FF]">
+                <span className="inline-flex items-center gap-2"><Icons.history size={15} /> {label("inspector.versionHistory")}</span> <Icons.chevR size={13} />
               </button>
             ) : null}
           </div>

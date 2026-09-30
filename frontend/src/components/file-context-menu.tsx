@@ -11,6 +11,7 @@ import type { FileActionHandlers } from "./file-actions-menu";
 import type { ShareLaunchMode } from "../lib/share-launch-logic";
 import { followUpdatesMenuLabel } from "../lib/follow-updates-logic";
 import { FileMenuIcons } from "../lib/file-menu-icons";
+import { clampBoxLeft, readContentLane } from "../lib/overlay-bounds-logic";
 
 type SubItem = { key: string; label: string; icon?: React.ReactNode; onSelect?: () => void };
 type Item = {
@@ -121,11 +122,12 @@ export function FileContextMenu({
 
   const menuW = 252;
   const estH = sections.reduce((n, g) => n + g.length, 0) * 32 + sections.length * 2 + 24;
-  const left = Math.min(Math.max(8, x), Math.max(8, window.innerWidth - menuW - 8));
+  const lane = readContentLane();
+  const left = clampBoxLeft(x, menuW, lane);
   const top = Math.min(Math.max(8, y), Math.max(8, window.innerHeight - estH - 8));
   const subItem = sections.flat().find((item) => item.key === subKey && item.submenuItems);
   const subLeft = rtl ? left - 244 - 2 : left + menuW + 2;
-  const subLeftClamped = Math.min(Math.max(8, subLeft), Math.max(8, window.innerWidth - 244 - 8));
+  const subLeftClamped = clampBoxLeft(subLeft, 244, lane);
 
   return createPortal(
     <div ref={ref} role="menu" style={{ left, top, width: menuW }} dir={rtl ? "rtl" : "ltr"}

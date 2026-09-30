@@ -8,6 +8,7 @@ import {
   PopoverPortal,
 } from "@radix-ui/react-popover";
 import { useLocale } from "./locale-provider";
+import { readContentLane } from "../lib/overlay-bounds-logic";
 
 export type ActionDropdownItem = {
   label: string;
@@ -159,6 +160,12 @@ export function ActionDropdown({ label, items, trigger }: ActionDropdownProps) {
   const rtl = locale === "ar";
   const groupedItems = groupItems(items);
   const [open, setOpen] = useState(false);
+  const collisionPadding = typeof window === "undefined"
+    ? 16
+    : (() => {
+        const lane = readContentLane();
+        return { top: 8, bottom: 8, left: lane.left, right: Math.max(8, window.innerWidth - lane.right) };
+      })();
 
   const defaultTrigger = (
     <PopoverTrigger asChild>
@@ -195,7 +202,7 @@ export function ActionDropdown({ label, items, trigger }: ActionDropdownProps) {
           align={rtl ? "start" : "end"}
           dir={rtl ? "rtl" : "ltr"}
           sideOffset={4}
-          collisionPadding={16}
+          collisionPadding={collisionPadding}
           avoidCollisions
           sticky="always"
           className="wd-menu z-[100] w-64"

@@ -204,7 +204,7 @@ export function ActionToolbar({
       </ToolbarAnchoredPanel>
 
       {context !== "teamFolders" ? (
-        <button type="button" onClick={dispatchFolderCreate} title={label("menu.folder")} aria-label={label("menu.folder")}
+        <button type="button" onClick={() => router.push("/files")} title={label("nav.files")} aria-label={label("nav.files")}
           className="wd-icon-btn text-[color:var(--wd-primary-dark)]">
           <Icons.folder size={16} />
         </button>
