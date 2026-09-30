@@ -5,7 +5,7 @@ export type CreateShareBody = {
   password?: string;
   can_download: boolean;
   recipient_user_ids?: string[];
-  permission?: "VIEW" | "COMMENT" | "EDIT";
+  permission?: "VIEW" | "COMMENT" | "EDIT" | "ORGANIZE" | "FULL_ACCESS";
   email_recipients?: string[];
 };
 
@@ -16,7 +16,7 @@ export function buildCreateShareBody(input: {
   password?: string;
   canDownload: boolean;
   recipientUserIds?: string[];
-  permission?: "VIEW" | "COMMENT" | "EDIT";
+  permission?: "VIEW" | "COMMENT" | "EDIT" | "ORGANIZE" | "FULL_ACCESS";
   emailRecipients?: string[];
 }): CreateShareBody {
   const body: CreateShareBody = {

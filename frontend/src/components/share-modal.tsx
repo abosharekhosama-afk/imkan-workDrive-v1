@@ -1,21 +1,20 @@
 "use client";
 
-import { useEffect, useMemo, useState, type FormEvent } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useLocale } from "./locale-provider";
 import { Modal } from "./modal";
 import { Toast } from "./toast";
 import { buildCreateShareBody, createShare } from "../lib/api/shares";
 import { listOrganizationMembers, type OrgMember } from "../lib/api/organization";
-import { listSharedByMe, removeShareRecipient, revokeShare, type SharedItem } from "../lib/api/shared";
+import { listSharedByMe, removeShareRecipient, revokeShare, updateShareRecipientPermission, type SharedItem } from "../lib/api/shared";
 import { friendlyErrorMessageKey } from "../lib/friendly-error";
 import { normalizePublicAppUrl } from "../lib/public-url";
 import { buildShareEmbedCode, resolveShareLaunch, type ShareLaunchMode } from "../lib/share-launch-logic";
 import { sharesForResource } from "../lib/share-resource-logic";
 import { ImkanOptionPicker } from "./imkan-option-picker";
 
-type SharePermission = "VIEW" | "COMMENT" | "EDIT";
+type SharePermission = "VIEW" | "COMMENT" | "EDIT" | "ORGANIZE" | "FULL_ACCESS";
 type ExpiryKind = "never" | "1d" | "7d" | "30d" | "custom";
-type ShareTab = "link" | "invite";
 
 const EXPIRY_DAYS: Record<Exclude<ExpiryKind, "never" | "custom">, number> = {
   "1d": 1,
@@ -23,7 +22,8 @@ const EXPIRY_DAYS: Record<Exclude<ExpiryKind, "never" | "custom">, number> = {
   "30d": 30,
 };
 
-const PERMISSION_OPTIONS: SharePermission[] = ["VIEW", "COMMENT", "EDIT"];
+const FILE_PERMISSIONS: SharePermission[] = ["VIEW", "COMMENT", "EDIT", "FULL_ACCESS"];
+const FOLDER_PERMISSIONS: SharePermission[] = ["VIEW", "COMMENT", "EDIT", "ORGANIZE", "FULL_ACCESS"];
 
 function permissionOptionLabel(option: SharePermission): string {
   return `share.permission.${option}`;
@@ -45,8 +45,9 @@ export function ShareModal({
   onChanged?: () => void;
 }) {
   const launch = useMemo(() => resolveShareLaunch(launchMode), [launchMode]);
+  const permissionOptions = resourceType === "FOLDER" ? FOLDER_PERMISSIONS : FILE_PERMISSIONS;
   const { label, locale } = useLocale();
-  const [activeTab, setActiveTab] = useState<ShareTab>(launch.tab);
+  const [activeTab, setActiveTab] = useState<"link" | "invite">(launch.tab);
   const [password, setPassword] = useState("");
   const [expiryKind, setExpiryKind] = useState<ExpiryKind>("never");
   const [customExpiryDate, setCustomExpiryDate] = useState("");
@@ -70,7 +71,17 @@ export function ShareModal({
     setLoadingShares(true);
     try {
       const rows = await listSharedByMe();
-      setExistingShares(sharesForResource(rows, resourceType, resourceId));
+      const mine = sharesForResource(rows, resourceType, resourceId);
+      setExistingShares(mine);
+      const current = mine[0];
+      if (current) {
+        if (current.canDownload != null) setCanDownload(current.canDownload);
+        if (current.permission && permissionOptions.includes(current.permission as SharePermission)) setPermission(current.permission as SharePermission);
+        if (current.expiresAt) {
+          setExpiryKind("custom");
+          setCustomExpiryDate(current.expiresAt.slice(0, 10));
+        }
+      }
     } catch {
       setExistingShares([]);
     } finally {
@@ -129,7 +140,7 @@ export function ShareModal({
     }
   }
 
-  async function runSubmit(recipients: string[]): Promise<boolean> {
+  async function runSubmit(recipients: string[]): Promise<string | null> {
     setError(null);
     setSubmitting(true);
     try {
@@ -145,28 +156,25 @@ export function ShareModal({
           emailRecipients: emailRecipients.split(/[;,\s]+/).map((v) => v.trim()).filter(Boolean),
         }),
       );
-      setLinkUrl(normalizePublicAppUrl(result.link_url));
+      const url = normalizePublicAppUrl(result.link_url);
+      setLinkUrl(url);
+      setRecipientUserIds([]);
       await refreshShares();
       onChanged?.();
       setToast(label("share.created"));
-      return true;
+      return url;
     } catch (cause) {
       setError(label(friendlyErrorMessageKey(cause)));
-      return false;
+      return null;
     } finally {
       setSubmitting(false);
     }
   }
 
-  async function onSubmit(event: FormEvent) {
-    event.preventDefault();
-    if (submitting) return;
-    await runSubmit(activeTab === "invite" ? recipientUserIds : []);
-  }
-
   async function onCopyLink() {
-    if (!displayLink) return;
-    const ok = await copyToClipboard(displayLink);
+    const url = displayLink ?? await runSubmit([]);
+    if (!url) return;
+    const ok = await copyToClipboard(url);
     if (ok) {
       setCopied(true);
       setToast(label("share.linkCopied"));
@@ -215,7 +223,20 @@ export function ShareModal({
     }
   }
 
-  const disableSubmit = submitting || (activeTab === "invite" && recipientUserIds.length === 0);
+  async function onChangeRecipientPermission(shareId: string, userId: string, next: SharePermission) {
+    setBusyShareId(`${shareId}:${userId}`);
+    setError(null);
+    try {
+      await updateShareRecipientPermission(shareId, userId, next);
+      await refreshShares();
+      onChanged?.();
+    } catch (cause) {
+      setError(label(friendlyErrorMessageKey(cause)));
+    } finally {
+      setBusyShareId(null);
+    }
+  }
+
   const modalTitle = launchMode === "downloadLink"
     ? label("share.titleDownloadLink")
     : launchMode === "embed"
@@ -230,7 +251,7 @@ export function ShareModal({
         onChange={setPermission as (value: SharePermission | "") => void}
         ariaLabel={label("share.permission")}
         fullWidth
-        options={PERMISSION_OPTIONS.map((option) => ({
+        options={permissionOptions.map((option) => ({
           value: option,
           label: label(permissionOptionLabel(option) as Parameters<typeof label>[0]),
         }))}
@@ -271,12 +292,18 @@ export function ShareModal({
             {primaryShare.recipients?.length ? (
               <ul className="mt-2 space-y-1.5">
                 {primaryShare.recipients.map((recipient) => (
-                  <li key={recipient.userId} className="flex items-center justify-between gap-2 rounded-lg bg-slate-50 px-2.5 py-2 text-[11px]">
-                    <span className="min-w-0 truncate">{recipient.user?.name || recipient.user?.email || recipient.userId}</span>
+                  <li key={recipient.userId} className="flex items-center gap-2 rounded-lg bg-slate-50 px-2.5 py-2 text-[12px]">
+                    <span className="min-w-0 flex-1 truncate">{recipient.user?.name || recipient.user?.email || recipient.userId}</span>
+                    <ImkanOptionPicker
+                      value={(permissionOptions.includes(recipient.permission as SharePermission) ? recipient.permission : "VIEW") as SharePermission}
+                      onChange={(next) => { if (next) void onChangeRecipientPermission(primaryShare.id, recipient.userId, next); }}
+                      ariaLabel={label("share.permission")}
+                      options={permissionOptions.map((option) => ({ value: option, label: label(permissionOptionLabel(option) as Parameters<typeof label>[0]) }))}
+                    />
                     <button
                       type="button"
                       disabled={busyShareId === `${primaryShare.id}:${recipient.userId}`}
-                      className="shrink-0 text-red-600 disabled:opacity-50"
+                      className="shrink-0 text-[12px] text-red-600 disabled:opacity-50"
                       onClick={() => void onRemoveRecipient(primaryShare.id, recipient.userId)}
                     >
                       {label("share.removeRecipient")}
@@ -300,133 +327,85 @@ export function ShareModal({
           </section>
         ) : null}
 
-        {displayLink && !linkUrl ? (
-          <div className="wd-alert wd-alert-success break-all">
-            <strong className="block font-medium">{label("share.activeLink")}</strong>
-            <code className="block break-all text-[length:var(--imkan-font-size-secondary)]">{displayLink}</code>
-          </div>
-        ) : null}
+        {error ? <p className="text-red-500 text-[length:var(--imkan-font-size-secondary)]">{error}</p> : null}
 
+        <form onSubmit={(event) => { event.preventDefault(); setActiveTab("invite"); void runSubmit(recipientUserIds); }} className="flex flex-col gap-3">
+          <section className="rounded-xl border border-slate-200 p-3">
+            <h3 className="mb-2 text-[13px] font-semibold text-slate-900">{label("share.addMembers")}</h3>
+            <div className="flex flex-wrap items-center gap-2">
+              <input type="search" value={memberQuery} onChange={(event) => setMemberQuery(event.target.value)} className="wd-input min-w-[180px] flex-1" placeholder={label("share.recipients.search")} aria-label={label("share.recipients.search")} />
+              <div className="w-[150px]">{permissionField}</div>
+              <button type="submit" className="h-9 rounded-full bg-[color:var(--wd-primary)] px-4 text-[13px] font-semibold text-white transition hover:bg-[color:var(--wd-primary-dark)] disabled:opacity-50" disabled={submitting || recipientUserIds.length === 0}>{submitting && activeTab === "invite" ? "…" : label("share.add")}</button>
+            </div>
+            {memberQuery.trim() && filteredMembers.length === 0 ? <p className="mt-2 text-[12px] text-slate-500">{label("share.recipients.none")}</p> : null}
+            {filteredMembers.length > 0 ? (
+              <div className="imkan-share-recipient-list mt-2">
+                {filteredMembers.slice(0, 6).map((member) => {
+                  const memberId = member.userId || member.id;
+                  const displayName = member.name?.trim() || member.email.split("@")[0];
+                  const selected = recipientUserIds.includes(memberId);
+                  return (
+                    <button type="button" key={memberId} className={`imkan-share-recipient${selected ? " selected" : ""}`} onClick={() => toggleRecipient(memberId)}>
+                      <span className="imkan-share-avatar">{displayName.slice(0, 2).toUpperCase()}</span>
+                      <span><b>{displayName}</b><small>{member.email}</small></span>
+                      <span>{selected ? "✓" : "＋"}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            ) : null}
+          </section>
+
+          <section className="rounded-xl border border-slate-200 p-3">
+            <h3 className="text-[13px] font-semibold text-slate-900">{label("share.linkAccess")}</h3>
+            <p className="mt-1 text-[12px] text-slate-500">{locale === "ar" ? "عرض، تعليق، تعديل، تنظيم للمجلدات، أو مشاركة لإعادة المشاركة." : "View, Comment, Edit, Organize for folders, or Share to reshare."}</p>
+            {displayLink ? <code className="mt-2 block break-all rounded-lg bg-slate-50 px-3 py-2 text-[12px] text-slate-700">{displayLink}</code> : null}
+            <div className="mt-3 grid gap-3 md:grid-cols-2">
+              <div className="wd-field">
+                <label>{label("share.password")}</label>
+                <input type="password" value={password} onChange={(event) => setPassword(event.target.value)} className="wd-input" placeholder={label("share.password")} minLength={8} />
+              </div>
+              <div className="wd-field">
+                <label>{label("share.expires")}</label>
+                <ImkanOptionPicker
+                  value={expiryKind}
+                  onChange={setExpiryKind as (value: ExpiryKind | "") => void}
+                  ariaLabel={label("share.expires")}
+                  fullWidth
+                  options={(["never", "1d", "7d", "30d", "custom"] as ExpiryKind[]).map((option) => ({
+                    value: option,
+                    label: label(`share.expiry.${option}` as Parameters<typeof label>[0]),
+                  }))}
+                />
+              </div>
+            </div>
+            {expiryKind === "custom" ? (
+              <div className="wd-field">
+                <label>{label("share.expiry.custom")}</label>
+                <input type="date" value={customExpiryDate} onChange={(event) => setCustomExpiryDate(event.target.value)} className="wd-input" min={new Date(Date.now() + 86_400_000).toISOString().slice(0, 10)} />
+              </div>
+            ) : null}
+            {downloadField}
+            {permissionField}
+            <div className="wd-field">
+              <label>{locale === "ar" ? "إرسال الرابط بالبريد" : "Email the link"}</label>
+              <input type="text" value={emailRecipients} onChange={(event) => setEmailRecipients(event.target.value)} className="wd-input" placeholder="email@example.com" />
+            </div>
+            <div className="mt-2 flex flex-wrap justify-end gap-2">
+              <button type="button" className="h-9 rounded-full border border-slate-200 px-4 text-[13px] font-medium text-slate-600 transition hover:bg-slate-50" onClick={() => { setActiveTab("link"); void runSubmit([]); }} disabled={submitting}>{submitting && activeTab === "link" ? "…" : label(displayLink ? "share.updateLink" : "share.submit")}</button>
+              <button type="button" className="h-9 rounded-full bg-[color:var(--wd-primary)] px-4 text-[13px] font-semibold text-white transition hover:bg-[color:var(--wd-primary-dark)] disabled:opacity-50" disabled={!displayLink && submitting} onClick={() => void onCopyLink()}>{copied ? label("share.copied") : label("share.copyLink")}</button>
+            </div>
+          </section>
+        </form>
         {embedCode ? (
           <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
             <div className="mb-2 text-[12px] font-semibold text-slate-800">{label("share.embedCode")}</div>
             <textarea readOnly value={embedCode} rows={3} className="w-full rounded-lg border border-slate-200 bg-white px-2 py-2 font-mono text-[10px]" />
-            <button type="button" className="wd-btn wd-btn-ghost wd-btn-sm mt-2" onClick={() => void onCopyEmbed()}>
+            <button type="button" className="mt-2 h-8 rounded-full border border-slate-200 px-3 text-[12px] font-medium text-slate-700 transition hover:bg-white" onClick={() => void onCopyEmbed()}>
               {copiedEmbed ? label("share.copied") : label("share.copyEmbed")}
             </button>
           </div>
         ) : null}
-
-        <div className="zoho-view-toggle">
-          <button
-            type="button"
-            role="tab"
-            aria-selected={activeTab === "link"}
-            className={`zoho-view-btn${activeTab === "link" ? " active" : ""}`}
-            onClick={() => { setActiveTab("link"); setError(null); }}
-          >
-            {label("share.tab.link")}
-          </button>
-          <button
-            type="button"
-            role="tab"
-            aria-selected={activeTab === "invite"}
-            className={`zoho-view-btn${activeTab === "invite" ? " active" : ""}`}
-            onClick={() => { setActiveTab("invite"); setError(null); }}
-          >
-            {label("share.tab.invite")}
-          </button>
-        </div>
-
-        {error ? <p className="text-red-500 text-[length:var(--imkan-font-size-secondary)]">{error}</p> : null}
-
-        {linkUrl ? (
-          <div className="flex flex-col gap-2">
-            <div className="wd-alert wd-alert-success break-all">
-              <strong className="block font-medium">{label("share.created")}</strong>
-              <code className="block break-all text-[length:var(--imkan-font-size-secondary)]">{linkUrl}</code>
-            </div>
-            <div className="flex flex-wrap items-center gap-2">
-              <button type="button" className="wd-btn wd-btn-ghost wd-btn-sm" onClick={() => void onCopyLink()}>
-                {copied ? label("share.copied") : label("share.copyLink")}
-              </button>
-              {launch.showEmbedPanel && linkUrl ? (
-                <button type="button" className="wd-btn wd-btn-ghost wd-btn-sm" onClick={() => void onCopyEmbed()}>
-                  {copiedEmbed ? label("share.copied") : label("share.copyEmbed")}
-                </button>
-              ) : null}
-            </div>
-          </div>
-        ) : (
-          <form onSubmit={onSubmit} className="flex flex-col">
-            {activeTab === "link" ? (
-              <>
-                <div className="wd-field">
-                  <label>{label("share.password")}</label>
-                  <input type="password" value={password} onChange={(event) => setPassword(event.target.value)} className="wd-input" placeholder={label("share.password")} minLength={8} />
-                </div>
-                <div className="wd-field">
-                  <label>{label("share.expires")}</label>
-                  <ImkanOptionPicker
-                    value={expiryKind}
-                    onChange={setExpiryKind as (value: ExpiryKind | "") => void}
-                    ariaLabel={label("share.expires")}
-                    fullWidth
-                    options={(["never", "1d", "7d", "30d", "custom"] as ExpiryKind[]).map((option) => ({
-                      value: option,
-                      label: label(`share.expiry.${option}` as Parameters<typeof label>[0]),
-                    }))}
-                  />
-                </div>
-                {expiryKind === "custom" ? (
-                  <div className="wd-field">
-                    <label>{label("share.expiry.custom")}</label>
-                    <input type="date" value={customExpiryDate} onChange={(event) => setCustomExpiryDate(event.target.value)} className="wd-input" min={new Date(Date.now() + 86_400_000).toISOString().slice(0, 10)} />
-                  </div>
-                ) : null}
-                {downloadField}
-                {permissionField}
-                <div className="wd-field">
-                  <label>{locale === "ar" ? "إرسال الرابط بالبريد الإلكتروني (اختياري)" : "Email the share link (optional)"}</label>
-                  <input type="text" value={emailRecipients} onChange={(event) => setEmailRecipients(event.target.value)} className="wd-input" placeholder="email@example.com" />
-                </div>
-              </>
-            ) : (
-              <>
-                <div className="wd-field">
-                  <label>{label("share.recipients.search")}</label>
-                  <input type="search" value={memberQuery} onChange={(event) => setMemberQuery(event.target.value)} className="wd-input" placeholder={label("share.recipients.search")} />
-                </div>
-                {filteredMembers.length === 0 ? (
-                  <p className="mb-3 text-[length:var(--imkan-font-size-secondary)]">{label("share.recipients.none")}</p>
-                ) : (
-                  <div className="imkan-share-recipient-list">
-                    {filteredMembers.slice(0, 8).map((member) => {
-                      const memberId = member.userId || member.id;
-                      const displayName = member.name?.trim() || member.email.split("@")[0];
-                      const selected = recipientUserIds.includes(memberId);
-                      return (
-                        <button type="button" key={memberId} className={`imkan-share-recipient${selected ? " selected" : ""}`} onClick={() => toggleRecipient(memberId)}>
-                          <span className="imkan-share-avatar">{displayName.slice(0, 2).toUpperCase()}</span>
-                          <span><b>{displayName}</b><small>{member.email}</small></span>
-                          <span>{selected ? "✓" : "＋"}</span>
-                        </button>
-                      );
-                    })}
-                  </div>
-                )}
-                {permissionField}
-                {downloadField}
-              </>
-            )}
-            <div className="mt-3 flex justify-end gap-2">
-              <button type="button" className="wd-btn wd-btn-ghost" onClick={onClose}>{label("share.cancel")}</button>
-              <button type="submit" className="wd-btn wd-btn-primary" disabled={disableSubmit}>
-                {submitting ? "…" : label("share.submit")}
-              </button>
-            </div>
-          </form>
-        )}
       </div>
       {toast ? <Toast message={toast} onDismiss={() => setToast(null)} /> : null}
     </Modal>

@@ -165,7 +165,7 @@ export default function PublicCollectionPage() {
             </label>
           </div>
           {files.length > 0 ? <ul className="space-y-1 text-sm text-slate-700">{files.map((file) => <li key={`${file.name}-${file.size}-${file.lastModified}`}>{file.name} — {Math.ceil(file.size / 1024)} KB</li>)}</ul> : null}
-          <button className="wd-primary-button" disabled={busy || !files.length || !identityReady} onClick={() => void submit()}>{busy ? text("Uploading…", "جارٍ الرفع…") : text("Submit files", "إرسال الملفات")}</button>
+          <button type="button" disabled={busy || !files.length || !identityReady} onClick={() => void submit()} className="h-11 w-full rounded-full bg-[color:var(--wd-primary)] text-[14px] font-semibold text-white shadow-sm transition hover:bg-[color:var(--wd-primary-dark)] hover:shadow-[0_6px_16px_rgba(23,92,211,0.28)] disabled:cursor-not-allowed disabled:bg-[#c5c9d1] disabled:text-white disabled:shadow-none">{busy ? text("Uploading…", "جارٍ الرفع…") : text("Submit files", "إرسال الملفات")}</button>
           {message ? <p role="status" className="text-sm">{message}</p> : null}
         </div>
       </section>
