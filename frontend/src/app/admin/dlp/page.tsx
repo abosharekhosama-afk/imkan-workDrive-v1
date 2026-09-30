@@ -87,7 +87,7 @@ export default function AdminDlpPage() {
           <h1 className="text-[20px] font-semibold text-[#202124]">{t("Data Loss Prevention", "منع فقدان البيانات")}</h1>
           <div className="mt-4 flex gap-6 text-[13px]">
             {(["policies", "labels"] as const).map((key) => (
-              <button key={key} type="button" onClick={() => setTab(key)} className={`border-b-2 pb-3 ${tab === key ? "border-[#2c66dd] font-semibold text-[#2c66dd]" : "border-transparent text-[#5f6368]"}`}>{key === "policies" ? t("Policies", "السياسات") : t("Classification Labels", "تصنيفات البيانات")}</button>
+              <button key={key} type="button" onClick={() => setTab(key)} className={`rounded-none border-0 border-b-2 bg-transparent px-1 pb-3 shadow-none ${tab === key ? "border-[#2c66dd] font-semibold text-[#2c66dd]" : "border-transparent text-[#5f6368]"}`}>{key === "policies" ? t("Policies", "السياسات") : t("Classification Labels", "تصنيفات البيانات")}</button>
             ))}
           </div>
         </div>

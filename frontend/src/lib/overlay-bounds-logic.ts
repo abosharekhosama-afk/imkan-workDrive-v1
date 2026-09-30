@@ -26,7 +26,7 @@ export function clampBoxLeft(desiredLeft: number, width: number, lane: ContentLa
 
 export function measureSidebarBox(): SidebarBox | null {
   if (typeof document === "undefined") return null;
-  const el = document.querySelector(".primary-sidebar, .zoho-sidebar");
+  const el = document.querySelector(".primary-sidebar, .zoho-sidebar, .admin-console-sidebar");
   if (!(el instanceof HTMLElement)) return null;
   const rect = el.getBoundingClientRect();
   if (rect.width < 8) return null;

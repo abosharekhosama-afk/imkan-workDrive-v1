@@ -239,7 +239,7 @@ export default function AdminDataAdministrationPage() {
         
         <div className="mt-5 flex gap-5 overflow-x-auto border-b border-slate-200">
           {TABS.map(([id, en, arLabel]) => (
-            <button key={id} type="button" onClick={() => setTab(id)} className={`shrink-0 border-b-2 pb-3 text-[13px] ${tab === id ? "border-[#175cd3] font-semibold text-[#175cd3]" : "border-transparent text-[#555] hover:text-[#175cd3]"}`}>{text(ar, en, arLabel)}</button>
+            <button key={id} type="button" onClick={() => setTab(id)} className={`shrink-0 rounded-none border-0 border-b-2 bg-transparent px-1 pb-3 text-[13px] shadow-none ${tab === id ? "border-[#175cd3] font-semibold text-[#175cd3]" : "border-transparent text-[#555] hover:text-[#175cd3]"}`}>{text(ar, en, arLabel)}</button>
           ))}
         </div>
       </div>

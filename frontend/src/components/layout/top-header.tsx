@@ -228,8 +228,11 @@ function HeaderSearchOverlay({ onClose, inputRef }: { onClose: () => void; input
       panel.style.transform = "none";
     };
     place();
+    const sidebar = document.querySelector(".primary-sidebar, .zoho-sidebar, .admin-console-sidebar");
+    const observer = typeof ResizeObserver === "undefined" || !(sidebar instanceof HTMLElement) ? null : new ResizeObserver(place);
+    observer?.observe(sidebar as HTMLElement);
     window.addEventListener("resize", place);
-    return () => window.removeEventListener("resize", place);
+    return () => { observer?.disconnect(); window.removeEventListener("resize", place); };
   }, []);
   const [q, setQ] = useState("");
   const [scope, setScope] = useState<"all" | "folders" | "files">("all");

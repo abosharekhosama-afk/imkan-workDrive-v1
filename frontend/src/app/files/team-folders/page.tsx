@@ -209,7 +209,7 @@ export default function TeamFoldersPage() {
   };
 
   return (
-    <section className="team-folders-page flex min-h-full min-w-0 flex-col bg-white">
+    <section className="team-folders-page flex min-h-[calc(100dvh-56px)] w-full min-w-0 flex-1 flex-col bg-white">
       <div className="team-folders-toolbar flex shrink-0 items-center border-b border-slate-100 px-5" data-team-folders-toolbar>
         <div className="relative shrink-0" data-team-folder-filter>
           <button id={filterButtonId} type="button" onClick={() => setFilterOpen((v) => !v)} className={`team-filter-trigger ${scopeFilter !== "joined" ? "is-active" : ""}`} aria-expanded={filterOpen} aria-haspopup="menu">
@@ -250,7 +250,7 @@ export default function TeamFoldersPage() {
       {loading ? (
         <div className="team-folders-list-loading"><SkeletonLoader rows={4} columns={1} /></div>
       ) : visibleFolders.length === 0 ? (
-        <div className="flex min-h-0 flex-1 items-center justify-center">
+        <div className="flex min-h-0 flex-1 items-center justify-center self-stretch">
           <EmptyState
             title={search ? (locale === "ar" ? "لا توجد نتائج" : "No matching Team Folders") : label("teamFolders.empty")}
             description={search ? undefined : label("teamFolders.emptyDescription")}

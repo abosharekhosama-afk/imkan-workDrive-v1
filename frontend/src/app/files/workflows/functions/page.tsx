@@ -337,14 +337,14 @@ function FunctionBuilder({ draft, setDraft, ar, connections, onSave, onSaveAndTe
                   <div className="grid grid-cols-1 gap-1.5">{group.items.map(item => <button key={item[0]} type="button" draggable onDragStart={e => beginOperationDrag(item[0], e)} onDragEnd={() => { /* clear after drop has had a chance to read the payload */ window.setTimeout(() => { dragOperationRef.current = null; setDragOperation(null); }, 300); }} onClick={() => addOperation(item[0])} className="flex items-center gap-2 border border-[#e2e2e2] bg-[#fafafa] px-3 py-2 text-start text-[11px] hover:border-[#b6c9e8] hover:bg-[#f3f7fc]"><span className="text-slate-400">⠿</span><span>{ar ? item[2] : item[1]}</span><span className="ms-auto text-[10px] text-slate-400">＋</span></button>)}</div>
                 </section>)}
               </>}
-              {panel === "inputs" && <><p className="mb-3 text-[11px] text-slate-500">{ar ? "القيم التي تستقبلها الدالة من الـ Workflow." : "Values passed into this function by a workflow."}</p><div className="space-y-2">{definition.inputs.map((p, i) => <PortEditor key={`${p.key}-${i}`} port={p} ar={ar} onChange={v => updatePort("inputs", i, v)} onRemove={() => removePort("inputs", i)} />)}</div><button type="button" className="mt-3 rounded border border-slate-300 px-3 py-2 text-[11px]" onClick={() => addPort("inputs")}>＋ {ar ? "إضافة مدخل" : "Add input"}</button></>}
-              {panel === "outputs" && <><p className="mb-3 text-[11px] text-slate-500">{ar ? "القيم التي ستعيدها الدالة إلى الـ Workflow." : "Values returned from this function to the workflow."}</p><div className="space-y-2">{definition.outputs.map((p, i) => <PortEditor key={`${p.key}-${i}`} port={p} ar={ar} onChange={v => updatePort("outputs", i, v)} onRemove={() => removePort("outputs", i)} />)}</div><button type="button" className="mt-3 rounded border border-slate-300 px-3 py-2 text-[11px]" onClick={() => addPort("outputs")}>＋ {ar ? "إضافة مخرج" : "Add output"}</button></>}
+              {panel === "inputs" && <><p className="mb-3 text-[11px] text-slate-500">{ar ? "القيم التي تستقبلها الدالة من الـ Workflow." : "Values passed into this function by a workflow."}</p><div className="space-y-2">{definition.inputs.map((p, i) => <PortEditor key={`input-${i}`} port={p} ar={ar} onChange={v => updatePort("inputs", i, v)} onRemove={() => removePort("inputs", i)} />)}</div><button type="button" className="mt-3 rounded border border-slate-300 px-3 py-2 text-[11px]" onClick={() => addPort("inputs")}>＋ {ar ? "إضافة مدخل" : "Add input"}</button></>}
+              {panel === "outputs" && <><p className="mb-3 text-[11px] text-slate-500">{ar ? "القيم التي ستعيدها الدالة إلى الـ Workflow." : "Values returned from this function to the workflow."}</p><div className="space-y-2">{definition.outputs.map((p, i) => <PortEditor key={`output-${i}`} port={p} ar={ar} onChange={v => updatePort("outputs", i, v)} onRemove={() => removePort("outputs", i)} />)}</div><button type="button" className="mt-3 rounded border border-slate-300 px-3 py-2 text-[11px]" onClick={() => addPort("outputs")}>＋ {ar ? "إضافة مخرج" : "Add output"}</button></>}
               {panel === "details" && <div className="space-y-3"><label className="block text-[11px]">{ar ? "اسم العرض" : "Display name"}<input className="wf-input mt-1" value={draft.name} onChange={e => setDraft({ ...draft, name: e.target.value })} /></label><label className="block text-[11px]">{ar ? "معرّف الدالة" : "Function identifier"}<input className="wf-input mt-1" value={draft.key} onChange={e => setDraft({ ...draft, key: e.target.value })} /></label><label className="block text-[11px]">{ar ? "الوصف" : "Description"}<textarea className="wf-input mt-1 min-h-20" value={draft.description} onChange={e => setDraft({ ...draft, description: e.target.value })} /></label><button type="button" className="text-[11px] text-blue-700" onClick={() => setAdvanced(v => !v)}>{ar ? "التعريف المتقدم JSON" : "Advanced JSON definition"}</button>{advanced && <textarea className="wf-input min-h-56 font-mono text-[10px]" value={JSON.stringify(definition, null, 2)} onChange={e => { try { updateDef(cloneDefinition(JSON.parse(e.target.value))); } catch { /* retain last valid definition */ } }} />}</div>}
             </div>
           </aside>
           <main className="flex min-w-0 flex-1 flex-col bg-white">
             <div className="flex h-[50px] shrink-0 items-center justify-between border-b border-[#e6e6e6] px-4"><div className="text-[12px] font-medium">{ar ? "محرر البرنامج النصي" : "Script Editor"}</div><div className="text-[10px] text-slate-400">{ar ? "اسحب إجراءً إلى هنا" : "Drag an action here"}</div></div>
-            <div className="min-h-0 flex-1 overflow-auto bg-white" onDragOver={e => { e.preventDefault(); e.dataTransfer.dropEffect = "copy"; }} onDrop={finishOperationDrop}>
+            <div className="min-h-0 flex-1 overflow-auto bg-white" onDragOver={e => { e.preventDefault(); e.dataTransfer.dropEffect = "copy"; }} onDrop={finishOperationDrop} onMouseDown={(event) => { if (event.target === event.currentTarget) setSelectedIndex(null); }}>
               <div className="min-h-full font-mono text-[12px] leading-[22px]">
                 {codeRows.map((row, lineIndex) => {
                   const operationIndex = row.operationIndex;
@@ -444,6 +444,7 @@ export default function WorkflowFunctionsPage({ standalone = false }: { standalo
       const input = JSON.parse(testInputText);
       if (!input || typeof input !== "object" || Array.isArray(input)) throw new Error("Test input must be a JSON object");
       setResult(await testWorkflowFunction(f.id, input as Record<string, unknown>, versionId));
+      try { setExecutions(await listWorkflowFunctionExecutions(f.id)); } catch { /* the result is already visible */ }
     } catch (e) {
       if (e instanceof SyntaxError) setTestInputError(ar ? "صيغة JSON غير صحيحة. راجع الأقواس والفواصل." : "Invalid JSON. Check braces and commas.");
       else setError(e instanceof Error ? e.message : "Function test failed");
@@ -451,11 +452,7 @@ export default function WorkflowFunctionsPage({ standalone = false }: { standalo
   };
   const filteredRows = rows.filter(f => `${f.name} ${f.key} ${f.description ?? ""}`.toLowerCase().includes(search.toLowerCase()));
 
-  const Shell = ({ children }: { children: ReactNode }) => standalone
-    ? <>{children}</>
-    : <WorkflowShell active="functions" title={ar ? "الدوال المخصصة" : "Custom Functions"} subtitle={ar ? "مصمم بصري بإصدارات ثابتة ومدخلات ومخرجات قابلة للربط داخل Workflow." : "Visual, versioned functions with reusable inputs and outputs for workflows."}>{children}</WorkflowShell>;
-
-  return <Shell>
+  const frame = (<>
     <main className="h-full min-h-0 overflow-y-auto bg-white p-2 sm:p-3" dir={ar ? "rtl" : "ltr"}>
       <div className="flex min-h-full w-full flex-col">
         <div className="flex flex-wrap items-center justify-between gap-3">
@@ -521,7 +518,7 @@ export default function WorkflowFunctionsPage({ standalone = false }: { standalo
 
     {open && <FunctionBuilder draft={draft} setDraft={setDraft} ar={ar} connections={connections} busy={busy} onCancel={() => { setOpen(false); setEditingFunctionId(null); }} onSave={() => void create(false)} onSaveAndTest={() => void create(true)} />}
 
-    {selected && <div className="fixed inset-0 z-[240] flex items-center justify-center bg-slate-950/40 p-4">
+    {selected && <div className="fixed inset-0 z-[240] flex items-center justify-center bg-slate-950/40 p-4" onMouseDown={(event) => { if (event.target === event.currentTarget) setSelected(null); }}>
       <div className="wf-modal w-[min(900px,96vw)] max-h-[90vh] overflow-y-auto p-5" dir={ar ? "rtl" : "ltr"}>
         <div className="flex items-center justify-between"><div><h2 className="text-[16px] font-semibold">{selected.name}</h2><p className="text-[10px] text-slate-500">{ar ? "الإصدارات وسجل التنفيذ" : "Versions and execution history"}</p></div><button className="wd-icon-btn" onClick={() => setSelected(null)}>×</button></div>
         <div className="mt-4 grid gap-2 sm:grid-cols-[1fr_auto_auto]"><input className="wf-input" value={editName} onChange={e => setEditName(e.target.value)} /><button className="wd-pill wd-pill-record" disabled={busy} onClick={() => void saveMeta()}>{ar ? "حفظ" : "Save"}</button><button className="wd-pill wd-pill-record" disabled={busy} onClick={() => void remove()}>{ar ? "حذف" : "Delete"}</button></div>
@@ -535,8 +532,11 @@ export default function WorkflowFunctionsPage({ standalone = false }: { standalo
             </div>
           </div>
         )}</div>
-        <div className="mt-5"><div className="text-[10px] font-semibold">{ar ? "آخر عمليات التنفيذ" : "Recent executions"}</div><div className="mt-2 max-h-40 space-y-1 overflow-auto">{executions.map(x => <div key={x.id} className="flex items-center justify-between rounded-lg bg-slate-50 px-3 py-2 text-[9px]"><span>{x.status} · v{x.versionId.slice(0, 6)}</span><span>{x.durationMs ?? "-"} ms</span></div>)}</div></div>
+        <div className="mt-5"><div className="text-[10px] font-semibold">{ar ? "آخر عمليات التنفيذ" : "Recent executions"}</div><div className="mt-2 max-h-40 space-y-1 overflow-auto">{executions.length === 0 ? <p className="text-[10px] text-slate-400">{ar ? "لا توجد عمليات تنفيذ بعد." : "No executions yet."}</p> : executions.map(x => <div key={x.id} className="flex items-center justify-between rounded-lg bg-slate-50 px-3 py-2 text-[9px]"><span>{x.status} · v{x.versionId.slice(0, 6)}</span><span>{x.durationMs ?? "-"} ms</span></div>)}</div></div>
+        {result ? <pre className="mt-4 max-h-48 overflow-auto rounded-xl bg-slate-50 p-3 text-[10px] whitespace-pre-wrap">{JSON.stringify(result, null, 2)}</pre> : null}
       </div>
     </div>}
-  </Shell>;
+  </>);
+  if (standalone) return frame;
+  return <WorkflowShell active="functions" title={ar ? "الدوال المخصصة" : "Custom Functions"} subtitle={ar ? "مصمم بصري بإصدارات ثابتة ومدخلات ومخرجات قابلة للربط داخل Workflow." : "Visual, versioned functions with reusable inputs and outputs for workflows."}>{frame}</WorkflowShell>;
 }
