@@ -626,7 +626,7 @@ html[data-theme="dark"] .zoho-icon-btn:hover{background:var(--wd-hover);color:#d
     transition: background-color var(--wd-dur) var(--wd-ease), color var(--wd-dur) var(--wd-ease), box-shadow var(--wd-dur) var(--wd-ease);
   }
 }
-.admin-console-shell button:not(.wd-icon-btn):not([role="switch"]):not(.wd-menu-item):not(.admin-activity-tab):not(.team-manage-tab):not(.team-folder-pin):not(.team-folder-members):not(.team-folder-more):not(.team-filter-trigger):not(.team-view-trigger):not(.admin-audit-new-report),
+.admin-console-shell button:not(.wd-icon-btn):not([role="switch"]):not(.wd-menu-item):not(.admin-activity-tab):not(.admin-underline-tab):not(.team-manage-tab):not(.team-folder-pin):not(.team-folder-members):not(.team-folder-more):not(.team-filter-trigger):not(.team-view-trigger):not(.admin-audit-new-report),
 .admin-console-shell a.imkan-button {
   border-radius: var(--wd-pill-radius, 16px);
   transition: background-color var(--wd-dur) var(--wd-ease), color var(--wd-dur) var(--wd-ease), box-shadow var(--wd-dur) var(--wd-ease);
@@ -2084,7 +2084,7 @@ html[dir="rtl"] .team-folder-menu button{
   .team-folder-pin{min-width:72px;padding-inline:8px}
   .team-folder-pin-label{display:none}
   .team-folders-search{width:220px}
-  .search-overlay-panel{width:100%}
+  .search-overlay-panel{width:auto;max-width:calc(100vw - 24px)}
   .search-mainbar-label{display:none}
 }
 @media(max-width:680px){
@@ -4237,6 +4237,16 @@ html[data-theme="dark"] .imkan-connections-page .connections-detail-overlay{back
 /* Admin Console / Zoho WorkDrive settings parity */
 .admin-console-shell .admin-activity-tabs {
   gap: 1.25rem;
+}
+.admin-console-shell button.admin-underline-tab {
+  border-radius: 0 !important;
+  border-style: solid !important;
+  height: auto !important;
+  min-height: 0 !important;
+  padding: 0 2px 12px !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  border-width: 0 0 2px 0 !important;
 }
 .admin-console-shell .admin-activity-tab {
   border-radius: 0;

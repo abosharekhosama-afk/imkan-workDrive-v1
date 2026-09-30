@@ -3,13 +3,15 @@ import { useEffect, useState } from "react";
 import { useLocale } from "./locale-provider";
 import { Modal } from "./modal";
 import { createFolder, getFolder, listRootContents } from "../lib/api/folders";
+import { listTeamFolders } from "../lib/api/team-folders";
+import { listSharedWithMe } from "../lib/api/shared";
 import { friendlyErrorMessageKey } from "../lib/friendly-error";
 import { Icons } from "./layout/icons";
 import { ImkanOptionPicker, toImkanPickerOptions } from "./imkan-option-picker";
 import { getTransferDataTemplateMandate, type DataTemplate } from "../lib/api/metadata";
 import { resolveDataTemplateSchema } from "../lib/data-template-logic";
 
-type FlatFolder = { id: string; name: string; depth: number };
+type FlatFolder = { id: string; name: string; depth: number; section: "myFolders" | "team" | "shared" | "favorites" };
 
 const SIDE_SECTIONS: Array<{ key: string; labelKey: string; icon: React.ReactNode }> = [
   { key: "favorites", labelKey: "files.favorite", icon: <Icons.star size={14} className="text-[color:var(--wd-primary)]" /> },
@@ -38,18 +40,33 @@ export function MoveModal({ resourceName, resourceType = "FILE", resourceId, mod
   const loadTree = async () => {
     setLoading(true); setError(null);
     try {
-      const root = await listRootContents();
       const entries: FlatFolder[] = [];
-      const walk = async (list: Array<{ id: string; name: string }>, depth: number): Promise<void> => {
+      const walk = async (list: Array<{ id: string; name: string }>, depth: number, section: FlatFolder["section"]): Promise<void> => {
         for (const folder of list) {
-          entries.push({ id: folder.id, name: folder.name, depth });
+          if (entries.some((entry) => entry.id === folder.id && entry.section === section)) continue;
+          entries.push({ id: folder.id, name: folder.name, depth, section });
           try {
             const detail = await getFolder(folder.id);
-            if (detail.folders?.length) await walk(detail.folders, depth + 1);
+            if (detail.folders?.length) await walk(detail.folders, depth + 1, section);
           } catch { /* skip unreadable subtree */ }
         }
       };
-      await walk(root.folders ?? [], 0);
+      const [root, teams, shared] = await Promise.all([
+        listRootContents(),
+        listTeamFolders().catch(() => ({ teamFolders: [] as Array<{ name: string; rootFolderId: string | null }> })),
+        listSharedWithMe().catch(() => []),
+      ]);
+      await walk(root.folders ?? [], 0, "myFolders");
+      for (const team of teams.teamFolders) {
+        if (!team.rootFolderId) continue;
+        entries.push({ id: team.rootFolderId, name: team.name, depth: 0, section: "team" });
+        try {
+          const detail = await getFolder(team.rootFolderId);
+          if (detail.folders?.length) await walk(detail.folders, 1, "team");
+        } catch { /* skip unreadable team folder */ }
+      }
+      const sharedFolders = shared.filter((item) => item.resourceType === "FOLDER" && item.resourceId).map((item) => ({ id: item.resourceId, name: item.name || item.resourceId }));
+      await walk(sharedFolders, 0, "shared");
       setFolders(entries);
     } catch (cause) {
       setError(label(friendlyErrorMessageKey(cause)));
@@ -82,7 +99,7 @@ export function MoveModal({ resourceName, resourceType = "FILE", resourceId, mod
   const invalidDestinationIds = new Set(resourceType === "FOLDER" && resourceId ? [resourceId] : []);
   const filtered = (search.trim()
     ? folders.filter((f) => f.name.toLowerCase().includes(search.trim().toLowerCase()))
-    : folders).filter((f) => !invalidDestinationIds.has(f.id));
+    : folders.filter((f) => activeSection === "favorites" ? false : f.section === activeSection)).filter((f) => !invalidDestinationIds.has(f.id));
 
   async function createNewFolder() {
     const name = newName.trim(); if (!name) return;
@@ -157,13 +174,13 @@ return (
                   {destination === null ? <Icons.check size={14} className="text-[color:var(--wd-primary)]" /> : null}
                 </button>
                 {loading ? <p className="px-3 py-5 text-[12px] text-slate-400">...</p> : null}
-                {!loading && filtered.length === 0 ? <p className="px-3 py-5 text-[12px] text-slate-400">{label("filter.all")}</p> : null}
+                {!loading && filtered.length === 0 ? <p className="px-3 py-5 text-[12px] text-slate-400">{activeSection === "favorites" ? (locale === "ar" ? "لا توجد مجلدات مفضلة في هذه القائمة." : "No favorite folders are listed here.") : (locale === "ar" ? "لا توجد مجلدات في هذا القسم." : "No folders in this section.")}</p> : null}
                 {!loading && filtered.length > 0 ? (
                   <ul className="flex flex-col gap-0.5">
                     {filtered.map((folder) => {
                       const selected = destination === folder.id;
                       return (
-                        <li key={folder.id}>
+                        <li key={`${folder.section}-${folder.id}`}>
                           <button type="button" onClick={() => setDestination(folder.id)}
                             className={`flex min-h-10 w-full items-center gap-3 rounded-lg px-3 py-2 text-start text-[13px] ${selected ? "bg-[var(--wd-primary-light)] font-medium text-[color:var(--wd-primary-ink)]" : "text-slate-700 hover:bg-slate-50"}`}
                             style={{ paddingInlineStart: 12 + folder.depth * 20 }}>

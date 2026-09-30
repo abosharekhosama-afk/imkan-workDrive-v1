@@ -275,7 +275,7 @@ export function FileBrowser({
       let av: string | number = a.name.toLocaleLowerCase();
       let bv: string | number = b.name.toLocaleLowerCase();
       if (sortField === "lastModified") { av = Date.parse(a.updatedAt ?? "") || 0; bv = Date.parse(b.updatedAt ?? "") || 0; }
-      else if (sortField === "timeCreated") { av = Date.parse(a.updatedAt ?? "") || 0; bv = Date.parse(b.updatedAt ?? "") || 0; }
+      else if (sortField === "timeCreated") { const created = (item: FileRecord | FolderRecord) => Date.parse((item as FileRecord).createdAt ?? item.updatedAt ?? "") || 0; av = created(a); bv = created(b); }
       else if (sortField === "size") { av = "size" in a ? (a.size ?? 0) : (folderSizes.get(a.id) ?? 0); bv = "size" in b ? (b.size ?? 0) : (folderSizes.get(b.id) ?? 0); }
       else if (sortField === "type") { av = "mimeType" in a ? (a.mimeType ?? "") : "folder"; bv = "mimeType" in b ? (b.mimeType ?? "") : "folder"; }
       else if (sortField === "extension") { av = a.name.includes(".") ? a.name.split(".").pop()!.toLowerCase() : ""; bv = b.name.includes(".") ? b.name.split(".").pop()!.toLowerCase() : ""; }
@@ -832,6 +832,8 @@ export function FileBrowser({
           compact={viewMode === "compact"}
           sortField={sortField}
           sortDir={sortDir}
+          onSortField={setSortField}
+          onSortDir={setSortDir}
           columns={columns}
           onColumns={(next) => { setColumnsState(next); try { window.localStorage.setItem("wd-file-columns", JSON.stringify(next)); } catch { /* ignore quota */ } }}
         />

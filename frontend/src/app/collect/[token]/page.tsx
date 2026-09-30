@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useParams, usePathname } from "next/navigation";
 import { ApiError, getApiBaseUrl } from "../../../lib/api/client";
 import { useLocale } from "../../../components/locale-provider";
 
@@ -40,7 +41,13 @@ async function publicRequest<T>(path: string, init: RequestInit = {}): Promise<T
   return response.json() as Promise<T>;
 }
 
-export default function PublicCollectionPage({ params }: { params: { token: string } }) {
+export default function PublicCollectionPage() {
+  const route = useParams<{ token?: string | string[] }>();
+  const pathname = usePathname();
+  const fromParam = Array.isArray(route.token) ? route.token[0] ?? "" : route.token ?? "";
+  const fromPath = pathname.match(/^\/collect\/([^/?#]+)/)?.[1] ?? "";
+  let token = fromParam || fromPath;
+  try { token = decodeURIComponent(token); } catch { /* keep the raw segment */ }
   const { locale } = useLocale();
   const ar = locale === "ar";
   const text = (en: string, arabic: string) => (ar ? arabic : en);
@@ -54,10 +61,12 @@ export default function PublicCollectionPage({ params }: { params: { token: stri
   const [message, setMessage] = useState("");
 
   useEffect(() => {
-    void publicRequest<Info>(`/collections/public/${encodeURIComponent(params.token)}`)
+    if (!token) return;
+    setMessage("");
+    void publicRequest<Info>(`/collections/public/${encodeURIComponent(token)}`)
       .then(setInfo)
       .catch((error) => setMessage(error instanceof Error ? error.message : text("Collection unavailable", "رابط التجميع غير متاح")));
-  }, [params.token]);
+  }, [token]);
 
   const maxBytes = info?.maxFileSizeBytes ? Number(info.maxFileSizeBytes) : null;
   const identityReady = !info || ((!info.collectName || name.trim()) && (!info.collectEmail || email.trim()) && (!info.collectPhone || phone.trim()));
@@ -88,7 +97,7 @@ export default function PublicCollectionPage({ params }: { params: { token: stri
         const bytes = await file.arrayBuffer();
         const digest = await crypto.subtle.digest("SHA-256", bytes);
         const sha256 = Array.from(new Uint8Array(digest)).map((byte) => byte.toString(16).padStart(2, "0")).join("");
-        const init = await publicRequest<UploadInit>(`/collections/public/${encodeURIComponent(params.token)}/upload-request`, {
+        const init = await publicRequest<UploadInit>(`/collections/public/${encodeURIComponent(token)}/upload-request`, {
           method: "POST",
           body: JSON.stringify({
             name: file.name,
@@ -108,7 +117,7 @@ export default function PublicCollectionPage({ params }: { params: { token: stri
           body: file,
         });
         if (!put.ok) throw new Error(text(`Upload failed for ${file.name}`, `فشل رفع ${file.name}`));
-        await publicRequest(`/collections/public/${encodeURIComponent(params.token)}/complete`, {
+        await publicRequest(`/collections/public/${encodeURIComponent(token)}/complete`, {
           method: "POST",
           body: JSON.stringify({ submissionId: init.submissionId, uploadId: init.upload_id ?? init.uploadId }),
         });

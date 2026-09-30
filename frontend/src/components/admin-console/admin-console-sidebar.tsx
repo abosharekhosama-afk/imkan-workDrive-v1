@@ -45,7 +45,7 @@ export function AdminConsoleSidebar() {
   }, []);
 
   return (
-    <aside className="admin-console-sidebar flex h-full w-[255px] shrink-0 flex-col bg-[#272727] text-white" dir={ar ? "rtl" : "ltr"}>
+    <aside data-overlay-bound="sidebar" className="admin-console-sidebar flex h-full w-[255px] shrink-0 flex-col bg-[#272727] text-white" dir={ar ? "rtl" : "ltr"}>
       <div className="flex h-[54px] shrink-0 items-center border-b border-white/10 px-4">
         <Link href="/admin" className="flex min-w-0 items-center gap-2">
           {logo ? <img src={logo} alt="" className="h-7 max-w-[120px] object-contain" /> : <span className="flex h-7 w-7 items-center justify-center rounded-md bg-[color:var(--wd-primary)] text-white"><Icons.folder size={17} /></span>}

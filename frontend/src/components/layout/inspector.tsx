@@ -236,7 +236,7 @@ export function InspectorPanel({ onVersionHistory }: { onVersionHistory?: (fileI
   );
   return (
     <>
-      <aside className="wd-drawer hidden shrink-0 flex-col border-s border-[#EDEDED] bg-white lg:flex" aria-label={label("inspector.details")}>
+      <aside data-overlay-bound="sidebar" className="wd-drawer hidden shrink-0 flex-col border-s border-[#EDEDED] bg-white lg:flex" aria-label={label("inspector.details")}>
         {inner}
       </aside>
       {mobileInspectorOpen ? (

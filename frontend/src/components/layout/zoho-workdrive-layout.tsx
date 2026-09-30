@@ -38,7 +38,7 @@ function Frame({ children }: { children: ReactNode }) {
   return (
     <div className="workdrive-frame flex h-screen min-h-0 w-full overflow-hidden bg-white">
       <WipHost /><ExternalAppsHost /><CloudImportHost /><NewItemHost /><RecordingHost />
-      <aside className={`hidden shrink-0 md:block ${width}`} aria-label="primary">
+      <aside data-overlay-bound="sidebar" className={`hidden shrink-0 md:block ${width}`} aria-label="primary">
         <PrimarySidebar />
       </aside>
       {mobileNavOpen ? (

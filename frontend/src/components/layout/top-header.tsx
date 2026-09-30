@@ -24,6 +24,7 @@ export function TopHeader({ adminMode = false }: { adminMode?: boolean }) {
   const [notes, setNotes] = useState<NotificationRecord[]>([]);
   const [scope, setScope] = useState<ScopeDetail>({ folderId: null, folderName: null });
   const [teamFolder, setTeamFolder] = useState<TeamFolderRecord | null>(null);
+  const [teamContextKey, setTeamContextKey] = useState<string | null>(null);
   const [teamMemberCount, setTeamMemberCount] = useState(0);
   const [manageOpen, setManageOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
@@ -66,11 +67,22 @@ export function TopHeader({ adminMode = false }: { adminMode?: boolean }) {
   const isTeamManageRoute = /^\/(?:files|admin)\/team-folders\/[^/]+\/manage/.test(pathname);
   const isTeamFoldersDirectory = pathname === "/files/team-folders" || pathname === "/admin/team-folders";
   const teamFoldersBase = pathname.startsWith("/admin/") ? "/admin/team-folders" : "/files/team-folders";
-  const isFolderRoute = /^\/files\/[^/]+$/.test(pathname);
-  const teamContext = isTeamManageRoute || (isFolderRoute && Boolean(scope.folderId));
+  const namedFilesSection = /^\/files\/(templates|workflows|collections|favorites|recent|trash|activity|shared-with-me|shared-by-me|shared-links|external-storage|connections|editor)(\/|$)/.test(pathname);
+  const isFolderRoute = /^\/files\/[^/]+$/.test(pathname) && !namedFilesSection;
+  const contextKey = isTeamManageRoute
+    ? `manage:${decodeURIComponent(pathname.split("/")[3] ?? "")}`
+    : isFolderRoute && scope.folderId
+      ? `folder:${scope.folderId}`
+      : null;
 
   useEffect(() => {
     let live = true;
+    if (!contextKey) {
+      setTeamFolder(null);
+      setTeamContextKey(null);
+      setTeamMemberCount(0);
+      return;
+    }
     const loadTeamContext = async () => {
       try {
         let candidate: TeamFolderRecord | null = null;
@@ -83,6 +95,7 @@ export function TopHeader({ adminMode = false }: { adminMode?: boolean }) {
           if (folder.teamFolderId) candidate = await getTeamFolder(folder.teamFolderId);
         }
         if (!live) return;
+        setTeamContextKey(contextKey);
         setTeamFolder(candidate);
         if (candidate) {
           if (typeof candidate.memberCount === "number") {
@@ -95,12 +108,12 @@ export function TopHeader({ adminMode = false }: { adminMode?: boolean }) {
           setTeamMemberCount(0);
         }
       } catch {
-        if (live) { setTeamFolder(null); setTeamMemberCount(0); }
+        if (live) { setTeamFolder(null); setTeamContextKey(null); setTeamMemberCount(0); }
       }
     };
     void loadTeamContext();
     return () => { live = false; };
-  }, [isFolderRoute, isTeamManageRoute, pathname, scope.folderId]);
+  }, [contextKey, isFolderRoute, isTeamManageRoute, pathname, scope.folderId]);
 
   const unread = notes.filter((n) => !n.readAt).length;
   const teamTabs = [
@@ -131,7 +144,7 @@ export function TopHeader({ adminMode = false }: { adminMode?: boolean }) {
     );
   }
 
-  if (teamContext && teamFolder) {
+  if (contextKey && teamContextKey === contextKey && teamFolder) {
     const roleLabel = teamFolder.role === 'ORG_ADMIN' ? 'Admin' : teamFolder.role || 'Member';
     return (
       <header className={`team-context-header ${isTeamManageRoute ? 'team-context-header--manage' : ''}`}>
@@ -221,6 +234,8 @@ function HeaderSearchOverlay({ onClose, inputRef }: { onClose: () => void; input
     const place = () => {
       const lane = readContentLane(12);
       const width = Math.max(280, lane.right - lane.left);
+      panel.style.position = "fixed";
+      panel.style.top = "0";
       panel.style.left = `${lane.left}px`;
       panel.style.width = `${width}px`;
       panel.style.maxWidth = `${width}px`;
@@ -238,9 +253,10 @@ function HeaderSearchOverlay({ onClose, inputRef }: { onClose: () => void; input
       place();
     };
     watch();
-    const frame = document.querySelector(".workdrive-frame");
-    const mutations = typeof MutationObserver === "undefined" || !(frame instanceof HTMLElement) ? null : new MutationObserver(watch);
-    mutations?.observe(frame as HTMLElement, { childList: true, subtree: true });
+    const mutations = typeof MutationObserver === "undefined" ? null : new MutationObserver(watch);
+    document.querySelectorAll(".workdrive-frame, .admin-console-shell").forEach((frame) => {
+      if (frame instanceof HTMLElement) mutations?.observe(frame, { childList: true, subtree: true });
+    });
     window.addEventListener("resize", place);
     return () => { observer?.disconnect(); mutations?.disconnect(); window.removeEventListener("resize", place); };
   }, []);

@@ -165,6 +165,7 @@
 | — | Collect Files public drop page, workflow create routing, custom-function save, field drop editors, persisted table columns, sidebar-bounded search, and card dropdowns | ✅ Implemented |
 | — | Workflow builder load, admin search bounds, underline tabs, function typing and test result, collection menu, and team-folder empty state | ✅ Implemented |
 | — | Audit-card dropdowns on workflow transitions, templates, team-folder manage, and data-template association; search card stays inside the secondary sidebar | ✅ Implemented |
+| — | Collect link token, per-page header title, underline admin tabs, search lane, move/copy data template fields, and file-table sort | ✅ Implemented |
 
 ---
 

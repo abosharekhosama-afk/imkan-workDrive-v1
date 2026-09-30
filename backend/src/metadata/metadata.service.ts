@@ -278,16 +278,26 @@ export class MetadataService {
     });
     if (!folder) throw new NotFoundException('Destination folder not found');
 
-    // A Folder-level mandate takes precedence over the Team Folder mandate.
-    // It applies to items directly created/copied/moved into this folder.
-    if (folder.mandateDataTemplateId && folder.mandateDataTemplate) {
-      const applies = folder.mandateDataTemplateTarget === 'BOTH' || folder.mandateDataTemplateTarget === target;
-      return { enabled: applies, target, template: applies ? folder.mandateDataTemplate : null };
+    // A folder mandate on this folder, or the nearest parent, takes precedence.
+    // Team Folder membership is inherited from any ancestor when a child row has no teamFolderId.
+    let teamFolderId = folder.teamFolderId;
+    let current: { parentId: string | null; teamFolderId: string | null; mandateDataTemplateId: string | null; mandateDataTemplateTarget: string; mandateDataTemplate: typeof folder.mandateDataTemplate } | null = folder;
+    while (current) {
+      if (current.teamFolderId) teamFolderId = current.teamFolderId;
+      if (current.mandateDataTemplateId && current.mandateDataTemplate) {
+        const applies = current.mandateDataTemplateTarget === 'BOTH' || current.mandateDataTemplateTarget === target;
+        return { enabled: applies, target, template: applies ? current.mandateDataTemplate : null };
+      }
+      if (!current.parentId) break;
+      current = await this.prisma.folder.findFirst({
+        where: { id: current.parentId, orgId: user.org_id },
+        select: { parentId: true, teamFolderId: true, mandateDataTemplateId: true, mandateDataTemplateTarget: true, mandateDataTemplate: true },
+      });
     }
 
-    // Team Folder mandates apply only to items added directly to its root.
-    if (!folder.teamFolderId || folder.parentId !== null) return { enabled: false, target, template: null };
-    const teamFolder = await this.prisma.teamFolder.findFirst({ where: { id: folder.teamFolderId, orgId: user.org_id }, include: { mandateDataTemplate: true } });
+    // A Team Folder mandate applies to every folder in that Team Folder.
+    if (!teamFolderId) return { enabled: false, target, template: null };
+    const teamFolder = await this.prisma.teamFolder.findFirst({ where: { id: teamFolderId, orgId: user.org_id }, include: { mandateDataTemplate: true } });
     if (!teamFolder?.mandateDataTemplateId || !teamFolder.mandateDataTemplate) return { enabled: false, target, template: null };
     const applies = teamFolder.mandateDataTemplateTarget === 'BOTH' || teamFolder.mandateDataTemplateTarget === target;
     return { enabled: applies, target, template: applies ? teamFolder.mandateDataTemplate : null };

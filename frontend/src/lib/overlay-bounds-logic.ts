@@ -3,7 +3,7 @@ export type ContentLane = { left: number; right: number };
 export type SidebarBox = { left: number; right: number; width: number };
 
 /** Side columns the search card and floating menus must stay clear of. */
-export const overlaySidebarSelector = ".primary-sidebar, .zoho-sidebar, .admin-console-sidebar, .secondary-sidebar, .workflow-secondary-sidebar, .wd-drawer, .workflow-inspector, .overlay-bound";
+export const overlaySidebarSelector = "[data-overlay-bound='sidebar'], .primary-sidebar, .zoho-sidebar, .admin-console-sidebar, .secondary-sidebar, .workflow-secondary-sidebar, .wd-drawer, .workflow-inspector, .overlay-bound";
 
 /** Horizontal band that stays clear of every side column, in viewport pixels. */
 export function contentLane(viewportWidth: number, sidebar: SidebarBox | readonly SidebarBox[] | null, padding = 8): ContentLane {

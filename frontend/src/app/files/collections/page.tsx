@@ -62,7 +62,13 @@ export default function CollectionsPage() {
   const [linkCollection, setLinkCollection] = useState<FileCollection | null>(null);
   const [linkUrl, setLinkUrl] = useState("");
   const [linkBusy, setLinkBusy] = useState(false);
-  const [linkTokens, setLinkTokens] = useState<Record<string,string>>({});
+  const [linkTokens, setLinkTokens] = useState<Record<string,string>>(() => {
+    if (typeof window === "undefined") return {};
+    try {
+      const parsed = JSON.parse(window.localStorage.getItem("wd-collection-link-tokens") || "{}") as Record<string, string>;
+      return parsed && typeof parsed === "object" ? parsed : {};
+    } catch { return {}; }
+  });
   const [emailTo, setEmailTo] = useState("");
   const [emailMessage, setEmailMessage] = useState("");
   const [emailBusy, setEmailBusy] = useState(false);
@@ -100,7 +106,11 @@ export default function CollectionsPage() {
         sameNameAsVersion,
         notifyOnSubmission,
       });
-      setLinkTokens(current=>({...current,[result.id]:result.token}));
+      setLinkTokens(current => {
+        const next = { ...current, [result.id]: result.token };
+        try { window.localStorage.setItem("wd-collection-link-tokens", JSON.stringify(next)); } catch { /* ignore quota */ }
+        return next;
+      });
       setLinkUrl(`${window.location.origin}${result.publicPath}`);
       setLinkCollection({ ...result, submissionsCount: 0, filesCount: 0 });
       setEmailTo(""); setEmailMessage(""); setEmailNotice("");
@@ -154,7 +164,11 @@ export default function CollectionsPage() {
       if (!token) {
         const result = await regenerateCollectionLink(row.id);
         token = result.token;
-        setLinkTokens(current=>({...current,[row.id]:token!}));
+        setLinkTokens(current => {
+          const next = { ...current, [row.id]: token! };
+          try { window.localStorage.setItem("wd-collection-link-tokens", JSON.stringify(next)); } catch { /* ignore quota */ }
+          return next;
+        });
       }
       const url = `${window.location.origin}/collect/${token}`;
       setLinkUrl(url);

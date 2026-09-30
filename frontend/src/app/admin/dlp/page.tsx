@@ -85,9 +85,10 @@ export default function AdminDlpPage() {
       <header className="flex items-start justify-between gap-4 border-b border-[#ededed] px-7 pb-0 pt-5">
         <div>
           <h1 className="text-[20px] font-semibold text-[#202124]">{t("Data Loss Prevention", "منع فقدان البيانات")}</h1>
+          <p className="mt-2 max-w-3xl text-[12px] leading-5 text-[#5f6368]">{t("Create a classification label, then create a policy and choose where it applies: all folders, selected folders, or all folders except selected. Turn the policy on. Files uploaded or edited after that are classified automatically, and the label's block or warning actions apply on share and download.", "أنشئ تصنيف بيانات، ثم أنشئ سياسة واختر مكان تطبيقها: كل المجلدات، أو مجلدات محددة، أو كل المجلدات ما عدا المحددة. فعّل السياسة. الملفات التي تُرفع أو تُعدَّل بعدها تُصنَّف تلقائياً، وتُطبَّق إجراءات المنع أو التحذير عند المشاركة والتنزيل.")}</p>
           <div className="mt-4 flex gap-6 text-[13px]">
             {(["policies", "labels"] as const).map((key) => (
-              <button key={key} type="button" onClick={() => setTab(key)} className={`rounded-none border-0 border-b-2 bg-transparent px-1 pb-3 shadow-none ${tab === key ? "border-[#2c66dd] font-semibold text-[#2c66dd]" : "border-transparent text-[#5f6368]"}`}>{key === "policies" ? t("Policies", "السياسات") : t("Classification Labels", "تصنيفات البيانات")}</button>
+              <button key={key} type="button" onClick={() => setTab(key)} className={`admin-underline-tab border-b-2 bg-transparent px-1 pb-3 text-[13px] ${tab === key ? "border-[#2c66dd] font-semibold text-[#2c66dd]" : "border-transparent text-[#5f6368]"}`}>{key === "policies" ? t("Policies", "السياسات") : t("Classification Labels", "تصنيفات البيانات")}</button>
             ))}
           </div>
         </div>

@@ -151,15 +151,12 @@ export function FileTable({
   sortField, sortDir, onSortField, onSortDir, columns, onColumns,
 }: FileTableProps) {
   const { label, locale } = useLocale();
-  // Controlled sorting — driven by the toolbar Sort-by popover (sortField/sortDir)
-  // when provided; falls back to internal state otherwise.
-  const [sort, setSort] = useState<{ key: ColumnKey; direction: SortDir }>({ key: "name", direction: "asc" });
-  useEffect(() => {
-    if (sortField !== undefined && sortDir !== undefined) setSort({ key: sortField, direction: sortDir });
-  }, [sortField, sortDir]);
+  const controlled = sortField !== undefined && sortDir !== undefined;
+  const [internalSort, setInternalSort] = useState<{ key: ColumnKey; direction: SortDir }>({ key: "name", direction: "asc" });
+  const sort = controlled ? { key: sortField, direction: sortDir } : internalSort;
   const toggleSort = (key: ColumnKey, dir?: SortDir) => {
     const direction = dir ?? (sort.key === key ? (sort.direction === "asc" ? "desc" : "asc") : "asc");
-    setSort({ key, direction });
+    if (!controlled) setInternalSort({ key, direction });
     onSortField?.(key);
     onSortDir?.(direction);
   };
