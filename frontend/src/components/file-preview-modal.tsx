@@ -15,6 +15,7 @@ import { OfficeViewer } from "./preview/office-viewer";
 import { MediaViewer } from "./preview/media-viewer";
 import { CodeViewer } from "./preview/code-viewer";
 import { ArchiveViewer } from "./preview/archive-viewer";
+import { MarkdownViewer } from "./preview/markdown-viewer";
 import { DetailsSidebar } from "./preview/details-sidebar";
 import { FileCommentsPanel } from "./preview/file-comments-panel";
 import { DataTemplateSidebar } from "./preview/data-template-sidebar";
@@ -25,7 +26,7 @@ import { FileMenuIcons } from "../lib/file-menu-icons";
 import { listFileComments } from "../lib/api/comments";
 import { usePreviewUrl } from "./preview/use-preview-url";
 import { resolveMimeType } from "../lib/api/mime";
-import { getPreviewMimeCategory, isBrowserRenderableImage } from "../lib/api/preview";
+import { getLanguageFromMime, getPreviewMimeCategory, isBrowserRenderableImage } from "../lib/api/preview";
 import { formatBytes } from "../lib/api/quota";
 import { copyFile, getFileDlp, moveFile, renameFile, requestDownload, trashFile, type FileDlpDecision } from "../lib/api/files";
 import { triggerDownload } from "../lib/api/download";
@@ -256,6 +257,7 @@ export function FilePreviewModal({ target, onClose, onPrevFile, onNextFile, init
       case "audio":
         return <MediaViewer url={url} epoch={epoch} mimeType={effectiveMime} fileName={activeTarget.name} isAudio onLoadError={() => void refresh()} />;
       case "text":
+        if (getLanguageFromMime(effectiveMime, activeTarget.name) === "markdown") return <MarkdownViewer url={url} fileName={activeTarget.name} />;
         return <CodeViewer url={url} mimeType={effectiveMime} fileName={activeTarget.name} />;
       case "office":
         return <OfficeViewer url={url} fileName={activeTarget.name} onDownload={() => void handleDownload()} />;
