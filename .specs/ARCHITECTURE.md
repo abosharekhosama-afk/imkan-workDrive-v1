@@ -202,12 +202,12 @@ The frontend uses a centralized `apiRequest<T>()` wrapper:
 
 ## 7. Authentication Flow
 
-1. User submits credentials → POST `/auth/login` (or POST `/auth/login/otp` for a code-only sign-in)
-2. Server emails a 6-digit code and returns `{ otp_required, challenge_id, masked_email }`
-3. User submits the code → POST `/auth/login/verify`, which returns `{ access_token, user }`
-4. Signup uses the same email-code step via POST `/auth/signup` then POST `/auth/signup/verify`
+1. User submits credentials → POST `/auth/login`. An existing account receives `{ access_token, user }` and a session. A code is not emailed on every password sign-in.
+2. POST `/auth/login/otp` is the explicit code-only sign-in. It emails a 6-digit code and returns `{ otp_required, challenge_id, masked_email }`
+3. User submits that code → POST `/auth/login/verify`, which returns `{ access_token, user }`
+4. Signup uses one email-code step via POST `/auth/signup` then POST `/auth/signup/verify`
 5. Google sign-in uses GET `/auth/google` and treats a verified Google email as confirmed
-6. Password reset emails a link through the shared mail service (`SMTP_*`, `MAIL_FROM`)
+6. Password reset, organization invitations, collection links, share notices, follow updates, and comment notices use the shared mail service (`BREVO_API_KEY` or `SMTP_*`, plus `MAIL_FROM`)
 7. Client saves the token to localStorage + cookie
 8. Subsequent requests include `Authorization: Bearer <token>`
 9. 401 responses trigger automatic redirect to login screen

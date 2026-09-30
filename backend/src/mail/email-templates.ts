@@ -75,6 +75,36 @@ export function commentNoticeEmail(input: { fileName: string; actor: string; exc
   return { subject: title, text, html };
 }
 
+export function organizationInviteEmail(input: { organizationName: string; inviterName: string; role: string; acceptUrl: string; signupUrl: string }): RenderedEmail {
+  const subject = `${input.inviterName} invited you to ${input.organizationName}`;
+  const text = `${input.inviterName} invited you to join ${input.organizationName} on IMKAN WorkDrive as ${input.role}.\n\nIf you already have an account, open this link and sign in with the invited email:\n${input.acceptUrl}\n\nIf you are new, create an account with the invited email:\n${input.signupUrl}`;
+  const html = shell(
+    'Organization invitation',
+    `<p style="margin:0 0 12px"><strong>${escapeHtml(input.inviterName)}</strong> invited you to join <strong>${escapeHtml(input.organizationName)}</strong> as ${escapeHtml(input.role)}.</p><p style="margin:0 0 16px"><a href="${escapeHtml(input.acceptUrl)}" style="display:inline-block;background:#00a884;color:#fff;text-decoration:none;padding:12px 18px;border-radius:8px;font-weight:650">Accept invitation</a></p><p style="margin:0 0 8px">Already have an account? Sign in with the invited email, then open the link above.</p><p style="margin:0">New to IMKAN? <a href="${escapeHtml(input.signupUrl)}" style="color:#00a884">Create an account</a> with the same email.</p>`,
+  );
+  return { subject, text, html };
+}
+
+export function shareNoticeEmail(input: { resourceName: string; link: string }): RenderedEmail {
+  const subject = 'A file has been shared with you on IMKAN WorkDrive';
+  const text = `${input.resourceName ? `"${input.resourceName}" was shared with you.` : 'A file was shared with you.'}\n\nOpen it:\n${input.link}`;
+  const html = shell(
+    'Shared with you',
+    `<p style="margin:0 0 12px">${input.resourceName ? `<strong>${escapeHtml(input.resourceName)}</strong> was shared with you.` : 'A file was shared with you.'}</p><p style="margin:0"><a href="${escapeHtml(input.link)}" style="color:#00a884">Open the shared resource</a></p>`,
+  );
+  return { subject, text, html };
+}
+
+export function followUpdateEmail(input: { title: string; body: string; resourceName: string }): RenderedEmail {
+  const subject = input.title;
+  const text = `${input.body}\n\n${input.resourceName}`;
+  const html = shell(
+    escapeHtml(input.title),
+    `<p style="margin:0 0 12px">${escapeHtml(input.body)}</p><p style="margin:0"><strong>${escapeHtml(input.resourceName)}</strong></p>`,
+  );
+  return { subject, text, html };
+}
+
 export function passwordResetEmail(input: { link: string }): RenderedEmail {
   const subject = 'Reset your IMKAN WorkDrive password';
   const text = `Reset your password using this link (valid for 30 minutes):\n${input.link}\n\nIf you did not request a reset, ignore this email.`;

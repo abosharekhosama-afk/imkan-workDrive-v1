@@ -7,7 +7,7 @@ import { AuthShell } from "../../../components/auth/auth-shell";
 import { GoogleButton } from "../../../components/auth/google-button";
 import { OtpCodeInput } from "../../../components/auth/otp-code-input";
 import { useLocale } from "../../../components/locale-provider";
-import { googleUrl, login, requestLoginOtp, resendOtp, saveSession, verifyLoginOtp, type OtpChallenge } from "../../../lib/api/auth";
+import { googleUrl, isOtpChallenge, login, requestLoginOtp, resendOtp, saveSession, verifyLoginOtp, type OtpChallenge } from "../../../lib/api/auth";
 import { emptyOtpDigits, otpValue } from "../../../lib/auth-otp-logic";
 
 function destination(params: URLSearchParams) {
@@ -73,7 +73,13 @@ function LoginForm() {
     setBusy(true);
     setError("");
     try {
-      await openOtp(await login(email, password));
+      const result = await login(email, password);
+      if (!isOtpChallenge(result)) {
+        saveSession(result);
+        router.replace(destination(params));
+        return;
+      }
+      await openOtp(result);
     } catch (err) {
       setError(err instanceof Error && err.message ? err.message : "Unable to sign in. Check your email and password.");
     } finally {

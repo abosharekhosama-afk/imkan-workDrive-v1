@@ -2,11 +2,13 @@ import { ConflictException, ForbiddenException, Injectable, NotFoundException, B
 import { createHash, randomBytes } from 'node:crypto';
 import { InvitationStatus, OrgRole, MembershipStatus } from '@prisma/client';
 import type { AccessTokenPayload } from '../auth/jwt.types';
+import { organizationInviteEmail } from '../mail/email-templates';
+import { MailService } from '../mail/mail.service';
 import { PrismaService } from '../prisma/prisma.service';
 
 @Injectable()
 export class OrganizationService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(private readonly prisma: PrismaService, private readonly mail: MailService) {}
 
   private assertSuperAdmin(user: AccessTokenPayload) {
     if (user.role !== OrgRole.SUPER_ADMIN && user.role !== OrgRole.ADMIN) throw new ForbiddenException('Organization admin access required');
@@ -527,8 +529,19 @@ export class OrganizationService {
     const raw = randomBytes(32).toString('hex');
     const invitation = await this.prisma.organizationInvitation.create({ data: { orgId: user.org_id, email, role, tokenHash: this.hash(raw), invitedById: user.sub, expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000) }, include: { organization: { select: { name: true } } } });
     await this.prisma.auditLog.create({ data: { orgId: user.org_id, actorId: user.sub, action: 'ORG_INVITATION_CREATED', resourceType: 'ORGANIZATION_INVITATION', resourceId: invitation.id } });
-    const base = process.env.FRONTEND_URL ?? 'http://localhost:3000';
-    return { id: invitation.id, email, role, expiresAt: invitation.expiresAt, inviteUrl: `${base}/organization/invitations/accept?token=${raw}` };
+    const base = (process.env.FRONTEND_URL ?? 'http://localhost:3000').replace(/\/$/, '');
+    const acceptUrl = `${base}/organization/invitations/accept?token=${raw}`;
+    const signupUrl = `${base}/auth/signup?inviteToken=${encodeURIComponent(raw)}`;
+    const inviter = await this.prisma.user.findUnique({ where: { id: user.sub }, select: { name: true, email: true } });
+    const rendered = organizationInviteEmail({
+      organizationName: invitation.organization.name,
+      inviterName: inviter?.name?.trim() || inviter?.email || 'A teammate',
+      role,
+      acceptUrl,
+      signupUrl,
+    });
+    const sent = await this.mail.send({ to: email, ...rendered }).catch(() => ({ delivered: false }));
+    return { id: invitation.id, email, role, expiresAt: invitation.expiresAt, inviteUrl: acceptUrl, emailed: sent.delivered };
   }
 
   async invitations(user: AccessTokenPayload) {

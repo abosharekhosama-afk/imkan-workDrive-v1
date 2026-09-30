@@ -160,6 +160,7 @@
 | 003 | Version History UI | ✅ Implemented |
 | — | Admin Console Data Loss Prevention (Zoho policies, labels, region rules) | ✅ Implemented |
 | — | Inspector tabs, real detail fields, sidebar-bounded menus, and live table columns | ✅ Implemented |
+| — | Password sign-in keeps a session without a code; invitations, shares, collections, and follow updates use the shared mail service | ✅ Implemented |
 
 ---
 

@@ -34,7 +34,13 @@ export type OtpChallenge = {
   dev_code?: string;
 };
 
-export function login(email: string, password: string) { return request<OtpChallenge>('/auth/login', { email, password }); }
+export type LoginResult = AuthResult | OtpChallenge;
+
+export function isOtpChallenge(value: LoginResult): value is OtpChallenge {
+  return "otp_required" in value && value.otp_required === true;
+}
+
+export function login(email: string, password: string) { return request<LoginResult>('/auth/login', { email, password }); }
 export function verifyLoginOtp(challengeId: string, code: string) { return request<AuthResult>('/auth/login/verify', { challengeId, code }); }
 export function requestLoginOtp(email: string) { return request<OtpChallenge>('/auth/login/otp', { email }); }
 export function resendOtp(challengeId: string) { return request<OtpChallenge>('/auth/otp/resend', { challengeId }); }

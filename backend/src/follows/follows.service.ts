@@ -4,7 +4,8 @@ import type { AccessTokenPayload } from '../auth/jwt.types';
 import { NotificationsService } from '../notifications/notifications.service';
 import { PermissionService } from '../permissions/permission.service';
 import { PrismaService } from '../prisma/prisma.service';
-import { OfficeEmailService } from '../office-email/office-email.service';
+import { followUpdateEmail } from '../mail/email-templates';
+import { MailService } from '../mail/mail.service';
 
 type FollowEventInput = {
   orgId: string;
@@ -24,7 +25,7 @@ export class FollowsService {
     private readonly prisma: PrismaService,
     private readonly permissions: PermissionService,
     private readonly notifications: NotificationsService,
-    private readonly email: OfficeEmailService,
+    private readonly mail: MailService,
   ) {}
 
   async list(user: AccessTokenPayload) {
@@ -124,12 +125,8 @@ export class FollowsService {
         }).catch(() => undefined);
       }
       if (preference.notifyEmail && preference.email) {
-        await this.email.send({ org_id: input.orgId, sub: userId, email: preference.email } as AccessTokenPayload, {
-          to: [preference.email],
-          subject: payload.title,
-          text: `${payload.body ?? payload.title}\n\n${input.resourceName}`,
-          html: `<p>${this.escapeHtml(payload.body ?? payload.title)}</p><p><strong>${this.escapeHtml(input.resourceName)}</strong></p>`,
-        }).catch(() => undefined);
+        const rendered = followUpdateEmail({ title: payload.title, body: payload.body ?? payload.title, resourceName: input.resourceName });
+        await this.mail.send({ to: preference.email, ...rendered }).catch(() => undefined);
       }
     }));
   }
@@ -184,10 +181,6 @@ export class FollowsService {
       default:
         return null;
     }
-  }
-
-  private escapeHtml(value: string) {
-    return value.replace(/[&<>"']/g, (char) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[char] ?? char));
   }
 
   private async assertReadable(user: AccessTokenPayload, resourceType: ResourceType, resourceId: string) {

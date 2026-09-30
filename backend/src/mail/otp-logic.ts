@@ -8,6 +8,12 @@ export const OTP_WINDOW_LIMIT = 5;
 
 export type OtpPurpose = 'LOGIN' | 'SIGNUP' | 'PASSWORDLESS';
 
+/** Password sign-in for an existing account opens a session. A code is only for a new account or an explicit code sign-in. */
+export function loginDelivery(input: { hasAccount: boolean; method: 'password' | 'code' }): 'session' | 'otp' {
+  if (input.method === 'code' || !input.hasAccount) return 'otp';
+  return 'session';
+}
+
 export type OtpChallengeResult = {
   otp_required: true;
   challenge_id: string;

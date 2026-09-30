@@ -11,6 +11,7 @@ import { addWorkflowBusinessMinutes } from './workflow-calendar';
 import { CustomFunctionExecutor } from './custom-function.executor';
 import { ConnectionsService } from '../connections/connections.service';
 import { TemplatesService } from '../templates/templates.service';
+import { MailService } from '../mail/mail.service';
 import { OfficeEmailService } from '../office-email/office-email.service';
 import { MetadataService } from '../metadata/metadata.service';
 
@@ -39,6 +40,7 @@ export class WorkflowEngineService implements OnModuleInit, OnModuleDestroy {
     private readonly permissions: PermissionService,
     private readonly connections: ConnectionsService,
     private readonly email: OfficeEmailService,
+    private readonly mail: MailService,
     @Inject(forwardRef(() => TemplatesService)) private readonly templates: TemplatesService,
     @Inject(forwardRef(() => MetadataService)) private readonly metadata: MetadataService,
   ) {}
@@ -548,8 +550,20 @@ export class WorkflowEngineService implements OnModuleInit, OnModuleDestroy {
           attachmentFileId = typeof currentFields[attachmentFieldId] === 'string' ? String(currentFields[attachmentFieldId]) : '';
         }
         const attachments = attachmentFileId ? [await this.email.loadAttachment(user, attachmentFileId)] : undefined;
-        const result = await this.email.send(user, { to: recipients, subject, text: body, attachments });
-        return { action: 'send_email', ...result, recipients: recipients.length, attachmentFileId: attachmentFileId || null };
+        try {
+          const result = await this.email.send(user, { to: recipients, subject, text: body, attachments });
+          return { action: 'send_email', ...result, recipients: recipients.length, attachmentFileId: attachmentFileId || null };
+        } catch (error) {
+          const message = error instanceof Error ? error.message : '';
+          if (!message.includes('not configured')) throw error;
+          const text = attachmentFileId ? `${body}\n\nAttachment file: ${attachmentFileId}` : body;
+          let delivered = 0;
+          for (const to of recipients) {
+            const sent = await this.mail.send({ to, subject, text, html: `<p>${text.replace(/[&<>]/g, (char) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[char] ?? char))}</p>` }).catch(() => ({ delivered: false }));
+            if (sent.delivered) delivered += 1;
+          }
+          return { action: 'send_email', ok: delivered > 0, recipients: delivered, attachmentFileId: attachmentFileId || null };
+        }
       }
       case 'create_document_from_template': {
         const templateId = typeof config.templateId === 'string' ? config.templateId.trim() : '';

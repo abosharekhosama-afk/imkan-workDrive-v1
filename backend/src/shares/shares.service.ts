@@ -26,7 +26,8 @@ import { EffectivePermissionService } from '../permissions/effective-permission.
 import { PrismaService } from '../prisma/prisma.service';
 import { STORAGE_SERVICE, type StorageService } from '../storage/storage.types';
 import type { CreateShareInput } from './create-share.schema';
-import { OfficeEmailService } from '../office-email/office-email.service';
+import { shareNoticeEmail } from '../mail/email-templates';
+import { MailService } from '../mail/mail.service';
 import { DlpService } from '../dlp/dlp.service';
 import { FollowsService } from '../follows/follows.service';
 
@@ -58,7 +59,7 @@ export class SharesService {
     private readonly effective: EffectivePermissionService,
     private readonly config: ConfigService,
     @Inject(STORAGE_SERVICE) private readonly storage: StorageService,
-    private readonly email: OfficeEmailService,
+    private readonly mail: MailService,
     private readonly dlp: DlpService,
     private readonly follows: FollowsService,
   ) {}
@@ -124,23 +125,11 @@ export class SharesService {
       await tx.auditLog.create({ data: { orgId: user.org_id, actorId: user.sub, action: 'SHARE_CREATED', resourceType: input.resourceType, resourceId: input.resourceId } });
       await tx.accessEvent.create({ data: { orgId: user.org_id, userId: user.sub, resourceType: input.resourceType, resourceId: input.resourceId, action: 'SHARE' } });
     });
-    const base = this.config.get<string>('PUBLIC_APP_URL') ?? '';
-    const linkUrl = `${base}/share/public?token=${encodeURIComponent(linkToken)}`;
-    let emailed = 0;
-    if (input.emailRecipients?.length) {
-      await this.email.send(user, {
-        to: input.emailRecipients,
-        subject: 'A file has been shared with you on IMKAN WorkDrive',
-        text: `A file has been shared with you on IMKAN WorkDrive.
-
-Open the shared resource: ${linkUrl}` ,
-        html: `<p>A file has been shared with you on <strong>IMKAN WorkDrive</strong>.</p><p><a href="${linkUrl}">Open the shared resource</a></p>`,
-      });
-      emailed = input.emailRecipients.length;
-    }
+    const linkUrl = this.shareLink(linkToken);
     const resourceName = input.resourceType === ResourceType.FILE
       ? (await this.prisma.file.findUnique({ where: { id: input.resourceId }, select: { name: true } }))?.name
       : (await this.prisma.folder.findUnique({ where: { id: input.resourceId }, select: { name: true } }))?.name;
+    const emailed = await this.emailShareLink(input.emailRecipients, resourceName ?? '', linkUrl);
     void this.follows.notifyResourceEvent({
       orgId: user.org_id,
       resourceType: input.resourceType,
@@ -614,19 +603,25 @@ Open the shared resource: ${linkUrl}` ,
       }
     });
 
-    const base = this.config.get<string>('PUBLIC_APP_URL') ?? '';
-    const linkUrl = `${base}/share/public?token=${encodeURIComponent(existing.linkToken)}`;
-    let emailed = 0;
-    if (input.emailRecipients?.length) {
-      await this.email.send(user, {
-        to: input.emailRecipients,
-        subject: 'A file has been shared with you on IMKAN WorkDrive',
-        text: `A file has been shared with you on IMKAN WorkDrive.\n\nOpen the shared resource: ${linkUrl}`,
-        html: `<p>A file has been shared with you on <strong>IMKAN WorkDrive</strong>.</p><p><a href="${linkUrl}">Open the shared resource</a></p>`,
-      });
-      emailed = input.emailRecipients.length;
-    }
+    const linkUrl = this.shareLink(existing.linkToken);
+    const emailed = await this.emailShareLink(input.emailRecipients, '', linkUrl);
     return { link_url: linkUrl, emailed };
+  }
+
+  private shareLink(token: string) {
+    const base = (this.config.get<string>('FRONTEND_URL') ?? this.config.get<string>('PUBLIC_APP_URL') ?? 'http://localhost:3000').replace(/\/$/, '');
+    return `${base}/share/public?token=${encodeURIComponent(token)}`;
+  }
+
+  private async emailShareLink(recipients: string[] | undefined, resourceName: string, link: string) {
+    const addresses = [...new Set((recipients ?? []).map((value) => value.trim().toLowerCase()).filter((value) => /^\S+@\S+\.\S+$/.test(value)))];
+    const rendered = shareNoticeEmail({ resourceName, link });
+    let emailed = 0;
+    for (const to of addresses) {
+      const sent = await this.mail.send({ to, ...rendered }).catch(() => ({ delivered: false }));
+      if (sent.delivered) emailed += 1;
+    }
+    return emailed;
   }
 
   private async loadOwnedResource(

@@ -16,6 +16,7 @@ import {
   OTP_WINDOW_MS,
   generateOtpCode,
   hashOtpCode,
+  loginDelivery,
   maskEmail,
   otpCodesMatch,
   type OtpChallengeResult,
@@ -259,20 +260,29 @@ export class AuthService {
     });
   }
 
-  async login(input: { email: string; password: string; organizationId?: string }, _context?: { ipAddress?: string; userAgent?: string }): Promise<OtpChallengeResult> {
+  async login(input: { email: string; password: string; organizationId?: string }, context?: { ipAddress?: string; userAgent?: string }): Promise<AuthResult | OtpChallengeResult> {
     const email = input.email.trim().toLowerCase();
     const user = await this.prisma.user.findFirst({ where: { email } });
     if (!user?.passwordHash || user.status !== 'ACTIVE' || !(await this.verify(input.password, user.passwordHash))) {
       throw new UnauthorizedException('Invalid email or password');
     }
-    await this.requireActiveMembership(user.id, input.organizationId);
-    return this.issueEmailOtp({
-      email,
-      purpose: 'LOGIN',
-      userId: user.id,
-      payload: input.organizationId ? { organizationId: input.organizationId } : undefined,
-      action: 'Use this code to finish signing in to IMKAN WorkDrive.',
+    const membership = await this.requireActiveMembership(user.id, input.organizationId);
+    if (loginDelivery({ hasAccount: true, method: 'password' }) === 'otp') {
+      return this.issueEmailOtp({
+        email,
+        purpose: 'LOGIN',
+        userId: user.id,
+        payload: input.organizationId ? { organizationId: input.organizationId } : undefined,
+        action: 'Use this code to finish signing in to IMKAN WorkDrive.',
+      });
+    }
+    await this.prisma.user.update({
+      where: { id: user.id },
+      data: { currentOrganizationId: membership.organizationId, lastLoginAt: new Date(), emailVerifiedAt: user.emailVerifiedAt ?? new Date() },
     });
+    const result = await this.issue(user, membership, context);
+    await this.prisma.securityEvent.create({ data: { orgId: membership.organizationId, userId: user.id, severity: 'INFO', eventType: 'LOGIN_SUCCESS', ipAddress: context?.ipAddress, metadata: { userAgent: context?.userAgent?.slice(0, 180), method: 'PASSWORD' } } });
+    return result;
   }
 
   async requestPasswordlessOtp(emailInput: string): Promise<OtpChallengeResult> {
@@ -694,8 +704,9 @@ export class AuthService {
     const secret = this.config.get<string>('JWT_SECRET');
     if (!secret) throw new UnauthorizedException('JWT is not configured');
 
-    const sessionId = randomBytes(16).toString('hex');
+    const sessionId = randomUUID();
     const expiresAt = new Date(Date.now() + 8 * 60 * 60 * 1000);
+    const userAgent = context?.userAgent?.replace(/\s+/g, ' ').trim().slice(0, 180) || null;
 
     const payload: AccessTokenPayload = {
       sub: user.id,
@@ -711,8 +722,8 @@ export class AuthService {
 
     const deviceId = randomUUID();
     await this.prisma.$transaction([
-      this.prisma.userDevice.create({ data: { id: deviceId, orgId: membership.organizationId, userId: user.id, name: context?.userAgent ? context.userAgent.slice(0, 120) : 'Web browser', platform: context?.userAgent?.slice(0, 80), lastSeenAt: new Date() } }),
-      this.prisma.session.create({ data: { id: sessionId, orgId: membership.organizationId, userId: user.id, tokenHash: this.hashToken(accessToken), expiresAt, ipAddress: context?.ipAddress, userAgent: context?.userAgent, deviceId } }),
+      this.prisma.userDevice.create({ data: { id: deviceId, orgId: membership.organizationId, userId: user.id, name: userAgent?.slice(0, 120) || 'Web browser', platform: userAgent?.slice(0, 80), lastSeenAt: new Date() } }),
+      this.prisma.session.create({ data: { id: sessionId, orgId: membership.organizationId, userId: user.id, tokenHash: this.hashToken(accessToken), expiresAt, ipAddress: context?.ipAddress?.slice(0, 64) ?? null, userAgent, deviceId } }),
     ]);
 
     return {
