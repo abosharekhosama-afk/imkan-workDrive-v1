@@ -70,6 +70,8 @@ export type AdminConsoleSettings = {
   sameDomainJoinEnabled: boolean;
 };
 export const getAdminConsoleSettings = () => apiRequest<AdminConsoleSettings>('/admin/enterprise/settings');
+export type ViewPreferences = Pick<AdminConsoleSettings, 'defaultView' | 'thumbnailSize' | 'previewPanel'>;
+export const getViewPreferences = () => apiRequest<ViewPreferences>('/admin/enterprise/view-preferences');
 export const updateAdminConsoleSettings = (body: Partial<AdminConsoleSettings>) => apiRequest<AdminConsoleSettings>('/admin/enterprise/settings', { method: 'PATCH', body: JSON.stringify(body) });
 
 export type DataAdminItem = {

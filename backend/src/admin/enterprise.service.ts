@@ -230,6 +230,15 @@ export class EnterpriseService {
 
 
 
+  async viewPreferences(user: AccessTokenPayload) {
+    const row = await this.ensureConsoleSettings(user.org_id);
+    return {
+      defaultView: row.defaultView,
+      thumbnailSize: row.thumbnailSize,
+      previewPanel: row.previewPanel,
+    };
+  }
+
   async consoleSettings(user: AccessTokenPayload) {
     this.assertAdmin(user);
     const row = await this.ensureConsoleSettings(user.org_id);

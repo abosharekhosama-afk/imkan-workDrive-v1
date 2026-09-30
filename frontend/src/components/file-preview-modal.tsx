@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { useLocale } from "./locale-provider";
 import { FileIcon } from "./file-icon";
 import { ImageViewer } from "./preview/image-viewer";
@@ -11,6 +11,8 @@ import { CodeViewer } from "./preview/code-viewer";
 import { ArchiveViewer } from "./preview/archive-viewer";
 import { DetailsSidebar } from "./preview/details-sidebar";
 import { FileCommentsPanel } from "./preview/file-comments-panel";
+import { DataTemplateSidebar } from "./preview/data-template-sidebar";
+import { DEFAULT_WATERMARK_CONFIG, PreviewWatermark, WatermarkSidebar, type WatermarkConfig } from "./preview/watermark-sidebar";
 import { listFileComments } from "../lib/api/comments";
 import { usePreviewUrl } from "./preview/use-preview-url";
 import { resolveMimeType } from "../lib/api/mime";
@@ -20,6 +22,9 @@ import { requestDownload } from "../lib/api/files";
 import { triggerDownload } from "../lib/api/download";
 import { buildCreateShareBody, createShare } from "../lib/api/shares";
 import { normalizePublicAppUrl } from "../lib/public-url";
+import { getFileDlp, type FileDlpDecision } from "../lib/api/files";
+import { getViewPreferences } from "../lib/api/enterprise";
+import { useRouter } from "next/navigation";
 
 export interface FilePreviewModalTarget {
   id: string;
@@ -34,7 +39,7 @@ interface FilePreviewModalProps {
   onClose: () => void;
   onPrevFile?: () => void;
   onNextFile?: () => void;
-  initialPanel?: "details" | "comments";
+  initialPanel?: "details" | "comments" | "dataTemplate" | "watermark" | "zia";
   focusCommentId?: string | null;
 }
 
@@ -58,9 +63,12 @@ export function FilePreviewModal({ target, onClose, onPrevFile, onNextFile, init
   const { label } = useLocale();
   const previousActiveRef = useRef<HTMLElement | null>(null);
   const printFrameRef = useRef<HTMLIFrameElement | null>(null);
-  const [panel, setPanel] = useState<"details" | "comments" | null>(initialPanel ?? null);
+  const [panel, setPanel] = useState<"details" | "comments" | "dataTemplate" | "watermark" | "zia" | null>(initialPanel ?? null);
   const [commentCount, setCommentCount] = useState(0);
   const [toast, setToast] = useState<string | null>(null);
+  const [dlp, setDlp] = useState<FileDlpDecision | null>(null);
+  const [watermarkConfig, setWatermarkConfig] = useState<WatermarkConfig>(DEFAULT_WATERMARK_CONFIG);
+  const router = useRouter();
 
   const open = Boolean(target);
   const activeTarget = target;
@@ -73,6 +81,22 @@ export function FilePreviewModal({ target, onClose, onPrevFile, onNextFile, init
   useEffect(() => {
     setPanel(initialPanel ?? null);
     setToast(null);
+    setDlp(null);
+    setWatermarkConfig(DEFAULT_WATERMARK_CONFIG);
+    if (!activeTarget) return;
+    let live = true;
+    void getFileDlp(activeTarget.id).then((value) => {
+      if (!live) return;
+      setDlp(value);
+      setWatermarkConfig((current) => ({ ...current, text: value.watermark.text || current.text }));
+    }).catch(() => { if (live) setDlp(null); });
+    void getViewPreferences().then((value) => {
+      if (!live) return;
+      if (!initialPanel) {
+        setPanel(value.previewPanel === "DETAILS" ? "details" : value.previewPanel === "COMMENTS" ? "comments" : value.previewPanel === "DATA_TEMPLATE" ? "dataTemplate" : null);
+      }
+    }).catch(() => undefined);
+    return () => { live = false; };
   }, [activeTarget?.id, initialPanel]);
 
   useEffect(() => {
@@ -158,6 +182,15 @@ export function FilePreviewModal({ target, onClose, onPrevFile, onNextFile, init
     printFrameRef.current = frame;
   }, [url]);
 
+  const togglePanel = useCallback((next: "details" | "comments" | "dataTemplate" | "watermark" | "zia") => {
+    setPanel((current) => current === next ? null : next);
+  }, []);
+
+  const openWith = useCallback((kind: "writer" | "sheet" | "show") => {
+    if (!activeTarget) return;
+    router.push(`/office/${kind}/${activeTarget.id}`);
+  }, [activeTarget, router]);
+
   // Binary/unrenderable payloads: elegant card with a prominent download CTA.
   const renderableViewers: Record<string, boolean> = {
     image: isBrowserRenderableImage(effectiveMime),
@@ -225,73 +258,79 @@ export function FilePreviewModal({ target, onClose, onPrevFile, onNextFile, init
     }
   };
 
+  const railButton = (key: "details" | "comments" | "dataTemplate" | "watermark" | "zia", icon: ReactNode, title: string) => (
+    <button type="button" className={`zoho-preview-rail-btn${panel === key ? " active" : ""}`} onClick={() => togglePanel(key)} title={title} aria-label={title} aria-pressed={panel === key}>
+      <span className="zoho-preview-rail-icon">{icon}</span>
+      <span>{title}</span>
+      {key === "comments" && commentCount > 0 ? <b className="zoho-rail-badge">{commentCount > 99 ? "99+" : commentCount}</b> : null}
+    </button>
+  );
+
   return (
     <div className="zoho-preview-modal" role="dialog" aria-modal="true" aria-label={`${activeTarget.name} — ${label("preview.title")}`}>
       <header className="zoho-preview-head">
-        <WorkDriveLogo />
+        <div className="zoho-preview-breadcrumb">
+          <WorkDriveLogo />
+          <span className="zoho-preview-filetype">{extension}</span>
+        </div>
         <span className="zoho-preview-file">
           <FileIcon kind="file" mimeType={effectiveMime} name={activeTarget.name} label={label("files.type.file")} />
           <strong title={info?.file_name || activeTarget.name}>{info?.file_name || activeTarget.name}</strong>
         </span>
-        <span className="zoho-preview-chip">{extension}</span>
-        <span className="zoho-preview-chip muted">{formatBytes(effectiveSize)}</span>
         <div className="zoho-preview-actions">
-          <button
-            type="button"
-            className={`zoho-icon-btn${panel === "details" ? " active" : ""}`}
-            onClick={() => setPanel((value) => value === "details" ? null : "details")}
-            aria-label={label("preview.details")}
-            aria-expanded={panel === "details"}
-            title={label("preview.details")}
-          >
-            ⓘ
-          </button>
-          <button
-            type="button"
-            className={`zoho-icon-btn relative${panel === "comments" ? " active" : ""}`}
-            onClick={() => setPanel((value) => value === "comments" ? null : "comments")}
-            aria-label={label("preview.comments")}
-            aria-expanded={panel === "comments"}
-            title={label("preview.comments")}
-          >
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true"><path d="M5 6h14v9H8l-3 3z" /></svg>
-            {commentCount > 0 ? <span className="zoho-comment-badge">{commentCount > 99 ? "99+" : commentCount}</span> : null}
-          </button>
-          <button type="button" className="zoho-icon-btn" onClick={() => void handleShare()} aria-label={label("preview.share")} title={label("preview.share")}>
-            ⇗
-          </button>
-          {category === "pdf" || (category === "image" && renderableViewers.image) ? (
-            <button type="button" className="zoho-icon-btn" onClick={handlePrint} aria-label={label("preview.print")} title={label("preview.print")}>
-              ⎙
-            </button>
-          ) : null}
-          <button type="button" className="zoho-preview-download" onClick={() => void handleDownload()}>
-            {label("preview.download")}
-          </button>
-          <button type="button" className="zoho-icon-btn zoho-preview-close" onClick={onClose} aria-label={label("preview.close")}>✕</button>
+          {category === "image" ? <button type="button" className="zoho-preview-outline-btn" onClick={() => showToast(label("preview.editImage") || "Image editor")}>✎ <span>{label("preview.editImage") || "Edit image"}</span></button> : null}
+          <div className="zoho-preview-menu-wrap">
+            <button type="button" className="zoho-preview-share" onClick={() => void handleShare()}><span>⇧</span>{label("preview.share") || "Share"}<span>⌄</span></button>
+          </div>
+          <div className="zoho-preview-menu-wrap">
+            <button type="button" className="zoho-preview-outline-btn" onClick={() => {
+              if (category === "office") {
+                const ext = extension.toLowerCase();
+                if (["xls", "xlsx", "ods"].includes(ext)) openWith("sheet");
+                else if (["ppt", "pptx", "odp"].includes(ext)) openWith("show");
+                else openWith("writer");
+              } else showToast(label("preview.openWith") || "Open With");
+            }}>{label("preview.openWith") || "Open With"} <span>⌄</span></button>
+          </div>
+          <button type="button" className="zoho-preview-icon-top" onClick={() => void navigator.clipboard.writeText(`${window.location.origin}/files?file=${encodeURIComponent(activeTarget.id)}`)} aria-label={label("preview.copyLink") || "Copy link"} title={label("preview.copyLink") || "Copy link"}>↗</button>
+          <button type="button" className="zoho-preview-icon-top" onClick={() => void handleDownload()} aria-label={label("preview.download")} title={label("preview.download")}>⇩</button>
+          <button type="button" className="zoho-preview-icon-top" onClick={() => showToast(label("files.actions") || "More actions")} aria-label={label("files.actions") || "More actions"} title={label("files.actions") || "More actions"}>•••</button>
+          <button type="button" className="zoho-preview-icon-top close" onClick={onClose} aria-label={label("preview.close")}>×</button>
         </div>
       </header>
 
       <div className="zoho-preview-shell">
         <div className="zoho-preview-stage">
-          {onPrevFile ? (
-            <button type="button" className="zoho-preview-arrow start" onClick={onPrevFile} aria-label={label("preview.prevPage")} title="←">‹</button>
-          ) : null}
-          <div className="zoho-preview-body">{renderStage()}</div>
-          {onNextFile ? (
-            <button type="button" className="zoho-preview-arrow end" onClick={onNextFile} aria-label={label("preview.nextPage")} title="→">›</button>
-          ) : null}
+          {onPrevFile ? <button type="button" className="zoho-preview-arrow start" onClick={onPrevFile} aria-label={label("preview.prevPage")} title="Previous">‹</button> : null}
+          <div className="zoho-preview-body">
+            <div className="zoho-preview-canvas-wrap">
+              {renderStage()}
+              <PreviewWatermark enabled={Boolean(dlp?.watermark.enabled)} config={watermarkConfig} />
+            </div>
+          </div>
+          {onNextFile ? <button type="button" className="zoho-preview-arrow end" onClick={onNextFile} aria-label={label("preview.nextPage")} title="Next">›</button> : null}
         </div>
-        <DetailsSidebar
-          open={panel === "details"}
-          fileId={activeTarget.id}
-          fileName={info?.file_name || activeTarget.name}
-          mimeType={effectiveMime}
-          size={effectiveSize}
-          versionNumber={info?.version_number}
-          updatedAt={info?.updated_at}
-        />
-        {panel === "comments" ? <FileCommentsPanel fileId={activeTarget.id} focusCommentId={focusCommentId} onCount={setCommentCount} /> : null}
+
+        {panel === "details" ? <DetailsSidebar open fileId={activeTarget.id} fileName={info?.file_name || activeTarget.name} mimeType={effectiveMime} size={effectiveSize} versionNumber={info?.version_number} updatedAt={info?.updated_at} onClose={() => setPanel(null)} /> : null}
+        {panel === "comments" ? <FileCommentsPanel fileId={activeTarget.id} focusCommentId={focusCommentId} onCount={setCommentCount} onClose={() => setPanel(null)} /> : null}
+        {panel === "dataTemplate" ? <DataTemplateSidebar open fileId={activeTarget.id} onClose={() => setPanel(null)} /> : null}
+        {panel === "watermark" ? <WatermarkSidebar open fileId={activeTarget.id} config={watermarkConfig} onChange={setWatermarkConfig} onClose={() => setPanel(null)} /> : null}
+        {panel === "zia" ? (
+          <aside className="zoho-preview-panel zoho-zia-panel" dir={label("preview.title") === "معاينة الملف" ? "rtl" : "ltr"}>
+            <header className="zoho-preview-panel-head"><div><h2>Zia</h2><p>{activeTarget.name}</p></div><button type="button" className="zoho-panel-close" onClick={() => setPanel(null)}>×</button></header>
+            <div className="zoho-preview-panel-body"><div className="zoho-panel-empty"><div className="zoho-panel-empty-icon">✦</div><strong>{label("preview.ziaComingSoon") || "Zia insights"}</strong><span>{label("preview.ziaComingSoonDescription") || "Zia actions for file summaries and insights are available from supported editors."}</span></div></div>
+          </aside>
+        ) : null}
+
+        <nav className="zoho-preview-rail" aria-label="Preview tools">
+          {railButton("details", <span className="rail-info">i</span>, label("preview.details") || "Details")}
+          {railButton("comments", <span className="rail-comment">▱</span>, label("preview.comments") || "Comments")}
+          {railButton("dataTemplate", <span className="rail-template">▤</span>, label("preview.dataTemplates") || "Data Templates")}
+          {railButton("watermark", <span className="rail-watermark">♢</span>, label("preview.watermark") || "Watermark")}
+          {railButton("zia", <span className="rail-zia">✣</span>, "Zia")}
+          <div className="zoho-preview-rail-spacer" />
+          <button type="button" className="zoho-preview-rail-plus" onClick={() => showToast(label("files.actions") || "More apps")} aria-label={label("files.actions") || "More apps"}>+</button>
+        </nav>
       </div>
 
       {toast ? <div className="zoho-preview-toast" role="status">{toast}</div> : null}

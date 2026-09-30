@@ -183,10 +183,8 @@ export function FileCommentsPanel({
         </div>
       </header>
       {error ? <div className="mx-4 mt-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-[12px] text-red-700">{error}</div> : null}
-      <div className="min-h-0 flex-1 overflow-auto px-2 py-3">
-        {visible.length === 0 ? <p className="px-3 py-8 text-center text-[13px] text-[#80868b]">{label("preview.commentEmpty")}</p> : visible.map((comment) => <CommentCard key={comment.id} comment={comment} />)}
-      </div>
-      <form className="border-t border-[#ededed] p-3" onSubmit={(event) => { event.preventDefault(); void post(draft); }}>
+      <div className="zoho-comment-compose-head"><span className="zoho-comment-avatar">{initials(me?.id, null)}</span><span className="zoho-comment-compose-label">{label("preview.commentPlaceholder")}</span></div>
+      <form className="zoho-comments-composer border-b border-[#ededed] p-3" onSubmit={(event) => { event.preventDefault(); void post(draft); }}>
         <div className="relative">
           {suggestions.length > 0 && mention ? (
             <ul className="absolute bottom-full z-10 mb-1 max-h-48 w-full overflow-auto rounded-xl border border-[#e3e5e8] bg-white p-1 shadow-lg">
@@ -207,6 +205,9 @@ export function FileCommentsPanel({
           <button type="submit" disabled={busy || !draft.trim()} className="rounded-full bg-[#2c66dd] px-4 py-1.5 text-[12px] font-semibold text-white disabled:opacity-40">{label("preview.commentPost")}</button>
         </div>
       </form>
+      <div className="min-h-0 flex-1 overflow-auto px-2 py-3">
+        {visible.length === 0 ? <p className="px-3 py-8 text-center text-[13px] text-[#80868b]">{label("preview.commentEmpty")}</p> : visible.map((comment) => <CommentCard key={comment.id} comment={comment} />)}
+      </div>
     </aside>
   );
 }

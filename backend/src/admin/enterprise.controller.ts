@@ -9,6 +9,7 @@ import { DataAdministrationService } from './data-administration.service';
 export class EnterpriseController {
   constructor(private readonly service: EnterpriseService, private readonly dlp: DlpService, private readonly dataAdmin: DataAdministrationService) {}
   @Get('settings') consoleSettings(@CurrentUser() u: AccessTokenPayload) { return this.service.consoleSettings(u); }
+  @Get('view-preferences') viewPreferences(@CurrentUser() u: AccessTokenPayload) { return this.service.viewPreferences(u); }
   @Patch('settings') updateConsoleSettings(@CurrentUser() u: AccessTokenPayload, @Body() b: Record<string, unknown>) { return this.service.updateConsoleSettings(u, b); }
   @Get('security-center') securityCenter(@CurrentUser() u: AccessTokenPayload) { return this.service.securityCenter(u); }
   @Delete('sessions/:sessionId') revokeUserSession(@CurrentUser() u: AccessTokenPayload, @Param('sessionId') id: string) { return this.service.revokeUserSession(u, id); }
