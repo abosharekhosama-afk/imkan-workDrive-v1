@@ -3,10 +3,11 @@ import { CurrentUser } from '../auth/current-user.decorator';
 import type { AccessTokenPayload } from '../auth/jwt.types';
 import { EnterpriseService } from './enterprise.service';
 import { DlpService } from '../dlp/dlp.service';
+import { DataAdministrationService } from './data-administration.service';
 
 @Controller('admin/enterprise')
 export class EnterpriseController {
-  constructor(private readonly service: EnterpriseService, private readonly dlp: DlpService) {}
+  constructor(private readonly service: EnterpriseService, private readonly dlp: DlpService, private readonly dataAdmin: DataAdministrationService) {}
   @Get('settings') consoleSettings(@CurrentUser() u: AccessTokenPayload) { return this.service.consoleSettings(u); }
   @Patch('settings') updateConsoleSettings(@CurrentUser() u: AccessTokenPayload, @Body() b: Record<string, unknown>) { return this.service.updateConsoleSettings(u, b); }
   @Get('security-center') securityCenter(@CurrentUser() u: AccessTokenPayload) { return this.service.securityCenter(u); }
@@ -36,4 +37,19 @@ export class EnterpriseController {
   @Post('audit/reports') auditReport(@CurrentUser() u: AccessTokenPayload, @Body() b: any) { return this.service.auditReport(u, b); }
   @Get('external-shares') externalShares(@CurrentUser() u: AccessTokenPayload) { return this.service.externalShares(u); }
   @Post('users/:userId/suspend') suspendUser(@CurrentUser() u: AccessTokenPayload, @Param('userId') id: string) { return this.service.suspendUser(u, id); }
+
+  @Get('data/locations') dataLocations(@CurrentUser() u: AccessTokenPayload) { return this.dataAdmin.locations(u); }
+  @Get('data/browse') dataBrowse(@CurrentUser() u: AccessTokenPayload, @Query('scope') scope?: string, @Query('id') id?: string, @Query('q') q?: string, @Query('deleted') deleted?: string) { return this.dataAdmin.browse(u, { scope, id, q, deleted }); }
+  @Post('data/my-folder-access') dataMyFolderAccess(@CurrentUser() u: AccessTokenPayload, @Body() b: { memberId?: string; reason?: string }) { return this.dataAdmin.recordMyFolderAccess(u, b); }
+  @Get('data/shared') dataShared(@CurrentUser() u: AccessTokenPayload, @Query('filter') filter?: string, @Query('location') location?: string, @Query('q') q?: string) { return this.dataAdmin.shared(u, { filter, location, q }); }
+  @Patch('data/shares/:shareId') dataUpdateShare(@CurrentUser() u: AccessTokenPayload, @Param('shareId') id: string, @Body() b: { kind?: string; permission?: string }) { return this.dataAdmin.updateShare(u, id, b); }
+  @Delete('data/shares/:shareId') dataRevokeShare(@CurrentUser() u: AccessTokenPayload, @Param('shareId') id: string, @Query('kind') kind?: string) { return this.dataAdmin.revokeShare(u, id, kind); }
+  @Post('data/share') dataShare(@CurrentUser() u: AccessTokenPayload, @Body() b: { kind?: string; ids?: string[]; permission?: string; recipientUserId?: string; canDownload?: boolean }) { return this.dataAdmin.share(u, b); }
+  @Post('data/trash') dataTrash(@CurrentUser() u: AccessTokenPayload, @Body() b: { ids?: string[] }) { return this.dataAdmin.trash(u, b); }
+  @Post('data/restore') dataRestore(@CurrentUser() u: AccessTokenPayload, @Body() b: { ids?: string[] }) { return this.dataAdmin.restore(u, b); }
+  @Post('data/purge') dataPurge(@CurrentUser() u: AccessTokenPayload, @Body() b: { ids?: string[] }) { return this.dataAdmin.purge(u, b); }
+  @Post('data/transfer') dataTransfer(@CurrentUser() u: AccessTokenPayload, @Body() b: { kind?: string; ids?: string[]; targetUserId?: string }) { return this.dataAdmin.transfer(u, b); }
+  @Get('data/large') dataLarge(@CurrentUser() u: AccessTokenPayload, @Query('q') q?: string) { return this.dataAdmin.largeFiles(u, { q }); }
+  @Get('data/files/:fileId/versions') dataVersions(@CurrentUser() u: AccessTokenPayload, @Param('fileId') id: string) { return this.dataAdmin.versions(u, id); }
+  @Delete('data/files/:fileId/versions/:versionId') dataDeleteVersion(@CurrentUser() u: AccessTokenPayload, @Param('fileId') fileId: string, @Param('versionId') versionId: string) { return this.dataAdmin.deleteVersion(u, fileId, versionId); }
 }

@@ -71,3 +71,75 @@ export type AdminConsoleSettings = {
 };
 export const getAdminConsoleSettings = () => apiRequest<AdminConsoleSettings>('/admin/enterprise/settings');
 export const updateAdminConsoleSettings = (body: Partial<AdminConsoleSettings>) => apiRequest<AdminConsoleSettings>('/admin/enterprise/settings', { method: 'PATCH', body: JSON.stringify(body) });
+
+export type DataAdminItem = {
+  id: string;
+  kind: 'FILE' | 'FOLDER';
+  name: string;
+  ownerId: string;
+  ownerName: string;
+  ownerEmail: string;
+  size: number | null;
+  extension: string | null;
+  updatedAt: string;
+  deletedAt: string | null;
+  versionCount: number | null;
+  location: string;
+  teamFolderId: string | null;
+};
+export type DataAdminShare = {
+  id: string;
+  resourceKind: 'FILE' | 'FOLDER';
+  resourceId: string;
+  name: string;
+  permission: string;
+  canDownload: boolean;
+  kind: 'team' | 'internet' | 'download';
+  recipients: Array<{ id: string; name: string; email: string }>;
+  ownerName: string;
+  location: string;
+  teamFolderId: string | null;
+  createdAt: string;
+};
+export type DataAdminLocations = {
+  teamFolders: Array<{ id: string; name: string }>;
+  members: Array<{ id: string; name: string; email: string }>;
+  trashDays: number;
+  largeFileMinBytes: number;
+};
+export type DataAdminVersion = { id: string; versionNumber: number; size: number; createdAt: string; status: string; latest: boolean };
+
+const dataQuery = (params: Record<string, string | undefined>) => {
+  const search = new URLSearchParams();
+  for (const [key, value] of Object.entries(params)) if (value) search.set(key, value);
+  const text = search.toString();
+  return text ? `?${text}` : '';
+};
+
+export const getDataAdminLocations = () => apiRequest<DataAdminLocations>('/admin/enterprise/data/locations');
+export const browseDataAdmin = (params: { scope: string; id?: string; q?: string; deleted?: boolean }) =>
+  apiRequest<DataAdminItem[]>(`/admin/enterprise/data/browse${dataQuery({ scope: params.scope, id: params.id, q: params.q, deleted: params.deleted ? '1' : undefined })}`);
+export const recordMyFolderAccess = (body: { memberId: string; reason: string }) =>
+  apiRequest<{ ok: boolean; memberId: string; emailed: boolean }>('/admin/enterprise/data/my-folder-access', { method: 'POST', body: JSON.stringify(body) });
+export const getDataAdminShares = (params: { filter?: string; location?: string; q?: string }) =>
+  apiRequest<DataAdminShare[]>(`/admin/enterprise/data/shared${dataQuery(params)}`);
+export const updateDataAdminShare = (id: string, body: { kind: 'FILE' | 'FOLDER'; permission: string }) =>
+  apiRequest<{ id: string; permission: string }>(`/admin/enterprise/data/shares/${id}`, { method: 'PATCH', body: JSON.stringify(body) });
+export const revokeDataAdminShare = (id: string, kind: 'FILE' | 'FOLDER') =>
+  apiRequest<{ id: string; revoked: boolean }>(`/admin/enterprise/data/shares/${id}?kind=${kind}`, { method: 'DELETE' });
+export const shareDataAdminItems = (body: { kind: 'FILE' | 'FOLDER'; ids: string[]; permission: string; recipientUserId?: string; canDownload: boolean }) =>
+  apiRequest<{ shared: string[] }>('/admin/enterprise/data/share', { method: 'POST', body: JSON.stringify(body) });
+export const trashDataAdminFiles = (ids: string[]) =>
+  apiRequest<{ trashed: string[] }>('/admin/enterprise/data/trash', { method: 'POST', body: JSON.stringify({ ids }) });
+export const restoreDataAdminFiles = (ids: string[]) =>
+  apiRequest<{ restored: string[] }>('/admin/enterprise/data/restore', { method: 'POST', body: JSON.stringify({ ids }) });
+export const purgeDataAdminFiles = (ids: string[]) =>
+  apiRequest<{ deleted: string[] }>('/admin/enterprise/data/purge', { method: 'POST', body: JSON.stringify({ ids }) });
+export const transferDataAdminItems = (body: { kind: 'FILE' | 'FOLDER'; ids: string[]; targetUserId: string }) =>
+  apiRequest<{ targetUserId: string }>(`/admin/enterprise/data/transfer`, { method: 'POST', body: JSON.stringify(body) });
+export const getDataAdminLargeFiles = (q?: string) =>
+  apiRequest<DataAdminItem[]>(`/admin/enterprise/data/large${dataQuery({ q })}`);
+export const getDataAdminVersions = (fileId: string) =>
+  apiRequest<{ file: { id: string; name: string; size: number }; versions: DataAdminVersion[] }>(`/admin/enterprise/data/files/${fileId}/versions`);
+export const deleteDataAdminVersion = (fileId: string, versionId: string) =>
+  apiRequest<{ id: string; deleted: boolean }>(`/admin/enterprise/data/files/${fileId}/versions/${versionId}`, { method: 'DELETE' });
