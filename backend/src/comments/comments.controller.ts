@@ -17,6 +17,11 @@ export class CommentsController {
     return this.s.add(u, id, b.body, b.parentId);
   }
 
+  @Patch(':id/resolve')
+  resolve(@CurrentUser() u: AccessTokenPayload, @Param('id') id: string, @Body() b: { resolved?: boolean }) {
+    return this.s.setResolved(u, id, b.resolved !== false);
+  }
+
   @Patch(':id')
   update(@CurrentUser() u: AccessTokenPayload, @Param('id') id: string, @Body() b: { body: string }) {
     return this.s.update(u, id, b.body);

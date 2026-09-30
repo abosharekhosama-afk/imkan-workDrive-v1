@@ -89,18 +89,20 @@ export function FileContextMenu({
       { key: "download", label: `${D("download")} (⌃S)`, hint: "⌃S", icon: FileMenuIcons.download, onSelect: onDownload ?? (() => toast("download")) },
       { key: "rename", label: D("rename"), icon: FileMenuIcons.rename, onSelect: onRename ?? (() => toast("rename")) },
       { key: "follow", label: label(followUpdatesMenuLabel(Boolean(handlers.isFollowingUpdates))), icon: handlers.isFollowingUpdates ? FileMenuIcons.unfollowUpdates : FileMenuIcons.followUpdates, onSelect: handlers.onFollowUpdates ?? (() => toast("followUpdates")) },
-      { key: "more", label: D("moreOptions"), icon: FileMenuIcons.moreOptions, onSelect: () => toast("moreOptions") },
+      handlers.onComment
+        ? { key: "more", label: D("moreOptions"), icon: FileMenuIcons.moreOptions, submenu: true, submenuItems: [{ key: "addComment", label: label("menu.addComment"), icon: FileMenuIcons.comment, onSelect: handlers.onComment }] }
+        : { key: "more", label: D("moreOptions"), icon: FileMenuIcons.moreOptions, onSelect: () => toast("moreOptions") },
     ],
     [
       { key: "delete", label: D("moveToTrash"), icon: FileMenuIcons.moveToTrash, danger: true, onSelect: onDelete ?? (() => toast("moveToTrash")) },
     ],
   ];
 
-  const [subOpen, setSubOpen] = useState(false);
+  const [subKey, setSubKey] = useState<string | null>(null);
   const subTimer = useRef<number | null>(null);
-  const openSubmenu = (open: boolean) => {
+  const openSubmenu = (key: string | null) => {
     if (subTimer.current) window.clearTimeout(subTimer.current);
-    subTimer.current = window.setTimeout(() => setSubOpen(open), open ? 80 : 120);
+    subTimer.current = window.setTimeout(() => setSubKey(key), key ? 80 : 120);
   };
   useEffect(() => {
     const onDown = (e: MouseEvent) => { if (ref.current?.contains(e.target as Node)) return; onClose(); };
@@ -121,8 +123,7 @@ export function FileContextMenu({
   const estH = sections.reduce((n, g) => n + g.length, 0) * 32 + sections.length * 2 + 24;
   const left = Math.min(Math.max(8, x), Math.max(8, window.innerWidth - menuW - 8));
   const top = Math.min(Math.max(8, y), Math.max(8, window.innerHeight - estH - 8));
-  const share = sections[1]?.[0];
-  const openSub = subOpen && Boolean(share?.submenuItems);
+  const subItem = sections.flat().find((item) => item.key === subKey && item.submenuItems);
   const subLeft = rtl ? left - 244 - 2 : left + menuW + 2;
   const subLeftClamped = Math.min(Math.max(8, subLeft), Math.max(8, window.innerWidth - 244 - 8));
 
@@ -141,8 +142,8 @@ export function FileContextMenu({
                   it.onSelect?.();
                 }
               }}
-              onMouseEnter={() => openSubmenu(Boolean(it.submenu))}
-              data-active={it.submenu && openSub ? true : undefined}
+              onMouseEnter={() => openSubmenu(it.submenu ? it.key : null)}
+              data-active={it.submenu && subKey === it.key ? true : undefined}
               data-danger={it.danger || undefined}
               className="wd-menu-item min-h-[34px] text-start">
               <span className="flex w-6 shrink-0 items-center justify-center" aria-hidden="true">{it.icon ?? null}</span>
@@ -152,10 +153,12 @@ export function FileContextMenu({
           ))}
         </div>
       ))}
-      {openSub && share.submenuItems ? (
+      {subItem?.submenuItems ? (
         <div className="wd-menu fixed z-[96]" dir={rtl ? "rtl" : "ltr"}
-          style={{ left: subLeftClamped, top: top + 36, width: 244 }}>
-          {share.submenuItems.map((si) => (
+          style={{ left: subLeftClamped, top: subKey === "more" ? top + 210 : top + 36, width: 244 }}
+          onMouseEnter={() => openSubmenu(subKey)}
+          onMouseLeave={() => openSubmenu(null)}>
+          {subItem.submenuItems.map((si) => (
             <button key={si.key} type="button" role="menuitem"
               onClick={(event) => {
               event.preventDefault();

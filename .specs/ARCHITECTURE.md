@@ -170,7 +170,7 @@ imkan-workDrive-v1-2-release/
 ### Activity & Audit
 - **AuditLog**: Action audit trail
 - **Notification**: User notifications
-- **Comment**: File/folder comments
+- **Comment**: File comments with one reply level, @mentions, edit history, and resolve/reopen (`resolvedAt`)
 
 ### Security
 - **SecurityPolicy**: Per-org security settings (MFA, sharing restrictions)

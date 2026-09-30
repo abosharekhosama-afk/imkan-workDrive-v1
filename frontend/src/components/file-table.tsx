@@ -82,6 +82,7 @@ interface FileTableProps {
   onSelectRow?: (id: string, isSelected: boolean) => void;
   onSelectAll?: (isSelected: boolean) => void;
   onPreview?: (resourceType: "FILE" | "FOLDER", resourceId: string, resourceName: string, mimeType?: string, size?: number) => void;
+  onComment?: (resourceType: "FILE" | "FOLDER", resourceId: string, resourceName: string, mimeType?: string, size?: number) => void;
   onVersionHistory?: (resourceType: "FILE" | "FOLDER", resourceId: string, resourceName: string, mimeType?: string, size?: number) => void;
   onOpen?: (resourceType: "FILE" | "FOLDER", resourceId: string, resourceName: string) => void;
   onMove?: (resourceType: "FILE" | "FOLDER", resourceId: string, resourceName: string) => void;
@@ -122,6 +123,7 @@ export function FileTable({
   onDelete,
   onFavorite,
   onPreview,
+  onComment,
   onVersionHistory,
   onOpen,
   onMove,
@@ -333,7 +335,7 @@ export function FileTable({
           {sortedFiles.map((file) => (
             <tr key={file.id} draggable={Boolean(canMutate)} onDragStart={(e) => { e.dataTransfer.effectAllowed="move"; e.dataTransfer.setData("application/x-workdrive", JSON.stringify({type:"FILE",id:file.id,name:file.name})); }} onContextMenu={(e) => { e.preventDefault(); setCtxMenu({ x: e.clientX, y: e.clientY, node: (<FileContextMenu
               onToast={onToast}
-              handlers={{ onOpen: onOpen ? () => onOpen("FILE", file.id, file.name) : undefined, onInspect: onInspect ? () => onInspect("FILE", file.id, file.name) : undefined, onPreview: onPreview ? () => onPreview("FILE", file.id, file.name, file.mimeType ?? undefined, file.size ?? undefined) : undefined, onDownload: () => onDownload(file.id), onShare: canShare ? (mode) => onShare("FILE", file.id, mode) : undefined, onRename: canMutate ? () => onRename("FILE", file.id, file.name) : undefined, onMove: onMove && canMutate ? () => onMove("FILE", file.id, file.name) : undefined,
+              handlers={{ onOpen: onOpen ? () => onOpen("FILE", file.id, file.name) : undefined, onInspect: onInspect ? () => onInspect("FILE", file.id, file.name) : undefined, onPreview: onPreview ? () => onPreview("FILE", file.id, file.name, file.mimeType ?? undefined, file.size ?? undefined) : undefined, onComment: onComment ? () => onComment("FILE", file.id, file.name, file.mimeType ?? undefined, file.size ?? undefined) : undefined, onDownload: () => onDownload(file.id), onShare: canShare ? (mode) => onShare("FILE", file.id, mode) : undefined, onRename: canMutate ? () => onRename("FILE", file.id, file.name) : undefined, onMove: onMove && canMutate ? () => onMove("FILE", file.id, file.name) : undefined,
                     onCopy: onCopy && canMutate ? () => onCopy("FILE", file.id, file.name) : undefined, onFavoriteToggle: onFavorite ? () => onFavorite("FILE", file.id) : undefined, onVersionHistory: onVersionHistory ? () => onVersionHistory("FILE", file.id, file.name, file.mimeType ?? undefined, file.size ?? undefined) : undefined, onDelete: canMutate ? () => onDelete("FILE", file.id) : undefined, onAssignWorkflow: onAssignWorkflow && canMutate ? () => onAssignWorkflow("FILE", file.id, file.name) : undefined, onOrganize: onOrganize && canMutate ? () => onOrganize("FILE", file.id) : undefined, onFollowUpdates: onFollowUpdates ? () => onFollowUpdates("FILE", file.id, file.name) : undefined, isFollowingUpdates: followIds.has(followResourceKey("FILE", file.id)) }}
               onCopyLink={onCopyLink ? () => onCopyLink(file.id) : undefined}
               x={e.clientX} y={e.clientY} onClose={() => setCtxMenu(null)}
@@ -374,6 +376,7 @@ export function FileTable({
                     onOpen: onOpen ? () => onOpen("FILE", file.id, file.name) : undefined,
                     onInspect: onInspect ? () => onInspect("FILE", file.id, file.name) : undefined,
                     onPreview: onPreview ? () => onPreview("FILE", file.id, file.name, file.mimeType ?? undefined, file.size ?? undefined) : undefined,
+                    onComment: onComment ? () => onComment("FILE", file.id, file.name, file.mimeType ?? undefined, file.size ?? undefined) : undefined,
                     onDownload: () => onDownload(file.id),
                     onShare: canShare ? (mode) => onShare("FILE", file.id, mode) : undefined,
                     onRename: canMutate ? () => onRename("FILE", file.id, file.name) : undefined,

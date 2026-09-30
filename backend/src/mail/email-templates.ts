@@ -68,6 +68,13 @@ function escapeHtml(value: string): string {
   return value.replace(/[&<>"']/g, (char) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[char] ?? char));
 }
 
+export function commentNoticeEmail(input: { fileName: string; actor: string; excerpt: string; link: string; mentioned: boolean }): RenderedEmail {
+  const title = input.mentioned ? `You were mentioned in a comment on ${input.fileName}` : `New comment on ${input.fileName}`;
+  const text = `${input.actor} ${input.mentioned ? 'mentioned you in a comment' : 'commented'} on ${input.fileName}.\n\n${input.excerpt}\n\nOpen the comment: ${input.link}`;
+  const html = `<p><strong>${escapeHtml(input.actor)}</strong> ${input.mentioned ? 'mentioned you in a comment' : 'commented'} on <strong>${escapeHtml(input.fileName)}</strong>.</p><blockquote>${escapeHtml(input.excerpt)}</blockquote><p><a href="${escapeHtml(input.link)}">Open the comment</a></p>`;
+  return { subject: title, text, html };
+}
+
 export function passwordResetEmail(input: { link: string }): RenderedEmail {
   const subject = 'Reset your IMKAN WorkDrive password';
   const text = `Reset your password using this link (valid for 30 minutes):\n${input.link}\n\nIf you did not request a reset, ignore this email.`;

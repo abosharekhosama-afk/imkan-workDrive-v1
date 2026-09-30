@@ -10,6 +10,8 @@ import { MediaViewer } from "./preview/media-viewer";
 import { CodeViewer } from "./preview/code-viewer";
 import { ArchiveViewer } from "./preview/archive-viewer";
 import { DetailsSidebar } from "./preview/details-sidebar";
+import { FileCommentsPanel } from "./preview/file-comments-panel";
+import { listFileComments } from "../lib/api/comments";
 import { usePreviewUrl } from "./preview/use-preview-url";
 import { resolveMimeType } from "../lib/api/mime";
 import { getPreviewMimeCategory, isBrowserRenderableImage } from "../lib/api/preview";
@@ -32,6 +34,8 @@ interface FilePreviewModalProps {
   onClose: () => void;
   onPrevFile?: () => void;
   onNextFile?: () => void;
+  initialPanel?: "details" | "comments";
+  focusCommentId?: string | null;
 }
 
 function WorkDriveLogo() {
@@ -50,11 +54,12 @@ function WorkDriveLogo() {
  * fetch — the root cause of the CORS/403 redirect failures) and a collapsible
  * details/activity sidebar.
  */
-export function FilePreviewModal({ target, onClose, onPrevFile, onNextFile }: FilePreviewModalProps) {
+export function FilePreviewModal({ target, onClose, onPrevFile, onNextFile, initialPanel, focusCommentId }: FilePreviewModalProps) {
   const { label } = useLocale();
   const previousActiveRef = useRef<HTMLElement | null>(null);
   const printFrameRef = useRef<HTMLIFrameElement | null>(null);
-  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [panel, setPanel] = useState<"details" | "comments" | null>(initialPanel ?? null);
+  const [commentCount, setCommentCount] = useState(0);
   const [toast, setToast] = useState<string | null>(null);
 
   const open = Boolean(target);
@@ -66,8 +71,17 @@ export function FilePreviewModal({ target, onClose, onPrevFile, onNextFile }: Fi
   const effectiveMime = info?.mime_type ?? resolvedMime;
 
   useEffect(() => {
-    setSidebarOpen(false);
+    setPanel(initialPanel ?? null);
     setToast(null);
+  }, [activeTarget?.id, initialPanel]);
+
+  useEffect(() => {
+    if (!activeTarget) return;
+    let cancelled = false;
+    listFileComments(activeTarget.id).then((rows) => {
+      if (!cancelled) setCommentCount(rows.length + rows.reduce((sum, row) => sum + (row.replies?.length ?? 0), 0));
+    }).catch(() => { if (!cancelled) setCommentCount(0); });
+    return () => { cancelled = true; };
   }, [activeTarget?.id]);
 
   useEffect(() => {
@@ -217,20 +231,31 @@ export function FilePreviewModal({ target, onClose, onPrevFile, onNextFile }: Fi
         <WorkDriveLogo />
         <span className="zoho-preview-file">
           <FileIcon kind="file" mimeType={effectiveMime} name={activeTarget.name} label={label("files.type.file")} />
-          <strong title={activeTarget.name}>{activeTarget.name}</strong>
+          <strong title={info?.file_name || activeTarget.name}>{info?.file_name || activeTarget.name}</strong>
         </span>
         <span className="zoho-preview-chip">{extension}</span>
         <span className="zoho-preview-chip muted">{formatBytes(effectiveSize)}</span>
         <div className="zoho-preview-actions">
           <button
             type="button"
-            className={`zoho-icon-btn${sidebarOpen ? " active" : ""}`}
-            onClick={() => setSidebarOpen((value) => !value)}
+            className={`zoho-icon-btn${panel === "details" ? " active" : ""}`}
+            onClick={() => setPanel((value) => value === "details" ? null : "details")}
             aria-label={label("preview.details")}
-            aria-expanded={sidebarOpen}
+            aria-expanded={panel === "details"}
             title={label("preview.details")}
           >
             ⓘ
+          </button>
+          <button
+            type="button"
+            className={`zoho-icon-btn relative${panel === "comments" ? " active" : ""}`}
+            onClick={() => setPanel((value) => value === "comments" ? null : "comments")}
+            aria-label={label("preview.comments")}
+            aria-expanded={panel === "comments"}
+            title={label("preview.comments")}
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true"><path d="M5 6h14v9H8l-3 3z" /></svg>
+            {commentCount > 0 ? <span className="zoho-comment-badge">{commentCount > 99 ? "99+" : commentCount}</span> : null}
           </button>
           <button type="button" className="zoho-icon-btn" onClick={() => void handleShare()} aria-label={label("preview.share")} title={label("preview.share")}>
             ⇗
@@ -258,14 +283,15 @@ export function FilePreviewModal({ target, onClose, onPrevFile, onNextFile }: Fi
           ) : null}
         </div>
         <DetailsSidebar
-          open={sidebarOpen}
+          open={panel === "details"}
           fileId={activeTarget.id}
-          fileName={activeTarget.name}
+          fileName={info?.file_name || activeTarget.name}
           mimeType={effectiveMime}
           size={effectiveSize}
           versionNumber={info?.version_number}
           updatedAt={info?.updated_at}
         />
+        {panel === "comments" ? <FileCommentsPanel fileId={activeTarget.id} focusCommentId={focusCommentId} onCount={setCommentCount} /> : null}
       </div>
 
       {toast ? <div className="zoho-preview-toast" role="status">{toast}</div> : null}

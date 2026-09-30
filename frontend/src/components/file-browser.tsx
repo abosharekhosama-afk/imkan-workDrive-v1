@@ -125,6 +125,8 @@ export function FileBrowser({
     name: string;
     mimeType?: string;
     size?: number;
+    panel?: "details" | "comments";
+    commentId?: string | null;
   } | null>(null);
   const [versionHistoryTarget, setVersionHistoryTarget] = useState<{
     type: "FILE" | "FOLDER";
@@ -432,7 +434,7 @@ export function FileBrowser({
     triggerDownload(result.download_url);
   }
 
-  async function onPreview(type: "FILE" | "FOLDER", id: string, name: string, mimeType?: string, size?: number) {
+  async function onPreview(type: "FILE" | "FOLDER", id: string, name: string, mimeType?: string, size?: number, panel?: "details" | "comments", commentId?: string | null) {
     if (type !== "FILE") return;
     // Dynamic MIME detection (P0): fall back to extension sniffing so files
     // uploaded with an empty/octet-stream browser type still preview inline.
@@ -443,8 +445,23 @@ export function FileBrowser({
       name,
       mimeType: resolvedMime,
       size,
+      panel,
+      commentId,
     });
   }
+
+  useEffect(() => {
+    const fileId = searchParams.get("file");
+    const commentId = searchParams.get("comment");
+    if (!fileId || !commentId) return;
+    let cancelled = false;
+    void getFileDetails(fileId).then((file) => {
+      if (!cancelled) void onPreview("FILE", file.id, file.name, file.mimeType ?? undefined, file.size, "comments", commentId);
+    }).catch(() => {
+      if (!cancelled) void onPreview("FILE", fileId, "File", undefined, undefined, "comments", commentId);
+    });
+    return () => { cancelled = true; };
+  }, [searchParams]);
 
   // Universal preview navigation: every file can be walked through with the
   // arrow keys; unsupported types get an elegant download card in the viewer.
@@ -740,6 +757,7 @@ export function FileBrowser({
           folderUpdatedAt={folderUpdatedAt}
           onOpenFolder={(folderId) => router.push(`/files/${folderId}`)}
           onPreview={(file) => void onPreview("FILE", file.id, file.name, file.mimeType ?? undefined, file.size ?? undefined)}
+          onComment={(file) => void onPreview("FILE", file.id, file.name, file.mimeType ?? undefined, file.size ?? undefined, "comments")}
           onShare={(type, id, mode) => {
             const folder = filteredContents.folders.find((f) => f.id === id);
             const file = filteredContents.files.find((f) => f.id === id);
@@ -770,6 +788,7 @@ export function FileBrowser({
           }}
           onDownload={onDownload}
           onPreview={onPreview}
+          onComment={(type, id, name, mimeType, size) => void onPreview(type, id, name, mimeType, size, "comments")}
           onVersionHistory={onVersionHistory}
           onOpen={handleOpen}
           onMove={handleMove}
@@ -902,6 +921,8 @@ export function FileBrowser({
             mimeType: previewTarget.mimeType,
             size: previewTarget.size,
           } : null}
+          initialPanel={previewTarget.panel}
+          focusCommentId={previewTarget.commentId}
           onClose={() => setPreviewTarget(null)}
           onPrevFile={handlePrevFile}
           onNextFile={handleNextFile}

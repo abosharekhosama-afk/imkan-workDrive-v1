@@ -18,6 +18,7 @@ export interface FileGridViewProps {
   canShare?: boolean;
   onOpenFolder: (folderId: string) => void;
   onPreview?: (file: FileRecord) => void;
+  onComment?: (file: FileRecord) => void;
   onShare?: (resourceType:"FILE"|"FOLDER", resourceId: string, mode?: ShareLaunchMode) => void;
   onDownload?: (fileId: string) => void;
   onRename?: (resourceType:"FILE"|"FOLDER", resourceId: string, name: string) => void;
@@ -59,6 +60,7 @@ export function FileGridView({
   canShare = true,
   onOpenFolder,
   onPreview,
+  onComment,
   onShare,
   onDownload,
   onRename,
@@ -120,6 +122,7 @@ export function FileGridView({
           onOpen: onPreview ? () => onPreview(file) : undefined,
           onInspect: onInspect ? () => onInspect("FILE", file.id, file.name) : undefined,
           onPreview: onPreview ? () => onPreview(file) : undefined,
+          onComment: onComment ? () => onComment(file) : undefined,
           onDownload: onDownload ? () => onDownload(file.id) : undefined,
           onShare: onShare ? (mode) => onShare("FILE", file.id, mode) : undefined,
           onRename: canMutate && onRename ? () => onRename("FILE", file.id, file.name) : undefined,

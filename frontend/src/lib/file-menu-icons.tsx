@@ -36,6 +36,7 @@ export const FileMenuIcons = {
   videoRecord: <Icons.video size={sz} />,
   audioRecord: <Icons.mic size={sz} />,
   preview: <Icons.eye size={sz} />,
+  comment: <svg width={sz} height={sz} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true"><path d="M5 6h14v9H8l-3 3z" /></svg>,
   versionHistory: <Icons.history size={sz} />,
   favorite: <Icons.star size={sz} />,
   unfavorite: <Icons.star size={sz} className="fill-current" />,

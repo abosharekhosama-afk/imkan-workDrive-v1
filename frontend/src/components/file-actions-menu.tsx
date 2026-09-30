@@ -24,6 +24,7 @@ export interface FileActionHandlers {
   onFollowUpdates?: () => void;
   isFollowingUpdates?: boolean;
   onVersionHistory?: () => void;
+  onComment?: () => void;
   onDelete?: () => void;
   onAssignWorkflow?: () => void;
 }
@@ -77,6 +78,13 @@ export function FileActionsMenu({ context, handlers, onCopyLink }: FileActionsMe
   }
   if (handlers.onVersionHistory) {
     push({ label: label("files.versionHistory"), icon: FileMenuIcons.versionHistory, onSelect: handlers.onVersionHistory });
+  }
+  if (handlers.onComment) {
+    push({
+      label: label("menu.moreOptions"),
+      icon: FileMenuIcons.moreOptions,
+      submenu: [{ label: label("menu.addComment"), icon: FileMenuIcons.comment, onSelect: handlers.onComment }],
+    });
   }
 
   if (handlers.onFavoriteToggle) {

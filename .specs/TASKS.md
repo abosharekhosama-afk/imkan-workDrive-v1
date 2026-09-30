@@ -136,7 +136,7 @@
 | T-014 | Add analytics/telemetry | Observability | Track feature usage and errors |
 | T-015 | Implement file tagging system | Feature | User-defined tags beyond folders |
 | T-016 | Add custom folder icons | Design | User-selectable folder colors/icons |
-| T-017 | Implement file comments UI | Feature | Backend exists, frontend pending |
+| T-017 | Implement file comments UI | Feature | Zoho preview comments panel: post, reply, mention, edit, delete, resolve |
 | T-018 | Add data export functionality | Feature | GDPR/personal data export |
 | T-019 | Optimize bundle size | Performance | Code splitting, lazy loading |
 | T-020 | Add service worker for caching | Performance | PWA capabilities |

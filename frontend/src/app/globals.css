@@ -1047,6 +1047,8 @@ img.zoho-owner-avatar{object-fit:cover}
 
 /* ── Preview details sidebar ──────────────────────────────────────────── */
 .zoho-preview-side{flex:none;width:300px;border-inline-start:1px solid #2c333d;background:#1b2027;overflow-y:auto;padding:16px 14px;display:flex;flex-direction:column;gap:18px}
+.zoho-comments-panel{flex:none;display:flex;flex-direction:column;width:min(380px,100%);height:100%;background:#fff;color:#202124;border-inline-start:1px solid #e6e8eb}
+.zoho-comment-badge{position:absolute;top:-4px;inset-inline-end:-4px;min-width:16px;height:16px;border-radius:99px;background:#2c66dd;color:#fff;font-size:10px;line-height:16px;padding:0 4px}
 .zoho-side-section h4{margin:0 0 10px;font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:#93a0ad}
 .zoho-side-grid{display:grid;grid-template-columns:auto 1fr;gap:8px 14px;margin:0;font-size:12.5px}
 .zoho-side-grid dt{color:#7d8a97}

@@ -8,6 +8,8 @@ export type FileComment = {
   body: string;
   parentId?: string | null;
   editedAt?: string | null;
+  resolvedAt?: string | null;
+  resolvedById?: string | null;
   createdAt: string;
   updatedAt: string;
   user?: FileCommentUser;
@@ -34,4 +36,11 @@ export function updateFileComment(fileId: string, commentId: string, body: strin
 
 export function deleteFileComment(fileId: string, commentId: string) {
   return apiRequest<{ ok: boolean }>(`/files/${fileId}/comments/${commentId}`, { method: 'DELETE' });
+}
+
+export function setFileCommentResolved(fileId: string, commentId: string, resolved: boolean) {
+  return apiRequest<FileComment>(`/files/${fileId}/comments/${commentId}/resolve`, {
+    method: 'PATCH',
+    body: JSON.stringify({ resolved }),
+  });
 }
