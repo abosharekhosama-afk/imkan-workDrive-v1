@@ -19,7 +19,7 @@ export function WorkflowShell({ children, title, subtitle, active }: { children:
   } as const;
   const contextualHelpKey = helpKeyByActive[active ?? "all"];
   const visibleItems = filterWorkflowShellTabs(buildWorkflowShellTabs(adminConsole), adminConsole, access);
-  const createHref = `${workflowShellBase(adminConsole)}/builder`;
+  const createHref = `${workflowShellBase(adminConsole)}?create=1`;
 
   return (
     <div className="workflow-ui flex min-h-0 flex-1 flex-col bg-white">
@@ -34,7 +34,7 @@ export function WorkflowShell({ children, title, subtitle, active }: { children:
           </div>
           <div className="flex items-center gap-2">
             <WorkflowHelp compact helpKey={contextualHelpKey} />
-            {adminConsole && access?.canCreate ? (
+            {access?.canCreate ? (
               <Link href={createHref} className="wd-pill wd-pill-new">＋ {ar ? "سير عمل جديد" : "New workflow"}</Link>
             ) : null}
           </div>

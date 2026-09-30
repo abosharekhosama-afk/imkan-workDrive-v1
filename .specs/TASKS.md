@@ -162,6 +162,7 @@
 | — | Inspector tabs, real detail fields, sidebar-bounded menus, and live table columns | ✅ Implemented |
 | — | Password sign-in keeps a session without a code; invitations, shares, collections, and follow updates use the shared mail service | ✅ Implemented |
 | — | Admin Data Administration: find in Team Folders and My Folders, shared items, deleted items, and large files | ✅ Implemented |
+| — | Collect Files public drop page, workflow create routing, custom-function save, field drop editors, persisted table columns, sidebar-bounded search, and card dropdowns | ✅ Implemented |
 
 ---
 

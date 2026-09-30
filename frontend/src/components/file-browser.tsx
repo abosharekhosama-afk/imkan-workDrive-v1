@@ -56,6 +56,7 @@ import { SkeletonLoader } from "./skeleton-loader";
 import { UploadZone } from "./upload-zone";
 import { errorMessageForStatus } from "./feedback-state-logic";
 import { WorkflowPicker } from "./workflow-picker";
+import { ImkanOptionPicker } from "./imkan-option-picker";
 import { listWorkflowResourceStatus, type WorkflowResourceStatus } from "../lib/api/workflows";
 import { listFollows, unfollowResource } from "../lib/api/follows";
 import { FollowUpdatesModal, type FollowTarget } from "./follow-updates-modal";
@@ -142,7 +143,7 @@ export function FileBrowser({
   const [viewMode, setViewMode] = useState<ViewMode>("list");
   const [sortDir, setSortDir] = useState<SortDir>("desc");
   const [sortField, setSortField] = useState<ColumnKey>("name");
-  const [columns, setColumns] = useState<Partial<Record<ColumnKey, boolean>>>({ lastModified: true, timeCreated: true, size: true, type: true, extension: true });
+  const [columns, setColumnsState] = useState<Partial<Record<ColumnKey, boolean>>>({ lastModified: true, timeCreated: true, size: true, type: true, extension: true });
   const [filter, setFilter] = useState<FilterKey>((searchParams.get("filter") as FilterKey) || "all");
   const [advancedFilter, setAdvancedFilter] = useState<AdvancedFileFilter>({
     type: (searchParams.get("type") as AdvancedFileFilter["type"]) || "all",
@@ -392,6 +393,16 @@ export function FileBrowser({
     if (hasPersonalViewMode(storage)) setViewMode(readStoredViewMode(storage));
     applyPolicy();
     try {
+      const storedColumns = window.localStorage.getItem("wd-file-columns");
+      if (storedColumns) {
+        const parsed = JSON.parse(storedColumns) as Partial<Record<ColumnKey, boolean>>;
+        const keys: ColumnKey[] = ["lastModified", "timeCreated", "size", "type", "extension"];
+        setColumnsState((current) => {
+          const next = { ...current };
+          for (const key of keys) if (typeof parsed[key] === "boolean") next[key] = parsed[key] as boolean;
+          return next;
+        });
+      }
       const f = window.localStorage.getItem(FILTER_STORAGE_KEY);
       if (f === "folders" || f === "documents" || f === "sheets" || f === "slides" || f === "media" || f === "audio" || f === "archives" || f === "favorites" || f === "all") {
         setFilter(f);
@@ -822,7 +833,7 @@ export function FileBrowser({
           sortField={sortField}
           sortDir={sortDir}
           columns={columns}
-          onColumns={setColumns}
+          onColumns={(next) => { setColumnsState(next); try { window.localStorage.setItem("wd-file-columns", JSON.stringify(next)); } catch { /* ignore quota */ } }}
         />
       )}
       </div>
@@ -999,7 +1010,7 @@ export function FileBrowser({
           className="text-[length:var(--imkan-font-size-ui)]"
         >
           {newFolderMandateLoading ? <div className="mb-3 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-[11px] text-slate-500">{label("common.loading")}</div> : null}
-          {newFolderMandate ? <div className="mb-3 rounded-lg border border-blue-100 bg-blue-50/60 p-3"><div className="text-[11px] font-semibold text-slate-800">{locale === "ar" ? "خصائص Data Template المطلوبة" : "Required Data Template properties"}</div><div className="mt-1 text-[10px] text-slate-500">{newFolderMandate.name}</div><div className="mt-3 space-y-2">{resolveDataTemplateSchema(newFolderMandate).map((field) => <label key={field.key} className="block text-[10px] text-slate-600">{field.label}{field.required ? " *" : ""}{field.type === "boolean" ? <input type="checkbox" checked={Boolean(newFolderFields[field.key])} onChange={(e)=>setNewFolderFields(v=>({...v,[field.key]:e.target.checked}))} className="ms-2" /> : field.type === "select" || field.type === "radio" ? <select value={String(newFolderFields[field.key] ?? "")} onChange={(e)=>setNewFolderFields(v=>({...v,[field.key]:e.target.value}))} className="mt-1 w-full rounded border border-slate-200 bg-white px-2 py-1.5 text-[11px]"><option value="">—</option>{(field.options ?? []).map((o)=><option key={o} value={o}>{o}</option>)}</select> : <input type={field.type === "number" ? "number" : field.type === "date" ? "date" : field.type === "datetime" ? "datetime-local" : field.type === "email" ? "email" : "text"} value={String(newFolderFields[field.key] ?? "")} onChange={(e)=>setNewFolderFields(v=>({...v,[field.key]:field.type === "number" ? Number(e.target.value) : e.target.value}))} className="mt-1 w-full rounded border border-slate-200 px-2 py-1.5 text-[11px]" />}</label>)}</div></div> : null}
+          {newFolderMandate ? <div className="mb-3 rounded-lg border border-blue-100 bg-blue-50/60 p-3"><div className="text-[11px] font-semibold text-slate-800">{locale === "ar" ? "خصائص Data Template المطلوبة" : "Required Data Template properties"}</div><div className="mt-1 text-[10px] text-slate-500">{newFolderMandate.name}</div><div className="mt-3 space-y-2">{resolveDataTemplateSchema(newFolderMandate).map((field) => <label key={field.key} className="block text-[10px] text-slate-600">{field.label}{field.required ? " *" : ""}{field.type === "boolean" ? <input type="checkbox" checked={Boolean(newFolderFields[field.key])} onChange={(e)=>setNewFolderFields(v=>({...v,[field.key]:e.target.checked}))} className="ms-2" /> : field.type === "select" || field.type === "radio" ? <ImkanOptionPicker value={String(newFolderFields[field.key] ?? "")} onChange={(value)=>setNewFolderFields(v=>({...v,[field.key]:value}))} ariaLabel={field.label} fullWidth allowEmpty emptyLabel="—" className="mt-1" options={(field.options ?? []).map((o)=>({ value: o, label: o }))} /> : <input type={field.type === "number" ? "number" : field.type === "date" ? "date" : field.type === "datetime" ? "datetime-local" : field.type === "email" ? "email" : "text"} value={String(newFolderFields[field.key] ?? "")} onChange={(e)=>setNewFolderFields(v=>({...v,[field.key]:field.type === "number" ? Number(e.target.value) : e.target.value}))} className="mt-1 w-full rounded border border-slate-200 px-2 py-1.5 text-[11px]" />}</label>)}</div></div> : null}
           <label className="mb-3 flex flex-col gap-1">
             {label("files.folderName")}
             <input

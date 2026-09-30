@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { useLocale } from "@/components/locale-provider";
+import { ImkanOptionPicker } from "@/components/imkan-option-picker";
 import {
   browseDataAdmin,
   deleteDataAdminVersion,
@@ -259,26 +260,26 @@ export default function AdminDataAdministrationPage() {
             <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder={text(ar, "Search by name", "بحث بالاسم")} className="h-9 min-w-[220px] flex-1 rounded-lg border border-slate-200 px-3 text-[13px] outline-none focus:border-[#175cd3]" />
             {tab === "shared" ? (
               <>
-                <select value={shareFilter} onChange={(event) => setShareFilter(event.target.value)} className="h-9 rounded-lg border border-slate-200 bg-white px-2 text-[12px]">
-                  <option value="all">{text(ar, "All shared items", "كل العناصر المشتركة")}</option>
-                  <option value="team">{text(ar, "Shared within the team", "مشارك داخل الفريق")}</option>
-                  <option value="internet">{text(ar, "Anyone on the internet", "أي شخص على الإنترنت")}</option>
-                  <option value="download">{text(ar, "Download links", "روابط التنزيل")}</option>
-                  <option value="external">{text(ar, "External share links", "روابط المشاركة الخارجية")}</option>
-                </select>
-                <select value={shareLocation} onChange={(event) => setShareLocation(event.target.value)} className="h-9 rounded-lg border border-slate-200 bg-white px-2 text-[12px]">
-                  <option value="all">{text(ar, "All locations", "كل المواقع")}</option>
-                  <option value="personal">{text(ar, "My Folders", "مجلداتي")}</option>
-                  {locations?.teamFolders.map((folder) => <option key={folder.id} value={folder.id}>{folder.name}</option>)}
-                </select>
+                <ImkanOptionPicker value={shareFilter} onChange={setShareFilter} ariaLabel={text(ar, "Share filter", "تصفية المشاركات")} options={[
+                  { value: "all", label: text(ar, "All shared items", "كل العناصر المشتركة") },
+                  { value: "team", label: text(ar, "Shared within the team", "مشارك داخل الفريق") },
+                  { value: "internet", label: text(ar, "Anyone on the internet", "أي شخص على الإنترنت") },
+                  { value: "download", label: text(ar, "Download links", "روابط التنزيل") },
+                  { value: "external", label: text(ar, "External share links", "روابط المشاركة الخارجية") },
+                ]} />
+                <ImkanOptionPicker value={shareLocation} onChange={setShareLocation} ariaLabel={text(ar, "Location", "الموقع")} options={[
+                  { value: "all", label: text(ar, "All locations", "كل المواقع") },
+                  { value: "personal", label: text(ar, "My Folders", "مجلداتي") },
+                  ...(locations?.teamFolders.map((folder) => ({ value: folder.id, label: folder.name })) ?? []),
+                ]} />
               </>
             ) : null}
             {tab === "deleted" ? (
-              <select value={deletedLocation} onChange={(event) => setDeletedLocation(event.target.value)} className="h-9 rounded-lg border border-slate-200 bg-white px-2 text-[12px]">
-                <option value="all">{text(ar, "All locations", "كل المواقع")}</option>
-                <option value="personal">{text(ar, "My Folders", "مجلداتي")}</option>
-                {locations?.teamFolders.map((folder) => <option key={folder.id} value={folder.id}>{folder.name}</option>)}
-              </select>
+              <ImkanOptionPicker value={deletedLocation} onChange={setDeletedLocation} ariaLabel={text(ar, "Deleted location", "موقع المحذوفات")} options={[
+                { value: "all", label: text(ar, "All locations", "كل المواقع") },
+                { value: "personal", label: text(ar, "My Folders", "مجلداتي") },
+                ...(locations?.teamFolders.map((folder) => ({ value: folder.id, label: folder.name })) ?? []),
+              ]} />
             ) : null}
           </div>
 
@@ -394,14 +395,9 @@ export default function AdminDataAdministrationPage() {
             <h2 className="text-[16px] font-semibold">{text(ar, "Share", "مشاركة")}</h2>
             <p className="mt-2 text-[13px] text-slate-600">{text(ar, "Share with a team member, or leave the member empty to create a link anyone can open.", "شارك مع عضو في الفريق، أو اترك العضو فارغاً لإنشاء رابط يمكن لأي شخص فتحه.")}</p>
             <label className="mt-3 block text-[12px] font-semibold text-slate-700">{text(ar, "Permission", "الإذن")}</label>
-            <select value={sharePermission} onChange={(event) => setSharePermission(event.target.value)} className="mt-1 h-10 w-full rounded-lg border border-slate-200 px-2 text-[13px]">
-              {["VIEW", "COMMENT", "EDIT", "ORGANIZE", "FULL_ACCESS"].map((value) => <option key={value} value={value}>{value}</option>)}
-            </select>
+            <ImkanOptionPicker fullWidth value={sharePermission} onChange={setSharePermission} ariaLabel={text(ar, "Permission", "الإذن")} options={["VIEW", "COMMENT", "EDIT", "ORGANIZE", "FULL_ACCESS"].map((value) => ({ value, label: value }))} />
             <label className="mt-3 block text-[12px] font-semibold text-slate-700">{text(ar, "Team member", "عضو الفريق")}</label>
-            <select value={shareRecipient} onChange={(event) => setShareRecipient(event.target.value)} className="mt-1 h-10 w-full rounded-lg border border-slate-200 px-2 text-[13px]">
-              <option value="">{text(ar, "Anyone with the link", "أي شخص يملك الرابط")}</option>
-              {locations?.members.map((member) => <option key={member.id} value={member.id}>{member.name || member.email}</option>)}
-            </select>
+            <ImkanOptionPicker fullWidth allowEmpty emptyLabel={text(ar, "Anyone with the link", "أي شخص يملك الرابط")} value={shareRecipient} onChange={setShareRecipient} ariaLabel={text(ar, "Team member", "عضو الفريق")} options={locations?.members.map((member) => ({ value: member.id, label: member.name || member.email })) ?? []} />
             <label className="mt-3 flex items-center gap-2 text-[13px] text-slate-700"><input type="checkbox" checked={shareDownload} onChange={(event) => setShareDownload(event.target.checked)} />{text(ar, "Allow download", "السماح بالتنزيل")}</label>
             {error ? <p className="mt-2 text-[12px] text-red-600">{error}</p> : null}
             <div className="mt-4 flex justify-end gap-2">
@@ -417,9 +413,7 @@ export default function AdminDataAdministrationPage() {
           <div className="w-full max-w-md rounded-xl bg-white p-5 shadow-xl">
             <h2 className="text-[16px] font-semibold">{text(ar, "Transfer ownership", "نقل الملكية")}</h2>
             <p className="mt-2 text-[13px] text-slate-600">{text(ar, "The new owner must be an active member. A folder transfer includes the files inside it.", "يجب أن يكون المالك الجديد عضواً نشطاً. نقل المجلد يشمل الملفات داخله.")}</p>
-            <select value={targetUserId} onChange={(event) => setTargetUserId(event.target.value)} className="mt-3 h-10 w-full rounded-lg border border-slate-200 px-2 text-[13px]">
-              {locations?.members.map((member) => <option key={member.id} value={member.id}>{member.name || member.email}</option>)}
-            </select>
+            <div className="mt-3"><ImkanOptionPicker fullWidth value={targetUserId} onChange={setTargetUserId} ariaLabel={text(ar, "New owner", "المالك الجديد")} options={locations?.members.map((member) => ({ value: member.id, label: member.name || member.email })) ?? []} /></div>
             <div className="mt-4 flex justify-end gap-2">
               <button type="button" onClick={() => setTransferOpen(false)} className="rounded-lg px-3 py-2 text-[13px] text-slate-600">{text(ar, "Cancel", "إلغاء")}</button>
               <button type="button" disabled={busy || !targetUserId} onClick={() => void transfer()} className="rounded-lg bg-[#175cd3] px-3 py-2 text-[13px] font-semibold text-white disabled:opacity-40">{text(ar, "Transfer", "نقل")}</button>
@@ -448,9 +442,7 @@ export default function AdminDataAdministrationPage() {
             <h2 className="text-[16px] font-semibold">{activeShare.name}</h2>
             <p className="mt-1 text-[12px] text-slate-500">{shareKindLabel(activeShare.kind, ar)} · {activeShare.location}</p>
             <label className="mt-3 block text-[12px] font-semibold text-slate-700">{text(ar, "Permission", "الإذن")}</label>
-            <select value={permission} onChange={(event) => setPermission(event.target.value)} className="mt-1 h-10 w-full rounded-lg border border-slate-200 px-2 text-[13px]">
-              {["VIEW", "COMMENT", "EDIT", "ORGANIZE", "FULL_ACCESS"].map((value) => <option key={value} value={value}>{value}</option>)}
-            </select>
+            <ImkanOptionPicker fullWidth value={permission} onChange={setPermission} ariaLabel={text(ar, "Permission", "الإذن")} options={["VIEW", "COMMENT", "EDIT", "ORGANIZE", "FULL_ACCESS"].map((value) => ({ value, label: value }))} />
             <p className="mt-3 text-[12px] text-slate-600">{activeShare.recipients.length ? activeShare.recipients.map((person) => person.email).join(", ") : text(ar, "No team recipients. This is a link share.", "لا يوجد مستلمون داخل الفريق. هذه مشاركة برابط.")}</p>
             <div className="mt-4 flex justify-end gap-2">
               <button type="button" onClick={() => setActiveShare(null)} className="rounded-lg px-3 py-2 text-[13px] text-slate-600">{text(ar, "Close", "إغلاق")}</button>

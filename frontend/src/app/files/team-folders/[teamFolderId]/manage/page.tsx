@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useParams, usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useLocale } from "../../../../../components/locale-provider";
+import { ImkanOptionPicker, toImkanPickerOptions } from "../../../../../components/imkan-option-picker";
 import { ApiError } from "../../../../../lib/api/client";
 import {
   addTeamFolderMember,
@@ -396,20 +397,30 @@ export default function TeamFolderManagePage() {
                 <div className="mb-7 grid gap-3 rounded-lg border border-slate-200 bg-white p-3 md:grid-cols-[minmax(0,1fr)_130px_80px]">
                   <div>
                     <label className="mb-1.5 block text-[11px] font-medium text-slate-500">{locale === "ar" ? "العضو المتاح" : "Available member"}</label>
-                    <select value={selectedUser ? (selectedUser.userId || selectedUser.id) : ""} onChange={(e) => {
-                      const next = availableProfiles.find((profile) => (profile.userId || profile.id) === e.target.value) || null;
-                      setSelectedUser(next);
-                    }} className="h-11 w-full rounded-md border border-slate-200 bg-white px-3 text-[13px] outline-none focus:border-[color:var(--wd-primary)]">
-                      <option value="">{locale === "ar" ? "اختر عضوًا من القائمة" : "Select a member"}</option>
-                      {availableProfiles.map((profile) => {
-                        const profileId = profile.userId || profile.id;
-                        return <option key={profileId} value={profileId}>{profile.name ? `${profile.name} — ${profile.email}` : profile.email}</option>;
-                      })}
-                    </select>
+                    <ImkanOptionPicker
+                      value={selectedUser ? (selectedUser.userId || selectedUser.id) : ""}
+                      onChange={(value) => {
+                        const next = availableProfiles.find((profile) => (profile.userId || profile.id) === value) || null;
+                        setSelectedUser(next);
+                      }}
+                      ariaLabel={locale === "ar" ? "العضو المتاح" : "Available member"}
+                      fullWidth
+                      allowEmpty
+                      emptyLabel={locale === "ar" ? "اختر عضوًا من القائمة" : "Select a member"}
+                      options={availableProfiles.map((profile) => ({
+                        value: profile.userId || profile.id,
+                        label: profile.name ? `${profile.name} — ${profile.email}` : profile.email,
+                      }))}
+                    />
                   </div>
-                  <select value={inviteRole} onChange={(e) => setInviteRole(e.target.value as TeamFolderRole)} className="h-11 self-end border border-slate-200 px-3 text-[12px] outline-none">
-                    <option value="EDITOR">Editor</option><option value="VIEWER">Viewer</option><option value="ORGANIZER">Organizer</option><option value="ADMIN">Admin</option>
-                  </select>
+                  <ImkanOptionPicker
+                    value={inviteRole}
+                    onChange={(value) => setInviteRole(value as TeamFolderRole)}
+                    ariaLabel={locale === "ar" ? "الدور" : "Role"}
+                    fullWidth
+                    className="self-end"
+                    options={[{ value: "EDITOR", label: "Editor" }, { value: "VIEWER", label: "Viewer" }, { value: "ORGANIZER", label: "Organizer" }, { value: "ADMIN", label: "Admin" }]}
+                  />
                   <button type="button" onClick={() => void addMember()} disabled={!selectedUser || busy} className="h-11 self-end rounded-md bg-[color:var(--wd-primary)] px-4 text-[13px] font-semibold text-white disabled:opacity-50">{locale === "ar" ? "إضافة" : "Add"}</button>
                 </div>
               ) : null}
@@ -419,25 +430,38 @@ export default function TeamFolderManagePage() {
                   <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_130px_80px]">
                     <div>
                       <label className="mb-1.5 block text-[11px] font-medium text-slate-500">{locale === "ar" ? "المجموعة المتاحة" : "Available group"}</label>
-                      <select value={selectedGroup?.id || ""} onChange={(e) => {
-                        const next = availableGroups.find((group) => group.id === e.target.value) || null;
-                        setSelectedGroup(next);
-                      }} className="h-11 w-full rounded-md border border-slate-200 bg-white px-3 text-[13px] outline-none focus:border-[color:var(--wd-primary)]">
-                        <option value="">{locale === "ar" ? "اختر مجموعة من القائمة" : "Select a group"}</option>
-                        {availableGroups.map((group) => <option key={group.id} value={group.id}>{group.name} — {group.memberCount} {locale === "ar" ? "عضو" : "members"}</option>)}
-                      </select>
+                      <ImkanOptionPicker
+                        value={selectedGroup?.id || ""}
+                        onChange={(value) => {
+                          const next = availableGroups.find((group) => group.id === value) || null;
+                          setSelectedGroup(next);
+                        }}
+                        ariaLabel={locale === "ar" ? "المجموعة المتاحة" : "Available group"}
+                        fullWidth
+                        allowEmpty
+                        emptyLabel={locale === "ar" ? "اختر مجموعة من القائمة" : "Select a group"}
+                        options={availableGroups.map((group) => ({
+                          value: group.id,
+                          label: `${group.name} — ${group.memberCount} ${locale === "ar" ? "عضو" : "members"}`,
+                        }))}
+                      />
                     </div>
-                    <select value={groupRole} onChange={(e) => setGroupRole(e.target.value as TeamFolderRole)} className="h-11 self-end rounded-md border border-slate-200 px-3 text-[12px] outline-none">
-                      <option value="EDITOR">Editor</option><option value="VIEWER">Viewer</option><option value="COMMENTER">Commenter</option><option value="ORGANIZER">Organizer</option><option value="ADMIN">Admin</option>
-                    </select>
+                    <ImkanOptionPicker
+                      value={groupRole}
+                      onChange={(value) => setGroupRole(value as TeamFolderRole)}
+                      ariaLabel={locale === "ar" ? "دور المجموعة" : "Group role"}
+                      fullWidth
+                      className="self-end"
+                      options={[{ value: "EDITOR", label: "Editor" }, { value: "VIEWER", label: "Viewer" }, { value: "COMMENTER", label: "Commenter" }, { value: "ORGANIZER", label: "Organizer" }, { value: "ADMIN", label: "Admin" }]}
+                    />
                     <button type="button" onClick={() => void addGroup()} disabled={!selectedGroup || busy} className="h-11 self-end rounded-md bg-[color:var(--wd-primary)] px-4 text-[13px] font-semibold text-white disabled:opacity-50">{locale === "ar" ? "إضافة" : "Add"}</button>
                   </div>
                 </div>
               ) : null}
-              {groups.length ? <div className="mb-7 overflow-hidden rounded-lg border border-slate-200"><div className="border-b bg-slate-50 px-4 py-3 text-[12px] font-semibold">{locale === "ar" ? "المجموعات المضافة" : "Added Groups"}</div>{groups.map((group) => <div key={group.groupId} className="flex min-h-[60px] items-center gap-3 border-b border-slate-100 px-4 last:border-b-0"><span className="flex h-8 w-8 items-center justify-center rounded-full bg-[#edf3ff] text-[#315da8]">👥</span><div className="min-w-0 flex-1"><strong className="block truncate text-[12px]">{group.name}</strong><span className="text-[10px] text-slate-500">{group.memberCount} {locale === "ar" ? "عضو" : "members"}</span></div>{canManage ? <select value={group.role} onChange={(e) => void changeGroupRole(group.groupId, e.target.value as TeamFolderRole)} disabled={busy} className="h-8 rounded-full border border-slate-200 px-3 text-[11px]"><option value="ADMIN">Admin</option><option value="ORGANIZER">Organizer</option><option value="EDITOR">Editor</option><option value="COMMENTER">Commenter</option><option value="VIEWER">Viewer</option></select> : <span className="text-[11px] text-slate-500">{group.role}</span>}{canManage ? <button type="button" onClick={() => void removeGroup(group.groupId)} className="h-8 w-8 rounded-full text-slate-400 hover:bg-red-50 hover:text-red-600">×</button> : null}</div>)}</div> : null}
+              {groups.length ? <div className="mb-7 overflow-hidden rounded-lg border border-slate-200"><div className="border-b bg-slate-50 px-4 py-3 text-[12px] font-semibold">{locale === "ar" ? "المجموعات المضافة" : "Added Groups"}</div>{groups.map((group) => <div key={group.groupId} className="flex min-h-[60px] items-center gap-3 border-b border-slate-100 px-4 last:border-b-0"><span className="flex h-8 w-8 items-center justify-center rounded-full bg-[#edf3ff] text-[#315da8]">👥</span><div className="min-w-0 flex-1"><strong className="block truncate text-[12px]">{group.name}</strong><span className="text-[10px] text-slate-500">{group.memberCount} {locale === "ar" ? "عضو" : "members"}</span></div>{canManage ? <ImkanOptionPicker value={group.role} onChange={(value) => void changeGroupRole(group.groupId, value as TeamFolderRole)} disabled={busy} ariaLabel={locale === "ar" ? "دور المجموعة" : "Group role"} options={[{ value: "ADMIN", label: "Admin" }, { value: "ORGANIZER", label: "Organizer" }, { value: "EDITOR", label: "Editor" }, { value: "COMMENTER", label: "Commenter" }, { value: "VIEWER", label: "Viewer" }]} /> : <span className="text-[11px] text-slate-500">{group.role}</span>}{canManage ? <button type="button" onClick={() => void removeGroup(group.groupId)} className="h-8 w-8 rounded-full text-slate-400 hover:bg-red-50 hover:text-red-600">×</button> : null}</div>)}</div> : null}
               <div className="mb-3 flex items-center justify-between border-b border-slate-200 pb-2"><strong className="text-[13px]">{members.length} {locale === "ar" ? "عضو" : "Member"}{members.length === 1 ? "" : "s"}</strong><input value={memberSearch} onChange={(e) => setMemberSearch(e.target.value)} placeholder={locale === "ar" ? "بحث" : "Search"} className="h-9 w-[285px] rounded-full border border-slate-200 px-3 text-[13px] outline-none focus:border-[color:var(--wd-primary)]" /></div>
               <div className="divide-y divide-slate-100 border-y border-slate-100">
-                {visibleMembers.map((member) => <div key={member.userId} className="flex min-h-[66px] items-center gap-3"><span className="flex h-9 w-9 items-center justify-center rounded-full bg-slate-100 text-[11px] font-semibold text-slate-600">{displayMemberName(member, profiles).slice(0,2).toUpperCase()}</span><div className="min-w-0 flex-1"><strong className="block text-[13px]">{displayMemberName(member, profiles)}</strong><span className="text-[12px] text-slate-500">{member.email}</span></div>{canManage ? <select value={member.role} onChange={(e) => void changeRole(member.userId, e.target.value as TeamFolderRole)} disabled={busy} className="h-8 rounded-full border border-slate-200 px-3 text-[12px]"><option value={member.role}>{member.role}</option>{ROLE_ORDER.filter((r) => r !== member.role).map((r) => <option key={r} value={r}>{r}</option>)}</select> : <span className="text-[12px] text-slate-500">{member.role}</span>}{canManage ? <button type="button" onClick={() => void removeMember(member.userId)} className="h-8 w-8 rounded-full text-slate-400 hover:bg-red-50 hover:text-red-600" title={locale === "ar" ? "إزالة" : "Remove"}>×</button> : null}</div>)}
+                {visibleMembers.map((member) => <div key={member.userId} className="flex min-h-[66px] items-center gap-3"><span className="flex h-9 w-9 items-center justify-center rounded-full bg-slate-100 text-[11px] font-semibold text-slate-600">{displayMemberName(member, profiles).slice(0,2).toUpperCase()}</span><div className="min-w-0 flex-1"><strong className="block text-[13px]">{displayMemberName(member, profiles)}</strong><span className="text-[12px] text-slate-500">{member.email}</span></div>{canManage ? <ImkanOptionPicker value={member.role} onChange={(value) => void changeRole(member.userId, value as TeamFolderRole)} disabled={busy} ariaLabel={locale === "ar" ? "دور العضو" : "Member role"} options={toImkanPickerOptions([member.role, ...ROLE_ORDER.filter((r) => r !== member.role)])} /> : <span className="text-[12px] text-slate-500">{member.role}</span>}{canManage ? <button type="button" onClick={() => void removeMember(member.userId)} className="h-8 w-8 rounded-full text-slate-400 hover:bg-red-50 hover:text-red-600" title={locale === "ar" ? "إزالة" : "Remove"}>×</button> : null}</div>)}
               </div>
             </section>
           ) : null}
@@ -460,7 +484,7 @@ export default function TeamFolderManagePage() {
 
           {tab === "activity" ? (
             <section className="mx-auto w-full max-w-[930px]">
-              <div className="mb-5 flex items-center justify-center gap-3"><select className="h-9 rounded-full border border-slate-200 bg-white px-4 text-[13px] text-slate-700"><option>All Activities</option></select><button type="button" className="h-9 rounded-full bg-[#ececec] px-4 text-[13px] font-semibold text-[#333]">Export Activity Report</button></div>
+              <div className="mb-5 flex items-center justify-center gap-3"><ImkanOptionPicker value="ALL" onChange={() => {}} ariaLabel="Activity filter" options={[{ value: "ALL", label: "All Activities" }]} /><button type="button" className="h-9 rounded-full bg-[#ececec] px-4 text-[13px] font-semibold text-[#333]">Export Activity Report</button></div>
               {panelLoading ? <div className="py-12 text-center text-[13px] text-slate-500">Loading…</div> : activityRows.length === 0 ? <div className="py-16 text-center text-[14px] text-slate-500">{locale === "ar" ? "لا يوجد نشاط بعد" : "No activity yet"}</div> : <div className="relative mx-auto max-w-[610px] border-s border-[#d9dce0] ps-8">{activityRows.map((row) => <div key={row.id} className="relative mb-8"><span className="absolute -start-[9px] top-0 h-[18px] w-[18px] rounded-full border-4 border-white bg-[#e6e7e9]" /><div className="-ms-16 mb-1 w-12 text-end text-[12px] leading-4 text-[#555]">{formatDateLocalized(row.createdAt, locale)}</div><div className="flex items-start gap-3"><span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-slate-100 text-[10px] font-semibold text-slate-600">{(row.actor?.name || row.actor?.email || "You").slice(0,2).toUpperCase()}</span><div><strong className="block text-[13px] text-[#2457B8]">{row.actor?.name || row.actor?.email || "You"}</strong><div className="text-[13px] text-[#333]">{row.action.replaceAll("_", " ")}</div>{row.metadata && typeof row.metadata === "object" && "name" in row.metadata ? <div className="mt-1 text-[13px] text-[#555]">{String(row.metadata.name)}</div> : null}</div></div></div>)}</div>}
             </section>
           ) : null}
@@ -482,7 +506,7 @@ export default function TeamFolderManagePage() {
             <section className="mx-auto w-full max-w-[930px] space-y-6">
               <div className="rounded-[16px] border border-[#e5e5e5] bg-white p-7">
                 <div className="flex items-start justify-between gap-6"><div><h2 className="text-[17px] font-medium text-[#2d2d2d]">{locale === "ar" ? "فرض قالب بيانات" : "Mandate data template association"}</h2><p className="mt-3 max-w-[760px] text-[13px] leading-6 text-[#666]">{locale === "ar" ? "سيتم ربط القالب تلقائيًا بالعناصر الجديدة التي تضاف مباشرة إلى مجلد الفريق، مع طلب الخصائص المطلوبة." : "Automatically associate the template with new items added directly to this Team Folder and require the custom properties."}</p></div><button type="button" disabled={!canManage || !dataTemplates.length} onClick={() => setMandateEnabled((v) => !v)} className={`relative h-6 w-11 shrink-0 rounded-full transition ${mandateEnabled ? "bg-[#2c66dd]" : "bg-[#d9dce0]"}`}><span className={`absolute top-1 h-4 w-4 rounded-full bg-white shadow-sm transition ${mandateEnabled ? "end-1" : "start-1"}`} /></button></div>
-                <div className="mt-6 grid gap-4 md:grid-cols-2"><label><span className="mb-1.5 block text-[11px] font-medium text-[#555]">{locale === "ar" ? "قالب البيانات" : "Data Template"}</span><select disabled={!canManage || !mandateEnabled} value={mandateTemplateId ?? ""} onChange={(e) => setMandateTemplateId(e.target.value || null)} className="h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-[11px]"><option value="">{locale === "ar" ? "اختر قالبًا" : "Select a template"}</option>{dataTemplates.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}</select></label><label><span className="mb-1.5 block text-[11px] font-medium text-[#555]">{locale === "ar" ? "يطبق على" : "Apply to"}</span><select disabled={!canManage || !mandateEnabled} value={mandateTarget} onChange={(e) => setMandateTarget(e.target.value as "FILES"|"FOLDERS"|"BOTH")} className="h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-[11px]"><option value="FILES">{locale === "ar" ? "الملفات فقط" : "Files only"}</option><option value="FOLDERS">{locale === "ar" ? "المجلدات فقط" : "Folders only"}</option><option value="BOTH">{locale === "ar" ? "الملفات والمجلدات" : "Files and folders"}</option></select></label></div>
+                <div className="mt-6 grid gap-4 md:grid-cols-2"><label><span className="mb-1.5 block text-[11px] font-medium text-[#555]">{locale === "ar" ? "قالب البيانات" : "Data Template"}</span><ImkanOptionPicker disabled={!canManage || !mandateEnabled} value={mandateTemplateId ?? ""} onChange={(value) => setMandateTemplateId(value || null)} ariaLabel={locale === "ar" ? "قالب البيانات" : "Data Template"} fullWidth allowEmpty emptyLabel={locale === "ar" ? "اختر قالبًا" : "Select a template"} options={dataTemplates.map((t) => ({ value: t.id, label: t.name }))} /></label><label><span className="mb-1.5 block text-[11px] font-medium text-[#555]">{locale === "ar" ? "يطبق على" : "Apply to"}</span><ImkanOptionPicker disabled={!canManage || !mandateEnabled} value={mandateTarget} onChange={(value) => setMandateTarget(value as "FILES"|"FOLDERS"|"BOTH")} ariaLabel={locale === "ar" ? "يطبق على" : "Apply to"} fullWidth options={[{ value: "FILES", label: locale === "ar" ? "الملفات فقط" : "Files only" }, { value: "FOLDERS", label: locale === "ar" ? "المجلدات فقط" : "Folders only" }, { value: "BOTH", label: locale === "ar" ? "الملفات والمجلدات" : "Files and folders" }]} /></label></div>
                 <div className="mt-5 flex items-center justify-between border-t border-slate-100 pt-5"><span className="text-[11px] text-slate-500">{dataTemplates.length ? `${dataTemplates.length} ${locale === "ar" ? "قالبًا نشطًا متاحًا" : "active templates available"}` : (locale === "ar" ? "لا توجد قوالب بيانات نشطة." : "No active data templates available.")}</span><button disabled={!canManage || (mandateEnabled && !mandateTemplateId) || settingsBusy} onClick={async () => { setSettingsBusy(true); try { await setTeamFolderDataTemplateMandate(id, { templateId: mandateEnabled ? mandateTemplateId : null, target: mandateTarget }); setError(""); } catch (cause) { setError(cause instanceof ApiError ? cause.message : (locale === "ar" ? "تعذر حفظ الإعداد." : "Unable to save the setting.")); } finally { setSettingsBusy(false); } }} className="h-9 rounded-lg bg-[color:var(--wd-primary)] px-4 text-[11px] font-semibold text-white disabled:opacity-50">{settingsBusy ? (locale === "ar" ? "جارٍ الحفظ..." : "Saving...") : (locale === "ar" ? "حفظ" : "Save")}</button></div>
               </div>
               <div className="rounded-[16px] border border-[#e5e5e5] bg-white p-7"><h3 className="text-[17px] font-medium text-[#333]">{locale === "ar" ? "قوالب المؤسسة المتاحة" : "Available Data Templates"}</h3><p className="mt-2 text-[13px] leading-6 text-[#666]">{locale === "ar" ? "يمكن لمسؤول المؤسسة إدارة القوالب والحقول من Admin Console." : "Organization admins can manage templates and custom fields from the Admin Console."}</p><Link href="/admin/data-templates" className="mt-5 inline-flex h-9 items-center rounded-full bg-[color:var(--wd-primary)] px-4 text-[13px] font-semibold text-white">{locale === "ar" ? "إدارة قوالب البيانات" : "Manage Data Templates"}</Link></div>

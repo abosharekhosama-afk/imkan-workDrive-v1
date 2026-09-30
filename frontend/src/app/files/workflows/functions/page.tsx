@@ -25,6 +25,11 @@ import { ImkanOptionPicker, toImkanPickerOptions } from "@/components/imkan-opti
 type Port = { key: string; label: string; type: string; required?: boolean; description?: string };
 type Operation = Record<string, unknown> & { op: string };
 type FunctionDefinition = { inputs: Port[]; operations: Operation[]; outputs: Port[] };
+function functionKeyFromName(name: string) {
+  const slug = name.trim().toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "");
+  return /^[a-z_][a-z0-9_]*$/.test(slug) ? slug.slice(0, 64) : "";
+}
+
 type Draft = {
   name: string;
   key: string;
@@ -153,7 +158,7 @@ function OperationEditor({
   operation, index, ar, connections, onChange, onRemove, onDragStart, onDrop,
 }: {
   operation: Operation; index: number; ar: boolean; connections: Connection[];
-  onChange: (next: Operation) => void; onRemove: () => void; onDragStart: () => void; onDrop: () => void;
+  onChange: (next: Operation) => void; onRemove: () => void; onDragStart: () => void; onDrop: (event: DragEvent<HTMLDivElement>) => void;
 }) {
   const op = operation.op;
   const set = (key: string, value: unknown) => onChange({ ...operation, [key]: value });
@@ -254,7 +259,7 @@ function FunctionBuilder({ draft, setDraft, ar, connections, onSave, onSaveAndTe
   const finishOperationDrop = (event: DragEvent<HTMLDivElement>) => {
     event.preventDefault();
     const op = event.dataTransfer.getData("text/plain") || dragOperationRef.current || dragOperation;
-    if (op) addOperation(op);
+    if (op && OPERATION_ITEMS.some((item) => item[0] === op)) addOperation(op);
     dragOperationRef.current = null;
     setDragOperation(null);
   };
@@ -289,7 +294,10 @@ function FunctionBuilder({ draft, setDraft, ar, connections, onSave, onSaveAndTe
     ...definition.operations.flatMap((op, i) => codeFor(op, i).map(line => ({ line: `    ${line}`, operationIndex: i }))),
     { line: "}", operationIndex: null },
   ];
-  const valid = draft.name.trim() && draft.key.trim() && definition.operations.length > 0 && definition.operations.length <= 30 && definition.inputs.every(p => /^[A-Za-z_][A-Za-z0-9_]*$/.test(p.key)) && definition.outputs.every(p => /^[A-Za-z_][A-Za-z0-9_]*$/.test(p.key));
+  const keyOk = !draft.key.trim() || /^[A-Za-z_][A-Za-z0-9_]*$/.test(draft.key.trim());
+  const portsOk = definition.inputs.every(p => /^[A-Za-z_][A-Za-z0-9_]*$/.test(p.key)) && definition.outputs.every(p => /^[A-Za-z_][A-Za-z0-9_]*$/.test(p.key));
+  const valid = Boolean(draft.name.trim()) && keyOk && portsOk && definition.operations.length > 0 && definition.operations.length <= 30;
+  const saveHint = !draft.name.trim() ? (ar ? "أدخل اسم الدالة أولاً" : "Enter a function name first") : definition.operations.length < 1 ? (ar ? "أضف إجراءً واحداً على الأقل" : "Add at least one action") : !keyOk || !portsOk ? (ar ? "معرّفات المدخلات والمخرجات يجب أن تكون أحرفاً إنجليزية" : "Input and output keys must be English identifiers") : "";
   const selected = selectedIndex !== null ? definition.operations[selectedIndex] : null;
   const nav = [
     ["blocks", "▣", ar ? "الإجراءات" : "Blocks"], ["inputs", "⇥", ar ? "المدخلات" : "Inputs"],
@@ -301,8 +309,8 @@ function FunctionBuilder({ draft, setDraft, ar, connections, onSave, onSaveAndTe
         <header className="flex h-[54px] shrink-0 items-center gap-3 border-b border-[#dedede] bg-white px-3">
           <span className="text-[18px] font-semibold">ƒx</span><span className="h-5 w-px bg-slate-200" />
           <input aria-label={ar ? "اسم الدالة" : "Function name"} className="h-8 w-48 border-0 bg-transparent text-[13px] font-medium outline-none" value={draft.name} onChange={e => setDraft({ ...draft, name: e.target.value })} placeholder={ar ? "اسم الدالة" : "Function name"} />
-          <span className="hidden min-w-0 flex-1 truncate text-[11px] text-slate-400 sm:block">{draft.key || "automation.Data"}</span>
-          <div className="ml-auto flex shrink-0 items-center gap-2">
+          <span className="hidden min-w-0 flex-1 truncate text-[11px] text-slate-400 sm:block">{draft.key || functionKeyFromName(draft.name) || (ar ? "يُولَّد المعرّف عند الحفظ" : "Identifier is created on save")}</span>
+          <div className="ml-auto flex shrink-0 items-center gap-2">{saveHint ? <span className="max-w-[220px] truncate text-[11px] text-slate-500">{saveHint}</span> : null}
             <button type="button" className="rounded-full border border-slate-300 px-3 py-1.5 text-[11px]" onClick={onCancel}>{ar ? "إلغاء" : "Cancel"}</button>
             <button type="button" className="rounded-full border border-blue-300 px-3 py-1.5 text-[11px] text-blue-700" disabled={!valid || busy} onClick={onSaveAndTest}>{busy ? (ar ? "جارٍ الحفظ…" : "Saving…") : (ar ? "حفظ واختبار" : "Save and test")}</button>
             <button type="button" className="rounded-full bg-[#2875d7] px-4 py-1.5 text-[11px] font-semibold text-white disabled:opacity-40" disabled={!valid || busy} onClick={onSave}>{ar ? "حفظ" : "Save"}</button>
@@ -321,12 +329,12 @@ function FunctionBuilder({ draft, setDraft, ar, connections, onSave, onSaveAndTe
               {panel === "blocks" && selected && selectedIndex !== null ? <OperationEditor operation={selected} index={selectedIndex} ar={ar} connections={connections}
                 onChange={next => { const operations = [...definition.operations]; operations[selectedIndex ?? 0] = next; updateDef({ operations }); }}
                 onRemove={() => { updateDef({ operations: definition.operations.filter((_, i) => i !== (selectedIndex ?? 0)) }); setSelectedIndex(null); }}
-                onDragStart={() => setDragIndex(selectedIndex)} onDrop={() => { if (dragIndex !== null) reorder(dragIndex, selectedIndex ?? 0); setDragIndex(null); }} /> : null}
+                onDragStart={() => setDragIndex(selectedIndex)} onDrop={(event) => { event.preventDefault(); event.stopPropagation(); if (dragIndex !== null) reorder(dragIndex, selectedIndex ?? 0); setDragIndex(null); }} /> : null}
               {panel === "blocks" && !selected && <>
                 <p className="mb-3 text-[11px] leading-5 text-slate-500">{ar ? "اسحب الإجراء إلى محرر الكود لإضافته، أو اضغط عليه في الأجهزة اللمسية. ستظهر حقول إدخاله هنا مباشرة." : "Drag an action into the code editor (or tap it on touch devices). Its input fields will open here."}</p>
                 {OP_GROUPS.map(group => <section key={group.label} className="mb-4">
                   <div className="mb-2 text-[9px] font-semibold uppercase tracking-wider text-slate-500">{ar ? group.arLabel : group.label}</div>
-                  <div className="grid grid-cols-1 gap-1.5">{group.items.map(item => <button key={item[0]} type="button" draggable onDragStart={e => beginOperationDrag(item[0], e)} onDragEnd={() => { /* clear after drop has had a chance to read the payload */ window.setTimeout(() => { dragOperationRef.current = null; setDragOperation(null); }, 0); }} onClick={() => addOperation(item[0])} className="flex items-center gap-2 border border-[#e2e2e2] bg-[#fafafa] px-3 py-2 text-start text-[11px] hover:border-[#b6c9e8] hover:bg-[#f3f7fc]"><span className="text-slate-400">⠿</span><span>{ar ? item[2] : item[1]}</span><span className="ms-auto text-[10px] text-slate-400">＋</span></button>)}</div>
+                  <div className="grid grid-cols-1 gap-1.5">{group.items.map(item => <button key={item[0]} type="button" draggable onDragStart={e => beginOperationDrag(item[0], e)} onDragEnd={() => { /* clear after drop has had a chance to read the payload */ window.setTimeout(() => { dragOperationRef.current = null; setDragOperation(null); }, 300); }} onClick={() => addOperation(item[0])} className="flex items-center gap-2 border border-[#e2e2e2] bg-[#fafafa] px-3 py-2 text-start text-[11px] hover:border-[#b6c9e8] hover:bg-[#f3f7fc]"><span className="text-slate-400">⠿</span><span>{ar ? item[2] : item[1]}</span><span className="ms-auto text-[10px] text-slate-400">＋</span></button>)}</div>
                 </section>)}
               </>}
               {panel === "inputs" && <><p className="mb-3 text-[11px] text-slate-500">{ar ? "القيم التي تستقبلها الدالة من الـ Workflow." : "Values passed into this function by a workflow."}</p><div className="space-y-2">{definition.inputs.map((p, i) => <PortEditor key={`${p.key}-${i}`} port={p} ar={ar} onChange={v => updatePort("inputs", i, v)} onRemove={() => removePort("inputs", i)} />)}</div><button type="button" className="mt-3 rounded border border-slate-300 px-3 py-2 text-[11px]" onClick={() => addPort("inputs")}>＋ {ar ? "إضافة مدخل" : "Add input"}</button></>}
@@ -392,7 +400,8 @@ export default function WorkflowFunctionsPage({ standalone = false }: { standalo
         else setSelected(null);
         setVersions((prev) => [created, ...prev]);
       } else {
-        const created = await createWorkflowFunction(draft);
+        const key = draft.key.trim() || functionKeyFromName(draft.name) || `fn_${Date.now().toString(36)}`;
+        const created = await createWorkflowFunction({ ...draft, key });
         if (testAfterSave && testInput) setResult(await testWorkflowFunction(created.id, testInput));
         setOpen(false); load();
         await showVersions(created);

@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useLocale } from "../../../components/locale-provider";
+import { ImkanOptionPicker } from "../../../components/imkan-option-picker";
 import { listSharedByMe, updateShareRecipientPermission, type SharedItem } from "../../../lib/api/shared";
 
 function statusBadge(status?: string): { className: string; text: string } {
@@ -109,13 +110,12 @@ export default function SharedByMePage() {
                                 <span className="wd-badge wd-badge-gray">
                                   {recipient.user?.name || recipient.user?.email || recipient.userId.slice(0, 8)}
                                 </span>
-                                <select
-                                  aria-label={`${recipient.user?.name || recipient.user?.email || recipient.userId} permission`}
+                                <ImkanOptionPicker
+                                  ariaLabel={`${recipient.user?.name || recipient.user?.email || recipient.userId} permission`}
                                   value={recipient.permission ?? r.permission ?? "VIEW"}
                                   disabled={updating === key}
-                                  className="wd-input !w-auto !min-w-20 !py-1 text-xs"
-                                  onChange={async (event) => {
-                                    const next = event.target.value;
+                                  onChange={async (value) => {
+                                    const next = value || "VIEW";
                                     setUpdating(key);
                                     try {
                                       await updateShareRecipientPermission(r.id, recipient.userId, next);
@@ -129,13 +129,8 @@ export default function SharedByMePage() {
                                       setUpdating(null);
                                     }
                                   }}
-                                >
-                                  <option value="VIEW">VIEW</option>
-                                  <option value="COMMENT">COMMENT</option>
-                                  <option value="EDIT">EDIT</option>
-                                  <option value="ORGANIZE">ORGANIZE</option>
-                                  <option value="FULL_ACCESS">FULL_ACCESS</option>
-                                </select>
+                                  options={["VIEW", "COMMENT", "EDIT", "ORGANIZE", "FULL_ACCESS"].map((value) => ({ value, label: value }))}
+                                />
                               </div>
                             );
                           })}

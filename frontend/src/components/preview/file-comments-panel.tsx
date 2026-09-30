@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useLocale } from "../locale-provider";
+import { ImkanOptionPicker } from "../imkan-option-picker";
 import { listOrganizationMembers } from "../../lib/api/organization";
 import {
   addFileComment, deleteFileComment, listFileComments, setFileCommentResolved, updateFileComment, type FileComment,
@@ -177,10 +178,7 @@ export function FileCommentsPanel({
       <header className="flex items-center justify-between border-b border-[#ededed] px-4 py-3">
         <h2 className="text-[15px] font-semibold text-[#202124]">{label("preview.comments")}</h2>
         <div className="flex items-center gap-2">
-          <select aria-label={label("preview.comments")} className="rounded-lg border border-[#dadce0] bg-white px-2 py-1 text-[12px]" value={showResolved ? "resolved" : "open"} onChange={(event) => setShowResolved(event.target.value === "resolved")}>
-            <option value="open">{label("preview.commentsAll")}</option>
-            <option value="resolved">{label("preview.commentsResolved")}</option>
-          </select>
+          <ImkanOptionPicker ariaLabel={label("preview.comments")} value={showResolved ? "resolved" : "open"} onChange={(value) => setShowResolved(value === "resolved")} options={[{ value: "open", label: label("preview.commentsAll") }, { value: "resolved", label: label("preview.commentsResolved") }]} />
           {onClose ? <button type="button" className="text-lg text-[#5f6368]" onClick={onClose} aria-label={label("preview.close")}>×</button> : null}
         </div>
       </header>

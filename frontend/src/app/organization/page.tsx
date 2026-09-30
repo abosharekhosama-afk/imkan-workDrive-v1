@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useLocale } from "../../components/locale-provider";
+import { ImkanOptionPicker } from "../../components/imkan-option-picker";
 import { getCurrentUserId } from "../../lib/api/jwt";
 import {
   createOrganizationAccount,
@@ -277,15 +278,7 @@ export default function OrganizationPage() {
             </div>
             <div className="wd-field">
               <label htmlFor="account-role">{label("org.createAccount.role")}</label>
-              <select
-                id="account-role"
-                className="wd-input"
-                value={accountRole}
-                onChange={(e) => setAccountRole(e.target.value as "MEMBER" | "ADMIN")}
-              >
-                <option value="MEMBER">{label("org.role.MEMBER")}</option>
-                <option value="ADMIN">{label("org.role.ADMIN")}</option>
-              </select>
+              <ImkanOptionPicker fullWidth value={accountRole} onChange={(value) => setAccountRole(value === "ADMIN" ? "ADMIN" : "MEMBER")} ariaLabel={label("org.role.MEMBER")} options={[{ value: "MEMBER", label: label("org.role.MEMBER") }, { value: "ADMIN", label: label("org.role.ADMIN") }]} />
             </div>
             <div style={{ display: "flex", justifyContent: "flex-end" }}>
               <button
@@ -359,10 +352,7 @@ export default function OrganizationPage() {
             </div>
             <div className="wd-field">
               <label htmlFor="invite-role">{label("org.inviteRole")}</label>
-              <select id="invite-role" className="wd-input" value={role} onChange={(e) => setRole(e.target.value as OrgRole)}>
-                <option value="MEMBER">{label("org.role.MEMBER")}</option>
-                <option value="ADMIN">{label("org.role.ADMIN")}</option>
-              </select>
+              <ImkanOptionPicker fullWidth value={role} onChange={(value) => setRole((value === "ADMIN" ? "ADMIN" : "MEMBER") as OrgRole)} ariaLabel={label("org.inviteRole")} options={[{ value: "MEMBER", label: label("org.role.MEMBER") }, { value: "ADMIN", label: label("org.role.ADMIN") }]} />
             </div>
             <div style={{ display: "flex", justifyContent: "flex-end" }}>
               <button type="submit" className="wd-btn wd-btn-primary" disabled={busy || !email.trim()}>
@@ -417,24 +407,20 @@ export default function OrganizationPage() {
                   </td>
                   <td className="imkan-muted">{m.email}</td>
                   <td>
-                    <select
-                      aria-label={`${m.email}: ${label("org.inviteRole")}`}
-                      className="wd-input"
-                      style={{ height: 30, width: "auto", paddingInline: 8 }}
+                    <ImkanOptionPicker
+                      ariaLabel={`${m.email}: ${label("org.inviteRole")}`}
                       value={m.role}
                       disabled={m.userId === currentUserId}
-                      onChange={async (e) => {
+                      onChange={async (value) => {
                         try {
-                          await updateOrganizationMember(m.id, e.target.value as OrgRole);
+                          await updateOrganizationMember(m.id, (value === "ADMIN" ? "ADMIN" : "MEMBER") as OrgRole);
                           await load();
                         } catch (err) {
                           setError(err instanceof Error ? err.message : "Unable to change role");
                         }
                       }}
-                    >
-                      <option value="MEMBER">{label("org.role.MEMBER")}</option>
-                      <option value="ADMIN">{label("org.role.ADMIN")}</option>
-                    </select>
+                      options={[{ value: "MEMBER", label: label("org.role.MEMBER") }, { value: "ADMIN", label: label("org.role.ADMIN") }]}
+                    />
                   </td>
                   <td className="imkan-muted">
                     {formatDate(m.joinedAt ?? m.createdAt)}

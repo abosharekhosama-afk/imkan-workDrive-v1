@@ -33,7 +33,7 @@ function Frame({ children }: { children: ReactNode }) {
     select(null);
   }, [showInspector, pathname, select, setInspectorOpen, setMobileInspectorOpen]);
 
-  if (pathname.startsWith("/auth/")) return <>{children}</>;
+  if (pathname.startsWith("/auth/") || pathname.startsWith("/collect/") || pathname.startsWith("/share/")) return <>{children}</>;
   const width = sidebarCollapsed ? "md:w-16" : "md:w-[264px]";
   return (
     <div className="workdrive-frame flex h-screen min-h-0 w-full overflow-hidden bg-white">

@@ -749,7 +749,7 @@ export class WorkflowsService {
         const retries = Number(x.retries ?? 0); if (!Number.isInteger(retries) || retries < 0 || retries > 3) throw new BadRequestException('HTTP_REQUEST retries must be between 0 and 3');
       }
     }
-    return { operations };
+    return { inputs: validatePorts(inputs, 'inputs'), operations, outputs: validatePorts(outputs, 'outputs') };
   }
 
   private async validateFunctionConnectionReferences(user: AccessTokenPayload, definition: unknown) {

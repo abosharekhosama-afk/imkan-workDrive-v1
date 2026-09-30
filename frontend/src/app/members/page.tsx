@@ -5,6 +5,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useLocale } from "@/components/locale-provider";
 import { usePathname } from "next/navigation";
 import { Icons } from "@/components/layout/icons";
+import { ImkanOptionPicker } from "@/components/imkan-option-picker";
 import { Toast } from "@/components/toast";
 import {
   getMemberManagement,
@@ -254,7 +255,7 @@ function InviteModal({ ar, onClose, onDone, setToast }: { ar: boolean; onClose: 
       <form className="member-modal" onSubmit={submit} onMouseDown={(e) => e.stopPropagation()}>
         <header><h2>{ar ? "دعوة أعضاء" : "Invite Members"}</h2><button type="button" onClick={onClose}>×</button></header>
         <label>{ar ? "البريد الإلكتروني" : "Email address"}<input value={email} onChange={(e) => setEmail(e.target.value)} autoFocus placeholder="name@example.com" type="email" /></label>
-        <label>{ar ? "الدور" : "Role"}<select value={role} onChange={(e) => setRole(e.target.value as OrgRole)}><option value="MEMBER">{ar ? "عضو" : "Member"}</option><option value="ADMIN">{ar ? "مسؤول" : "Admin"}</option><option value="SUPER_ADMIN">{ar ? "مسؤول عام" : "Super Admin"}</option></select></label>
+        <label>{ar ? "الدور" : "Role"}<ImkanOptionPicker fullWidth value={role} onChange={(value) => setRole((value || "MEMBER") as OrgRole)} ariaLabel={ar ? "الدور" : "Role"} options={[{ value: "MEMBER", label: ar ? "عضو" : "Member" }, { value: "ADMIN", label: ar ? "مسؤول" : "Admin" }, { value: "SUPER_ADMIN", label: ar ? "مسؤول عام" : "Super Admin" }]} /></label>
         <footer><button type="button" className="member-soft-button" onClick={onClose}>{ar ? "إلغاء" : "Cancel"}</button><button type="submit" className="member-primary-button" disabled={saving}>{ar ? "إرسال الدعوة" : "Send invitation"}</button></footer>
       </form>
     </div>

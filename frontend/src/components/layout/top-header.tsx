@@ -1,7 +1,8 @@
 "use client";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { readContentLane } from "../../lib/overlay-bounds-logic";
 import { useLocale } from "../locale-provider";
 import { ThemeToggle } from "../theme-toggle";
 import { listNotifications, type NotificationRecord } from "../../lib/api/notifications";
@@ -213,6 +214,23 @@ export function TopHeader({ adminMode = false }: { adminMode?: boolean }) {
 
 function HeaderSearchOverlay({ onClose, inputRef }: { onClose: () => void; inputRef: React.RefObject<HTMLInputElement | null> }) {
   const { label } = useLocale();
+  const panelRef = useRef<HTMLDivElement | null>(null);
+  useLayoutEffect(() => {
+    const panel = panelRef.current;
+    if (!panel) return;
+    const place = () => {
+      const lane = readContentLane(12);
+      const width = Math.max(280, lane.right - lane.left);
+      panel.style.left = `${lane.left}px`;
+      panel.style.width = `${width}px`;
+      panel.style.maxWidth = `${width}px`;
+      panel.style.right = "auto";
+      panel.style.transform = "none";
+    };
+    place();
+    window.addEventListener("resize", place);
+    return () => window.removeEventListener("resize", place);
+  }, []);
   const [q, setQ] = useState("");
   const [scope, setScope] = useState<"all" | "folders" | "files">("all");
   const [fileType, setFileType] = useState<"all" | "documents" | "images" | "pdf">("all");
@@ -339,7 +357,7 @@ function HeaderSearchOverlay({ onClose, inputRef }: { onClose: () => void; input
   return (
     <div className="search-overlay" role="dialog" aria-modal="true" aria-label={label("search.placeholder")}>
       <div className="search-overlay-backdrop" onClick={onClose} aria-hidden="true" />
-      <div className="search-overlay-panel">
+      <div className="search-overlay-panel" ref={panelRef}>
         <div className="search-mainbar">
           <FilterChip kind="scope" icon={<Icons.search size={15} />}>{scope === "all" ? "Search All" : scope === "folders" ? "Folders" : "Files"}</FilterChip>
           <input

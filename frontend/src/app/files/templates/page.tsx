@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { SecondarySidebar } from "@/components/layout/secondary-sidebar";
 import { Icons } from "@/components/layout/icons";
 import { useLocale } from "@/components/locale-provider";
+import { ImkanOptionPicker } from "@/components/imkan-option-picker";
 import { TemplatePreview } from "@/components/templates/template-preview";
 import { TemplateVariablesPanel } from "@/components/templates/template-variables-panel";
 import {
@@ -486,22 +487,9 @@ export default function TemplatesPage() {
               <Icons.search size={15} />
               <input value={q} onChange={(e) => setQ(e.target.value)} placeholder={text(ar, "Search templates", "ابحث في القوالب")} className="min-w-0 flex-1 text-[13px] outline-none" />
             </div>
-            <select value={type ?? ""} onChange={(e) => setType((e.target.value || undefined) as TemplateType | undefined)} className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-[12px] text-slate-600">
-              <option value="">{text(ar, "All types", "كل الأنواع")}</option>
-              <option value="DOCUMENT">{text(ar, "Documents", "مستندات")}</option>
-              <option value="SPREADSHEET">{text(ar, "Spreadsheets", "جداول")}</option>
-              <option value="PRESENTATION">{text(ar, "Presentations", "عروض تقديمية")}</option>
-            </select>
-            <select value={categoryId ?? ""} onChange={(e) => setCategoryId(e.target.value || undefined)} className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-[12px] text-slate-600">
-              <option value="">{text(ar, "All categories", "كل التصنيفات")}</option>
-              {categories.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-            </select>
-            <select value={sort} onChange={(e) => setSort(e.target.value as "name" | "name_desc" | "updated" | "updated_asc")} className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-[12px] text-slate-600">
-              <option value="updated">{text(ar, "Recently modified", "آخر تعديل")}</option>
-              <option value="updated_asc">{text(ar, "Oldest modified", "أقدم تعديل")}</option>
-              <option value="name">{text(ar, "Name (A–Z)", "الاسم (أ–ي)")}</option>
-              <option value="name_desc">{text(ar, "Name (Z–A)", "الاسم (ي–أ)")}</option>
-            </select>
+            <ImkanOptionPicker allowEmpty emptyLabel={text(ar, "All types", "كل الأنواع")} value={type ?? ""} onChange={(value) => setType((value || undefined) as TemplateType | undefined)} ariaLabel={text(ar, "Type", "النوع")} options={[{ value: "DOCUMENT", label: text(ar, "Documents", "مستندات") }, { value: "SPREADSHEET", label: text(ar, "Spreadsheets", "جداول") }, { value: "PRESENTATION", label: text(ar, "Presentations", "عروض تقديمية") }]} />
+            <ImkanOptionPicker allowEmpty emptyLabel={text(ar, "All categories", "كل التصنيفات")} value={categoryId ?? ""} onChange={(value) => setCategoryId(value || undefined)} ariaLabel={text(ar, "Category", "التصنيف")} options={categories.map((category) => ({ value: category.id, label: category.name }))} />
+            <ImkanOptionPicker value={sort} onChange={(value) => setSort((value || "updated") as "name" | "name_desc" | "updated" | "updated_asc")} ariaLabel={text(ar, "Sort", "الترتيب")} options={[{ value: "updated", label: text(ar, "Recently modified", "آخر تعديل") }, { value: "updated_asc", label: text(ar, "Oldest modified", "أقدم تعديل") }, { value: "name", label: text(ar, "Name (A–Z)", "الاسم (أ–ي)") }, { value: "name_desc", label: text(ar, "Name (Z–A)", "الاسم (ي–أ)") }]} />
             <div className="flex items-center rounded-lg border border-slate-200 bg-white p-0.5">
               <button type="button" onClick={() => setLayout("grid")} aria-label={text(ar, "Grid view", "عرض شبكي")} className={`rounded-md p-1.5 ${layout === "grid" ? "bg-slate-100 text-slate-800" : "text-slate-400"}`}><Icons.grid size={15} /></button>
               <button type="button" onClick={() => setLayout("list")} aria-label={text(ar, "List view", "عرض قائمة")} className={`rounded-md p-1.5 ${layout === "list" ? "bg-slate-100 text-slate-800" : "text-slate-400"}`}><Icons.list size={15} /></button>
@@ -684,9 +672,7 @@ export default function TemplatesPage() {
             <label className="mt-4 block text-[12px] font-medium text-slate-700">{text(ar, "Description", "الوصف")}</label>
             <textarea value={createTemplateDescription} onChange={(e) => setCreateTemplateDescription(e.target.value)} rows={2} className="mt-2 w-full rounded-lg border border-slate-200 px-3 py-2.5 text-[13px] outline-none focus:border-[var(--wd-primary)]" />
             <label className="mt-4 block text-[12px] font-medium text-slate-700">{text(ar, "Category", "التصنيف")}</label>
-            <select value={createTemplateCategoryId} onChange={(e) => setCreateTemplateCategoryId(e.target.value)} className="mt-2 w-full rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-[13px] outline-none">
-              <option value="">{text(ar, "No category", "بدون تصنيف")}</option>{categories.map((category) => <option key={category.id} value={category.id}>{category.name}</option>)}
-            </select>
+            <div className="mt-2"><ImkanOptionPicker fullWidth allowEmpty emptyLabel={text(ar, "No category", "بدون تصنيف")} value={createTemplateCategoryId} onChange={setCreateTemplateCategoryId} ariaLabel={text(ar, "Category", "التصنيف")} options={categories.map((category) => ({ value: category.id, label: category.name }))} /></div>
             <div className="mt-5 flex justify-end gap-2">
               <button type="button" onClick={() => !busy && setCreateTemplateOpen(false)} className="rounded-lg border border-slate-200 px-4 py-2 text-[12px] text-slate-600">{text(ar, "Cancel", "إلغاء")}</button>
               <button type="button" disabled={busy || !createTemplateName.trim() || (createMode === "existing" && !createFile)} onClick={() => void createTemplate()} className="rounded-lg bg-[var(--wd-primary)] px-4 py-2 text-[12px] font-medium text-white disabled:opacity-50">{busy ? text(ar, "Creating…", "جارٍ الإنشاء…") : text(ar, "Create and open editor", "إنشاء وفتح المحرر")}</button>
@@ -706,9 +692,7 @@ export default function TemplatesPage() {
             <label className="mt-4 block text-[12px] font-medium text-slate-700">{text(ar, "Description", "الوصف")}</label>
             <textarea value={saveDescription} onChange={(e) => setSaveDescription(e.target.value)} rows={3} className="mt-2 w-full resize-none rounded-lg border border-slate-200 px-3 py-2.5 text-[13px] outline-none focus:border-[var(--wd-primary)]" />
             <label className="mt-4 block text-[12px] font-medium text-slate-700">{text(ar, "Category", "التصنيف")}</label>
-            <select value={saveCategoryId} onChange={(e) => setSaveCategoryId(e.target.value)} className="mt-2 w-full rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-[13px]">
-              <option value="">{text(ar, "No category", "بدون تصنيف")}</option>{categories.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-            </select>
+            <div className="mt-2"><ImkanOptionPicker fullWidth allowEmpty emptyLabel={text(ar, "No category", "بدون تصنيف")} value={saveCategoryId} onChange={setSaveCategoryId} ariaLabel={text(ar, "Category", "التصنيف")} options={categories.map((category) => ({ value: category.id, label: category.name }))} /></div>
             <div className="mt-5 flex justify-end gap-2">
               <button type="button" disabled={busy} onClick={() => { setSaveTargetOpen(false); router.replace("/files/templates"); }} className="rounded-lg border border-slate-200 px-4 py-2 text-[12px] text-slate-600">{text(ar, "Cancel", "إلغاء")}</button>
               <button type="button" disabled={busy || !saveName.trim()} onClick={() => void saveSourceAsTemplate()} className="rounded-lg bg-[var(--wd-primary)] px-4 py-2 text-[12px] font-medium text-white disabled:opacity-50">{busy ? text(ar, "Saving…", "جارٍ الحفظ…") : text(ar, "Save template", "حفظ القالب")}</button>
@@ -727,9 +711,7 @@ export default function TemplatesPage() {
             <label className="mt-4 block text-[12px] font-medium text-slate-700">{text(ar, "Description", "الوصف")}</label>
             <textarea value={editDescription} onChange={(e) => setEditDescription(e.target.value)} rows={3} className="mt-2 w-full resize-none rounded-lg border border-slate-200 px-3 py-2.5 text-[13px] outline-none" />
             <label className="mt-4 block text-[12px] font-medium text-slate-700">{text(ar, "Category", "التصنيف")}</label>
-            <select value={editCategoryId} onChange={(e) => setEditCategoryId(e.target.value)} className="mt-2 w-full rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-[13px]">
-              <option value="">{text(ar, "No category", "بدون تصنيف")}</option>{categories.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-            </select>
+            <div className="mt-2"><ImkanOptionPicker fullWidth allowEmpty emptyLabel={text(ar, "No category", "بدون تصنيف")} value={editCategoryId} onChange={setEditCategoryId} ariaLabel={text(ar, "Category", "التصنيف")} options={categories.map((category) => ({ value: category.id, label: category.name }))} /></div>
             <div className="mt-5 flex justify-end gap-2"><button type="button" disabled={busy} onClick={() => setEditTarget(null)} className="rounded-lg border border-slate-200 px-4 py-2 text-[12px] text-slate-600">{text(ar, "Cancel", "إلغاء")}</button><button type="button" disabled={busy || !editName.trim()} onClick={() => void saveEdit()} className="rounded-lg bg-[var(--wd-primary)] px-4 py-2 text-[12px] font-medium text-white">{text(ar, "Save", "حفظ")}</button></div>
           </div>
         </div>
@@ -742,9 +724,7 @@ export default function TemplatesPage() {
             <h2 className="text-[16px] font-semibold text-slate-900">{text(ar, "Change category", "تغيير التصنيف")}</h2>
             <p className="mt-1 text-[12px] text-slate-500">{categoryTarget.name}</p>
             <label className="mt-5 block text-[12px] font-medium text-slate-700">{text(ar, "Category", "التصنيف")}</label>
-            <select autoFocus value={categoryTargetId} onChange={(e) => setCategoryTargetId(e.target.value)} className="mt-2 w-full rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-[13px]">
-              <option value="">{text(ar, "All / No category", "الكل / بدون تصنيف")}</option>{categories.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-            </select>
+            <div className="mt-2"><ImkanOptionPicker fullWidth allowEmpty emptyLabel={text(ar, "All / No category", "الكل / بدون تصنيف")} value={categoryTargetId} onChange={setCategoryTargetId} ariaLabel={text(ar, "Category", "التصنيف")} options={categories.map((category) => ({ value: category.id, label: category.name }))} /></div>
             <div className="mt-5 flex justify-end gap-2"><button type="button" disabled={busy} onClick={() => setCategoryTarget(null)} className="rounded-lg border border-slate-200 px-4 py-2 text-[12px] text-slate-600">{text(ar, "Cancel", "إلغاء")}</button><button type="button" disabled={busy} onClick={() => void changeCategory()} className="rounded-lg bg-[var(--wd-primary)] px-4 py-2 text-[12px] font-medium text-white">{text(ar, "Save", "حفظ")}</button></div>
           </div>
         </div>

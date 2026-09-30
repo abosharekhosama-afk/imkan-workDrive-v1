@@ -1926,10 +1926,10 @@ html[dir="rtl"] .team-folder-menu button{
 .search-overlay-panel{
   position:absolute;
   top:0;
-  left:50%;
-  width:min(1265px,calc(100vw - 360px));
+  left:0;
+  width:100%;
   max-height:calc(100vh - 12px);
-  transform:translateX(-50%);
+  transform:none;
   overflow:hidden;
   border:1px solid #e1e4e8;
   border-top:0;
@@ -2084,7 +2084,7 @@ html[dir="rtl"] .team-folder-menu button{
   .team-folder-pin{min-width:72px;padding-inline:8px}
   .team-folder-pin-label{display:none}
   .team-folders-search{width:220px}
-  .search-overlay-panel{width:calc(100vw - 24px)}
+  .search-overlay-panel{width:100%}
   .search-mainbar-label{display:none}
 }
 @media(max-width:680px){
