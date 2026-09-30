@@ -17,10 +17,12 @@ export type MenuItem = {
   chevron?: boolean;
   submenuItems?: Array<MenuItem | "sep">;
 };
-export function ZohoMenu({ open, onClose, onSelect, items, labelledBy, align = "start", width = "w-56", widthPx }: {
+export function ZohoMenu({ open, onClose, onSelect, items, labelledBy, align = "start", width = "w-56", widthPx, zIndex = 90, constrainToLane = true }: {
   open: boolean; onClose: () => void; onSelect: (key: string) => void;
   items: Array<MenuItem | "sep" | { header: MessageKey }>; labelledBy: string;
   align?: "start" | "end"; width?: string; widthPx?: number;
+  zIndex?: number;
+  constrainToLane?: boolean;
 }) {
   const { label } = useLocale();
   const ref = useRef<HTMLDivElement | null>(null);
@@ -43,14 +45,16 @@ export function ZohoMenu({ open, onClose, onSelect, items, labelledBy, align = "
       } else {
         start = isRtl ? r.right - menuW : r.left;
       }
-      start = clampBoxLeft(start, menuW, readContentLane());
+      start = constrainToLane
+        ? clampBoxLeft(start, menuW, readContentLane())
+        : Math.min(Math.max(8, start), Math.max(8, window.innerWidth - menuW - 8));
       setPos({ top: r.bottom + 4, start });
     };
     place();
     window.addEventListener("resize", place);
     window.addEventListener("scroll", place, true);
     return () => { window.removeEventListener("resize", place); window.removeEventListener("scroll", place, true); };
-  }, [open, labelledBy, align, menuW]);
+  }, [open, labelledBy, align, menuW, constrainToLane]);
   useEffect(() => {
     if (!open) return;
     const onDown = (e: MouseEvent) => {
@@ -77,8 +81,9 @@ export function ZohoMenu({ open, onClose, onSelect, items, labelledBy, align = "
     ...(rtl ? { right: Math.max(8, window.innerWidth - pos.start - menuW) } : { left: pos.start }),
   };
   return createPortal(
-    <div ref={ref} role="menu" aria-labelledby={labelledBy} style={style}
-      className={`wd-menu fixed z-[90] ${widthPx ? "" : width} overflow-hidden`}>
+    <div ref={ref} role="menu" aria-labelledby={labelledBy}
+      className={`wd-menu fixed ${widthPx ? "" : width} overflow-hidden`}
+      style={{ ...style, zIndex }}>
       {items.map((it, i) => {
         if (it === "sep") return <div key={`sep-${i}`} className="wd-menu-sep" role="separator" />;
         if (typeof it === "object" && "header" in it) {
@@ -125,7 +130,7 @@ export function ZohoMenu({ open, onClose, onSelect, items, labelledBy, align = "
         const parent = items.find((item) => item !== "sep" && typeof item === "object" && "key" in item && item.key === activeKey) as MenuItem | undefined;
         if (!parent?.submenuItems?.length) return null;
         return (
-          <div role="menu" className="wd-menu fixed z-[91] w-[250px] overflow-hidden" style={{ top: submenuPos.top, ...(rtl ? { right: window.innerWidth - submenuPos.start - 250 } : { left: submenuPos.start }) }}
+          <div role="menu" className="wd-menu fixed w-[250px] overflow-hidden" style={{ top: submenuPos.top, zIndex: zIndex + 1, ...(rtl ? { right: window.innerWidth - submenuPos.start - 250 } : { left: submenuPos.start }) }}
             onMouseLeave={() => { setActiveKey(null); setSubmenuPos(null); }}>
             {parent.submenuItems.map((child, i) => child === "sep" ? <div key={`sub-sep-${i}`} className="wd-menu-sep" role="separator" /> : (
               <button key={child.key} type="button" role="menuitem" disabled={child.disabled} data-danger={child.danger || undefined}

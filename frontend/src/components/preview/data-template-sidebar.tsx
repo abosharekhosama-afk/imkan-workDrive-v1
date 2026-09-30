@@ -2,8 +2,8 @@
 
 import { useEffect, useState } from "react";
 import { useLocale } from "../locale-provider";
-import { listDataTemplates, listFileDataTemplateBindings, type DataTemplateBinding, type DataTemplate } from "../../lib/api/metadata";
-import { DataTemplateAssociationModal } from "../data-template-association-modal";
+import { ImkanOptionPicker } from "../imkan-option-picker";
+import { associateFileDataTemplate, listDataTemplates, listFileDataTemplateBindings, type DataTemplateBinding, type DataTemplate } from "../../lib/api/metadata";
 
 export function DataTemplateSidebar({ open, fileId, onClose }: { open: boolean; fileId: string; onClose?: () => void }) {
   const { locale } = useLocale();
@@ -11,20 +11,38 @@ export function DataTemplateSidebar({ open, fileId, onClose }: { open: boolean; 
   const [rows, setRows] = useState<DataTemplateBinding[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [templates, setTemplates] = useState<DataTemplate[]>([]);
-  const [associateOpen, setAssociateOpen] = useState(false);
+  const [picked, setPicked] = useState("");
+  const [busy, setBusy] = useState(false);
 
   useEffect(() => {
     if (!open) return;
     let live = true;
     setRows(null);
     setError(null);
+    setPicked("");
     void Promise.all([listFileDataTemplateBindings(fileId), listDataTemplates(false)])
       .then(([value, allTemplates]) => { if (live) { setRows(value); setTemplates(allTemplates); } })
       .catch((cause) => { if (live) setError(cause instanceof Error ? cause.message : (ar ? "تعذر تحميل قالب البيانات." : "Unable to load data templates.")); });
     return () => { live = false; };
   }, [open, fileId, ar]);
 
+  async function associate(templateId: string) {
+    if (!templateId || busy) return;
+    setBusy(true);
+    setError(null);
+    try {
+      await associateFileDataTemplate(fileId, templateId, {});
+      setPicked("");
+      setRows(await listFileDataTemplateBindings(fileId));
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : (ar ? "تعذر ربط القالب." : "Unable to associate the template."));
+    } finally {
+      setBusy(false);
+    }
+  }
+
   if (!open) return null;
+  const available = templates.filter((template) => template.active && !rows?.some((binding) => binding.templateId === template.id));
 
   return (
     <aside className="zoho-preview-panel zoho-data-template-panel" dir={ar ? "rtl" : "ltr"} aria-label={ar ? "قوالب البيانات" : "Data Templates"}>
@@ -35,7 +53,20 @@ export function DataTemplateSidebar({ open, fileId, onClose }: { open: boolean; 
         </div>
         {onClose ? <button type="button" className="zoho-panel-close" onClick={onClose} aria-label={ar ? "إغلاق" : "Close"}>×</button> : null}
       </header>
-      <div className="zoho-data-template-actionbar"><button type="button" className="zoho-data-template-associate" onClick={() => setAssociateOpen(true)}>＋ {ar ? "ربط قالب" : "Associate"}</button></div>
+      <div className="zoho-data-template-actionbar">
+        <ImkanOptionPicker
+          appearance="audit"
+          fullWidth
+          allowEmpty
+          disabled={busy}
+          value={picked}
+          onChange={(next) => { setPicked(next); void associate(next); }}
+          options={available.map((template) => ({ value: template.id, label: template.name }))}
+          ariaLabel={ar ? "ربط قالب" : "Associate"}
+          placeholder={ar ? "اختر قالبًا" : "Select a template"}
+          emptyLabel={ar ? "اختر قالبًا" : "Select a template"}
+        />
+      </div>
       <div className="zoho-preview-panel-body">
         {rows === null && !error ? <div className="zoho-panel-loading"><span className="zoho-viewer-spinner" /></div> : null}
         {error ? <div className="zoho-panel-error">{error}</div> : null}
@@ -43,7 +74,7 @@ export function DataTemplateSidebar({ open, fileId, onClose }: { open: boolean; 
           <div className="zoho-panel-empty">
             <div className="zoho-panel-empty-icon">▣</div>
             <strong>{ar ? "لا توجد قوالب مرتبطة" : "No data templates"}</strong>
-            <span>{ar ? "يمكن ربط قالب من قائمة تنظيم الملف." : "A template can be associated from the file organization actions."}</span>
+            <span>{ar ? "اختر قالبًا من القائمة أعلاه." : "Choose a template from the list above."}</span>
           </div>
         ) : null}
         {rows?.map((binding) => {
@@ -70,7 +101,6 @@ export function DataTemplateSidebar({ open, fileId, onClose }: { open: boolean; 
           );
         })}
       </div>
-      {associateOpen ? <DataTemplateAssociationModal targets={[{ type: "FILE", id: fileId, name: ar ? "الملف الحالي" : "Current file" }]} dataTemplates={templates} onClose={() => setAssociateOpen(false)} onChanged={() => { setAssociateOpen(false); listFileDataTemplateBindings(fileId).then(setRows).catch(() => undefined); }} /> : null}
     </aside>
   );
 }

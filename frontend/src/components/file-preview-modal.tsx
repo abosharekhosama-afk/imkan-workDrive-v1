@@ -1,12 +1,13 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
-import { PopoverTrigger } from "@radix-ui/react-popover";
 import { useLocale } from "./locale-provider";
 import { FileIcon } from "./file-icon";
-import { ActionDropdown } from "./action-dropdown";
 import { ShareModal } from "./share-modal";
-import { DataTemplateAssociationModal } from "./data-template-association-modal";
+import { MoveModal } from "./move-modal";
+import { RenameModal } from "./rename-modal";
+import { FollowUpdatesModal } from "./follow-updates-modal";
+import { WorkflowPicker } from "./workflow-picker";
 import { VersionHistoryDrawer } from "./files/version-history-drawer";
 import { ImageViewer } from "./preview/image-viewer";
 import { PdfViewer } from "./preview/pdf-viewer";
@@ -16,16 +17,21 @@ import { CodeViewer } from "./preview/code-viewer";
 import { ArchiveViewer } from "./preview/archive-viewer";
 import { DetailsSidebar } from "./preview/details-sidebar";
 import { FileCommentsPanel } from "./preview/file-comments-panel";
+import { DataTemplateSidebar } from "./preview/data-template-sidebar";
 import { DEFAULT_WATERMARK_CONFIG, PreviewWatermark, WatermarkSidebar, type WatermarkConfig } from "./preview/watermark-sidebar";
+import { Icons } from "./layout/icons";
+import { ZohoMenu } from "./layout/zoho-menu";
+import { FileMenuIcons } from "../lib/file-menu-icons";
 import { listFileComments } from "../lib/api/comments";
 import { usePreviewUrl } from "./preview/use-preview-url";
 import { resolveMimeType } from "../lib/api/mime";
 import { getPreviewMimeCategory, isBrowserRenderableImage } from "../lib/api/preview";
 import { formatBytes } from "../lib/api/quota";
-import { getFileDlp, requestDownload, trashFile, type FileDlpDecision } from "../lib/api/files";
+import { copyFile, getFileDlp, moveFile, renameFile, requestDownload, trashFile, type FileDlpDecision } from "../lib/api/files";
 import { triggerDownload } from "../lib/api/download";
-import { listDataTemplates, type DataTemplate } from "../lib/api/metadata";
 import { getViewPreferences } from "../lib/api/enterprise";
+import { openResourceInNewTab } from "../lib/selection-bar-actions-logic";
+import type { ShareLaunchMode } from "../lib/share-launch-logic";
 import { useRouter } from "next/navigation";
 
 export interface FilePreviewModalTarget {
@@ -64,16 +70,19 @@ function WorkDriveLogo() {
 export function FilePreviewModal({ target, onClose, onPrevFile, onNextFile, initialPanel, focusCommentId }: FilePreviewModalProps) {
   const { label } = useLocale();
   const previousActiveRef = useRef<HTMLElement | null>(null);
-  const printFrameRef = useRef<HTMLIFrameElement | null>(null);
-  const [panel, setPanel] = useState<"details" | "comments" | "watermark" | "zia" | null>(initialPanel === "dataTemplate" ? null : initialPanel ?? null);
+  const [panel, setPanel] = useState<"details" | "comments" | "dataTemplate" | "watermark" | "zia" | null>(initialPanel ?? null);
   const [commentCount, setCommentCount] = useState(0);
   const [toast, setToast] = useState<string | null>(null);
   const [dlp, setDlp] = useState<FileDlpDecision | null>(null);
   const [watermarkConfig, setWatermarkConfig] = useState<WatermarkConfig>(DEFAULT_WATERMARK_CONFIG);
-  const [shareOpen, setShareOpen] = useState(false);
+  const [shareMenuOpen, setShareMenuOpen] = useState(false);
+  const [actionsOpen, setActionsOpen] = useState(false);
+  const [shareLaunch, setShareLaunch] = useState<ShareLaunchMode | null>(null);
   const [versionOpen, setVersionOpen] = useState(false);
-  const [templateOpen, setTemplateOpen] = useState(initialPanel === "dataTemplate");
-  const [templates, setTemplates] = useState<DataTemplate[]>([]);
+  const [moveMode, setMoveMode] = useState<"move" | "copy" | null>(null);
+  const [renameOpen, setRenameOpen] = useState(false);
+  const [workflowOpen, setWorkflowOpen] = useState(false);
+  const [followOpen, setFollowOpen] = useState(false);
   const router = useRouter();
 
   const open = Boolean(target);
@@ -85,13 +94,18 @@ export function FilePreviewModal({ target, onClose, onPrevFile, onNextFile, init
   const effectiveMime = info?.mime_type ?? resolvedMime;
 
   useEffect(() => {
-    setPanel(initialPanel === "dataTemplate" ? null : initialPanel ?? null);
+    setPanel(initialPanel ?? null);
     setToast(null);
     setDlp(null);
     setWatermarkConfig(DEFAULT_WATERMARK_CONFIG);
-    setShareOpen(false);
+    setShareMenuOpen(false);
+    setActionsOpen(false);
+    setShareLaunch(null);
     setVersionOpen(false);
-    setTemplateOpen(initialPanel === "dataTemplate");
+    setMoveMode(null);
+    setRenameOpen(false);
+    setWorkflowOpen(false);
+    setFollowOpen(false);
     if (!activeTarget) return;
     let live = true;
     void getFileDlp(activeTarget.id).then((value) => {
@@ -106,17 +120,8 @@ export function FilePreviewModal({ target, onClose, onPrevFile, onNextFile, init
     }).catch(() => { if (live) setDlp(null); });
     void getViewPreferences().then((value) => {
       if (!live || initialPanel) return;
-      if (value.previewPanel === "DATA_TEMPLATE") {
-        setPanel(null);
-        setTemplateOpen(true);
-        void listDataTemplates(false).then((rows) => { if (live) setTemplates(rows); }).catch(() => undefined);
-        return;
-      }
-      setPanel(value.previewPanel === "DETAILS" ? "details" : value.previewPanel === "COMMENTS" ? "comments" : null);
+      setPanel(value.previewPanel === "DETAILS" ? "details" : value.previewPanel === "COMMENTS" ? "comments" : value.previewPanel === "DATA_TEMPLATE" ? "dataTemplate" : null);
     }).catch(() => undefined);
-    if (initialPanel === "dataTemplate") {
-      void listDataTemplates(false).then((rows) => { if (live) setTemplates(rows); }).catch(() => undefined);
-    }
     return () => { live = false; };
   }, [activeTarget?.id, initialPanel]);
 
@@ -143,7 +148,7 @@ export function FilePreviewModal({ target, onClose, onPrevFile, onNextFile, init
     if (!open) return;
     const onKeyDown = (event: KeyboardEvent) => {
       const node = event.target instanceof Element ? event.target : null;
-      const overlay = shareOpen || versionOpen || templateOpen || Boolean(node?.closest(".wd-menu, .imkan-modal-backdrop, [data-radix-popper-content-wrapper]"));
+      const overlay = Boolean(shareMenuOpen || actionsOpen || shareLaunch || versionOpen || moveMode || renameOpen || workflowOpen || followOpen || node?.closest(".wd-menu, .imkan-modal-backdrop, [data-radix-popper-content-wrapper]"));
       if (overlay) return;
       if (event.key === "Escape") {
         event.preventDefault();
@@ -158,7 +163,7 @@ export function FilePreviewModal({ target, onClose, onPrevFile, onNextFile, init
     };
     document.addEventListener("keydown", onKeyDown);
     return () => document.removeEventListener("keydown", onKeyDown);
-  }, [open, onClose, onPrevFile, onNextFile, shareOpen, versionOpen, templateOpen]);
+  }, [open, onClose, onPrevFile, onNextFile, shareMenuOpen, actionsOpen, shareLaunch, versionOpen, moveMode, renameOpen, workflowOpen, followOpen]);
 
   const showToast = useCallback((message: string) => {
     setToast(message);
@@ -185,36 +190,7 @@ export function FilePreviewModal({ target, onClose, onPrevFile, onNextFile, init
     }
   }, [activeTarget, label, showToast]);
 
-  const openTemplates = useCallback(() => {
-    setPanel(null);
-    setTemplateOpen(true);
-    void listDataTemplates(false).then(setTemplates).catch(() => setTemplates([]));
-  }, []);
-
-  const handlePrint = useCallback(() => {
-    if (!url) return;
-    printFrameRef.current?.remove();
-    const frame = document.createElement("iframe");
-    frame.style.position = "fixed";
-    frame.style.inset = "0";
-    frame.style.width = "0";
-    frame.style.height = "0";
-    frame.style.border = "none";
-    frame.src = url;
-    frame.onload = () => {
-      try {
-        frame.contentWindow?.focus();
-        frame.contentWindow?.print();
-      } finally {
-        window.setTimeout(() => frame.remove(), 60_000);
-      }
-    };
-    document.body.appendChild(frame);
-    printFrameRef.current = frame;
-  }, [url]);
-
-  const togglePanel = useCallback((next: "details" | "comments" | "watermark" | "zia") => {
-    setTemplateOpen(false);
+  const togglePanel = useCallback((next: "details" | "comments" | "dataTemplate" | "watermark" | "zia") => {
     setPanel((current) => current === next ? null : next);
   }, []);
 
@@ -293,17 +269,39 @@ export function FilePreviewModal({ target, onClose, onPrevFile, onNextFile, init
   const railButton = (key: "details" | "comments" | "dataTemplate" | "watermark" | "zia", icon: ReactNode, title: string) => (
     <button
       type="button"
-      className={`zoho-preview-rail-btn${key === "dataTemplate" ? (templateOpen ? " active" : "") : panel === key ? " active" : ""}`}
-      onClick={() => { if (key === "dataTemplate") openTemplates(); else togglePanel(key); }}
+      className={`zoho-preview-rail-btn${panel === key ? " active" : ""}`}
+      onClick={() => togglePanel(key)}
       title={title}
       aria-label={title}
-      aria-pressed={key === "dataTemplate" ? templateOpen : panel === key}
+      aria-pressed={panel === key}
     >
       <span className="zoho-preview-rail-icon">{icon}</span>
       <span>{title}</span>
       {key === "comments" && commentCount > 0 ? <b className="zoho-rail-badge">{commentCount > 99 ? "99+" : commentCount}</b> : null}
     </button>
   );
+
+  const fileName = info?.file_name || activeTarget.name;
+  const runAction = (key: string) => {
+    if (key === "openNewTab") openResourceInNewTab("FILE", activeTarget.id);
+    else if (key === "share") setShareLaunch("invite");
+    else if (key === "copyPermalink") void copyPermalink();
+    else if (key === "moveTo") setMoveMode("move");
+    else if (key === "copyTo") setMoveMode("copy");
+    else if (key === "assignWorkflow") setWorkflowOpen(true);
+    else if (key === "organize" || key === "organize:associateDataTemplate") setPanel("dataTemplate");
+    else if (key === "searchInFold") {
+      window.dispatchEvent(new CustomEvent("workdrive:focus-search"));
+      onClose();
+    } else if (key === "download") void handleDownload();
+    else if (key === "rename") setRenameOpen(true);
+    else if (key === "followUpdates") setFollowOpen(true);
+    else if (key === "moreOptions") setPanel("details");
+    else if (key === "moveToTrash") {
+      if (!window.confirm(label("files.deleteConfirm"))) return;
+      void trashFile(activeTarget.id).then(() => onClose()).catch((cause) => showToast(cause instanceof Error ? cause.message : label("preview.error")));
+    }
+  };
 
   return (
     <div className="zoho-preview-modal" role="dialog" aria-modal="true" aria-label={`${activeTarget.name} — ${label("preview.title")}`}>
@@ -314,11 +312,28 @@ export function FilePreviewModal({ target, onClose, onPrevFile, onNextFile, init
         </div>
         <span className="zoho-preview-file">
           <FileIcon kind="file" mimeType={effectiveMime} name={activeTarget.name} label={label("files.type.file")} />
-          <strong title={info?.file_name || activeTarget.name}>{info?.file_name || activeTarget.name}</strong>
+          <strong title={fileName}>{fileName}</strong>
         </span>
         <div className="zoho-preview-actions">
           <div className="zoho-preview-menu-wrap">
-            <button type="button" className="zoho-preview-share" onClick={() => setShareOpen(true)}><span>⇧</span>{label("preview.share")}<span>⌄</span></button>
+            <button id="preview-share-btn" type="button" className="zoho-preview-share" aria-expanded={shareMenuOpen} aria-haspopup="menu" onClick={() => { setActionsOpen(false); setShareMenuOpen((openMenu) => !openMenu); }}>
+              <span><Icons.share size={15} /></span>{label("preview.share")}<span><Icons.chevD size={13} /></span>
+            </button>
+            <ZohoMenu
+              open={shareMenuOpen}
+              onClose={() => setShareMenuOpen(false)}
+              labelledBy="preview-share-btn"
+              zIndex={240}
+              constrainToLane={false}
+              onSelect={(key) => {
+                if (key === "addMembers") setShareLaunch("invite");
+                else if (key === "externalShareLink") setShareLaunch("link");
+              }}
+              items={[
+                { key: "addMembers", labelKey: "menu.addMembers", icon: FileMenuIcons.addMembers },
+                { key: "externalShareLink", labelKey: "menu.externalShareLink", icon: FileMenuIcons.externalShareLink },
+              ]}
+            />
           </div>
           {category === "office" ? (
             <div className="zoho-preview-menu-wrap">
@@ -327,32 +342,44 @@ export function FilePreviewModal({ target, onClose, onPrevFile, onNextFile, init
                 if (["xls", "xlsx", "ods"].includes(ext)) openWith("sheet");
                 else if (["ppt", "pptx", "odp"].includes(ext)) openWith("show");
                 else openWith("writer");
-              }}>{label("preview.openWith")} <span>⌄</span></button>
+              }}>{label("preview.openWith")} <span><Icons.chevD size={13} /></span></button>
             </div>
           ) : null}
-          <button type="button" className="zoho-preview-icon-top" onClick={() => void copyPermalink()} aria-label={label("preview.copyLink")} title={label("preview.copyLink")}>↗</button>
-          <button type="button" className="zoho-preview-icon-top" onClick={() => void handleDownload()} aria-label={label("preview.download")} title={label("preview.download")}>⇩</button>
-          <ActionDropdown
-            label={label("files.actions")}
-            trigger={(
-              <PopoverTrigger asChild>
-                <button type="button" className="zoho-preview-icon-top" aria-label={label("files.actions")} title={label("files.actions")}>•••</button>
-              </PopoverTrigger>
-            )}
+          <button type="button" className="zoho-preview-icon-top" onClick={() => void copyPermalink()} aria-label={label("preview.copyLink")} title={label("preview.copyLink")}><Icons.link size={15} /></button>
+          <button type="button" className="zoho-preview-icon-top" onClick={() => void handleDownload()} aria-label={label("preview.download")} title={label("preview.download")}><Icons.download size={15} /></button>
+          <button id="preview-actions-btn" type="button" className="zoho-preview-icon-top" aria-expanded={actionsOpen} aria-haspopup="menu" onClick={() => { setShareMenuOpen(false); setActionsOpen((openMenu) => !openMenu); }} aria-label={label("files.actions")} title={label("files.actions")}><Icons.dots size={16} /></button>
+          <ZohoMenu
+            open={actionsOpen}
+            onClose={() => setActionsOpen(false)}
+            labelledBy="preview-actions-btn"
+            align="end"
+            widthPx={252}
+            zIndex={240}
+            constrainToLane={false}
+            onSelect={runAction}
             items={[
-              { label: label("files.download"), onSelect: () => void handleDownload() },
-              { label: label("files.share"), onSelect: () => setShareOpen(true) },
-              { label: label("preview.copyLink"), onSelect: () => void copyPermalink() },
-              { label: label("files.versionHistory"), onSelect: () => setVersionOpen(true) },
-              { label: label("preview.comments"), onSelect: () => setPanel("comments") },
-              { label: label("files.details"), onSelect: () => setPanel("details") },
-              { label: label("files.delete"), destructive: true, dividerBefore: true, onSelect: () => {
-                if (!window.confirm(label("files.deleteConfirm"))) return;
-                void trashFile(activeTarget.id).then(() => onClose()).catch((cause) => showToast(cause instanceof Error ? cause.message : label("preview.error")));
-              } },
+              { key: "openNewTab", labelKey: "menu.openNewTab", icon: FileMenuIcons.openNewTab },
+              "sep",
+              { key: "share", labelKey: "menu.shareMenu", icon: FileMenuIcons.shareMenu, chevron: true },
+              { key: "copyPermalink", labelKey: "menu.copyPermalink", icon: FileMenuIcons.copyPermalink },
+              "sep",
+              { key: "moveTo", labelKey: "menu.moveTo", icon: FileMenuIcons.moveTo, hint: "Z" },
+              { key: "copyTo", labelKey: "menu.copyTo", icon: FileMenuIcons.copyTo, hint: "C" },
+              { key: "assignWorkflow", labelKey: "menu.assignWorkflow", icon: FileMenuIcons.assignWorkflow },
+              { key: "organize", labelKey: "menu.organize", icon: FileMenuIcons.organize, chevron: true, submenuItems: [
+                { key: "associateDataTemplate", labelKey: "menu.associateDataTemplate", icon: FileMenuIcons.associateDataTemplate },
+              ] },
+              "sep",
+              { key: "searchInFold", labelKey: "menu.searchInFold", icon: FileMenuIcons.searchInFold },
+              { key: "download", labelKey: "menu.download", icon: FileMenuIcons.download, hint: "⌃S" },
+              { key: "rename", labelKey: "menu.rename", icon: FileMenuIcons.rename },
+              { key: "followUpdates", labelKey: "menu.followUpdates", icon: FileMenuIcons.followUpdates },
+              { key: "moreOptions", labelKey: "menu.moreOptions", icon: FileMenuIcons.moreOptions },
+              "sep",
+              { key: "moveToTrash", labelKey: "menu.moveToTrash", icon: FileMenuIcons.moveToTrash, danger: true },
             ]}
           />
-          <button type="button" className="zoho-preview-icon-top close" onClick={onClose} aria-label={label("preview.close")}>×</button>
+          <button type="button" className="zoho-preview-icon-top close" onClick={onClose} aria-label={label("preview.close")}><Icons.x size={16} /></button>
         </div>
       </header>
 
@@ -368,8 +395,9 @@ export function FilePreviewModal({ target, onClose, onPrevFile, onNextFile, init
           {onNextFile ? <button type="button" className="zoho-preview-arrow end" onClick={onNextFile} aria-label={label("preview.nextPage")} title="Next">›</button> : null}
         </div>
 
-        {panel === "details" ? <DetailsSidebar open fileId={activeTarget.id} fileName={info?.file_name || activeTarget.name} mimeType={effectiveMime} size={effectiveSize} versionNumber={info?.version_number} updatedAt={info?.updated_at} onClose={() => setPanel(null)} onShare={() => setShareOpen(true)} onViewVersions={() => setVersionOpen(true)} /> : null}
+        {panel === "details" ? <DetailsSidebar open fileId={activeTarget.id} fileName={fileName} mimeType={effectiveMime} size={effectiveSize} versionNumber={info?.version_number} updatedAt={info?.updated_at} onClose={() => setPanel(null)} onShare={() => setShareMenuOpen(true)} onViewVersions={() => setVersionOpen(true)} /> : null}
         {panel === "comments" ? <FileCommentsPanel fileId={activeTarget.id} focusCommentId={focusCommentId} onCount={setCommentCount} onClose={() => setPanel(null)} /> : null}
+        {panel === "dataTemplate" ? <DataTemplateSidebar open fileId={activeTarget.id} onClose={() => setPanel(null)} /> : null}
         {panel === "watermark" ? <WatermarkSidebar open fileId={activeTarget.id} config={watermarkConfig} onChange={setWatermarkConfig} onClose={() => setPanel(null)} /> : null}
         {panel === "zia" ? (
           <aside className="zoho-preview-panel zoho-zia-panel" dir={label("preview.title") === "معاينة الملف" ? "rtl" : "ltr"}>
@@ -379,40 +407,72 @@ export function FilePreviewModal({ target, onClose, onPrevFile, onNextFile, init
         ) : null}
 
         <nav className="zoho-preview-rail" aria-label="Preview tools">
-          {railButton("details", <span className="rail-info">i</span>, label("preview.details") || "Details")}
-          {railButton("comments", <span className="rail-comment">▱</span>, label("preview.comments") || "Comments")}
-          {railButton("dataTemplate", <span className="rail-template">▤</span>, label("preview.dataTemplates") || "Data Templates")}
-          {railButton("watermark", <span className="rail-watermark">♢</span>, label("preview.watermark") || "Watermark")}
-          {railButton("zia", <span className="rail-zia">✣</span>, "Zia")}
+          {railButton("details", <Icons.info size={16} />, label("preview.details") || "Details")}
+          {railButton("comments", <Icons.horn size={16} />, label("preview.comments") || "Comments")}
+          {railButton("dataTemplate", <Icons.layout size={16} />, label("preview.dataTemplates") || "Data Templates")}
+          {railButton("watermark", <Icons.shield size={16} />, label("preview.watermark") || "Watermark")}
+          {railButton("zia", <Icons.spark size={16} />, "Zia")}
           <div className="zoho-preview-rail-spacer" />
-          <button type="button" className="zoho-preview-rail-plus" onClick={() => showToast(label("files.actions"))} aria-label={label("files.actions")} title={label("files.actions")}>+</button>
         </nav>
       </div>
 
       {toast ? <div className="zoho-preview-toast" role="status">{toast}</div> : null}
-      {shareOpen ? (
+      {shareLaunch ? (
         <ShareModal
           resourceType="FILE"
           resourceId={activeTarget.id}
-          resourceName={info?.file_name || activeTarget.name}
-          onClose={() => setShareOpen(false)}
+          resourceName={fileName}
+          launchMode={shareLaunch}
+          onClose={() => setShareLaunch(null)}
         />
       ) : null}
       <VersionHistoryDrawer
         isOpen={versionOpen}
         onClose={() => setVersionOpen(false)}
         fileId={activeTarget.id}
-        fileName={info?.file_name || activeTarget.name}
+        fileName={fileName}
         mimeType={effectiveMime}
         size={effectiveSize}
         canWrite
         onRestored={() => void refresh()}
       />
-      {templateOpen ? (
-        <DataTemplateAssociationModal
-          targets={[{ type: "FILE", id: activeTarget.id, name: info?.file_name || activeTarget.name }]}
-          dataTemplates={templates}
-          onClose={() => setTemplateOpen(false)}
+      {moveMode ? (
+        <MoveModal
+          resourceType="FILE"
+          resourceId={activeTarget.id}
+          resourceName={fileName}
+          mode={moveMode}
+          onClose={() => setMoveMode(null)}
+          onMove={async (destinationFolderId, templateId, customFields) => {
+            if (moveMode === "copy") await copyFile(activeTarget.id, destinationFolderId, templateId, customFields);
+            else {
+              await moveFile(activeTarget.id, destinationFolderId, templateId, customFields);
+              onClose();
+            }
+          }}
+        />
+      ) : null}
+      {renameOpen ? (
+        <RenameModal
+          currentName={fileName}
+          onClose={() => setRenameOpen(false)}
+          onSubmit={async (name) => { await renameFile(activeTarget.id, name); void refresh(); }}
+        />
+      ) : null}
+      {workflowOpen ? (
+        <WorkflowPicker
+          resourceType="FILE"
+          resourceId={activeTarget.id}
+          resourceName={fileName}
+          onClose={() => setWorkflowOpen(false)}
+          onStarted={() => undefined}
+        />
+      ) : null}
+      {followOpen ? (
+        <FollowUpdatesModal
+          targets={[{ type: "FILE", id: activeTarget.id, name: fileName }]}
+          onClose={() => setFollowOpen(false)}
+          onChanged={(messageKey, name) => { if (messageKey) showToast(label(messageKey).replace("{name}", name || fileName)); }}
         />
       ) : null}
     </div>

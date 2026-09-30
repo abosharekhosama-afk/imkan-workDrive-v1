@@ -104,7 +104,7 @@ export function WatermarkSidebar({
         <button className={config.kind === "image" ? "active" : ""} type="button" onClick={() => update("kind", "image")}>{ar ? "صورة" : "Image"}</button>
       </div>
       <div className="zoho-preview-panel-body zoho-watermark-form">
-        <label className="flex items-center justify-between"><span>{ar ? "إظهار العلامة على المعاينة" : "Show watermark on the preview"}</span><input type="checkbox" checked={config.enabled || enforced} disabled={enforced} onChange={(e) => onChange({ ...config, enabled: e.target.checked })} /></label>
+        <label className="zoho-watermark-toggle"><span>{ar ? "إظهار العلامة على المعاينة" : "Show watermark on the preview"}</span><input type="checkbox" checked={config.enabled || enforced} disabled={enforced} onChange={(e) => onChange({ ...config, enabled: e.target.checked })} /></label>
         {config.kind === "image" ? (
           <label><span>{ar ? "صورة العلامة" : "Watermark image"}</span><input type="file" accept="image/*" onChange={(event) => {
             const file = event.target.files?.[0];
