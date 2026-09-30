@@ -20,6 +20,33 @@ describe("contentLane", () => {
     assert.equal(lane.left, 8);
     assert.equal(lane.right, 792);
   });
+
+  it("stays between a primary sidebar and a secondary sidebar", () => {
+    const lane = contentLane(1440, [
+      { left: 0, right: 264, width: 264 },
+      { left: 264, right: 488, width: 224 },
+    ]);
+    assert.equal(lane.left, 496);
+    assert.equal(lane.right, 1432);
+  });
+
+  it("stays clear of a right-side inspector as well", () => {
+    const lane = contentLane(1440, [
+      { left: 0, right: 264, width: 264 },
+      { left: 1080, right: 1440, width: 360 },
+    ]);
+    assert.equal(lane.left, 272);
+    assert.equal(lane.right, 1072);
+  });
+
+  it("keeps cards left of stacked right sidebars", () => {
+    const lane = contentLane(1440, [
+      { left: 1176, right: 1440, width: 264 },
+      { left: 952, right: 1176, width: 224 },
+    ]);
+    assert.equal(lane.left, 8);
+    assert.equal(lane.right, 944);
+  });
 });
 
 describe("clampBoxLeft", () => {

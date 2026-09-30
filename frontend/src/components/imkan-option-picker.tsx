@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { createContext, useContext, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { useLocale } from "./locale-provider";
 import { clampBoxLeft, readContentLane } from "../lib/overlay-bounds-logic";
@@ -54,7 +54,16 @@ type ImkanOptionPickerProps<T extends string> = {
   /** Allow clearing selection via an empty option row. */
   allowEmpty?: boolean;
   emptyLabel?: string;
+  /** Audit Logs card trigger. Defaults to the compact role pill. */
+  appearance?: "default" | "audit";
 };
+
+const PickerAppearanceContext = createContext<"default" | "audit">("default");
+
+/** Applies the audit card trigger to every picker inside, such as a workflow transition. */
+export function ImkanPickerAppearance({ appearance, children }: { appearance: "default" | "audit"; children: ReactNode }) {
+  return <PickerAppearanceContext.Provider value={appearance}>{children}</PickerAppearanceContext.Provider>;
+}
 
 /** Map plain string values to picker options (label defaults to the value). */
 export function toImkanPickerOptions(
@@ -106,8 +115,12 @@ export function ImkanOptionPicker<T extends string>({
   menuWidth = "default",
   allowEmpty = false,
   emptyLabel = "—",
+  appearance: appearanceProp,
 }: ImkanOptionPickerProps<T>) {
   const { locale } = useLocale();
+  const contextAppearance = useContext(PickerAppearanceContext);
+  const appearance = appearanceProp ?? contextAppearance;
+  const auditCard = appearance === "audit";
   const [open, setOpen] = useState(false);
   const [menuPosition, setMenuPosition] = useState<MenuPosition | null>(null);
   const rootRef = useRef<HTMLDivElement>(null);
@@ -242,7 +255,7 @@ export function ImkanOptionPicker<T extends string>({
       >
         <button
           type="button"
-          className={["imkan-option-picker-trigger", triggerClassName].filter(Boolean).join(" ")}
+          className={["imkan-option-picker-trigger", auditCard ? "is-audit-card" : "", triggerClassName].filter(Boolean).join(" ")}
           aria-haspopup="listbox"
           aria-expanded={open}
           aria-label={ariaLabel}
@@ -254,7 +267,7 @@ export function ImkanOptionPicker<T extends string>({
           <span className="imkan-option-picker-trigger-label">
             {selected?.label ?? placeholder ?? emptyLabel}
           </span>
-          <Icons.chevD size={12} />
+          {auditCard ? <span className="imkan-option-picker-chev" aria-hidden="true">⌄</span> : <Icons.chevD size={12} />}
         </button>
       </div>
       {menu}

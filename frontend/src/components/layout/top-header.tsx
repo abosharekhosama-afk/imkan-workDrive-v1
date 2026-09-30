@@ -2,7 +2,7 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
-import { readContentLane } from "../../lib/overlay-bounds-logic";
+import { overlaySidebarSelector, readContentLane } from "../../lib/overlay-bounds-logic";
 import { useLocale } from "../locale-provider";
 import { ThemeToggle } from "../theme-toggle";
 import { listNotifications, type NotificationRecord } from "../../lib/api/notifications";
@@ -227,12 +227,22 @@ function HeaderSearchOverlay({ onClose, inputRef }: { onClose: () => void; input
       panel.style.right = "auto";
       panel.style.transform = "none";
     };
-    place();
-    const sidebar = document.querySelector(".primary-sidebar, .zoho-sidebar, .admin-console-sidebar");
-    const observer = typeof ResizeObserver === "undefined" || !(sidebar instanceof HTMLElement) ? null : new ResizeObserver(place);
-    observer?.observe(sidebar as HTMLElement);
+    const observed = new Set<Element>();
+    const observer = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(place);
+    const watch = () => {
+      document.querySelectorAll(overlaySidebarSelector).forEach((el) => {
+        if (observed.has(el)) return;
+        observed.add(el);
+        observer?.observe(el);
+      });
+      place();
+    };
+    watch();
+    const frame = document.querySelector(".workdrive-frame");
+    const mutations = typeof MutationObserver === "undefined" || !(frame instanceof HTMLElement) ? null : new MutationObserver(watch);
+    mutations?.observe(frame as HTMLElement, { childList: true, subtree: true });
     window.addEventListener("resize", place);
-    return () => { observer?.disconnect(); window.removeEventListener("resize", place); };
+    return () => { observer?.disconnect(); mutations?.disconnect(); window.removeEventListener("resize", place); };
   }, []);
   const [q, setQ] = useState("");
   const [scope, setScope] = useState<"all" | "folders" | "files">("all");

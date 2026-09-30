@@ -41,7 +41,7 @@ export function SecondarySidebar({ section }: { section: "templates" | "workflow
   const items = section === "templates" ? templateItems : workflowItems;
 
   return (
-    <aside className="hidden w-56 shrink-0 border-e border-[color:var(--imkan-color-border)] bg-[#FAFBFD] lg:flex lg:flex-col" aria-label={section === "templates" ? label("nav.templates") : label("nav.workflows")}>
+    <aside className="secondary-sidebar hidden w-56 shrink-0 border-e border-[color:var(--imkan-color-border)] bg-[#FAFBFD] lg:flex lg:flex-col" aria-label={section === "templates" ? label("nav.templates") : label("nav.workflows")}>
       <div className="border-b border-[color:var(--imkan-color-border)] px-4 py-4">
         <h2 className="text-[13px] font-semibold text-slate-900">{section === "templates" ? label("templates.title") : label("workflows.title")}</h2>
         <p className="mt-1 text-[11.5px] leading-5 text-slate-500">{section === "templates" ? label("templates.description") : label("workflows.description")}</p>

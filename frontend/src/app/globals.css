@@ -2880,6 +2880,12 @@ html[data-theme="dark"] .workflow-ui .wd-card {
 .imkan-option-picker.is-full{display:block;width:100%}
 .imkan-option-picker-trigger-label{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .imkan-option-picker.is-full .imkan-option-picker-trigger{width:100%;justify-content:space-between}
+.imkan-option-picker-trigger.is-audit-card{box-sizing:border-box;height:42px;width:100%;justify-content:flex-start;gap:8px;border-radius:9px;border:1px solid #d7d9dc;background:#fff;padding:0 12px;color:#202124;font-size:14px;font-weight:400;text-align:start;box-shadow:none;transition:border-color .15s ease,box-shadow .15s ease}
+.imkan-option-picker:not(.is-full) .imkan-option-picker-trigger.is-audit-card{min-width:168px}
+.imkan-option-picker-trigger.is-audit-card:hover{border-color:#b8bdc5}
+.imkan-option-picker.is-open .imkan-option-picker-trigger.is-audit-card{border-color:#9ab9f3;box-shadow:0 0 0 2px rgba(47,110,229,.08)}
+.imkan-option-picker-trigger.is-audit-card .imkan-option-picker-trigger-label{flex:1}
+.imkan-option-picker-chev{margin-inline-start:auto;color:#5f6368;font-size:14px;line-height:1}
 .imkan-option-picker-menu-wide{width:360px;max-width:min(360px,calc(100vw - 24px))}
 
 .member-state-badge,.member-role-pill,.imkan-option-picker-trigger{background:#e9e9ea;border:0;border-radius:15px;padding:6px 10px;color:#202124;font-size:12px;font-weight:600;display:inline-flex;align-items:center;gap:8px}

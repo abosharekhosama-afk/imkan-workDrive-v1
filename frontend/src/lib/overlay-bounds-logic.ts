@@ -2,19 +2,28 @@ export type ContentLane = { left: number; right: number };
 
 export type SidebarBox = { left: number; right: number; width: number };
 
-/** Horizontal band that stays clear of the primary sidebar, in viewport pixels. */
-export function contentLane(viewportWidth: number, sidebar: SidebarBox | null, padding = 8): ContentLane {
+/** Side columns the search card and floating menus must stay clear of. */
+export const overlaySidebarSelector = ".primary-sidebar, .zoho-sidebar, .admin-console-sidebar, .secondary-sidebar, .workflow-secondary-sidebar, .wd-drawer, .workflow-inspector, .overlay-bound";
+
+/** Horizontal band that stays clear of every side column, in viewport pixels. */
+export function contentLane(viewportWidth: number, sidebar: SidebarBox | readonly SidebarBox[] | null, padding = 8): ContentLane {
   const rightEdge = Math.max(padding, viewportWidth - padding);
-  if (!sidebar || sidebar.width < 8 || viewportWidth <= padding * 2) {
-    return { left: padding, right: rightEdge };
+  const boxes = sidebar == null ? [] : Array.isArray(sidebar) ? sidebar : [sidebar];
+  let left = padding;
+  let right = rightEdge;
+  if (viewportWidth <= padding * 2) return { left, right };
+  for (const box of boxes) {
+    if (!box || box.width < 8) continue;
+    const onLeft = box.left < viewportWidth / 2 && box.right < viewportWidth - padding;
+    if (onLeft) {
+      left = Math.max(left, Math.min(right, box.right + padding));
+      continue;
+    }
+    if (box.left >= viewportWidth / 2) {
+      right = Math.min(right, Math.max(left, box.left - padding));
+    }
   }
-  const onLeft = sidebar.left <= padding + 2 || (sidebar.left < viewportWidth / 2 && sidebar.right < viewportWidth - padding);
-  if (onLeft && sidebar.left < viewportWidth / 2) {
-    const left = Math.min(rightEdge, Math.max(padding, sidebar.right + padding));
-    return { left, right: Math.max(left, rightEdge) };
-  }
-  const right = Math.max(padding, Math.min(rightEdge, sidebar.left - padding));
-  return { left: padding, right: Math.max(padding, right) };
+  return { left, right: Math.max(left, right) };
 }
 
 /** Pins a fixed card so its box stays inside the content lane. */
@@ -24,16 +33,21 @@ export function clampBoxLeft(desiredLeft: number, width: number, lane: ContentLa
   return Math.min(Math.max(lane.left, desiredLeft), maxLeft);
 }
 
+export function measureSidebarBoxes(): SidebarBox[] {
+  if (typeof document === "undefined") return [];
+  return [...document.querySelectorAll(overlaySidebarSelector)].flatMap((el) => {
+    if (!(el instanceof HTMLElement)) return [];
+    const rect = el.getBoundingClientRect();
+    if (rect.width < 8 || rect.height < 8) return [];
+    return [{ left: rect.left, right: rect.right, width: rect.width }];
+  });
+}
+
 export function measureSidebarBox(): SidebarBox | null {
-  if (typeof document === "undefined") return null;
-  const el = document.querySelector(".primary-sidebar, .zoho-sidebar, .admin-console-sidebar");
-  if (!(el instanceof HTMLElement)) return null;
-  const rect = el.getBoundingClientRect();
-  if (rect.width < 8) return null;
-  return { left: rect.left, right: rect.right, width: rect.width };
+  return measureSidebarBoxes()[0] ?? null;
 }
 
 export function readContentLane(padding = 8): ContentLane {
   const width = typeof window === "undefined" ? 1280 : window.innerWidth;
-  return contentLane(width, measureSidebarBox(), padding);
+  return contentLane(width, measureSidebarBoxes(), padding);
 }

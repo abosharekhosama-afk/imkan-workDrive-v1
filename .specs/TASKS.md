@@ -164,6 +164,7 @@
 | — | Admin Data Administration: find in Team Folders and My Folders, shared items, deleted items, and large files | ✅ Implemented |
 | — | Collect Files public drop page, workflow create routing, custom-function save, field drop editors, persisted table columns, sidebar-bounded search, and card dropdowns | ✅ Implemented |
 | — | Workflow builder load, admin search bounds, underline tabs, function typing and test result, collection menu, and team-folder empty state | ✅ Implemented |
+| — | Audit-card dropdowns on workflow transitions, templates, team-folder manage, and data-template association; search card stays inside the secondary sidebar | ✅ Implemented |
 
 ---
 
