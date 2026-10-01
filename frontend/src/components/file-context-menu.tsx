@@ -1,14 +1,12 @@
 "use client";
 
-// Right-click (context) menu matching Zoho WorkDrive row actions. Implements the
-// full 5-section reference hierarchy with a nested "Share..." submenu. A
-// client-side toast keeps non-backend actions (workflow, Zia, organize...) alive.
+// Right-click menu. It mirrors the row action menu and only exposes operations
+// that have a real handler for the selected resource and current permissions.
 
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useLocale } from "./locale-provider";
 import type { FileActionHandlers } from "./file-actions-menu";
-import type { ShareLaunchMode } from "../lib/share-launch-logic";
 import { followUpdatesMenuLabel } from "../lib/follow-updates-logic";
 import { FileMenuIcons } from "../lib/file-menu-icons";
 import { clampBoxLeft, readContentLane } from "../lib/overlay-bounds-logic";
@@ -22,24 +20,23 @@ type Item = {
 const DIC = {
   openNewTab: "menu.openNewTab", properties: "menu.properties", shareMenu: "menu.shareMenu",
   addMembers: "menu.addMembers", externalShareLink: "menu.externalShareLink",
-  downloadLink: "menu.downloadLink", embedCode: "menu.embedCode", shareToSupport: "menu.shareToSupport",
+  downloadLink: "menu.downloadLink", embedCode: "menu.embedCode",
   copyPermalink: "menu.copyPermalink", moveTo: "menu.moveTo", copyTo: "menu.copyTo",
-  assignWorkflow: "menu.assignWorkflow", organize: "menu.organize", searchInFold: "menu.searchInFold",
+  assignWorkflow: "menu.assignWorkflow", organize: "menu.organize",
   download: "menu.download", rename: "menu.rename", followUpdates: "menu.followUpdates",
-  moreOptions: "menu.moreOptions", moveToTrash: "menu.moveToTrash",
+  moreOptions: "menu.moreOptions", moveToTrash: "menu.moveToTrash", preview: "files.preview",
+  favorite: "files.favorite", unfavorite: "files.unfavorite", versionHistory: "files.versionHistory", addComment: "menu.addComment", openInOffice: "files.openInOffice", convertToOffice: "files.openInOffice",
 } as const;
 
 export function FileContextMenu({
   handlers,
   onCopyLink,
-  onToast,
   x,
   y,
   onClose,
 }: {
   handlers: FileActionHandlers;
   onCopyLink?: () => void;
-  onToast?: (message: string) => void;
   x: number;
   y: number;
   onClose: () => void;
@@ -48,60 +45,51 @@ export function FileContextMenu({
   const rtl = typeof document !== "undefined" && document.documentElement.dir === "rtl";
   const ref = useRef<HTMLDivElement | null>(null);
 
-  const D = (k: keyof typeof DIC) => label(DIC[k]);
-  const toast = (k: keyof typeof DIC) => onToast?.(D(k));
-  const open = handlers.onOpen;
+  const D = (k: keyof typeof DIC) => k === "openInOffice" ? "Open in IMKAN Office" : k === "convertToOffice" ? "Convert to IMKAN Office" : label(DIC[k]);
   const onShare = handlers.onShare;
-  const shareInvite = () => onShare?.("invite");
-  const shareLink = () => onShare?.("link");
-  const shareDownloadLink = () => onShare?.("downloadLink");
-  const shareEmbed = () => onShare?.("embed");
-  const onMove = handlers.onMove;
-  const onDownload = handlers.onDownload;
-  const onRename = handlers.onRename;
-  const onDelete = handlers.onDelete;
-
   const sections: Item[][] = [
     [
-      { key: "openNewTab", label: D("openNewTab"), icon: FileMenuIcons.openNewTab, onSelect: open ?? (() => toast("openNewTab")) },
-      { key: "properties", label: D("properties"), icon: FileMenuIcons.properties, onSelect: handlers.onInspect ?? (() => toast("properties")) },
+      ...(handlers.onOpen ? [{ key: "openNewTab", label: D("openNewTab"), icon: FileMenuIcons.openNewTab, onSelect: handlers.onOpen }] : []),
+      ...(handlers.onPreview ? [{ key: "preview", label: D("preview"), icon: FileMenuIcons.preview, onSelect: handlers.onPreview }] : []),
+      ...(handlers.onOpenInOffice ? [{ key: "openInOffice", label: D("openInOffice"), icon: FileMenuIcons.openNewTab, onSelect: handlers.onOpenInOffice }] : []),
+      ...(handlers.onReindex ? [{ key: "reindex", label: "Re-index", icon: FileMenuIcons.organize, onSelect: handlers.onReindex }] : []),
+      ...(handlers.onCheckOut ? [{ key: "checkOut", label: "Check Out", icon: FileMenuIcons.organize, onSelect: handlers.onCheckOut }] : []),
+      ...(handlers.onCheckIn ? [{ key: "checkIn", label: "Check In", icon: FileMenuIcons.organize, onSelect: handlers.onCheckIn }] : []),
+      ...(handlers.onMarkFinal ? [{ key: "markFinal", label: "Mark as Final", icon: FileMenuIcons.organize, onSelect: handlers.onMarkFinal }] : []),
+      ...(handlers.onEnableEditing ? [{ key: "enableEditing", label: "Enable Editing", icon: FileMenuIcons.organize, onSelect: handlers.onEnableEditing }] : []),
+      ...(handlers.onConvertToOffice ? [{ key: "convertToOffice", label: D("convertToOffice"), icon: FileMenuIcons.openNewTab, onSelect: handlers.onConvertToOffice }] : []),
+      ...(handlers.onInspect ? [{ key: "properties", label: D("properties"), icon: FileMenuIcons.properties, onSelect: handlers.onInspect }] : []),
     ],
     [
-      {
+      ...(onShare ? [{
         key: "share", label: D("shareMenu"), submenu: true, icon: FileMenuIcons.shareMenu,
         submenuItems: [
-          { key: "addMembers", label: D("addMembers"), icon: FileMenuIcons.addMembers, onSelect: shareInvite ?? (() => toast("addMembers")) },
-          { key: "external", label: D("externalShareLink"), icon: FileMenuIcons.externalShareLink, onSelect: shareLink ?? (() => toast("externalShareLink")) },
-          { key: "downloadLink", label: D("downloadLink"), icon: FileMenuIcons.downloadLink, onSelect: shareDownloadLink ?? (() => toast("downloadLink")) },
-          { key: "embed", label: D("embedCode"), icon: FileMenuIcons.embedCode, onSelect: shareEmbed ?? (() => toast("embedCode")) },
-          { key: "support", label: D("shareToSupport"), icon: FileMenuIcons.shareToSupport, onSelect: () => toast("shareToSupport") },
+          { key: "addMembers", label: D("addMembers"), icon: FileMenuIcons.addMembers, onSelect: () => onShare("invite") },
+          { key: "external", label: D("externalShareLink"), icon: FileMenuIcons.externalShareLink, onSelect: () => onShare("link") },
+          { key: "downloadLink", label: D("downloadLink"), icon: FileMenuIcons.downloadLink, onSelect: () => onShare("downloadLink") },
+          { key: "embed", label: D("embedCode"), icon: FileMenuIcons.embedCode, onSelect: () => onShare("embed") },
         ],
-      },
-      { key: "copyPermalink", label: D("copyPermalink"), icon: FileMenuIcons.copyPermalink, onSelect: onCopyLink ?? (() => toast("copyPermalink")) },
+      }] : []),
+      ...(onCopyLink ? [{ key: "copyPermalink", label: D("copyPermalink"), icon: FileMenuIcons.copyPermalink, onSelect: onCopyLink }] : []),
     ],
     [
-      { key: "move", label: `${D("moveTo")} (Z)`, hint: "Z", icon: FileMenuIcons.moveTo, onSelect: onMove ?? (() => toast("moveTo")) },
-      { key: "copy", label: `${D("copyTo")} (C)`, hint: "C", icon: FileMenuIcons.copyTo, onSelect: handlers.onCopy ?? (() => toast("copyTo")) },
-      { key: "workflow", label: D("assignWorkflow"), icon: FileMenuIcons.assignWorkflow, onSelect: handlers.onAssignWorkflow ?? (() => toast("assignWorkflow")) },
-      { key: "organize", label: D("organize"), icon: FileMenuIcons.organize, submenu: true, submenuItems: [
-        ...(handlers.onFavoriteToggle ? [{ key: "favorite", label: label(handlers.isFavorite ? "files.unfavorite" : "files.favorite"), icon: handlers.isFavorite ? FileMenuIcons.unfavorite : FileMenuIcons.favorite, onSelect: handlers.onFavoriteToggle }] : []),
-        ...(handlers.onLabelAs ? [{ key: "labelAs", label: label("nav.labels"), icon: FileMenuIcons.organize, onSelect: handlers.onLabelAs }] : []),
-        ...(handlers.onOrganize ? [{ key: "dataTemplate", label: label("menu.associateDataTemplate"), icon: FileMenuIcons.organize, onSelect: handlers.onOrganize }] : []),
-      ] },
+      ...(handlers.onMove ? [{ key: "move", label: `${D("moveTo")} (Z)`, hint: "Z", icon: FileMenuIcons.moveTo, onSelect: handlers.onMove }] : []),
+      ...(handlers.onCopy ? [{ key: "copy", label: `${D("copyTo")} (C)`, hint: "C", icon: FileMenuIcons.copyTo, onSelect: handlers.onCopy }] : []),
+      ...(handlers.onAssignWorkflow ? [{ key: "workflow", label: D("assignWorkflow"), icon: FileMenuIcons.assignWorkflow, onSelect: handlers.onAssignWorkflow }] : []),
+      ...(handlers.onOrganize ? [{ key: "organize", label: D("organize"), icon: FileMenuIcons.organize, onSelect: handlers.onOrganize }] : []),
     ],
     [
-      { key: "search", label: D("searchInFold"), icon: FileMenuIcons.searchInFold, onSelect: () => toast("searchInFold") },
-      { key: "download", label: `${D("download")} (⌃S)`, hint: "⌃S", icon: FileMenuIcons.download, onSelect: onDownload ?? (() => toast("download")) },
-      { key: "rename", label: D("rename"), icon: FileMenuIcons.rename, onSelect: onRename ?? (() => toast("rename")) },
-      { key: "follow", label: label(followUpdatesMenuLabel(Boolean(handlers.isFollowingUpdates))), icon: handlers.isFollowingUpdates ? FileMenuIcons.unfollowUpdates : FileMenuIcons.followUpdates, onSelect: handlers.onFollowUpdates ?? (() => toast("followUpdates")) },
-      handlers.onComment
-        ? { key: "more", label: D("moreOptions"), icon: FileMenuIcons.moreOptions, submenu: true, submenuItems: [{ key: "addComment", label: label("menu.addComment"), icon: FileMenuIcons.comment, onSelect: handlers.onComment }] }
-        : { key: "more", label: D("moreOptions"), icon: FileMenuIcons.moreOptions, onSelect: () => toast("moreOptions") },
+      ...(handlers.onDownload ? [{ key: "download", label: `${D("download")} (⌃S)`, hint: "⌃S", icon: FileMenuIcons.download, onSelect: handlers.onDownload }] : []),
+      ...(handlers.onRename ? [{ key: "rename", label: D("rename"), icon: FileMenuIcons.rename, onSelect: handlers.onRename }] : []),
+      ...(handlers.onFollowUpdates ? [{ key: "follow", label: label(followUpdatesMenuLabel(Boolean(handlers.isFollowingUpdates))), icon: handlers.isFollowingUpdates ? FileMenuIcons.unfollowUpdates : FileMenuIcons.followUpdates, onSelect: handlers.onFollowUpdates }] : []),
+      ...(handlers.onVersionHistory ? [{ key: "versions", label: D("versionHistory"), icon: FileMenuIcons.versionHistory, onSelect: handlers.onVersionHistory }] : []),
+      ...(handlers.onComment ? [{ key: "more", label: D("moreOptions"), icon: FileMenuIcons.moreOptions, submenu: true, submenuItems: [{ key: "addComment", label: D("addComment"), icon: FileMenuIcons.comment, onSelect: handlers.onComment }] }] : []),
+      ...(handlers.onFavoriteToggle ? [{ key: "favorite", label: handlers.isFavorite ? D("unfavorite") : D("favorite"), icon: handlers.isFavorite ? FileMenuIcons.unfavorite : FileMenuIcons.favorite, onSelect: handlers.onFavoriteToggle }] : []),
     ],
     [
-      { key: "delete", label: D("moveToTrash"), icon: FileMenuIcons.moveToTrash, danger: true, onSelect: onDelete ?? (() => toast("moveToTrash")) },
+      ...(handlers.onDelete ? [{ key: "delete", label: D("moveToTrash"), icon: FileMenuIcons.moveToTrash, danger: true, onSelect: handlers.onDelete }] : []),
     ],
-  ];
+  ].filter((section) => section.length > 0);
 
   const [subKey, setSubKey] = useState<string | null>(null);
   const subTimer = useRef<number | null>(null);
@@ -124,8 +112,10 @@ export function FileContextMenu({
     };
   }, [onClose]);
 
+  if (sections.length === 0) return null;
+
   const menuW = 252;
-  const estH = sections.reduce((n, g) => n + g.length, 0) * 32 + sections.length * 2 + 24;
+  const estH = sections.reduce((n, g) => n + g.length, 0) * 34 + sections.length * 2 + 24;
   const lane = readContentLane();
   const left = clampBoxLeft(x, menuW, lane);
   const top = Math.min(Math.max(8, y), Math.max(8, window.innerHeight - estH - 8));

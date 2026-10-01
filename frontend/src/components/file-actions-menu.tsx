@@ -12,6 +12,13 @@ import type { ShareLaunchMode } from "../lib/share-launch-logic";
 export interface FileActionHandlers {
   onOpen?: () => void;
   onPreview?: () => void;
+  onOpenInOffice?: () => void;
+  onConvertToOffice?: () => void;
+  onReindex?: () => void;
+  onCheckOut?: () => void;
+  onCheckIn?: () => void;
+  onMarkFinal?: () => void;
+  onEnableEditing?: () => void;
   onInspect?: () => void;
   onDownload?: () => void;
   onShare?: (mode?: ShareLaunchMode) => void;
@@ -21,7 +28,6 @@ export interface FileActionHandlers {
   onCopy?: () => void;
   onFavoriteToggle?: () => void;
   onOrganize?: () => void;
-  onLabelAs?: () => void;
   onFollowUpdates?: () => void;
   isFollowingUpdates?: boolean;
   isFavorite?: boolean;
@@ -58,6 +64,13 @@ export function FileActionsMenu({ context, handlers, onCopyLink }: FileActionsMe
   if (handlers.onPreview && handlers.onPreview !== handlers.onOpen) {
     push({ label: label("files.preview"), icon: FileMenuIcons.preview, onSelect: handlers.onPreview });
   }
+  if (handlers.onOpenInOffice) push({ label: "Open in IMKAN Office", icon: FileMenuIcons.openNewTab, onSelect: handlers.onOpenInOffice });
+  if (handlers.onConvertToOffice) push({ label: "Convert to IMKAN Office", icon: FileMenuIcons.openNewTab, onSelect: handlers.onConvertToOffice });
+  if (handlers.onReindex) push({ label: "Re-index", icon: FileMenuIcons.organize, onSelect: handlers.onReindex, dividerBefore: true });
+  if (handlers.onCheckOut) push({ label: "Check Out", icon: FileMenuIcons.organize, onSelect: handlers.onCheckOut });
+  if (handlers.onCheckIn) push({ label: "Check In", icon: FileMenuIcons.organize, onSelect: handlers.onCheckIn });
+  if (handlers.onMarkFinal) push({ label: "Mark as Final", icon: FileMenuIcons.organize, onSelect: handlers.onMarkFinal });
+  if (handlers.onEnableEditing) push({ label: "Enable Editing", icon: FileMenuIcons.organize, onSelect: handlers.onEnableEditing });
   if (handlers.onInspect) push({ label: label("menu.properties"), icon: FileMenuIcons.properties, onSelect: handlers.onInspect });
   if (handlers.onShare) {
     push({ label: label("menu.shareMenu"), icon: FileMenuIcons.shareMenu, onSelect: handlers.onShare, dividerBefore: items.length > 0 });
@@ -67,11 +80,7 @@ export function FileActionsMenu({ context, handlers, onCopyLink }: FileActionsMe
   if (handlers.onMove) push({ label: `${label("menu.moveTo")} (Z)`, icon: FileMenuIcons.moveTo, onSelect: handlers.onMove, dividerBefore: true });
   if (handlers.onCopy) push({ label: `${label("menu.copyTo")} (C)`, icon: FileMenuIcons.copyTo, onSelect: handlers.onCopy });
   if (handlers.onAssignWorkflow) push({ label: label("menu.assignWorkflow"), icon: FileMenuIcons.assignWorkflow, onSelect: handlers.onAssignWorkflow });
-  const organizeItems: ActionDropdownItem[] = [];
-  if (handlers.onFavoriteToggle) organizeItems.push({ label: label(context.isFavorite ? "files.unfavorite" : "files.favorite"), icon: context.isFavorite ? FileMenuIcons.unfavorite : FileMenuIcons.favorite, onSelect: handlers.onFavoriteToggle });
-  if (handlers.onLabelAs) organizeItems.push({ label: label("nav.labels"), icon: FileMenuIcons.organize, onSelect: handlers.onLabelAs });
-  if (handlers.onOrganize) organizeItems.push({ label: label("menu.associateDataTemplate"), icon: FileMenuIcons.organize, onSelect: handlers.onOrganize });
-  if (organizeItems.length) push({ label: label("menu.organize"), icon: FileMenuIcons.organize, submenu: organizeItems });
+  if (handlers.onOrganize) push({ label: label("menu.organize"), icon: FileMenuIcons.organize, onSelect: handlers.onOrganize });
 
   if (handlers.onDownload) push({ label: `${label("menu.download")} (⌃S)`, icon: FileMenuIcons.download, onSelect: handlers.onDownload, dividerBefore: true });
   if (handlers.onRename) push({ label: label("menu.rename"), icon: FileMenuIcons.rename, onSelect: handlers.onRename });
@@ -93,6 +102,13 @@ export function FileActionsMenu({ context, handlers, onCopyLink }: FileActionsMe
     });
   }
 
+  if (handlers.onFavoriteToggle) {
+    push({
+      label: label(context.isFavorite ? "files.unfavorite" : "files.favorite"),
+      icon: context.isFavorite ? FileMenuIcons.unfavorite : FileMenuIcons.favorite,
+      onSelect: handlers.onFavoriteToggle,
+    });
+  }
 
   if (handlers.onDelete) push({
     label: label("menu.moveToTrash"),

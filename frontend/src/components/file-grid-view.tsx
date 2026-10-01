@@ -1,5 +1,8 @@
 "use client";
 
+import { officeEditorPath, isNativeImkanOfficeFile } from "../lib/office-file-routing";
+import { createOfficeCopy } from "../lib/api/office";
+import { runFileControl } from "../lib/api/files";
 import { useLocale } from"./locale-provider";
 import { FileIcon } from"./file-icon";
 import { OwnerCell } from"./owner-cell";
@@ -92,6 +95,7 @@ export function FileGridView({
         const folderContext = buildFolderContext(canMutate, canShare);
         const folderHandlers: FileActionHandlers = {
           onOpen: () => onOpenFolder(folder.id),
+          isFavorite: favoriteIds.has(folder.id),
           onInspect: onInspect ? () => onInspect("FOLDER", folder.id, folder.name) : undefined,
           onShare: canShare && onShare ? (mode) => onShare("FOLDER", folder.id, mode) : undefined,
           onRename: canMutate && onRename ? () => onRename("FOLDER", folder.id, folder.name) : undefined,
@@ -120,8 +124,10 @@ export function FileGridView({
         const fileContext = buildFileContext(file.id, canMutate, canShare, canFavorite, favoriteIds);
         const fileHandlers: FileActionHandlers = {
           onOpen: onPreview ? () => onPreview(file) : undefined,
+          isFavorite: favoriteIds.has(file.id),
           onInspect: onInspect ? () => onInspect("FILE", file.id, file.name) : undefined,
           onPreview: onPreview ? () => onPreview(file) : undefined,
+          onReindex: () => { void runFileControl(file.id, "reindex").then(() => window.alert("Search index refreshed from available file metadata." )).catch((e) => window.alert(e instanceof Error ? e.message : "Re-index failed.")); }, onCheckOut: () => { void runFileControl(file.id, "check-out").then(() => window.location.reload()).catch((e) => window.alert(e instanceof Error ? e.message : "Check-out failed.")); }, onCheckIn: () => { void runFileControl(file.id, "check-in").then(() => window.location.reload()).catch((e) => window.alert(e instanceof Error ? e.message : "Check-in failed.")); }, onMarkFinal: () => { if (window.confirm("Mark this file as final? It will become read-only.")) void runFileControl(file.id, "mark-final").then(() => window.location.reload()).catch((e) => window.alert(e instanceof Error ? e.message : "Could not mark final.")); }, onEnableEditing: () => { if (window.confirm("Enable editing for this final file?")) void runFileControl(file.id, "enable-editing").then(() => window.location.reload()).catch((e) => window.alert(e instanceof Error ? e.message : "Could not enable editing.")); }, onOpenInOffice: officeEditorPath(file.id, file.name, file.mimeType) ? () => { if (isNativeImkanOfficeFile(file.name, file.mimeType)) { window.location.assign(officeEditorPath(file.id, file.name, file.mimeType)!); return; } void createOfficeCopy(file.id, "OPEN").then((result) => { window.location.assign(officeEditorPath(result.fileId, `${file.name}.imkan`, result.document?.nativeFormat ? `application/vnd.imkan.${String(result.document.nativeFormat).replace(/\+.*/, "")}` : undefined) || `/office/${String(result.document.type).toLowerCase()}/${encodeURIComponent(result.fileId)}`); }).catch((error) => window.alert(error instanceof Error ? error.message : "Could not open in IMKAN Office.")); } : undefined, onConvertToOffice: !isNativeImkanOfficeFile(file.name, file.mimeType) && officeEditorPath(file.id, file.name, file.mimeType) ? () => { void createOfficeCopy(file.id, "CONVERT").then((result) => { window.location.assign(officeEditorPath(result.fileId, `${file.name}.imkan`, `application/vnd.imkan.${String(result.document.nativeFormat).toLowerCase()}+json`) || `/office/${String(result.document.type).toLowerCase()}/${encodeURIComponent(result.fileId)}`); }).catch((error) => window.alert(error instanceof Error ? error.message : "Conversion failed.")); } : undefined,
           onComment: onComment ? () => onComment(file) : undefined,
           onDownload: onDownload ? () => onDownload(file.id) : undefined,
           onShare: onShare ? (mode) => onShare("FILE", file.id, mode) : undefined,
