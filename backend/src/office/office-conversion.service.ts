@@ -15,7 +15,7 @@ const PRESERVE_LIMIT = 4 * 1024 * 1024;
 const PRESERVE_SKIP = new Set(['word/document.xml','word/_rels/document.xml.rels','xl/workbook.xml','xl/_rels/workbook.xml.rels','ppt/presentation.xml','ppt/_rels/presentation.xml.rels']);
 
 const esc=(s:string)=>s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&apos;');
-const textOf=(xml:string)=>{const m=[...xml.matchAll(/<w:t[^>]*>([\s\S]*?)<\/w:t>/g)];return m.map(x=>x[1].replace(/&lt;/g,'<').replace(/&gt;/g,'>').replace(/&amp;/g,'&')).join('');};
+const textOf=(xml:string)=>{const m=[...xml.matchAll(/<w:t(?:\s[^>]*)?>([\s\S]*?)<\/w:t>/g)];return m.map(x=>x[1].replace(/&lt;/g,'<').replace(/&gt;/g,'>').replace(/&amp;/g,'&')).join('');};
 const decodeXml=(s:string)=>s.replace(/&lt;/g,'<').replace(/&gt;/g,'>').replace(/&amp;/g,'&').replace(/&quot;/g,'\"').replace(/&apos;/g,"'");
 const col=(n:number)=>{let s='';for(let x=n+1;x;x=Math.floor((x-1)/26))s=String.fromCharCode(65+(x-1)%26)+s;return s;};
 const cellRef=(r:number,c:number)=>`${col(c)}${r+1}`;
@@ -441,11 +441,11 @@ export class OfficeConversionService {
     const endnoteTextById:Record<string,string>={};
     for(const fm of footnotesXml.matchAll(/<w:footnote\b[^>]*w:id="(-?\d+)"[^>]*>([\s\S]*?)<\/w:footnote>/g)){
       const id=fm[1]; if(Number(id)<1) continue;
-      footnoteTextById[id]=decode([...fm[2].matchAll(/<w:t[^>]*>([\s\S]*?)<\/w:t>/g)].map(x=>x[1]).join('')).trim();
+      footnoteTextById[id]=decode([...fm[2].matchAll(/<w:t(?:\s[^>]*)?>([\s\S]*?)<\/w:t>/g)].map(x=>x[1]).join('')).trim();
     }
     for(const em of endnotesXml.matchAll(/<w:endnote\b[^>]*w:id="(-?\d+)"[^>]*>([\s\S]*?)<\/w:endnote>/g)){
       const id=em[1]; if(Number(id)<1) continue;
-      endnoteTextById[id]=decode([...em[2].matchAll(/<w:t[^>]*>([\s\S]*?)<\/w:t>/g)].map(x=>x[1]).join('')).trim();
+      endnoteTextById[id]=decode([...em[2].matchAll(/<w:t(?:\s[^>]*)?>([\s\S]*?)<\/w:t>/g)].map(x=>x[1]).join('')).trim();
     }
     const commentById:Record<string,{author:string;text:string;createdAt?:string;paraId?:string;parentParaId?:string;resolved?:boolean}>={};
     const commentExtendedByParaId:Record<string,{parentParaId?:string;resolved?:boolean}>={};
@@ -459,7 +459,7 @@ export class OfficeConversionService {
       const author=/w:author="([^"]*)"/.exec(attrs)?.[1]||'Unknown';
       const date=/w:date="([^"]*)"/.exec(attrs)?.[1];
       const paraId=/w14:paraId="([^"]+)"/.exec(body)?.[1];
-      const text=[...body.matchAll(/<w:t[^>]*>([\s\S]*?)<\/w:t>/g)].map(x=>decode(x[1])).join('');
+      const text=[...body.matchAll(/<w:t(?:\s[^>]*)?>([\s\S]*?)<\/w:t>/g)].map(x=>decode(x[1])).join('');
       commentById[id]={author:decode(author),text,createdAt:date,paraId};
       if(paraId && commentExtendedByParaId[paraId]) { commentById[id].parentParaId=commentExtendedByParaId[paraId].parentParaId; commentById[id].resolved=commentExtendedByParaId[paraId].resolved; }
     }
@@ -499,7 +499,7 @@ export class OfficeConversionService {
       const referencedEndnoteIds=[...pxml.matchAll(/<w:endnoteReference[^>]*w:id="(\d+)"/g)].map(x=>x[1]);
       for(const rm of pxml.matchAll(/<w:r(?:\s[^>]*)?>[\s\S]*?<\/w:r>/g)){
         const rx=rm[0], rpr=/<w:rPr[\s\S]*?<\/w:rPr>/.exec(rx)?.[0]||'';
-        const texts=[...rx.matchAll(/<w:t[^>]*>([\s\S]*?)<\/w:t>/g)].map(x=>decode(x[1])).join('');
+        const texts=[...rx.matchAll(/<w:t(?:\s[^>]*)?>([\s\S]*?)<\/w:t>/g)].map(x=>decode(x[1])).join('');
         if(!texts && !/<w:br/.test(rx)) continue;
         const run:any={text:texts,bold:!!rpr.match(/<w:b(?:\s|\/|>)/),italic:!!rpr.match(/<w:i(?:\s|\/|>)/),underline:!!rpr.match(/<w:u(?:\s|\/|>)/),strike:!!rpr.match(/<w:strike(?:\s|\/|>)/)};
         const style=styleId?styleMap[styleId]:undefined; if(style){run.bold ||= style.bold; run.italic ||= style.italic; run.underline ||= style.underline;}
@@ -517,14 +517,14 @@ export class OfficeConversionService {
       const blockId=`p${++bi}`;
       const commentIds=[...pxml.matchAll(/<w:commentRangeStart[^>]*w:id="([^"]+)"/g)].map(x=>x[1]);
       for(const cid of commentIds){ const c=commentById[cid]; if(c) importedComments.push({id:`comment-${cid}`,blockId,text:c.text,authorName:c.author,createdAt:c.createdAt||new Date().toISOString(),resolved:Boolean(c.resolved),replies:[],mentions:[],__docxParaId:c.paraId,__docxParentParaId:c.parentParaId}); }
-      for(const im of pxml.matchAll(/<w:ins\b([^>]*)>([\s\S]*?)<\/w:ins>/g)){ const body=im[2], author=/w:author="([^"]*)"/.exec(im[1])?.[1], date=/w:date="([^"]*)"/.exec(im[1])?.[1], text=[...body.matchAll(/<w:t[^>]*>([\s\S]*?)<\/w:t>/g)].map(x=>decode(x[1])).join(''); importedChanges.push({id:`ins-${blockId}-${importedChanges.length+1}`,blockId,kind:'insert',before:[],after:[{text}],authorName:author?decode(author):undefined,createdAt:date||new Date().toISOString(),status:'pending'}); }
+      for(const im of pxml.matchAll(/<w:ins\b([^>]*)>([\s\S]*?)<\/w:ins>/g)){ const body=im[2], author=/w:author="([^"]*)"/.exec(im[1])?.[1], date=/w:date="([^"]*)"/.exec(im[1])?.[1], text=[...body.matchAll(/<w:t(?:\s[^>]*)?>([\s\S]*?)<\/w:t>/g)].map(x=>decode(x[1])).join(''); importedChanges.push({id:`ins-${blockId}-${importedChanges.length+1}`,blockId,kind:'insert',before:[],after:[{text}],authorName:author?decode(author):undefined,createdAt:date||new Date().toISOString(),status:'pending'}); }
       for(const dm of pxml.matchAll(/<w:del\b([^>]*)>([\s\S]*?)<\/w:del>/g)){ const body=dm[2], author=/w:author="([^"]*)"/.exec(dm[1])?.[1], date=/w:date="([^"]*)"/.exec(dm[1])?.[1], text=[...body.matchAll(/<w:delText[^>]*>([\s\S]*?)<\/w:delText>/g)].map(x=>decode(x[1])).join(''); importedChanges.push({id:`del-${blockId}-${importedChanges.length+1}`,blockId,kind:'delete',before:[{text}],after:[],authorName:author?decode(author):undefined,createdAt:date||new Date().toISOString(),status:'pending'}); }
       for(const fm of pxml.matchAll(/<w:rPrChange\b([^>]*)>([\s\S]*?)<\/w:rPrChange>/g)){ const attrs=fm[1], oldPr=fm[2]; const author=/w:author="([^"]*)"/.exec(attrs)?.[1], date=/w:date="([^"]*)"/.exec(attrs)?.[1]; const current=runs[0]||{text:''}; const before:any={text:String(current.text||'')}; const after:any={text:String(current.text||'')}; const map=(pr:string,r:any)=>{ const b=/<w:b\b/.test(pr), i=/<w:i\b/.test(pr), u=/<w:u\b/.test(pr), strike=/<w:strike\b/.test(pr), sz=/<w:sz[^>]*w:val="([^"]+)"/.exec(pr)?.[1], color=/<w:color[^>]*w:val="([^"]+)"/.exec(pr)?.[1], font=/<w:rFonts[^>]*w:ascii="([^"]+)"/.exec(pr)?.[1]; if(b)r.bold=true;if(i)r.italic=true;if(u)r.underline=true;if(strike)r.strike=true;if(sz)r.fontSize=Number(sz)/2;if(color)r.color=`#${color}`;if(font)r.fontFamily=decode(font); }; map(oldPr,before); if(current.bold)after.bold=true;if(current.italic)after.italic=true;if(current.underline)after.underline=true;if(current.strike)after.strike=true;if(current.fontSize)after.fontSize=current.fontSize;if(current.color)after.color=current.color;if(current.fontFamily)after.fontFamily=current.fontFamily; importedChanges.push({id:`fmt-${blockId}-${importedChanges.length+1}`,blockId,kind:'format',before:[before],after:[after],authorName:author?decode(author):undefined,createdAt:date||new Date().toISOString(),status:'pending'}); }
       for(const fid of referencedFootnoteIds){ const marker=String(Object.keys(footnoteTextById).indexOf(fid)+1); footnoteBlockIds[fid]=blockId; if(!runs.some((r:any)=>r.verticalAlign==='superscript'&&String(r.text||'').includes(`[${marker}]`))) runs.push({text:` [${marker}]`,verticalAlign:'superscript'}); }
       for(const eid of referencedEndnoteIds){ const marker=String(Object.keys(endnoteTextById).indexOf(eid)+1); endnoteBlockIds[eid]=blockId; if(!runs.some((r:any)=>r.verticalAlign==='superscript'&&String(r.text||'').includes(`⟦${marker}⟧`))) runs.push({text:` ⟦${marker}⟧`,verticalAlign:'superscript'}); }
       const hasDrawing=/<w:drawing\b/.test(pxml);
       const hasStructuredField=/<w:fldSimple\b/.test(pxml);
-      const directTextXml=pxml.replace(/<w:fldSimple\b[\s\S]*?<\/w:fldSimple>/g,''); const hasMeaningfulText=[...directTextXml.matchAll(/<w:t[^>]*>([\s\S]*?)<\/w:t>/g)].some((m:any)=>decode(m[1]).trim().length>0);
+      const directTextXml=pxml.replace(/<w:fldSimple\b[\s\S]*?<\/w:fldSimple>/g,''); const hasMeaningfulText=[...directTextXml.matchAll(/<w:t(?:\s[^>]*)?>([\s\S]*?)<\/w:t>/g)].some((m:any)=>decode(m[1]).trim().length>0);
       if(!hasDrawing || hasMeaningfulText || commentIds.length || importedChanges.some((c:any)=>c.blockId===blockId) || referencedFootnoteIds.length || referencedEndnoteIds.length || /<w:bookmarkStart\b/.test(pxml)){
         blocks.push({id:blockId,type,align,direction,ordered: type==='list-item' ? Boolean(listMeta?.ordered) : false,listLevel:type==='list-item'?Number(ilvl):undefined,runs,lineSpacing:1.5,spaceAfter:8,pageBreakBefore});
         blockSourceOffsets[blockId]=typeof m.index==='number'?m.index:xml.indexOf(pxml);
@@ -559,10 +559,10 @@ export class OfficeConversionService {
     const paragraphXml=[...bodyXmlForParagraphs.matchAll(/<w:p(?:\s[^>]*)?>[\s\S]*?<\/w:p>/g)].map(m=>m[0]);
     const bookmarksRaw:any[]=[]; paragraphXml.forEach((pxml,idx)=>{ for(const m of pxml.matchAll(/<w:bookmarkStart[^>]*w:id="(\d+)"[^>]*w:name="([^"]+)"/g)) bookmarksRaw.push({id:m[1],name:m[2],blockId:`p${idx+1}`}); });
     const bookmarks=bookmarksRaw.map(b=>({id:b.id,name:b.name,blockId:b.blockId}));
-    const importedCaptions:any[]=[]; paragraphXml.forEach((pxml,idx)=>{ const blockId=`p${idx+1}`; for(const m of pxml.matchAll(/<w:fldSimple[^>]*w:instr="([^"]*\bSEQ\s+(Figure|Table|Equation)\b[^"]*)"[^>]*>([\s\S]*?)<\/w:fldSimple>/gi)){ const label=m[2]; const display=decode(([...m[3].matchAll(/<w:t[^>]*>([\s\S]*?)<\/w:t>/g)].map(x=>x[1]).join(''))||''); const num=(display.match(/(\d+(?:[.\-]\d+)*)/)||[])[1]||String(importedCaptions.length+1); importedCaptions.push({id:`caption-${importedCaptions.length+1}`,blockId,label,number:num,text:display||`${label} ${num}`}); } });
+    const importedCaptions:any[]=[]; paragraphXml.forEach((pxml,idx)=>{ const blockId=`p${idx+1}`; for(const m of pxml.matchAll(/<w:fldSimple[^>]*w:instr="([^"]*\bSEQ\s+(Figure|Table|Equation)\b[^"]*)"[^>]*>([\s\S]*?)<\/w:fldSimple>/gi)){ const label=m[2]; const display=decode(([...m[3].matchAll(/<w:t(?:\s[^>]*)?>([\s\S]*?)<\/w:t>/g)].map(x=>x[1]).join(''))||''); const num=(display.match(/(\d+(?:[.\-]\d+)*)/)||[])[1]||String(importedCaptions.length+1); importedCaptions.push({id:`caption-${importedCaptions.length+1}`,blockId,label,number:num,text:display||`${label} ${num}`}); } });
     const importedCrossReferences:any[]=[]; paragraphXml.forEach((pxml,idx)=>{ const sourceBlockId=`p${idx+1}`; for(const m of pxml.matchAll(/<w:fldSimple[^>]*w:instr="([^"]*\bREF\s+([^\s\\]+)[^"]*)"[^>]*>[\s\S]*?<\/w:fldSimple>/gi)){ const target=bookmarksRaw.find(b=>b.name===m[2]); if(target) importedCrossReferences.push({id:`xref-${importedCrossReferences.length+1}`,name:m[2],targetId:target.blockId,sourceBlockId,display:'label'}); } });
     const importedIndexEntries:any[]=[]; paragraphXml.forEach((pxml,idx)=>{ const blockId=`p${idx+1}`; for(const fm of pxml.matchAll(/<w:fldSimple\b[^>]*w:instr="([^"]*)"[^>]*>[\s\S]*?<\/w:fldSimple>/gi)){ const instr=decode(fm[1]); const match=/\bXE\s+"([^"]+)"/i.exec(instr); if(!match) continue; const parts=match[1].split(':'); importedIndexEntries.push({id:`index-${importedIndexEntries.length+1}`,term:parts[0].trim(),subentry:parts.slice(1).join(':').trim()||undefined,blockId}); } });
-    const importedCitations:any[]=[]; const importedCitationSources:any[]=[]; paragraphXml.forEach((pxml,idx)=>{ const blockId=`p${idx+1}`; for(const m of pxml.matchAll(/<w:fldSimple[^>]*w:instr="([^"]*\bCITATION\s+([^\s\\]+)[^"]*)"[^>]*>([\s\S]*?)<\/w:fldSimple>/gi)){ const sourceId=decode(m[2]); const display=decode(([...m[3].matchAll(/<w:t[^>]*>([\s\S]*?)<\/w:t>/g)].map(x=>x[1]).join(''))||''); const id=sourceId||`citation-${importedCitations.length+1}`; importedCitations.push({id:sourceId||id,source:sourceId||display||'Imported source',sourceId:sourceId||id,blockId,display}); if(!importedCitationSources.some((x:any)=>x.id===id)) importedCitationSources.push({id,type:'other',title:display||'Imported source'}); } });
+    const importedCitations:any[]=[]; const importedCitationSources:any[]=[]; paragraphXml.forEach((pxml,idx)=>{ const blockId=`p${idx+1}`; for(const m of pxml.matchAll(/<w:fldSimple[^>]*w:instr="([^"]*\bCITATION\s+([^\s\\]+)[^"]*)"[^>]*>([\s\S]*?)<\/w:fldSimple>/gi)){ const sourceId=decode(m[2]); const display=decode(([...m[3].matchAll(/<w:t(?:\s[^>]*)?>([\s\S]*?)<\/w:t>/g)].map(x=>x[1]).join(''))||''); const id=sourceId||`citation-${importedCitations.length+1}`; importedCitations.push({id:sourceId||id,source:sourceId||display||'Imported source',sourceId:sourceId||id,blockId,display}); if(!importedCitationSources.some((x:any)=>x.id===id)) importedCitationSources.push({id,type:'other',title:display||'Imported source'}); } });
     // Rehydrate modern threaded comment metadata. Reply comments are stored in comments.xml
     // as independent comments and linked through commentsExtended.xml paraId/paraIdParent.
     const importedByParaId:any={};
@@ -659,7 +659,7 @@ export class OfficeConversionService {
     const slidePaths=orderedRids.map(r=>rels[r]).filter(Boolean).filter(p=>/^ppt\/slides\/slide\d+\.xml$/.test(p));
     const color=(body:string,tag='a:solidFill')=>{const m=new RegExp(`<${tag}>[\\s\\S]*?<a:srgbClr val="([0-9A-Fa-f]{6})"`).exec(body);return m?`#${m[1]}`:undefined};
     const geom=(body:string)=>{const o=/<a:off[^>]*x="(\d+)"[^>]*y="(\d+)"/.exec(body),e=/<a:ext[^>]*cx="(\d+)"[^>]*cy="(\d+)"/.exec(body);const sx=100/cx,sy=100/cy;return {x:o?Number(o[1])*sx:0,y:o?Number(o[2])*sy:0,width:e?Number(e[1])*sx:10,height:e?Number(e[2])*sy:10,rotation:(/<a:xfrm[^>]*rot="(-?\d+)"/.exec(body)?.[1]?Number(/<a:xfrm[^>]*rot="(-?\d+)"/.exec(body)![1])/60000:0)};};
-    const textRuns=(body:string)=>[...body.matchAll(/<a:r>([\s\S]*?)<\/a:r>/g)].map(m=>{const b=m[1],t=[...b.matchAll(/<a:t>([\s\S]*?)<\/a:t>/g)].map(x=>decode(x[1])).join('');const rp=/<a:rPr([^>]*)>([\s\S]*?)<\/a:rPr>|<a:rPr([^>]*)\/>/.exec(b);const a=rp?.[1]||rp?.[3]||'';const fs=/\bsz="(\d+)"/.exec(a)?.[1];const f=/<a:latin[^>]*typeface="([^"]+)"/.exec(b)?.[1];const c=color(b);return {text:t,fontSize:fs?Number(fs)/100:undefined,fontFamily:f,color:c,bold:/\bb="(1|true)"/.test(a),italic:/\bi="(1|true)"/.test(a),underline:/\bu="sng|single"/.test(a)};});
+    const textRuns=(body:string)=>[...body.matchAll(/<a:r(?:\s[^>]*)?>([\s\S]*?)<\/a:r>/g)].map(m=>{const b=m[1],t=[...b.matchAll(/<a:t(?:\s[^>]*)?>([\s\S]*?)<\/a:t>/g)].map(x=>decode(x[1])).join('');const rp=/<a:rPr([^>]*)>([\s\S]*?)<\/a:rPr>|<a:rPr([^>]*)\/>/.exec(b);const a=rp?.[1]||rp?.[3]||'';const fs=/\bsz="(\d+)"/.exec(a)?.[1];const f=/<a:latin[^>]*typeface="([^"]+)"/.exec(b)?.[1];const c=color(b);return {text:t,fontSize:fs?Number(fs)/100:undefined,fontFamily:f,color:c,bold:/\bb="(1|true)"/.test(a),italic:/\bi="(1|true)"/.test(a),underline:/\bu="sng|single"/.test(a)};});
     const slides=await Promise.all(slidePaths.slice(0,200).map(async(p,i)=>{
       const xml=await z.file(p)!.async('string');
       const elements:any[]=[]; let ei=0;
@@ -687,7 +687,7 @@ export class OfficeConversionService {
       }
       // Native PPT tables: import cell text into Show's editable table matrix.
       for(const tm of xml.matchAll(/<a:tbl>([\s\S]*?)<\/a:tbl>/g)){
-        const rows=[...tm[1].matchAll(/<a:tr[\s\S]*?>([\s\S]*?)<\/a:tr>/g)].map(r=>[...r[1].matchAll(/<a:tc[\s\S]*?>([\s\S]*?)<\/a:tc>/g)].map(c=>[...c[1].matchAll(/<a:t>([\s\S]*?)<\/a:t>/g)].map(x=>decode(x[1])).join('')));const g=geom(tm[0]);elements.push({id:`el-${i+1}-${++ei}`,type:'table',...g,rows});
+        const rows=[...tm[1].matchAll(/<a:tr[\s\S]*?>([\s\S]*?)<\/a:tr>/g)].map(r=>[...r[1].matchAll(/<a:tc[\s\S]*?>([\s\S]*?)<\/a:tc>/g)].map(c=>[...c[1].matchAll(/<a:t(?:\s[^>]*)?>([\s\S]*?)<\/a:t>/g)].map(x=>decode(x[1])).join('')));const g=geom(tm[0]);elements.push({id:`el-${i+1}-${++ei}`,type:'table',...g,rows});
       }
       // Chart relationship + cached values. The imported chart remains native Show chart data,
       // allowing it to be edited and later exported again without flattening to an image.
@@ -698,7 +698,7 @@ export class OfficeConversionService {
       }
       // Speaker notes are stored in a separate notesSlide part. Preserve the visible text.
       let notes='';const nRid=[...xml.matchAll(/<p:extLst[\s\S]*?r:id="([^"]+)"/g)].map(m=>m[1])[0];
-      const notesRelPath=p.replace(/ppt\/slides\/slide(\d+)\.xml/, 'ppt/slides/_rels/slide$1.xml.rels'); const notesRel=z.file(notesRelPath)?await z.file(notesRelPath)!.async('string'):'';const notesTarget=/Type="[^"]*\/notesSlide"[^>]*Target="([^"]+)"/.exec(notesRel)?.[1];if(notesTarget){const np=this.resolveRelationshipTarget(p,notesTarget),nf=z.file(np);if(nf){const nx=await nf.async('string');notes=[...nx.matchAll(/<a:t>([\s\S]*?)<\/a:t>/g)].map(m=>decode(m[1])).join(' ').trim();}}
+      const notesRelPath=p.replace(/ppt\/slides\/slide(\d+)\.xml/, 'ppt/slides/_rels/slide$1.xml.rels'); const notesRel=z.file(notesRelPath)?await z.file(notesRelPath)!.async('string'):'';const notesTarget=/Type="[^"]*\/notesSlide"[^>]*Target="([^"]+)"/.exec(notesRel)?.[1];if(notesTarget){const np=this.resolveRelationshipTarget(p,notesTarget),nf=z.file(np);if(nf){const nx=await nf.async('string');notes=[...nx.matchAll(/<a:t(?:\s[^>]*)?>([\s\S]*?)<\/a:t>/g)].map(m=>decode(m[1])).join(' ').trim();}}
       const layout=elements.some(e=>e.type==='text'&&e.y<30)?(elements.filter(e=>e.type==='text').length>1?'title-content':'title'):'blank';
       const tr=/<p:transition[^>]*>([\s\S]*?)<\/p:transition>/.exec(xml)?.[1]||'';
       const transitionMatch=/<p:(fade|push|wipe|split|cover|uncover|zoom)\b/.exec(tr);

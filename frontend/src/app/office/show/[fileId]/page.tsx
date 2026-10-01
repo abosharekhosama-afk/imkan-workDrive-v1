@@ -13,6 +13,7 @@ import {OfficeTemplateFields} from '@/components/office-template-fields';
 import {addElement,addMaster,addSlide,assignMaster,deleteElement,deleteElements,deleteSlide,duplicateSlide,groupElements,moveSlide,reorderElement,setActiveSlide,setAspectRatio,setLayout,setSlideBackground,setSlideNotes,setSlideTransition,setSlideAutoAdvance,setTheme,setThemePreset,addSection,renameSection,deleteSection,assignSlideSection,duplicateMaster,setElementAnimation,setElementAnimations,addElementAnimation,removeElementAnimation,ungroupElements,updateElement,addComment,resolveComment,deleteComment,addCommentReply} from '@/office/show/commands';
 import {ShowChrome,ShowStatusBar,type ShowRibbonTab} from '@/office/show/show-chrome';
 import '@/office/show/show-ui.css';
+import { visibleMarkupText } from '@/office/markup-text-logic';
 const normalize=(raw:any):ShowDocument=>{
   let source=raw;
   if(typeof source==='string'){
@@ -33,9 +34,9 @@ const normalize=(raw:any):ShowDocument=>{
     const animations=Array.isArray(raw?.animations)?raw.animations.filter((a:any)=>a&&typeof a==='object').slice(0,20).map((a:any,j:number)=>({type:['fade','zoom','slide-in','float','pulse','spin'].includes(String(a.type))?String(a.type):'fade',duration:num(a.duration,500,50,10000),delay:num(a.delay,0,0,60000),phase:['entrance','emphasis','exit'].includes(String(a.phase))?String(a.phase):'entrance',order:num(a.order,j+1,1,100),trigger:['with-previous','after-previous','on-click'].includes(String(a.trigger))?String(a.trigger):'on-click'})):undefined;
     return {
       id:typeof raw?.id==='string'&&raw.id?raw.id:`element-${i+1}`,type,x:num(raw?.x,10,0,100),y:num(raw?.y,10,0,100),width:num(raw?.width,40,1,100),height:num(raw?.height,20,1,100),rotation:num(raw?.rotation,0,-360,360),
-      text:typeof raw?.text==='string'?raw.text.slice(0,10000):undefined,src:typeof raw?.src==='string'?raw.src.slice(0,4000):undefined,poster:typeof raw?.poster==='string'?raw.poster.slice(0,4000):undefined,
+      text:typeof raw?.text==='string'?visibleMarkupText(raw.text).slice(0,10000):undefined,src:typeof raw?.src==='string'?raw.src.slice(0,4000):undefined,poster:typeof raw?.poster==='string'?raw.poster.slice(0,4000):undefined,
       shape:['rect','circle','roundRect'].includes(String(raw?.shape))?String(raw.shape) as any:undefined,fill:typeof raw?.fill==='string'?raw.fill:undefined,color:typeof raw?.color==='string'?raw.color:undefined,fontSize:num(raw?.fontSize,20,8,120),fontFamily:typeof raw?.fontFamily==='string'?raw.fontFamily.slice(0,80):'Arial',bold:Boolean(raw?.bold),italic:Boolean(raw?.italic),underline:Boolean(raw?.underline),strike:Boolean(raw?.strike),align:['start','center','end'].includes(String(raw?.align))?String(raw.align) as any:'start',lineHeight:num(raw?.lineHeight,1.2,.8,3),bullet:['none','bullet','number'].includes(String(raw?.bullet))?String(raw.bullet) as any:'none',border:Boolean(raw?.border),
-      rows:type==='table'&&Array.isArray(raw?.rows)?raw.rows.slice(0,30).map((r:any)=>Array.isArray(r)?r.slice(0,20).map((c:any)=>String(c??'').slice(0,500)):[]):undefined,
+      rows:type==='table'&&Array.isArray(raw?.rows)?raw.rows.slice(0,30).map((r:any)=>Array.isArray(r)?r.slice(0,20).map((c:any)=>visibleMarkupText(String(c??'')).slice(0,500)):[]):undefined,
       animation:raw?.animation&&typeof raw.animation==='object'?{type:['fade','zoom','slide-in','float','pulse','spin'].includes(String(raw.animation.type))?String(raw.animation.type) as any:'fade',duration:num(raw.animation.duration,500,50,10000),delay:num(raw.animation.delay,0,0,60000),phase:['entrance','emphasis','exit'].includes(String(raw.animation.phase))?String(raw.animation.phase) as any:'entrance',order:num(raw.animation.order,1,1,100),trigger:['with-previous','after-previous','on-click'].includes(String(raw.animation.trigger))?String(raw.animation.trigger) as any:'on-click'}:undefined,animations,mediaAutoplay:Boolean(raw?.mediaAutoplay),mediaLoop:Boolean(raw?.mediaLoop),mediaMuted:Boolean(raw?.mediaMuted),mediaVolume:num(raw?.mediaVolume,1,0,1),mediaTrimStart:num(raw?.mediaTrimStart,0,0,86400),mediaTrimEnd:num(raw?.mediaTrimEnd,0,0,86400),groupId:typeof raw?.groupId==='string'?raw.groupId.slice(0,100):undefined,
     };
   };
@@ -45,7 +46,7 @@ const normalize=(raw:any):ShowDocument=>{
     layout:['blank','title','title-content','two-column','image-text'].includes(String(s?.layout))?String(s.layout):'blank',
     background:typeof s?.background==='string'?s.background:'#ffffff',
     elements:Array.isArray(s?.elements)?s.elements.slice(0,200).map(normalizeElement):[],
-    notes:typeof s?.notes==='string'?s.notes:'',
+    notes:typeof s?.notes==='string'?visibleMarkupText(s.notes):'',
     master:typeof s?.master==='string'?s.master:undefined,
     section:typeof s?.section==='string'?s.section:undefined,
     transition:['none','fade','slide'].includes(String(s?.transition))?String(s.transition):'none',

@@ -22,6 +22,47 @@ import { STORAGE_SERVICE, type StorageService } from '../storage/storage.types';
 import { DlpService } from '../dlp/dlp.service';
 
 
+function visibleMarkupText(value: string): string {
+  if (!value.includes('<') || !/<(?:w:|a:|p:)/.test(value)) return value;
+  const decode = (text: string) => text.replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&').replace(/&quot;/g, '"').replace(/&apos;/g, "'");
+  const parts = [...value.matchAll(/<(?:w:t|a:t|w:delText)(?:\s[^>]*)?>([\s\S]*?)<\/(?:w:t|a:t|w:delText)>/g)].map((match) => decode(match[1]));
+  return decode(parts.length ? parts.join('') : value.replace(/<[^>]+>/g, ''));
+}
+
+function cleanWriterRuns(runs: unknown) {
+  return Array.isArray(runs) ? runs.map((run) => run && typeof run === 'object' && typeof (run as { text?: unknown }).text === 'string' ? { ...run, text: visibleMarkupText((run as { text: string }).text) } : run) : runs;
+}
+
+function cleanStoredOfficeText(content: unknown): unknown {
+  if (!content || typeof content !== 'object') return content;
+  const value = content as Record<string, any>;
+  if (value.type === 'WRITER' && Array.isArray(value.blocks)) {
+    return {
+      ...value,
+      blocks: value.blocks.map((block) => {
+        if (!block || typeof block !== 'object') return block;
+        const table = block.table && Array.isArray(block.table.rows) ? { ...block.table, rows: block.table.rows.map((row: any) => Array.isArray(row) ? row.map((cell: any) => cell && typeof cell === 'object' ? { ...cell, runs: cleanWriterRuns(cell.runs) } : cell) : row) } : block.table;
+        return { ...block, runs: cleanWriterRuns(block.runs), ...(table ? { table } : {}) };
+      }),
+    };
+  }
+  if (value.type === 'SHOW' && Array.isArray(value.slides)) {
+    return {
+      ...value,
+      slides: value.slides.map((slide) => ({
+        ...slide,
+        notes: typeof slide?.notes === 'string' ? visibleMarkupText(slide.notes) : slide?.notes,
+        elements: Array.isArray(slide?.elements) ? slide.elements.map((element: any) => ({
+          ...element,
+          text: typeof element?.text === 'string' ? visibleMarkupText(element.text) : element?.text,
+          rows: Array.isArray(element?.rows) ? element.rows.map((row: any) => Array.isArray(row) ? row.map((cell: any) => typeof cell === 'string' ? visibleMarkupText(cell) : cell) : row) : element?.rows,
+        })) : slide?.elements,
+      })),
+    };
+  }
+  return content;
+}
+
 function clampNumber(value: unknown, min: number, max: number, fallback: number) {
   const n = Number(value);
   return Number.isFinite(n) ? Math.min(max, Math.max(min, n)) : fallback;
@@ -155,7 +196,7 @@ function normalizeWriterPage(value: unknown) {
 }
 function normalizeWriterRun(value: unknown) {
   const r = value && typeof value === 'object' ? value as Record<string, unknown> : {};
-  return { text: typeof r.text === 'string' ? r.text.slice(0, 20000) : '', bold: Boolean(r.bold), italic: Boolean(r.italic), underline: Boolean(r.underline), strike: Boolean(r.strike), fontFamily: typeof r.fontFamily === 'string' ? r.fontFamily.slice(0,80) : undefined, fontSize: clampNumber(r.fontSize,8,96,16), color: typeof r.color === 'string' && /^#[0-9a-f]{6}$/i.test(r.color) ? r.color : undefined, href: typeof r.href === 'string' && /^https?:\/\//i.test(r.href) ? r.href.slice(0,2000) : undefined, highlight: typeof r.highlight === 'string' && /^#[0-9a-f]{6}$/i.test(r.highlight) ? r.highlight : undefined, verticalAlign: r.verticalAlign === 'superscript' || r.verticalAlign === 'subscript' ? r.verticalAlign : undefined };
+  return { text: typeof r.text === 'string' ? visibleMarkupText(r.text).slice(0, 20000) : '', bold: Boolean(r.bold), italic: Boolean(r.italic), underline: Boolean(r.underline), strike: Boolean(r.strike), fontFamily: typeof r.fontFamily === 'string' ? r.fontFamily.slice(0,80) : undefined, fontSize: clampNumber(r.fontSize,8,96,16), color: typeof r.color === 'string' && /^#[0-9a-f]{6}$/i.test(r.color) ? r.color : undefined, href: typeof r.href === 'string' && /^https?:\/\//i.test(r.href) ? r.href.slice(0,2000) : undefined, highlight: typeof r.highlight === 'string' && /^#[0-9a-f]{6}$/i.test(r.highlight) ? r.highlight : undefined, verticalAlign: r.verticalAlign === 'superscript' || r.verticalAlign === 'subscript' ? r.verticalAlign : undefined };
 }
 function normalizeWriterReview(value: unknown, actorId?: string) {
   const r = value && typeof value === 'object' ? value as Record<string, unknown> : {};
@@ -1149,7 +1190,7 @@ export class OfficeService implements OfficeEngine {
     const slides = Array.isArray(value.slides) ? value.slides.slice(0, 200).map((raw: any) => {
       const rawElements = Array.isArray(raw?.elements) ? raw.elements.slice(0, 200) : [];
       const elements = rawElements.map((e: any) => {
-        const rows = Array.isArray(e?.rows) ? e.rows.slice(0, 30).map((r: any) => Array.isArray(r) ? r.slice(0, 20).map((c: any) => String(c).slice(0, 500)) : []) : undefined;
+        const rows = Array.isArray(e?.rows) ? e.rows.slice(0, 30).map((r: any) => Array.isArray(r) ? r.slice(0, 20).map((c: any) => visibleMarkupText(String(c)).slice(0, 500)) : []) : undefined;
         const fontFamily = typeof e?.fontFamily === 'string' ? String(e.fontFamily).slice(0, 80) : 'Arial';
         const fill = typeof e?.fill === 'string' && /^#[0-9a-f]{6}$/i.test(e.fill) ? e.fill : undefined;
         const color = typeof e?.color === 'string' && /^#[0-9a-f]{6}$/i.test(e.color) ? e.color : undefined;
@@ -1158,7 +1199,7 @@ export class OfficeService implements OfficeEngine {
           type: ['text','shape','image','video','audio','line','table'].includes(String(e?.type)) ? String(e.type) : 'text',
           x: clampNumber(e?.x, 0, 100, 10), y: clampNumber(e?.y, 0, 100, 10), width: clampNumber(e?.width, 1, 100, 40), height: clampNumber(e?.height, 1, 100, 20),
           rotation: clampNumber(e?.rotation, -360, 360, 0),
-          text: typeof e?.text === 'string' ? e.text.slice(0, 10000) : undefined,
+          text: typeof e?.text === 'string' ? visibleMarkupText(e.text).slice(0, 10000) : undefined,
           src: typeof e?.src === 'string' && /^(https?:\/\/|data:audio\/|data:video\/|blob:)/i.test(e.src) ? e.src.slice(0, 4000) : undefined,
           poster: typeof e?.poster === 'string' && /^(https?:\/\/|data:image\/|blob:)/i.test(e.poster) ? e.poster.slice(0, 4000) : undefined,
           shape: ['rect','circle','roundRect'].includes(String(e?.shape)) ? String(e.shape) : undefined,
@@ -1174,7 +1215,7 @@ export class OfficeService implements OfficeEngine {
         id: typeof raw?.id === 'string' ? raw.id.slice(0, 100) : crypto.randomUUID(),
         layout: ['blank','title','title-content','two-column','image-text'].includes(String(raw?.layout)) ? String(raw.layout) : 'blank',
         background: typeof raw?.background === 'string' && /^#[0-9a-f]{6}$/i.test(raw.background) ? raw.background : '#ffffff',
-        elements, notes: typeof raw?.notes === 'string' ? raw.notes.slice(0, 5000) : undefined, master: typeof raw?.master === 'string' ? raw.master.slice(0,100) : undefined, section: typeof raw?.section === 'string' ? raw.section.slice(0,120) : undefined, transition: ['none','fade','slide'].includes(String(raw?.transition)) ? String(raw.transition) : 'none', transitionDuration: clampNumber(raw?.transitionDuration,0,5000,300), autoAdvanceMs: clampNumber(raw?.autoAdvanceMs,0,600000,0),
+        elements, notes: typeof raw?.notes === 'string' ? visibleMarkupText(raw.notes).slice(0, 5000) : undefined, master: typeof raw?.master === 'string' ? raw.master.slice(0,100) : undefined, section: typeof raw?.section === 'string' ? raw.section.slice(0,120) : undefined, transition: ['none','fade','slide'].includes(String(raw?.transition)) ? String(raw.transition) : 'none', transitionDuration: clampNumber(raw?.transitionDuration,0,5000,300), autoAdvanceMs: clampNumber(raw?.autoAdvanceMs,0,600000,0),
       };
     }) : [];
     const safeSlides = slides.length ? slides : [{ id: 'slide-1', layout: 'blank', background: '#ffffff', elements: [] }];
@@ -1208,6 +1249,6 @@ export class OfficeService implements OfficeEngine {
   }
 
   private toState(document: { id: string; fileId: string; type: OfficeDocumentType; nativeFormat: string; content: unknown; revision: number; updatedAt: Date; sourceTemplateId?: string | null; sourceTemplateVersionId?: string | null }): OfficeDocumentState {
-    return { id: document.id, fileId: document.fileId, type: document.type as OfficeType, nativeFormat: document.nativeFormat, content: document.content, revision: document.revision, updatedAt: document.updatedAt.toISOString(), sourceTemplateId: document.sourceTemplateId ?? null, sourceTemplateVersionId: document.sourceTemplateVersionId ?? null };
+    return { id: document.id, fileId: document.fileId, type: document.type as OfficeType, nativeFormat: document.nativeFormat, content: cleanStoredOfficeText(document.content), revision: document.revision, updatedAt: document.updatedAt.toISOString(), sourceTemplateId: document.sourceTemplateId ?? null, sourceTemplateVersionId: document.sourceTemplateVersionId ?? null };
   }
 }

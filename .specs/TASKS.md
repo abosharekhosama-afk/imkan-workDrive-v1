@@ -169,6 +169,7 @@
 | — | File preview actions, live text and image watermark, data-template picker, comment replies, and version history | ✅ Implemented |
 | — | Zip archives list as a folder tree with inline preview, and Markdown files render as documents | ✅ Implemented |
 | — | Office sync keeps identical revisions quiet, rebases safe edits, and applies overlapping edits only when the user chooses Keep my work | ✅ Implemented |
+| — | Writer and Show show the visible Office text instead of raw Word and PowerPoint markup | ✅ Implemented |
 
 ---
 

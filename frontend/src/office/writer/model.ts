@@ -1,3 +1,5 @@
+import { visibleMarkupText } from '../markup-text-logic';
+
 export type WriterRun = {
   text: string;
   bold?: boolean;
@@ -163,8 +165,8 @@ export function normalizeWriterDocument(value: any): WriterDocument {
     marginLeftMm: clampNumber(rawPage.marginLeftMm, 0, 80, defaults.marginLeftMm),
     widthMm: clampNumber(rawPage.widthMm, 80, 500, defaults.widthMm),
     heightMm: clampNumber(rawPage.heightMm, 80, 500, defaults.heightMm),
-    header: typeof rawPage.header === 'string' ? rawPage.header.slice(0, 500) : '',
-    footer: typeof rawPage.footer === 'string' ? rawPage.footer.slice(0, 500) : '',
+    header: typeof rawPage.header === 'string' ? visibleMarkupText(rawPage.header).slice(0, 500) : '',
+    footer: typeof rawPage.footer === 'string' ? visibleMarkupText(rawPage.footer).slice(0, 500) : '',
     showPageNumbers: rawPage.showPageNumbers !== false,
     differentFirstPage: Boolean(rawPage.differentFirstPage), differentOddEven: Boolean(rawPage.differentOddEven),
     pageNumberStart: clampNumber(rawPage.pageNumberStart, 1, 99999, 1),
@@ -194,8 +196,8 @@ export function normalizeWriterDocument(value: any): WriterDocument {
     crossReferences: Array.isArray(source.crossReferences) ? source.crossReferences.slice(0,1000).map(normalizeCrossReference) : [],
     indexEntries: Array.isArray(source.indexEntries) ? source.indexEntries.slice(0,1000).map(normalizeIndexEntry) : [],
     bookmarks: Array.isArray(source.bookmarks) ? source.bookmarks.slice(0,500).map((x:any)=>({id:typeof x?.id==='string'?x.id:crypto.randomUUID(),name:typeof x?.name==='string'?x.name.slice(0,120):'Bookmark',blockId:typeof x?.blockId==='string'?x.blockId:''})) : [],
-    footnotes: Array.isArray(source.footnotes) ? source.footnotes.slice(0,500).map((x:any)=>({id:typeof x?.id==='string'?x.id:crypto.randomUUID(),marker:typeof x?.marker==='string'?x.marker.slice(0,20):'*',text:typeof x?.text==='string'?x.text.slice(0,4000):'',blockId:typeof x?.blockId==='string'?x.blockId:''})) : [],
-    endnotes: Array.isArray(source.endnotes) ? source.endnotes.slice(0,500).map((x:any)=>({id:typeof x?.id==='string'?x.id:crypto.randomUUID(),marker:typeof x?.marker==='string'?x.marker.slice(0,20):'*',text:typeof x?.text==='string'?x.text.slice(0,4000):'',blockId:typeof x?.blockId==='string'?x.blockId:''})) : [],
+    footnotes: Array.isArray(source.footnotes) ? source.footnotes.slice(0,500).map((x:any)=>({id:typeof x?.id==='string'?x.id:crypto.randomUUID(),marker:typeof x?.marker==='string'?x.marker.slice(0,20):'*',text:typeof x?.text==='string'?visibleMarkupText(x.text).slice(0,4000):'',blockId:typeof x?.blockId==='string'?x.blockId:''})) : [],
+    endnotes: Array.isArray(source.endnotes) ? source.endnotes.slice(0,500).map((x:any)=>({id:typeof x?.id==='string'?x.id:crypto.randomUUID(),marker:typeof x?.marker==='string'?x.marker.slice(0,20):'*',text:typeof x?.text==='string'?visibleMarkupText(x.text).slice(0,4000):'',blockId:typeof x?.blockId==='string'?x.blockId:''})) : [],
   };
 }
 
@@ -212,7 +214,7 @@ function normalizeComment(value: any): WriterComment {
   return {
     id: typeof value?.id === 'string' ? value.id : crypto.randomUUID(),
     blockId: typeof value?.blockId === 'string' ? value.blockId : '',
-    text: typeof value?.text === 'string' ? value.text.slice(0, 4000) : '',
+    text: typeof value?.text === 'string' ? visibleMarkupText(value.text).slice(0, 4000) : '',
     authorId: typeof value?.authorId === 'string' ? value.authorId.slice(0, 100) : undefined,
     authorName: typeof value?.authorName === 'string' ? value.authorName.slice(0, 120) : undefined,
     createdAt: typeof value?.createdAt === 'string' ? value.createdAt : new Date().toISOString(),
@@ -259,7 +261,7 @@ function normalizeBlock(block: any): WriterBlock {
 }
 
 function normalizeRun(run: any): WriterRun {
-  const out: WriterRun = { text: typeof run?.text === 'string' ? run.text : '', bold: Boolean(run?.bold), italic: Boolean(run?.italic), underline: Boolean(run?.underline), strike: Boolean(run?.strike) };
+  const out: WriterRun = { text: visibleMarkupText(typeof run?.text === 'string' ? run.text : ''), bold: Boolean(run?.bold), italic: Boolean(run?.italic), underline: Boolean(run?.underline), strike: Boolean(run?.strike) };
   if (typeof run?.fontFamily === 'string') out.fontFamily = run.fontFamily.slice(0, 80);
   if (Number.isFinite(Number(run?.fontSize))) out.fontSize = Math.min(96, Math.max(8, Number(run.fontSize)));
   if (typeof run?.color === 'string' && /^#[0-9a-f]{6}$/i.test(run.color)) out.color = run.color;
