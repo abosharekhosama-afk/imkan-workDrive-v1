@@ -1259,6 +1259,34 @@ export class FilesService {
    * Complete version history for a file, newest first. Tenant-scoped by
    * `orgId` and read-gated: cross-tenant or unreadable files are a 404.
    */
+  async setFileControl(user: AccessTokenPayload, id: string, action: 'CHECK_OUT' | 'CHECK_IN' | 'MARK_FINAL' | 'ENABLE_EDITING' | 'REINDEX') {
+    const file = await this.prisma.file.findFirst({ where: { id, orgId: user.org_id, deletedAt: null, status: FileStatus.ACTIVE }, include: { metadata: true } });
+    if (!file || !(await this.canReadFile(user, file))) throw new NotFoundException('File not found');
+    if (!(await this.effective.canWrite(user, ResourceType.FILE, id))) throw new ForbiddenException('Edit permission is required');
+    const now = new Date();
+    if (action === 'CHECK_OUT') {
+      if (file.isFinal) throw new ConflictException('Final files must be enabled for editing before checkout');
+      const result = await this.prisma.file.updateMany({ where: { id, orgId: user.org_id, checkedOutById: null, isFinal: false }, data: { checkedOutById: user.sub, checkedOutAt: now } });
+      if (!result.count) throw new ConflictException(file.checkedOutById ? 'File is already checked out' : 'File cannot be checked out');
+    } else if (action === 'CHECK_IN') {
+      if (file.checkedOutById !== user.sub) throw new ForbiddenException('Only the user who checked out this file can check it in');
+      await this.prisma.file.updateMany({ where: { id, orgId: user.org_id, checkedOutById: user.sub }, data: { checkedOutById: null, checkedOutAt: null } });
+    } else if (action === 'MARK_FINAL') {
+      if (file.checkedOutById && file.checkedOutById !== user.sub) throw new ConflictException('File is checked out by another user');
+      await this.prisma.file.update({ where: { id }, data: { isFinal: true, checkedOutById: null, checkedOutAt: null } });
+    } else if (action === 'ENABLE_EDITING') {
+      await this.prisma.file.update({ where: { id }, data: { isFinal: false } });
+    } else {
+      // Search is backed by FileMetadata fields. Re-index refreshes the searchable row from its current source values;
+      // it does not pretend to extract text from binary formats when no extractor/OCR pipeline is configured.
+      await this.prisma.fileMetadata.upsert({ where: { fileId: id }, create: { fileId: id }, update: { updatedAt: now } });
+      await this.prisma.file.update({ where: { id }, data: { indexedAt: now } });
+    }
+    await this.recordActivity(user.org_id, id, user.sub, AuditAction.UPDATE, { fileControl: action });
+    const updated = await this.prisma.file.findUnique({ where: { id }, select: { id: true, isFinal: true, checkedOutById: true, checkedOutAt: true, indexedAt: true } });
+    return { ...updated, action };
+  }
+
   async getDetails(user: AccessTokenPayload, id: string) {
     const file = await this.prisma.file.findFirst({
       where: { id, orgId: user.org_id, deletedAt: null },
@@ -1274,7 +1302,7 @@ export class FilesService {
       id: file.id, resourceType: 'FILE' as const, name: file.name, originalName: file.originalName,
       mimeType: file.mimeType, extension: file.extension, size: Number(file.size),
       createdAt: file.createdAt.toISOString(), updatedAt: file.updatedAt.toISOString(),
-      owner: file.owner, location: file.folder, visibility: file.visibility, status: file.status,
+      owner: file.owner, location: file.folder, visibility: file.visibility, status: file.status, isFinal: file.isFinal, checkedOutById: file.checkedOutById, checkedOutAt: file.checkedOutAt, indexedAt: file.indexedAt,
       metadata: file.metadata, tags: file.tags.map(({ tag }) => tag),
     };
   }
@@ -1794,7 +1822,7 @@ export class FilesService {
     })().catch(() => undefined);
   }
 
-  private async requireMutableFile<T extends { id: string; orgId: string; ownerId: string; folder?: { teamFolderId?: string | null } | null }>(
+  private async requireMutableFile<T extends { id: string; orgId: string; ownerId: string; isFinal?: boolean; checkedOutById?: string | null; folder?: { teamFolderId?: string | null } | null }>(
     user: AccessTokenPayload,
     file: T | null,
     deniedMessage: string,
@@ -1806,6 +1834,8 @@ export class FilesService {
     if (!(await this.effective.canWrite(user, ResourceType.FILE, file.id))) {
       throw new ForbiddenException(deniedMessage);
     }
+    if (file.isFinal) throw new ForbiddenException('This file is marked as final and is read-only');
+    if (file.checkedOutById && file.checkedOutById !== user.sub) throw new ForbiddenException('This file is checked out by another user');
     return file;
   }
 

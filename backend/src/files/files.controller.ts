@@ -287,6 +287,14 @@ export class FilesController {
     return this.files.restore(user, id);
   }
 
+  @Post(':id/control/:action')
+  controlFile(@CurrentUser() user: AccessTokenPayload, @Param('id', new ParseUUIDPipe({ version: '4' })) id: string, @Param('action') action: string) {
+    const allowed = ['check-out', 'check-in', 'mark-final', 'enable-editing', 'reindex'];
+    if (!allowed.includes(action)) throw new BadRequestException('Unsupported file action');
+    const mapped = ({ 'check-out': 'CHECK_OUT', 'check-in': 'CHECK_IN', 'mark-final': 'MARK_FINAL', 'enable-editing': 'ENABLE_EDITING', reindex: 'REINDEX' } as const)[action as 'check-out' | 'check-in' | 'mark-final' | 'enable-editing' | 'reindex'];
+    return this.files.setFileControl(user, id, mapped);
+  }
+
   @Patch(':id')
   rename(
     @CurrentUser() user: AccessTokenPayload,
