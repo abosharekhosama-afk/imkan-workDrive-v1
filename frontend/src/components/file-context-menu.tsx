@@ -83,8 +83,11 @@ export function FileContextMenu({
       { key: "move", label: `${D("moveTo")} (Z)`, hint: "Z", icon: FileMenuIcons.moveTo, onSelect: onMove ?? (() => toast("moveTo")) },
       { key: "copy", label: `${D("copyTo")} (C)`, hint: "C", icon: FileMenuIcons.copyTo, onSelect: handlers.onCopy ?? (() => toast("copyTo")) },
       { key: "workflow", label: D("assignWorkflow"), icon: FileMenuIcons.assignWorkflow, onSelect: handlers.onAssignWorkflow ?? (() => toast("assignWorkflow")) },
-      { key: "organize", label: D("organize"), icon: FileMenuIcons.organize, onSelect: handlers.onOrganize ?? (() => toast("organize")) },
-      { key: "labelAs", label: label("nav.labels"), icon: FileMenuIcons.organize, onSelect: handlers.onLabelAs },
+      { key: "organize", label: D("organize"), icon: FileMenuIcons.organize, submenu: true, submenuItems: [
+        ...(handlers.onFavoriteToggle ? [{ key: "favorite", label: label(handlers.isFavorite ? "files.unfavorite" : "files.favorite"), icon: handlers.isFavorite ? FileMenuIcons.unfavorite : FileMenuIcons.favorite, onSelect: handlers.onFavoriteToggle }] : []),
+        ...(handlers.onLabelAs ? [{ key: "labelAs", label: label("nav.labels"), icon: FileMenuIcons.organize, onSelect: handlers.onLabelAs }] : []),
+        ...(handlers.onOrganize ? [{ key: "dataTemplate", label: label("menu.associateDataTemplate"), icon: FileMenuIcons.organize, onSelect: handlers.onOrganize }] : []),
+      ] },
     ],
     [
       { key: "search", label: D("searchInFold"), icon: FileMenuIcons.searchInFold, onSelect: () => toast("searchInFold") },

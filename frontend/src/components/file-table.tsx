@@ -15,6 +15,7 @@ import type { WorkflowResourceStatus } from "../lib/api/workflows";
 import { formatBytes, resolveItemSize } from "../lib/api/quota";
 import { formatDateLocalized, latestOf } from "../lib/localized";
 import { followResourceKey } from "../lib/follow-updates-logic";
+import { listWorkspaceLabels, listWorkspaceLabelResources } from "../lib/api/workspace-labels";
 import type { ShareLaunchMode } from "../lib/share-launch-logic";
 import { listFileDataTemplateBindings, listFolderDataTemplateBindings } from "../lib/api/metadata";
 
@@ -157,6 +158,10 @@ export function FileTable({
 }: FileTableProps) {
   const { label, locale } = useLocale();
   const [templateBadges, setTemplateBadges] = useState<Map<string, string[]>>(new Map());
+  const [labelBadges, setLabelBadges] = useState<Map<string, Array<{ id: string; name: string; color: string }>>>(new Map());
+  useEffect(() => { let live = true; void (async () => { try { const labels = await listWorkspaceLabels(); const rows = await Promise.all(labels.map(async item => ({ item, resources: await listWorkspaceLabelResources(item.id).catch(() => []) }))); const next = new Map<string, Array<{ id: string; name: string; color: string }>>(); for (const { item, resources } of rows) for (const resource of resources) { const key = `${resource.resourceType}:${resource.resourceId}`; next.set(key, [...(next.get(key) ?? []), { id: item.id, name: item.name, color: item.color }]); } if (live) setLabelBadges(next); } catch { if (live) setLabelBadges(new Map()); } })(); return () => { live = false; }; }, [folders, files]);
+  const resourceLabels = (type: "FILE" | "FOLDER", id: string) => (labelBadges.get(`${type}:${id}`) ?? []).map(item => <button key={item.id} type="button" title={item.name} onClick={event => { event.preventDefault(); event.stopPropagation(); window.location.assign(`/files/labels?label=${encodeURIComponent(item.id)}`); }} className="ms-1 inline-flex max-w-[130px] items-center gap-1 text-[10px] text-slate-600 hover:underline"><i className="h-2 w-2 shrink-0 rounded-full" style={{ background: item.color }} /><span className="truncate">{item.name}</span></button>);
+  const followingMark = (type: "FILE" | "FOLDER", id: string) => followIds.has(followResourceKey(type, id)) ? <span className="ms-1 inline-flex items-center text-[11px] text-slate-500" title={locale === "ar" ? "تتم متابعة التحديثات" : "Following updates"} aria-label={locale === "ar" ? "تتم متابعة التحديثات" : "Following updates"}><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9"/><path d="M10 21h4"/></svg></span> : null;
   useEffect(() => { let live = true; const load = async () => { const entries = await Promise.all([...folders.map(async f => { try { const rows = await listFolderDataTemplateBindings(f.id); return [f.id, rows.map(x => x.template.name)] as const; } catch { return [f.id, []] as const; } }), ...files.map(async f => { try { const rows = await listFileDataTemplateBindings(f.id); return [f.id, rows.map(x => x.template.name)] as const; } catch { return [f.id, []] as const; } })]); if (live) setTemplateBadges(new Map(entries)); }; void load(); return () => { live = false; }; }, [folders, files]);
   const templateBadge = (type: "FILE"|"FOLDER", id: string) => (templateBadges.get(id) ?? []).map(name => <button key={`${id}-${name}`} type="button" title={locale === "ar" ? `فتح قالب البيانات ${name}` : `Open Data Template ${name}`} onClick={e => { e.preventDefault(); e.stopPropagation(); onDataTemplateBadgeClick?.(type,id); }} className="ms-1 inline-flex max-w-[150px] items-center gap-1 rounded-full border border-sky-200 bg-sky-50 px-2 py-0.5 text-[9px] font-medium text-sky-700 hover:bg-sky-100"><span aria-hidden="true">▤</span><span className="truncate">{name}</span></button>);
   const controlled = sortField !== undefined && sortDir !== undefined;
@@ -293,7 +298,7 @@ export function FileTable({
                 onDelete: canMutate ? () => onDelete("FOLDER", folder.id) : undefined, onAssignWorkflow: onAssignWorkflow && canMutate ? () => onAssignWorkflow("FOLDER", folder.id, folder.name) : undefined,
                 onOrganize: onOrganize && canMutate ? () => onOrganize("FOLDER", folder.id) : undefined, onLabelAs: onLabelAs ? () => onLabelAs("FOLDER", folder.id, folder.name) : undefined,
                 onFollowUpdates: onFollowUpdates ? () => onFollowUpdates("FOLDER", folder.id, folder.name) : undefined,
-                isFollowingUpdates: followIds.has(followResourceKey("FOLDER", folder.id)),
+                isFollowingUpdates: followIds.has(followResourceKey("FOLDER", folder.id)), isFavorite: favoriteIds.has(folder.id),
               }}
               onCopyLink={onCopyLink ? () => onCopyLink(folder.id) : undefined}
               onToast={onToast}
@@ -313,7 +318,7 @@ export function FileTable({
                   <FileIcon kind="folder" label={label("files.type.folder")} />
                   <span className="min-w-0 truncate">
                     <span className="wd-list-name block truncate">{folder.name}</span>
-                    <span className="wd-list-meta block truncate">{label("files.uploadedBy").replace("{name}", folder.ownerName ?? folder.ownerEmail ?? label("files.type.folder"))}</span>{workflowBadge(folder.id, folder.name)}{templateBadge("FOLDER", folder.id)}{followIds.has(followResourceKey("FOLDER", folder.id)) ? <span className="ms-2 inline-flex items-center gap-1 rounded-full bg-violet-50 px-2 py-0.5 text-[9px] font-medium text-violet-700" title={locale === "ar" ? "تتم متابعة التحديثات" : "Following updates"}>◉ {locale === "ar" ? "متابَع" : "Following"}</span> : null}
+                    <span className="wd-list-meta block truncate">{label("files.uploadedBy").replace("{name}", folder.ownerName ?? folder.ownerEmail ?? label("files.type.folder"))}</span>{workflowBadge(folder.id, folder.name)}{templateBadge("FOLDER", folder.id)}{resourceLabels("FOLDER", folder.id)}{followingMark("FOLDER", folder.id)}
                   </span>
                 </Link>
               </td>
@@ -342,7 +347,7 @@ export function FileTable({
                     onDelete: canMutate ? () => onDelete("FOLDER", folder.id) : undefined, onAssignWorkflow: onAssignWorkflow && canMutate ? () => onAssignWorkflow("FOLDER", folder.id, folder.name) : undefined,
                     onOrganize: onOrganize && canMutate ? () => onOrganize("FOLDER", folder.id) : undefined, onLabelAs: onLabelAs ? () => onLabelAs("FOLDER", folder.id, folder.name) : undefined,
                     onFollowUpdates: onFollowUpdates ? () => onFollowUpdates("FOLDER", folder.id, folder.name) : undefined,
-                    isFollowingUpdates: followIds.has(followResourceKey("FOLDER", folder.id)),
+                    isFollowingUpdates: followIds.has(followResourceKey("FOLDER", folder.id)), isFavorite: favoriteIds.has(folder.id),
                   }}
                 />
               </td>
@@ -352,7 +357,7 @@ export function FileTable({
             <tr key={file.id} draggable={Boolean(canMutate)} onDragStart={(e) => { e.dataTransfer.effectAllowed="move"; e.dataTransfer.setData("application/x-workdrive", JSON.stringify({type:"FILE",id:file.id,name:file.name})); }} onContextMenu={(e) => { e.preventDefault(); setCtxMenu({ x: e.clientX, y: e.clientY, node: (<FileContextMenu
               onToast={onToast}
               handlers={{ onOpen: onOpen ? () => onOpen("FILE", file.id, file.name) : undefined, onInspect: onInspect ? () => onInspect("FILE", file.id, file.name) : undefined, onPreview: onPreview ? () => onPreview("FILE", file.id, file.name, file.mimeType ?? undefined, file.size ?? undefined) : undefined, onComment: onComment ? () => onComment("FILE", file.id, file.name, file.mimeType ?? undefined, file.size ?? undefined) : undefined, onDownload: () => onDownload(file.id), onShare: canShare ? (mode) => onShare("FILE", file.id, mode) : undefined, onRename: canMutate ? () => onRename("FILE", file.id, file.name) : undefined, onMove: onMove && canMutate ? () => onMove("FILE", file.id, file.name) : undefined,
-                    onCopy: onCopy && canMutate ? () => onCopy("FILE", file.id, file.name) : undefined, onFavoriteToggle: onFavorite ? () => onFavorite("FILE", file.id) : undefined, onVersionHistory: onVersionHistory ? () => onVersionHistory("FILE", file.id, file.name, file.mimeType ?? undefined, file.size ?? undefined) : undefined, onDelete: canMutate ? () => onDelete("FILE", file.id) : undefined, onAssignWorkflow: onAssignWorkflow && canMutate ? () => onAssignWorkflow("FILE", file.id, file.name) : undefined, onOrganize: onOrganize && canMutate ? () => onOrganize("FILE", file.id) : undefined, onLabelAs: onLabelAs ? () => onLabelAs("FILE", file.id, file.name) : undefined, onFollowUpdates: onFollowUpdates ? () => onFollowUpdates("FILE", file.id, file.name) : undefined, isFollowingUpdates: followIds.has(followResourceKey("FILE", file.id)) }}
+                    onCopy: onCopy && canMutate ? () => onCopy("FILE", file.id, file.name) : undefined, onFavoriteToggle: onFavorite ? () => onFavorite("FILE", file.id) : undefined, onVersionHistory: onVersionHistory ? () => onVersionHistory("FILE", file.id, file.name, file.mimeType ?? undefined, file.size ?? undefined) : undefined, onDelete: canMutate ? () => onDelete("FILE", file.id) : undefined, onAssignWorkflow: onAssignWorkflow && canMutate ? () => onAssignWorkflow("FILE", file.id, file.name) : undefined, onOrganize: onOrganize && canMutate ? () => onOrganize("FILE", file.id) : undefined, onLabelAs: onLabelAs ? () => onLabelAs("FILE", file.id, file.name) : undefined, onFollowUpdates: onFollowUpdates ? () => onFollowUpdates("FILE", file.id, file.name) : undefined, isFollowingUpdates: followIds.has(followResourceKey("FILE", file.id)), isFavorite: favoriteIds.has(file.id) }}
               onCopyLink={onCopyLink ? () => onCopyLink(file.id) : undefined}
               x={e.clientX} y={e.clientY} onClose={() => setCtxMenu(null)}
             />)}); }} className="wd-list-row group relative cursor-grab active:cursor-grabbing" data-compact={compact || undefined} data-selected={selectedIds.has(file.id) || undefined} onClick={(e) => inspectFromRowClick(e, "FILE", file.id, file.name)}>
@@ -370,7 +375,7 @@ export function FileTable({
                   <FileIcon kind="file" mimeType={file.mimeType} name={file.name} label={label("files.type.file")} />
                   <span className="min-w-0 truncate">
                     <span className="wd-list-name block truncate">{file.name}</span>
-                    <span className="wd-list-meta block truncate">{label("files.uploadedBy").replace("{name}", file.ownerName ?? file.ownerEmail ?? label("files.type.file"))}</span>{workflowBadge(file.id, file.name)}{templateBadge("FILE", file.id)}{followIds.has(followResourceKey("FILE", file.id)) ? <span className="ms-2 inline-flex items-center gap-1 rounded-full bg-violet-50 px-2 py-0.5 text-[9px] font-medium text-violet-700" title={locale === "ar" ? "تتم متابعة التحديثات" : "Following updates"}>◉ {locale === "ar" ? "متابَع" : "Following"}</span> : null}
+                    <span className="wd-list-meta block truncate">{label("files.uploadedBy").replace("{name}", file.ownerName ?? file.ownerEmail ?? label("files.type.file"))}</span>{workflowBadge(file.id, file.name)}{templateBadge("FILE", file.id)}{resourceLabels("FILE", file.id)}{followingMark("FILE", file.id)}
                   </span>
                 </button>
               </td>

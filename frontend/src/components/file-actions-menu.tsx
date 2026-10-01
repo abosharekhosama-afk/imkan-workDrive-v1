@@ -24,6 +24,7 @@ export interface FileActionHandlers {
   onLabelAs?: () => void;
   onFollowUpdates?: () => void;
   isFollowingUpdates?: boolean;
+  isFavorite?: boolean;
   onVersionHistory?: () => void;
   onComment?: () => void;
   onDelete?: () => void;
@@ -66,8 +67,11 @@ export function FileActionsMenu({ context, handlers, onCopyLink }: FileActionsMe
   if (handlers.onMove) push({ label: `${label("menu.moveTo")} (Z)`, icon: FileMenuIcons.moveTo, onSelect: handlers.onMove, dividerBefore: true });
   if (handlers.onCopy) push({ label: `${label("menu.copyTo")} (C)`, icon: FileMenuIcons.copyTo, onSelect: handlers.onCopy });
   if (handlers.onAssignWorkflow) push({ label: label("menu.assignWorkflow"), icon: FileMenuIcons.assignWorkflow, onSelect: handlers.onAssignWorkflow });
-  if (handlers.onOrganize) push({ label: label("menu.organize"), icon: FileMenuIcons.organize, onSelect: handlers.onOrganize });
-  if (handlers.onLabelAs) push({ label: label("nav.labels"), icon: FileMenuIcons.organize, onSelect: handlers.onLabelAs });
+  const organizeItems: ActionDropdownItem[] = [];
+  if (handlers.onFavoriteToggle) organizeItems.push({ label: label(context.isFavorite ? "files.unfavorite" : "files.favorite"), icon: context.isFavorite ? FileMenuIcons.unfavorite : FileMenuIcons.favorite, onSelect: handlers.onFavoriteToggle });
+  if (handlers.onLabelAs) organizeItems.push({ label: label("nav.labels"), icon: FileMenuIcons.organize, onSelect: handlers.onLabelAs });
+  if (handlers.onOrganize) organizeItems.push({ label: label("menu.associateDataTemplate"), icon: FileMenuIcons.organize, onSelect: handlers.onOrganize });
+  if (organizeItems.length) push({ label: label("menu.organize"), icon: FileMenuIcons.organize, submenu: organizeItems });
 
   if (handlers.onDownload) push({ label: `${label("menu.download")} (⌃S)`, icon: FileMenuIcons.download, onSelect: handlers.onDownload, dividerBefore: true });
   if (handlers.onRename) push({ label: label("menu.rename"), icon: FileMenuIcons.rename, onSelect: handlers.onRename });
@@ -89,13 +93,6 @@ export function FileActionsMenu({ context, handlers, onCopyLink }: FileActionsMe
     });
   }
 
-  if (handlers.onFavoriteToggle) {
-    push({
-      label: label(context.isFavorite ? "files.unfavorite" : "files.favorite"),
-      icon: context.isFavorite ? FileMenuIcons.unfavorite : FileMenuIcons.favorite,
-      onSelect: handlers.onFavoriteToggle,
-    });
-  }
 
   if (handlers.onDelete) push({
     label: label("menu.moveToTrash"),

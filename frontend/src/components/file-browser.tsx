@@ -830,6 +830,7 @@ export function FileBrowser({
           onAssignWorkflow={(type,id,name)=>setWorkflowTarget({type,id,name})}
           onFollowUpdates={(type, id, name) => openFollowUpdates([{ type, id, name }])}
           onLabelAs={(type,id,name)=>setLabelTarget({type,id,name})}
+          onOrganize={(type,id)=>{ const item = type === "FILE" ? files.find(x=>x.id===id) : folders.find(x=>x.id===id); if (item) setDataTemplateTargets([{ type, id, name: item.name }]); }}
           followIds={followIds}
           workflowStatuses={workflowStatuses}
           onWorkflowStatusClick={(status, resourceName) => setWorkflowStatusTarget({ status, resourceName })}
