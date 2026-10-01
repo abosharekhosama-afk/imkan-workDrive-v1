@@ -9,6 +9,9 @@ export type OfficeDocument = {
 export function getOfficeCapabilities() { return apiRequest('/office/capabilities'); }
 export function createOfficeDocument(input: { name: string; type: OfficeType; folderId?: string | null }) { return apiRequest<OfficeDocument>('/office/documents', { method: 'POST', body: JSON.stringify(input) }); }
 export function openOfficeDocument(fileId: string) { return apiRequest<OfficeDocument>(`/office/files/${fileId}`); }
+export type OfficeCopyMode = 'OPEN' | 'CONVERT';
+export type OfficeCopyResult = { fileId: string; document: OfficeDocument; created: boolean; mode: OfficeCopyMode; sourceFileId?: string; sourceFormat?: string };
+export function createOfficeCopy(fileId: string, mode: OfficeCopyMode) { return apiRequest<OfficeCopyResult>(`/office/files/${fileId}/office-copy`, { method: 'POST', body: JSON.stringify({ mode }) }); }
 export type OfficeWorkDriveContext = {
   file: { id: string; name: string; originalName: string; extension?: string | null; mimeType?: string | null; size: number; updatedAt: string; ownerId: string };
   location: { id: string; name: string; parentId?: string | null; teamFolderId?: string | null } | null;
