@@ -595,6 +595,10 @@ model File {
   createdAt      DateTime       @default(now()) @map("created_at")
   updatedAt      DateTime       @updatedAt @map("updated_at")
   lastAccessedAt DateTime?      @map("last_accessed_at")
+  isFinal        Boolean        @default(false) @map("is_final")
+  checkedOutById String?        @map("checked_out_by_id") @db.Char(36)
+  checkedOutAt   DateTime?      @map("checked_out_at")
+  indexedAt      DateTime?      @map("indexed_at")
   storageKey      String?      @map("storage_key")
   storageObjectId String?      @map("storage_object_id") @db.Char(36)
 
@@ -623,6 +627,8 @@ model File {
   @@index([orgId, status])
   @@index([orgId, fileType])
   @@index([orgId, ownerId])
+  @@index([orgId, isFinal])
+  @@index([checkedOutById])
   @@index([ownerId])
   @@fulltext([name])
   @@map("files")
@@ -906,6 +912,8 @@ model Template {
 
   @@index([orgId, libraryId, status])
   @@index([orgId, ownerId])
+  @@index([orgId, isFinal])
+  @@index([checkedOutById])
   @@index([libraryId, categoryId])
   @@fulltext([name, description])
   @@map("templates")
@@ -1987,6 +1995,8 @@ model ConnectionCustomService {
   @@unique([orgId, linkName])
   @@index([orgId, status, updatedAt])
   @@index([orgId, ownerId])
+  @@index([orgId, isFinal])
+  @@index([checkedOutById])
   @@map("connection_custom_services")
 }
 
@@ -2307,6 +2317,8 @@ model Workflow {
 
   @@index([orgId, status])
   @@index([orgId, ownerId])
+  @@index([orgId, isFinal])
+  @@index([checkedOutById])
   @@map("workflows")
 }
 
