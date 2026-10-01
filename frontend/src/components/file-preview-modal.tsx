@@ -31,6 +31,7 @@ import { formatBytes } from "../lib/api/quota";
 import { copyFile, getFileDlp, moveFile, renameFile, requestDownload, trashFile, type FileDlpDecision } from "../lib/api/files";
 import { triggerDownload } from "../lib/api/download";
 import { getViewPreferences } from "../lib/api/enterprise";
+import { saveFileAsTemplate } from "../lib/api/templates";
 import { openResourceInNewTab } from "../lib/selection-bar-actions-logic";
 import type { ShareLaunchMode } from "../lib/share-launch-logic";
 import { useRouter } from "next/navigation";
@@ -298,6 +299,14 @@ export function FilePreviewModal({ target, onClose, onPrevFile, onNextFile, init
     } else if (key === "download") void handleDownload();
     else if (key === "rename") setRenameOpen(true);
     else if (key === "followUpdates") setFollowOpen(true);
+    else if (key === "saveAsTemplate") {
+      const suggestedName = activeTarget.name.replace(/\.[^.]+$/, "");
+      const name = window.prompt(label("menu.saveAsTemplate") || "Save as template", suggestedName);
+      if (!name?.trim()) return;
+      void saveFileAsTemplate({ fileId: activeTarget.id, name: name.trim(), library: "PERSONAL" })
+        .then(() => showToast(label("templates.created") || "Template created"))
+        .catch((cause) => showToast(cause instanceof Error ? cause.message : label("preview.error")));
+    }
     else if (key === "moreOptions") setPanel("details");
     else if (key === "moveToTrash") {
       if (!window.confirm(label("files.deleteConfirm"))) return;
@@ -364,6 +373,7 @@ export function FilePreviewModal({ target, onClose, onPrevFile, onNextFile, init
               "sep",
               { key: "share", labelKey: "menu.shareMenu", icon: FileMenuIcons.shareMenu, chevron: true },
               { key: "copyPermalink", labelKey: "menu.copyPermalink", icon: FileMenuIcons.copyPermalink },
+              { key: "saveAsTemplate", label: label("menu.saveAsTemplate") || "Save as template", icon: FileMenuIcons.organize },
               "sep",
               { key: "moveTo", labelKey: "menu.moveTo", icon: FileMenuIcons.moveTo, hint: "Z" },
               { key: "copyTo", labelKey: "menu.copyTo", icon: FileMenuIcons.copyTo, hint: "C" },
