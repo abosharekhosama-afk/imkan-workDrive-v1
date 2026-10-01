@@ -99,6 +99,11 @@ export class OfficeController {
     return this.office.listAuditEvents(user, fileId, { limit: limit ? Number(limit) : undefined, action, since, until });
   }
 
+  @Post('files/:fileId/office-copy')
+  async createOfficeCopy(@CurrentUser() user: AccessTokenPayload, @Param('fileId') fileId: string, @Body() body: { mode?: 'OPEN' | 'CONVERT' }) {
+    return this.office.createOfficeCopy(user, fileId, body?.mode === 'OPEN' ? 'OPEN' : 'CONVERT');
+  }
+
   @Get('files/:fileId')
   open(@CurrentUser() user: AccessTokenPayload, @Param('fileId') fileId: string) { return this.office.open(user, fileId); }
 

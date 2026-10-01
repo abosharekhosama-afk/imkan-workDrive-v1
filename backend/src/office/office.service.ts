@@ -708,6 +708,38 @@ export class OfficeService implements OfficeEngine {
     return this.permissions.canWrite(user, resource);
   }
 
+  async createOfficeCopy(user: AccessTokenPayload, fileId: string, mode: 'OPEN' | 'CONVERT' = 'CONVERT') {
+    const source = await this.getAuthorizedFile(user, fileId);
+    const extension = (source.extension ?? '').replace(/^\./, '').toLowerCase();
+    if (extension === 'imkan' || String(source.mimeType ?? '').toLowerCase().startsWith('application/vnd.imkan.')) {
+      const existing = await this.open(user, fileId);
+      return { fileId, document: existing, created: false, mode };
+    }
+    await this.assertExternalOfficeFormatAllowed(user, extension);
+    if (!['docx', 'doc', 'odt', 'rtf', 'txt', 'xlsx', 'xls', 'ods', 'csv', 'pptx', 'ppt', 'odp'].includes(extension)) {
+      throw new NotFoundException('This file format cannot be opened or converted in IMKAN Office');
+    }
+
+    const version = await this.prisma.fileVersion.findFirst({
+      where: { fileId, orgId: user.org_id, status: 'ACTIVE' },
+      orderBy: { versionNumber: 'desc' },
+      include: { storageObject: true },
+    });
+    const storageKey = version?.storageObject?.storageKey ?? source.storageKey;
+    if (!storageKey) throw new NotFoundException('No active file version is available');
+    const bytes = await this.storage.readStoredObject(storageKey);
+    const imported = await this.conversion.import(bytes, source.name);
+    const folderId = source.folderId ?? null;
+    const base = imported.title.replace(/\.[^.]+$/, '').trim() || 'Document';
+    const suffix = mode === 'OPEN' ? ' - Editable Copy' : ' - IMKAN Office';
+    const targetName = `${base}${suffix}.imkan`;
+    const created = await this.createImported(user, { ...imported, title: `${base}${suffix}` }, folderId);
+    await this.auditOfficeEvent(user, mode === 'OPEN' ? 'OFFICE_EDITABLE_COPY_CREATED' : 'OFFICE_CONVERSION_CREATED', created.fileId, {
+      sourceFileId: fileId, sourceFormat: imported.sourceFormat, mode, sourceName: source.name, targetName,
+    });
+    return { fileId: created.fileId, document: created, created: true, mode, sourceFileId: fileId, sourceFormat: imported.sourceFormat };
+  }
+
   async open(user: AccessTokenPayload, fileId: string): Promise<OfficeDocumentState> {
     const file = await this.getAuthorizedFile(user, fileId);
     let document = await this.prisma.officeDocument.findUnique({ where: { fileId } });
