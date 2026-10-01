@@ -12,6 +12,7 @@ import { PermissionService } from '../permissions/permission.service';
 import { FilesService } from '../files/files.service';
 import type { OfficeDocumentState, OfficeEngine, OfficeType } from './core/office-engine.interface';
 import { OfficeConversionService, type OfficeImportResult } from './office-conversion.service';
+import { repairShowFromPreservation } from './ooxml-package-logic';
 import { publishOfficeRealtimeEvent } from './office-realtime';
 import { NotificationsService } from '../notifications/notifications.service';
 import { WorkflowEngineService } from '../workflows/workflow-engine.service';
@@ -1175,7 +1176,7 @@ export class OfficeService implements OfficeEngine {
 
   private assertContentSize(content: unknown) {
     const bytes = Buffer.byteLength(JSON.stringify(content ?? null), 'utf8');
-    if (bytes > 8 * 1024 * 1024) throw new ConflictException({ message: 'Office document state is too large', code: 'OFFICE_DOCUMENT_TOO_LARGE' });
+    if (bytes > 16 * 1024 * 1024) throw new ConflictException({ message: 'Office document state is too large', code: 'OFFICE_DOCUMENT_TOO_LARGE' });
   }
 
   private normalizeOfficeContent(content: unknown) {
@@ -1200,14 +1201,15 @@ export class OfficeService implements OfficeEngine {
           x: clampNumber(e?.x, 0, 100, 10), y: clampNumber(e?.y, 0, 100, 10), width: clampNumber(e?.width, 1, 100, 40), height: clampNumber(e?.height, 1, 100, 20),
           rotation: clampNumber(e?.rotation, -360, 360, 0),
           text: typeof e?.text === 'string' ? visibleMarkupText(e.text).slice(0, 10000) : undefined,
-          src: typeof e?.src === 'string' && /^(https?:\/\/|data:audio\/|data:video\/|blob:)/i.test(e.src) ? e.src.slice(0, 4000) : undefined,
-          poster: typeof e?.poster === 'string' && /^(https?:\/\/|data:image\/|blob:)/i.test(e.poster) ? e.poster.slice(0, 4000) : undefined,
+          src: typeof e?.src === 'string' && /^(https?:\/\/|data:image\/|data:audio\/|data:video\/|blob:)/i.test(e.src) ? e.src.slice(0, 2_000_000) : undefined,
+          poster: typeof e?.poster === 'string' && /^(https?:\/\/|data:image\/|blob:)/i.test(e.poster) ? e.poster.slice(0, 2_000_000) : undefined,
           shape: ['rect','circle','roundRect'].includes(String(e?.shape)) ? String(e.shape) : undefined,
           fill, color, fontSize: clampNumber(e?.fontSize, 8, 120, 20), fontFamily,
           bold: Boolean(e?.bold), italic: Boolean(e?.italic), underline: Boolean(e?.underline), strike: Boolean(e?.strike),
           lineHeight: clampNumber(e?.lineHeight, 0.8, 3, 1.2),
           bullet: ['none','bullet','number'].includes(String(e?.bullet)) ? String(e.bullet) : 'none',
           align: ['start','center','end'].includes(String(e?.align)) ? String(e.align) : 'start',
+          direction: e?.direction === 'rtl' || e?.textDirection === 'rtl' ? 'rtl' : e?.direction === 'ltr' || e?.textDirection === 'ltr' ? 'ltr' : undefined,
           border: Boolean(e?.border), rows, mediaAutoplay: Boolean(e?.mediaAutoplay), mediaLoop: Boolean(e?.mediaLoop), mediaMuted: Boolean(e?.mediaMuted), mediaVolume: clampNumber(e?.mediaVolume, 0, 1, e?.type === 'video' ? 1 : 1), mediaTrimStart: clampNumber(e?.mediaTrimStart, 0, 86400, 0), mediaTrimEnd: clampNumber(e?.mediaTrimEnd, 0, 86400, 0), animation: e?.animation && typeof e.animation === 'object' ? { type: ['fade','zoom','slide-in','float','pulse','spin'].includes(String(e.animation.type)) ? String(e.animation.type) : 'fade', duration: clampNumber(e.animation.duration, 50, 10000, 500), delay: clampNumber(e.animation.delay, 0, 60000, 0), direction: ['left','right','up','down'].includes(String(e.animation.direction)) ? String(e.animation.direction) : undefined, phase: ['entrance','emphasis','exit'].includes(String(e.animation.phase)) ? String(e.animation.phase) : 'entrance', order: clampNumber(e.animation.order,1,100,1), trigger: ['with-previous','after-previous','on-click'].includes(String(e.animation.trigger)) ? String(e.animation.trigger) : 'on-click' } : undefined, animations: Array.isArray(e?.animations) ? e.animations.slice(0,20).map((a:any,i:number)=>({ type:['fade','zoom','slide-in','float','pulse','spin'].includes(String(a?.type)) ? String(a.type) : 'fade', duration:clampNumber(a?.duration,50,10000,500), delay:clampNumber(a?.delay,0,60000,0), direction:['left','right','up','down'].includes(String(a?.direction))?String(a.direction):undefined, phase:['entrance','emphasis','exit'].includes(String(a?.phase))?String(a.phase):'entrance', order:clampNumber(a?.order,1,100,i+1), trigger:['with-previous','after-previous','on-click'].includes(String(a?.trigger))?String(a.trigger):'on-click' })) : undefined, groupId: typeof e?.groupId === 'string' ? e.groupId.slice(0,100) : undefined,
         };
       });
@@ -1249,6 +1251,6 @@ export class OfficeService implements OfficeEngine {
   }
 
   private toState(document: { id: string; fileId: string; type: OfficeDocumentType; nativeFormat: string; content: unknown; revision: number; updatedAt: Date; sourceTemplateId?: string | null; sourceTemplateVersionId?: string | null }): OfficeDocumentState {
-    return { id: document.id, fileId: document.fileId, type: document.type as OfficeType, nativeFormat: document.nativeFormat, content: cleanStoredOfficeText(document.content), revision: document.revision, updatedAt: document.updatedAt.toISOString(), sourceTemplateId: document.sourceTemplateId ?? null, sourceTemplateVersionId: document.sourceTemplateVersionId ?? null };
+    return { id: document.id, fileId: document.fileId, type: document.type as OfficeType, nativeFormat: document.nativeFormat, content: repairShowFromPreservation(cleanStoredOfficeText(document.content)), revision: document.revision, updatedAt: document.updatedAt.toISOString(), sourceTemplateId: document.sourceTemplateId ?? null, sourceTemplateVersionId: document.sourceTemplateVersionId ?? null };
   }
 }

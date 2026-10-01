@@ -1,6 +1,7 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
 import JSZip from 'jszip';
 import type { OfficeType } from './core/office-engine.interface';
+import { blipEmbedId, boxPercent, drawingText, maskBalanced, outerElements, relationshipMap, resolvePackageTarget, slideCanvas, slidePieces, wordDirection, wordFlowText } from './ooxml-package-logic';
 
 export type ConversionCategory = 'preserved'|'converted'|'warning'|'unsupported';
 export type ConversionDiagnostic = { code: string; severity: 'info'|'warning'|'loss'; category?: ConversionCategory; message: string; path?: string };
@@ -15,7 +16,7 @@ const PRESERVE_LIMIT = 4 * 1024 * 1024;
 const PRESERVE_SKIP = new Set(['word/document.xml','word/_rels/document.xml.rels','xl/workbook.xml','xl/_rels/workbook.xml.rels','ppt/presentation.xml','ppt/_rels/presentation.xml.rels']);
 
 const esc=(s:string)=>s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&apos;');
-const textOf=(xml:string)=>{const m=[...xml.matchAll(/<w:t(?:\s[^>]*)?>([\s\S]*?)<\/w:t>/g)];return m.map(x=>x[1].replace(/&lt;/g,'<').replace(/&gt;/g,'>').replace(/&amp;/g,'&')).join('');};
+const textOf=(xml:string)=>wordFlowText(xml);
 const decodeXml=(s:string)=>s.replace(/&lt;/g,'<').replace(/&gt;/g,'>').replace(/&amp;/g,'&').replace(/&quot;/g,'\"').replace(/&apos;/g,"'");
 const col=(n:number)=>{let s='';for(let x=n+1;x;x=Math.floor((x-1)/26))s=String.fromCharCode(65+(x-1)%26)+s;return s;};
 const cellRef=(r:number,c:number)=>`${col(c)}${r+1}`;
@@ -480,19 +481,19 @@ export class OfficeConversionService {
     // Paragraph extraction must only inspect direct document-body paragraphs; Word table cells
     // also contain <w:p> nodes and must remain owned by the table parser. Preserve offsets by
     // masking table XML with equal-length whitespace before paragraph matching.
-    const bodyXmlForParagraphs=xml.replace(/<w:tbl[\s\S]*?<\/w:tbl>/g,(m:string)=>' '.repeat(m.length));
+    const bodyXmlForParagraphs=maskBalanced(xml,'w:tbl');
     const importedComments:any[]=[]; const importedChanges:any[]=[];
     const footnoteBlockIds:Record<string,string>={};
     const endnoteBlockIds:Record<string,string>={};
     let bi=0;
-    for(const m of bodyXmlForParagraphs.matchAll(/<w:p(?:\s[^>]*)?>[\s\S]*?<\/w:p>/g)){
-      const pxml=m[0]; const ppr=/<w:pPr[\s\S]*?<\/w:pPr>/.exec(pxml)?.[0]||'';
+    for(const m of outerElements(bodyXmlForParagraphs,'w:p')){
+      const pxml=m.xml; const ppr=/<w:pPr[\s\S]*?<\/w:pPr>/.exec(pxml)?.[0]||'';
       const styleId=/<w:pStyle[^>]*w:val="([^"]+)"/.exec(ppr)?.[1];
       const numPr=/<w:numPr[\s\S]*?<\/w:numPr>/.test(ppr);
       const numId=/<w:numId[^>]*w:val="(\d+)"/.exec(ppr)?.[1]; const ilvl=/<w:ilvl[^>]*w:val="(\d+)"/.exec(ppr)?.[1]||'0'; const listMeta=numId?numberingMap[numToAbstract[numId]]?.[ilvl]:undefined;
       const alignVal=/<w:jc[^>]*w:val="([^"]+)"/.exec(ppr)?.[1];
       const align=alignVal==='center'?'center':alignVal==='right'?'end':alignVal==='both'?'justify':'start';
-      const direction=/<w:bidi(?:\s[^>]*)?\/?>/.test(ppr)?'rtl':alignVal==='left'?'ltr':'auto';
+      const direction=wordDirection(ppr, alignVal);
       const type=styleId && /heading1|title/i.test(styleId)?'heading1':styleId && /heading2/i.test(styleId)?'heading2':styleId && /heading3/i.test(styleId)?'heading3':numPr?'list-item':'paragraph';
       const runs:any[]=[];
       const referencedFootnoteIds=[...pxml.matchAll(/<w:footnoteReference[^>]*w:id="(\d+)"/g)].map(x=>x[1]);
@@ -500,8 +501,9 @@ export class OfficeConversionService {
       for(const rm of pxml.matchAll(/<w:r(?:\s[^>]*)?>[\s\S]*?<\/w:r>/g)){
         const rx=rm[0], rpr=/<w:rPr[\s\S]*?<\/w:rPr>/.exec(rx)?.[0]||'';
         const texts=[...rx.matchAll(/<w:t(?:\s[^>]*)?>([\s\S]*?)<\/w:t>/g)].map(x=>decode(x[1])).join('');
-        if(!texts && !/<w:br/.test(rx)) continue;
-        const run:any={text:texts,bold:!!rpr.match(/<w:b(?:\s|\/|>)/),italic:!!rpr.match(/<w:i(?:\s|\/|>)/),underline:!!rpr.match(/<w:u(?:\s|\/|>)/),strike:!!rpr.match(/<w:strike(?:\s|\/|>)/)};
+        const lineBreak=/<w:br\b/.test(rx);
+        if(!texts && !lineBreak) continue;
+        const run:any={text:texts+(lineBreak?'\n':''),bold:!!rpr.match(/<w:b(?:\s|\/|>)/),italic:!!rpr.match(/<w:i(?:\s|\/|>)/),underline:!!rpr.match(/<w:u(?:\s|\/|>)/),strike:!!rpr.match(/<w:strike(?:\s|\/|>)/)};
         const style=styleId?styleMap[styleId]:undefined; if(style){run.bold ||= style.bold; run.italic ||= style.italic; run.underline ||= style.underline;}
         const fs=/<w:sz[^>]*w:val="(\d+)"/.exec(rpr)?.[1]; if(fs) run.fontSize=Number(fs)/2;
         const color=/<w:color[^>]*w:val="([0-9A-Fa-f]{6})"/.exec(rpr)?.[1]; if(color) run.color='#'+color;
@@ -538,9 +540,9 @@ export class OfficeConversionService {
       if(rid&&target&&/\/image$/.test(typeRel)) documentImageRels[rid]=this.resolveRelationshipTarget('word/document.xml',target);
     }
     let importedImageNo=0;
-    for(const pm of bodyXmlForParagraphs.matchAll(/<w:p(?:\s[^>]*)?>[\s\S]*?<\/w:p>/g)){
-      const pxml=pm[0]; const imageMatch=/<a:blip[^>]*r:embed="([^"]+)"/.exec(pxml); if(!imageMatch) continue;
-      const imagePath=documentImageRels[imageMatch[1]]; if(!imagePath) continue; const imageFile=z.file(imagePath); if(!imageFile) continue;
+    for(const pm of outerElements(bodyXmlForParagraphs,'w:p')){
+      const pxml=pm.xml; const embed=blipEmbedId(pxml); if(!embed) continue;
+      const imagePath=documentImageRels[embed]; if(!imagePath) continue; const imageFile=z.file(imagePath); if(!imageFile) continue;
       const imageBuf=await imageFile.async('nodebuffer'); const ext=(imagePath.split('.').pop()||'png').toLowerCase();
       const extMime=ext==='jpg'||ext==='jpeg'?'jpeg':ext==='svg'?'svg+xml':ext;
       const extent=/<wp:extent[^>]*cx="(\d+)"[^>]*cy="(\d+)"/.exec(pxml);
@@ -550,13 +552,13 @@ export class OfficeConversionService {
     }
 
     // Native table conversion: each row/cell becomes Writer table cells.
-    for(const tm of xml.matchAll(/<w:tbl[\s\S]*?<\/w:tbl>/g)){
-      const rawRows=[...tm[0].matchAll(/<w:tr[\s\S]*?<\/w:tr>/g)]; const rows=rawRows.map((tr:any,ri:number)=>[...tr[0].matchAll(/<w:tc[\s\S]*?<\/w:tc>/g)].map((tc:any,ci:number)=>({id:`cell-${ri}-${ci}`,runs:[{text:textOf(tc[0])}],align:'start'}))); const headerRows=rawRows.filter((tr:any)=>/<w:tblHeader(?:\s[^>]*)?\/>/.test(tr[0])).length;
+    for(const tm of outerElements(xml,'w:tbl')){
+      const rawRows=outerElements(tm.xml,'w:tr'); const rows=rawRows.map((tr,ri)=>outerElements(tr.xml,'w:tc').map((tc,ci)=>({id:`cell-${ri}-${ci}`,runs:[{text:textOf(tc.xml)}],align:'start'}))); const headerRows=rawRows.filter((tr)=>/<w:tblHeader(?:\s[^>]*)?\/>/.test(tr.xml)).length;
       const tableId=`table-${blocks.length+1}`; blocks.push({id:tableId,type:'table',align:'start',runs:[{text:''}],table:{rows,bordered:true,headerRows,repeatHeaderRow:headerRows>0}});
-      blockSourceOffsets[tableId]=typeof tm.index==='number'?tm.index:xml.indexOf(tm[0]);
+      blockSourceOffsets[tableId]=tm.index;
     }
     const docRelXml=z.file('word/_rels/document.xml.rels')?await z.file('word/_rels/document.xml.rels')!.async('string'):''; const hyperlinkMap:Record<string,string>={}; for(const m of docRelXml.matchAll(/<Relationship\s+([^>]*)\/>/g)){const a=m[1],id=/Id="([^"]+)"/.exec(a)?.[1],target=/Target="([^"]+)"/.exec(a)?.[1],typeRel=/Type="([^"]+)"/.exec(a)?.[1]||''; if(id&&target&&/hyperlink$/.test(typeRel)) hyperlinkMap[id]=target;}
-    const paragraphXml=[...bodyXmlForParagraphs.matchAll(/<w:p(?:\s[^>]*)?>[\s\S]*?<\/w:p>/g)].map(m=>m[0]);
+    const paragraphXml=outerElements(bodyXmlForParagraphs,'w:p').map(m=>m.xml);
     const bookmarksRaw:any[]=[]; paragraphXml.forEach((pxml,idx)=>{ for(const m of pxml.matchAll(/<w:bookmarkStart[^>]*w:id="(\d+)"[^>]*w:name="([^"]+)"/g)) bookmarksRaw.push({id:m[1],name:m[2],blockId:`p${idx+1}`}); });
     const bookmarks=bookmarksRaw.map(b=>({id:b.id,name:b.name,blockId:b.blockId}));
     const importedCaptions:any[]=[]; paragraphXml.forEach((pxml,idx)=>{ const blockId=`p${idx+1}`; for(const m of pxml.matchAll(/<w:fldSimple[^>]*w:instr="([^"]*\bSEQ\s+(Figure|Table|Equation)\b[^"]*)"[^>]*>([\s\S]*?)<\/w:fldSimple>/gi)){ const label=m[2]; const display=decode(([...m[3].matchAll(/<w:t(?:\s[^>]*)?>([\s\S]*?)<\/w:t>/g)].map(x=>x[1]).join(''))||''); const num=(display.match(/(\d+(?:[.\-]\d+)*)/)||[])[1]||String(importedCaptions.length+1); importedCaptions.push({id:`caption-${importedCaptions.length+1}`,blockId,label,number:num,text:display||`${label} ${num}`}); } });
@@ -649,8 +651,8 @@ export class OfficeConversionService {
   private async importPptx(buffer:Buffer,filename:string):Promise<OfficeImportResult>{
     const z=await JSZip.loadAsync(buffer);
     const pres=z.file('ppt/presentation.xml')?await z.file('ppt/presentation.xml')!.async('string'):'';
-    const size=/<p:sldSz[^>]*cx="(\d+)"[^>]*cy="(\d+)"/.exec(pres);
-    const cx=size?Number(size[1]):12192000, cy=size?Number(size[2]):6858000;
+    const canvas=slideCanvas(pres);
+    const cx=canvas.cx, cy=canvas.cy;
     const aspect=Math.abs(cx/cy-16/9)<0.12?'16:9':'4:3';
     const relXml=z.file('ppt/_rels/presentation.xml.rels')?await z.file('ppt/_rels/presentation.xml.rels')!.async('string'):'';
     const rels:Record<string,string>={};
@@ -664,30 +666,35 @@ export class OfficeConversionService {
       const xml=await z.file(p)!.async('string');
       const elements:any[]=[]; let ei=0;
       const slideBg=color(xml,'p:bgPr');
-      const spTree=/<p:spTree>([\s\S]*?)<\/p:spTree>/.exec(xml)?.[1]||'';
-      for(const sm of spTree.matchAll(/<p:sp>([\s\S]*?)<\/p:sp>/g)){
-        const body=sm[1]; const g=geom(body); const tx=/<p:txBody>([\s\S]*?)<\/p:txBody>/.exec(body)?.[1];
-        if(tx){
-          const runs=textRuns(tx); const text=runs.map(r=>r.text).join(''); if(text){
-          const first=runs[0]||{}; const algn=/<a:pPr[^>]*algn="(l|ctr|r|just)"/.exec(tx)?.[1];
-          elements.push({id:`el-${i+1}-${++ei}`,type:'text',...g,x:Math.max(0,Math.min(100,g.x)),y:Math.max(0,Math.min(100,g.y)),width:Math.max(4,Math.min(100,g.width)),height:Math.max(4,Math.min(100,g.height)),text,fontSize:first.fontSize||20,fontFamily:first.fontFamily||'Arial',color:first.color||'#111827',bold:Boolean(first.bold),italic:Boolean(first.italic),underline:Boolean(first.underline),align:algn==='ctr'?'center':algn==='r'?'end':'start',textDirection:/(?:rtl|rightToLeft)\s*=\s*"(?:1|true)"/i.test(tx)?'rtl':'ltr'});
-            continue;
-          }
-        }
-        const prst=/<a:prstGeom[^>]*prst="([^"]+)"/.exec(body)?.[1]||'rect';
-        const fill=color(body)||'#e2e8f0'; const line=color(body,'a:ln')||undefined;
-        elements.push({id:`el-${i+1}-${++ei}`,type:'shape',...g,shape:/ellipse|oval|circle/i.test(prst)?'circle':'rect',fill,border:Boolean(line),borderColor:line,borderWidth:line?1:undefined});
-      }
-      for(const lm of spTree.matchAll(/<p:cxnSp>([\s\S]*?)<\/p:cxnSp>/g)){
-        const body=lm[1],g=geom(body),line=color(body,'a:ln')||'#64748b';elements.push({id:`el-${i+1}-${++ei}`,type:'line',...g,color:line,borderColor:line,borderWidth:1});
-      }
       const slideRelPath=p.replace(/([^/]+)$/,'_rels/$1.rels'); const slideRelXml=z.file(slideRelPath)?await z.file(slideRelPath)!.async('string'):'';
-      for(const pm of xml.matchAll(/<p:pic>[\s\S]*?<\/p:pic>/g)){
-        const body=pm[0],rid=/<a:blip[^>]*r:embed="([^"]+)"/.exec(body)?.[1];if(!rid)continue;const target=new RegExp(`<Relationship\\b[^>]*Id="${escapeRegExp(rid)}"[^>]*Target="([^"]+)"`).exec(slideRelXml)?.[1];if(!target)continue;const imagePath=this.resolveRelationshipTarget(p,target);const imageFile=z.file(imagePath);if(!imageFile)continue;const imageBuf=await imageFile.async('nodebuffer');const ext=(imagePath.split('.').pop()||'png').toLowerCase();const g=geom(body);elements.push({id:`el-${i+1}-${++ei}`,type:'image',...g,src:`data:image/${ext==='jpg'||ext==='jpeg'?'jpeg':ext};base64,${imageBuf.toString('base64')}`,alt:'Imported image'});
-      }
-      // Native PPT tables: import cell text into Show's editable table matrix.
-      for(const tm of xml.matchAll(/<a:tbl>([\s\S]*?)<\/a:tbl>/g)){
-        const rows=[...tm[1].matchAll(/<a:tr[\s\S]*?>([\s\S]*?)<\/a:tr>/g)].map(r=>[...r[1].matchAll(/<a:tc[\s\S]*?>([\s\S]*?)<\/a:tc>/g)].map(c=>[...c[1].matchAll(/<a:t(?:\s[^>]*)?>([\s\S]*?)<\/a:t>/g)].map(x=>decode(x[1])).join('')));const g=geom(tm[0]);elements.push({id:`el-${i+1}-${++ei}`,type:'table',...g,rows});
+      const relMap=relationshipMap(slideRelXml);
+      for(const piece of slidePieces(xml)){
+        const g=boxPercent(piece.box,cx,cy);
+        const id=`el-${i+1}-${++ei}`;
+        if(piece.kind==='picture'){
+          const rid=blipEmbedId(piece.xml); const target=rid?relMap[rid]?.target:''; if(!target) continue;
+          const imagePath=resolvePackageTarget(p,target); const imageFile=z.file(imagePath); if(!imageFile) continue;
+          const imageBuf=await imageFile.async('nodebuffer'); const ext=(imagePath.split('.').pop()||'png').toLowerCase();
+          const mime=ext==='jpg'||ext==='jpeg'?'jpeg':ext==='svg'?'svg+xml':ext;
+          elements.push({id,type:'image',...g,src:`data:image/${mime};base64,${imageBuf.toString('base64')}`,alt:'Imported image'});
+          continue;
+        }
+        if(piece.kind==='line'){ const line=color(piece.xml,'a:ln')||'#64748b'; elements.push({id,type:'line',...g,color:line,borderColor:line,borderWidth:1}); continue; }
+        if(piece.kind==='table'){
+          const rows=[...piece.xml.matchAll(/<a:tr[\s\S]*?>([\s\S]*?)<\/a:tr>/g)].map(r=>[...r[1].matchAll(/<a:tc[\s\S]*?>([\s\S]*?)<\/a:tc>/g)].map(c=>drawingText(c[1])));
+          elements.push({id,type:'table',...g,rows});
+          continue;
+        }
+        const tx=/<(?:p|a):txBody>([\s\S]*?)<\/(?:p|a):txBody>/.exec(piece.xml)?.[1]||'';
+        const text=drawingText(piece.xml);
+        if(text.trim()){
+          const runs=textRuns(tx); const first=runs.find(r=>r.text)||runs[0]||{}; const algn=/<a:pPr[^>]*algn="(l|ctr|r|just)"/.exec(tx)?.[1];
+          elements.push({id,type:'text',...g,text,fontSize:first.fontSize||20,fontFamily:first.fontFamily||'Arial',color:first.color||'#111827',bold:Boolean(first.bold),italic:Boolean(first.italic),underline:Boolean(first.underline),align:algn==='ctr'?'center':algn==='r'?'end':'start',textDirection:/(?:rtl|rightToLeft)\s*=\s*"(?:1|true)"/i.test(tx)?'rtl':'ltr'});
+          continue;
+        }
+        const prst=/<a:prstGeom[^>]*prst="([^"]+)"/.exec(piece.xml)?.[1]||'rect';
+        const fill=color(piece.xml)||'#e2e8f0'; const line=color(piece.xml,'a:ln')||undefined;
+        elements.push({id,type:'shape',...g,shape:/ellipse|oval|circle/i.test(prst)?'circle':'rect',fill,border:Boolean(line),borderColor:line,borderWidth:line?1:undefined});
       }
       // Chart relationship + cached values. The imported chart remains native Show chart data,
       // allowing it to be edited and later exported again without flattening to an image.
@@ -698,7 +705,7 @@ export class OfficeConversionService {
       }
       // Speaker notes are stored in a separate notesSlide part. Preserve the visible text.
       let notes='';const nRid=[...xml.matchAll(/<p:extLst[\s\S]*?r:id="([^"]+)"/g)].map(m=>m[1])[0];
-      const notesRelPath=p.replace(/ppt\/slides\/slide(\d+)\.xml/, 'ppt/slides/_rels/slide$1.xml.rels'); const notesRel=z.file(notesRelPath)?await z.file(notesRelPath)!.async('string'):'';const notesTarget=/Type="[^"]*\/notesSlide"[^>]*Target="([^"]+)"/.exec(notesRel)?.[1];if(notesTarget){const np=this.resolveRelationshipTarget(p,notesTarget),nf=z.file(np);if(nf){const nx=await nf.async('string');notes=[...nx.matchAll(/<a:t(?:\s[^>]*)?>([\s\S]*?)<\/a:t>/g)].map(m=>decode(m[1])).join(' ').trim();}}
+      const notesRelPath=p.replace(/ppt\/slides\/slide(\d+)\.xml/, 'ppt/slides/_rels/slide$1.xml.rels'); const notesRel=z.file(notesRelPath)?await z.file(notesRelPath)!.async('string'):'';const notesTarget=/Type="[^"]*\/notesSlide"[^>]*Target="([^"]+)"/.exec(notesRel)?.[1];if(notesTarget){const np=this.resolveRelationshipTarget(p,notesTarget),nf=z.file(np);if(nf){const nx=await nf.async('string');notes=drawingText(nx).trim();}}
       const layout=elements.some(e=>e.type==='text'&&e.y<30)?(elements.filter(e=>e.type==='text').length>1?'title-content':'title'):'blank';
       const tr=/<p:transition[^>]*>([\s\S]*?)<\/p:transition>/.exec(xml)?.[1]||'';
       const transitionMatch=/<p:(fade|push|wipe|split|cover|uncover|zoom)\b/.exec(tr);

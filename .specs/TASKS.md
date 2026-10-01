@@ -170,6 +170,7 @@
 | — | Zip archives list as a folder tree with inline preview, and Markdown files render as documents | ✅ Implemented |
 | — | Office sync keeps identical revisions quiet, rebases safe edits, and applies overlapping edits only when the user chooses Keep my work | ✅ Implemented |
 | — | Writer and Show show the visible Office text instead of raw Word and PowerPoint markup | ✅ Implemented |
+| — | PowerPoint pictures stay embedded and slide text keeps the package order | ✅ Implemented |
 
 ---
 
