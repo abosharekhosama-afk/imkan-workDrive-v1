@@ -912,8 +912,6 @@ model Template {
 
   @@index([orgId, libraryId, status])
   @@index([orgId, ownerId])
-  @@index([orgId, isFinal])
-  @@index([checkedOutById])
   @@index([libraryId, categoryId])
   @@fulltext([name, description])
   @@map("templates")
@@ -1995,8 +1993,6 @@ model ConnectionCustomService {
   @@unique([orgId, linkName])
   @@index([orgId, status, updatedAt])
   @@index([orgId, ownerId])
-  @@index([orgId, isFinal])
-  @@index([checkedOutById])
   @@map("connection_custom_services")
 }
 
@@ -2317,8 +2313,6 @@ model Workflow {
 
   @@index([orgId, status])
   @@index([orgId, ownerId])
-  @@index([orgId, isFinal])
-  @@index([checkedOutById])
   @@map("workflows")
 }
 
