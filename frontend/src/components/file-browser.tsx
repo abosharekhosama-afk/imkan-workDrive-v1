@@ -63,6 +63,7 @@ import { FollowUpdatesModal, type FollowTarget } from "./follow-updates-modal";
 import { followResourceKey } from "../lib/follow-updates-logic";
 import type { ShareLaunchMode } from "../lib/share-launch-logic";
 import { DataTemplateAssociationModal, type DataTemplateTarget } from "./data-template-association-modal";
+import { LabelAssignmentModal } from "./label-assignment-modal";
 
 export function FileBrowser({
   folderId,
@@ -183,6 +184,7 @@ export function FileBrowser({
   const [followIds, setFollowIds] = useState<Set<string>>(new Set());
   const [followTargets, setFollowTargets] = useState<FollowTarget[] | null>(null);
   const [dataTemplateTargets, setDataTemplateTargets] = useState<DataTemplateTarget[] | null>(null);
+  const [labelTarget, setLabelTarget] = useState<{type:"FILE"|"FOLDER";id:string;name:string}|null>(null);
 
   const canMutate = canMutateContent(role, readOnly);
   const canShare = canShareContent(role, readOnly);
@@ -250,10 +252,17 @@ export function FileBrowser({
       const isSlide = /presentation|powerpoint|keynote|slide/.test(mime) || /\.(ppt|pptx|odp)$/i.test(name);
       const isDocument = /wordprocessing|msword|officedocument\.word|pdf|text\//.test(mime) || /\.(doc|docx|odt|pdf|txt|rtf)$/i.test(name);
       if (advancedFilter.type !== "all") {
-        const expected = advancedFilter.type.toUpperCase();
-        if (String(file.fileType ?? "").toUpperCase() !== expected && !(expected === "PDF" && mime === "application/pdf")) return false;
+        const expectedTypes: Record<string, string[]> = {
+          document: ["DOCUMENT", "TEXT", "CODE"],
+          spreadsheet: ["SPREADSHEET"],
+          presentation: ["PRESENTATION"],
+          image: ["IMAGE"],
+          pdf: ["PDF"],
+        };
+        const allowed = expectedTypes[advancedFilter.type] ?? [advancedFilter.type.toUpperCase()];
+        if (!allowed.includes(String(file.fileType ?? "").toUpperCase()) && !(advancedFilter.type === "pdf" && mime === "application/pdf")) return false;
       }
-      if (advancedFilter.status !== "all" && advancedFilter.status !== "PENDING_APPROVAL" && String(file.status ?? "ACTIVE") !== advancedFilter.status) return false;
+      if (advancedFilter.status !== "all" && String(file.status ?? "ACTIVE").toUpperCase() !== advancedFilter.status.toUpperCase()) return false;
       if (advancedFilter.owner && file.ownerId !== advancedFilter.owner) return false;
       const dateValue = advancedFilter.dateField === "created" ? file.createdAt : file.updatedAt;
       if (advancedFilter.dateFrom && Date.parse(dateValue ?? "") < Date.parse(`${advancedFilter.dateFrom}T00:00:00`)) return false;
@@ -270,7 +279,15 @@ export function FileBrowser({
         default: return true;
       }
     };
-    const folderMatches = (folder: FolderRecord) => filter === "all" || filter === "folders" || (filter === "favorites" && favoriteIds.has(folder.id));
+    const folderMatches = (folder: FolderRecord) => {
+      if (!(filter === "all" || filter === "folders" || (filter === "favorites" && favoriteIds.has(folder.id)))) return false;
+      if (advancedFilter.owner && folder.ownerId !== advancedFilter.owner) return false;
+      if (advancedFilter.status !== "all" && advancedFilter.status !== "PENDING_APPROVAL") return false;
+      const dateValue = folder.updatedAt;
+      if (advancedFilter.dateFrom && Date.parse(dateValue ?? "") < Date.parse(`${advancedFilter.dateFrom}T00:00:00`)) return false;
+      if (advancedFilter.dateTo && Date.parse(dateValue ?? "") > Date.parse(`${advancedFilter.dateTo}T23:59:59`)) return false;
+      return true;
+    };
     const compare = (a: FileRecord | FolderRecord, b: FileRecord | FolderRecord) => {
       let av: string | number = a.name.toLocaleLowerCase();
       let bv: string | number = b.name.toLocaleLowerCase();
@@ -812,9 +829,11 @@ export function FileBrowser({
           favoriteIds={favoriteIds}
           onAssignWorkflow={(type,id,name)=>setWorkflowTarget({type,id,name})}
           onFollowUpdates={(type, id, name) => openFollowUpdates([{ type, id, name }])}
+          onLabelAs={(type,id,name)=>setLabelTarget({type,id,name})}
           followIds={followIds}
           workflowStatuses={workflowStatuses}
           onWorkflowStatusClick={(status, resourceName) => setWorkflowStatusTarget({ status, resourceName })}
+          onDataTemplateBadgeClick={(type,id) => { handleInspect(type,id); setInspectorTab("dataTemplates"); setInspectorOpen(true); setMobileInspectorOpen(true); }}
           onCopyLink={(id) => {
             const target = folders.some((folder) => folder.id === id)
               ? { type: "FOLDER" as const, id }
@@ -1039,6 +1058,7 @@ export function FileBrowser({
       triggerOnly
     />
     {followTargets?.length ? <FollowUpdatesModal targets={followTargets} onClose={() => setFollowTargets(null)} onChanged={(messageKey, name) => { refreshFollows(); if (messageKey && name) setToast(label(messageKey).replace("{name}", name)); else if (messageKey) setToast(label(messageKey).replace("{name}", followTargets[0]?.name ?? "")); }} /> : null}
+    {labelTarget ? <LabelAssignmentModal target={labelTarget} onClose={()=>setLabelTarget(null)} onChanged={()=>void load()} /> : null}
     {dataTemplateTargets?.length ? <DataTemplateAssociationModal targets={dataTemplateTargets} dataTemplates={dataTemplates} onClose={() => setDataTemplateTargets(null)} onChanged={() => { void load(); }} /> : null}
     {toast ? <Toast message={toast} onDismiss={() => setToast(null)} /> : null}
     </section>

@@ -128,8 +128,8 @@ export default function SharedWithMePage() {
           </div>
         </div>
       ) : (
-        <div className="wd-card overflow-x-auto w-full max-w-full">
-          <table className="wd-table min-w-[40rem]">
+        <div className="wd-card workflow-like-list w-full max-w-full overflow-x-auto">
+          <table className="wd-table workflow-like-table min-w-[40rem]">
             <thead>
               <tr>
                 <th>{label("shared.name")}</th>

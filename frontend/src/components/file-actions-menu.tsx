@@ -21,6 +21,7 @@ export interface FileActionHandlers {
   onCopy?: () => void;
   onFavoriteToggle?: () => void;
   onOrganize?: () => void;
+  onLabelAs?: () => void;
   onFollowUpdates?: () => void;
   isFollowingUpdates?: boolean;
   onVersionHistory?: () => void;
@@ -66,6 +67,7 @@ export function FileActionsMenu({ context, handlers, onCopyLink }: FileActionsMe
   if (handlers.onCopy) push({ label: `${label("menu.copyTo")} (C)`, icon: FileMenuIcons.copyTo, onSelect: handlers.onCopy });
   if (handlers.onAssignWorkflow) push({ label: label("menu.assignWorkflow"), icon: FileMenuIcons.assignWorkflow, onSelect: handlers.onAssignWorkflow });
   if (handlers.onOrganize) push({ label: label("menu.organize"), icon: FileMenuIcons.organize, onSelect: handlers.onOrganize });
+  if (handlers.onLabelAs) push({ label: label("nav.labels"), icon: FileMenuIcons.organize, onSelect: handlers.onLabelAs });
 
   if (handlers.onDownload) push({ label: `${label("menu.download")} (⌃S)`, icon: FileMenuIcons.download, onSelect: handlers.onDownload, dividerBefore: true });
   if (handlers.onRename) push({ label: label("menu.rename"), icon: FileMenuIcons.rename, onSelect: handlers.onRename });

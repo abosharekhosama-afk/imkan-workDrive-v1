@@ -250,7 +250,7 @@ export default function TeamFoldersPage() {
       {loading ? (
         <div className="team-folders-list-loading"><SkeletonLoader rows={4} columns={1} /></div>
       ) : visibleFolders.length === 0 ? (
-        <div className="flex min-h-0 flex-1 items-center justify-center self-stretch">
+        <div className="flex min-h-[calc(100vh-220px)] w-full flex-1 items-center justify-center self-stretch bg-white px-6 py-12">
           <EmptyState
             title={search ? (locale === "ar" ? "لا توجد نتائج" : "No matching Team Folders") : label("teamFolders.empty")}
             description={search ? undefined : label("teamFolders.emptyDescription")}

@@ -13,6 +13,8 @@ export const TENANT_SCOPED_MODELS = new Set([
   'Tag',
   'AuditLog',
   'FileDataTemplate',
+  'WorkspaceLabel',
+  'WorkspaceLabelResource',
 ]);
 
 export type QueryArgs = {

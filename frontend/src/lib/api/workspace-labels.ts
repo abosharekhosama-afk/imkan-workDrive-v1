@@ -1,0 +1,10 @@
+import { apiRequest } from './client';
+export type WorkspaceLabel = { id: string; name: string; color: string; position: number; resourceCount: number; createdAt: string; updatedAt: string };
+export type WorkspaceLabelResource = { id: string; labelId: string; resourceType: 'FILE'|'FOLDER'; resourceId: string; resource: { id: string; name: string; mimeType?: string|null; size?: number|null; folderId?: string|null; parentId?: string|null; updatedAt?: string } };
+export const listWorkspaceLabels = () => apiRequest<WorkspaceLabel[]>('/workspace-labels');
+export const createWorkspaceLabel = (name: string, color: string) => apiRequest<WorkspaceLabel>('/workspace-labels', { method:'POST', body:JSON.stringify({name,color}) });
+export const updateWorkspaceLabel = (id: string, patch: Partial<Pick<WorkspaceLabel,'name'|'color'|'position'>>) => apiRequest<WorkspaceLabel>(`/workspace-labels/${id}`, { method:'PATCH', body:JSON.stringify(patch) });
+export const deleteWorkspaceLabel = (id: string) => apiRequest(`/workspace-labels/${id}`, { method:'DELETE' });
+export const listWorkspaceLabelResources = (id: string) => apiRequest<WorkspaceLabelResource[]>(`/workspace-labels/${id}/resources`);
+export const attachWorkspaceLabel = (id:string,type:'FILE'|'FOLDER',resourceId:string) => apiRequest(`/workspace-labels/${id}/resources/${type}/${resourceId}`,{method:'POST'});
+export const detachWorkspaceLabel = (id:string,type:'FILE'|'FOLDER',resourceId:string) => apiRequest(`/workspace-labels/${id}/resources/${type}/${resourceId}`,{method:'DELETE'});

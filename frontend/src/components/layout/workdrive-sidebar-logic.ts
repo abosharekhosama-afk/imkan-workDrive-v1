@@ -15,6 +15,7 @@ export function buildWorkdriveSidebarItems(pathname: string): WorkdriveSidebarIt
     (pathname.startsWith("/files/") &&
       !pathname.startsWith("/files/recent") &&
       !pathname.startsWith("/files/favorites") &&
+      !pathname.startsWith("/files/labels") &&
       !pathname.startsWith("/files/shared-with-me") &&
       !pathname.startsWith("/files/shared-links") &&
       !pathname.startsWith("/files/collections") &&
@@ -28,7 +29,7 @@ export function buildWorkdriveSidebarItems(pathname: string): WorkdriveSidebarIt
     { href: "/notifications", key: "nav.allUnread", icon: "bell" },
     { href: "/files/recent", key: "nav.recent", icon: "clock", active: pathname.startsWith("/files/recent") },
     { href: "/files/favorites", key: "nav.favorites", icon: "star", active: pathname.startsWith("/files/favorites") },
-    { href: "/files", key: "nav.labels", icon: "tag" },
+    { href: "/files/labels", key: "nav.labels", icon: "tag", active: pathname.startsWith("/files/labels") },
     { href: "/files/shared-with-me", key: "nav.sharedWithMe", icon: "share", active: pathname.startsWith("/files/shared-with-me") },
     { href: "/files/shared-links", key: "nav.sharedLinks", icon: "share", active: pathname.startsWith("/files/shared-links") },
     { href: "/files/collections", key: "nav.collectFiles", icon: "inbox", active: pathname.startsWith("/files/collections") },
