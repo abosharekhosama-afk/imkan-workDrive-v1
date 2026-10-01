@@ -79,6 +79,11 @@ export function renameFile(id: string, name: string): Promise<{ id: string; name
   });
 }
 
+export type FileControlAction = "check-out" | "check-in" | "mark-final" | "enable-editing" | "reindex";
+export function runFileControl(id: string, action: FileControlAction) {
+  return apiRequest<{ id: string; isFinal: boolean; checkedOutById: string | null; checkedOutAt: string | null; indexedAt: string | null; action: string }>(`/files/${id}/control/${action}`, { method: "POST" });
+}
+
 export function trashFile(id: string): Promise<{ id: string; deleted: boolean }> {
   return apiRequest(`/files/${id}`, { method: "DELETE" });
 }
