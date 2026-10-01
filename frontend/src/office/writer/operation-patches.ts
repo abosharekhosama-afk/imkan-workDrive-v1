@@ -30,5 +30,5 @@ export function applyWriterPatches(source: WriterDocument, patches: WriterPatch[
 }
 
 export function patchPathsOverlap(a: string, b: string) {
-  return a === b || a.startsWith(`${b}/`) || b.startsWith(`${a}/`) || (a.startsWith('/blocksById/') && b === '/blockOrder') || (b.startsWith('/blocksById/') && a === '/blockOrder');
+  return a === b || a.startsWith(`${b}/`) || b.startsWith(`${a}/`);
 }

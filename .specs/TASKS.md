@@ -168,6 +168,7 @@
 | — | Collect public upload runs in the collection organization, and the share dialog uses Zoho roles and a single members-plus-link layout | ✅ Implemented |
 | — | File preview actions, live text and image watermark, data-template picker, comment replies, and version history | ✅ Implemented |
 | — | Zip archives list as a folder tree with inline preview, and Markdown files render as documents | ✅ Implemented |
+| — | Office sync keeps identical revisions quiet, rebases safe edits, and applies overlapping edits only when the user chooses Keep my work | ✅ Implemented |
 
 ---
 

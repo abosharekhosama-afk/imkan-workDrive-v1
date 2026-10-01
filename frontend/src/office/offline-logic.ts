@@ -10,11 +10,7 @@ export function patchPathsOverlap(a: string, b: string): boolean {
   const norm = (p: string) => p.replace(/\/+$/, '') || '/';
   const x = norm(a);
   const y = norm(b);
-  if (x === y || x.startsWith(`${y}/`) || y.startsWith(`${x}/`)) return true;
-  if ((x.startsWith('/blocksById/') && y === '/blockOrder') || (y.startsWith('/blocksById/') && x === '/blockOrder')) return true;
-  if ((x.startsWith('/sheetsById/') && y === '/sheetOrder') || (y.startsWith('/sheetsById/') && x === '/sheetOrder')) return true;
-  if ((x.startsWith('/slidesById/') && y === '/slideOrder') || (y.startsWith('/slidesById/') && x === '/slideOrder')) return true;
-  return false;
+  return x === y || x.startsWith(`${y}/`) || y.startsWith(`${x}/`);
 }
 
 export function diffGenericDocument(previous: unknown, next: unknown): OfficeOperationPatch[] {

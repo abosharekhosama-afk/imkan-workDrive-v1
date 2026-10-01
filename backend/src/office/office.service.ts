@@ -1061,11 +1061,7 @@ export class OfficeService implements OfficeEngine {
   }
 
   private officePatchPathsOverlap(a: string, b: string) {
-    if (a === b || a.startsWith(`${b}/`) || b.startsWith(`${a}/`)) return true;
-    if ((a.startsWith('/blocksById/') && b === '/blockOrder') || (b.startsWith('/blocksById/') && a === '/blockOrder')) return true;
-    if ((a.startsWith('/sheetsById/') && b === '/sheetOrder') || (b.startsWith('/sheetsById/') && a === '/sheetOrder')) return true;
-    if ((a.startsWith('/slidesById/') && b === '/slideOrder') || (b.startsWith('/slidesById/') && a === '/slideOrder')) return true;
-    return false;
+    return a === b || a.startsWith(`${b}/`) || b.startsWith(`${a}/`);
   }
 
   private applyOfficeOperationPatches(source: any, patches: Array<{ op: 'set' | 'delete'; path: string; value?: unknown }>) {
@@ -1074,6 +1070,19 @@ export class OfficeService implements OfficeEngine {
       const parts = patch.path.split('/').slice(1).map(x => decodeURIComponent(x));
       if (!parts.length) continue;
       if (parts[0] === 'blocksById' && Array.isArray(out.blocks)) { const i=out.blocks.findIndex((b:any)=>String(b?.id)===parts[1]); if (i>=0 && patch.op==='delete') out.blocks.splice(i,1); else if(i>=0 && patch.op==='set') out.blocks[i]=patch.value; else if(i<0 && patch.op==='set') out.blocks.push(patch.value); continue; }
+      if ((parts[0] === 'blockOrder' || parts[0] === 'sheetOrder' || parts[0] === 'slideOrder') && patch.op === 'set' && Array.isArray(patch.value)) {
+        const listKey = parts[0] === 'blockOrder' ? 'blocks' : parts[0] === 'sheetOrder' ? 'sheets' : 'slides';
+        if (Array.isArray(out[listKey])) {
+          const remoteIds = out[listKey].map((item: any) => String(item?.id ?? '')).filter(Boolean);
+          const seen = new Set<string>();
+          const order: string[] = [];
+          for (const id of patch.value.map((item: unknown) => String(item))) { if (!id || seen.has(id)) continue; seen.add(id); order.push(id); }
+          for (const id of remoteIds) { if (!seen.has(id)) { seen.add(id); order.push(id); } }
+          const byId = new Map(out[listKey].map((item: any) => [String(item?.id), item]));
+          out[listKey] = order.map((id) => byId.get(id)).filter(Boolean);
+          continue;
+        }
+      }
       if (parts[0] === 'sheetsById' && Array.isArray(out.sheets)) { const i=out.sheets.findIndex((x:any)=>String(x?.id)===parts[1]); if(i>=0 && parts.length===2 && patch.op==='set') out.sheets[i]=patch.value; else if(i>=0 && parts[2]==='cells') { out.sheets[i].cells ||= {}; const key=parts.slice(3).join('/'); if(patch.op==='delete') delete out.sheets[i].cells[key]; else out.sheets[i].cells[key]=patch.value; } continue; }
       if (parts[0] === 'slidesById' && Array.isArray(out.slides)) { const i=out.slides.findIndex((x:any)=>String(x?.id)===parts[1]); if(i>=0 && parts.length===2 && patch.op==='set') out.slides[i]=patch.value; else if(i>=0 && parts[2]==='elements') { const j=out.slides[i].elements.findIndex((x:any)=>String(x?.id)===parts[3]); if(j>=0 && patch.op==='set') out.slides[i].elements[j]=patch.value; else if(j>=0 && patch.op==='delete') out.slides[i].elements.splice(j,1); } continue; }
       let target=out; for(let i=0;i<parts.length-1;i++){ const k=parts[i]; if(target[k]===undefined) target[k]={}; target=target[k]; } const key=parts[parts.length-1]; if(patch.op==='delete') delete target[key]; else target[key]=patch.value;
@@ -1082,7 +1091,7 @@ export class OfficeService implements OfficeEngine {
   }
 
   private writerPatchPathsOverlap(a: string, b: string) {
-    return a === b || a.startsWith(`${b}/`) || b.startsWith(`${a}/`) || (a.startsWith('/blocksById/') && b === '/blockOrder') || (b.startsWith('/blocksById/') && a === '/blockOrder');
+    return a === b || a.startsWith(`${b}/`) || b.startsWith(`${a}/`);
   }
 
   private applyWriterOperationPatches(source: any, patches: Array<{ op: 'set' | 'delete'; path: string; value?: unknown }>) {

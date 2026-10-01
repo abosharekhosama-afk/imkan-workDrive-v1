@@ -7,6 +7,7 @@ export type WriterOperation = {
   baseRevision: number;
   patches: WriterPatch[];
   createdAt: string;
+  held?: boolean;
 };
 
 const storageKey = (fileId: string) => `imkan:writer:offline:${fileId}`;

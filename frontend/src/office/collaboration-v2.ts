@@ -2,7 +2,7 @@ import { submitOfficeOperation, openOfficeDocument, type OfficeOperationPatch } 
 import { ApiError } from '@/lib/api/client';
 import { diffOfficeDocuments } from './offline-logic';
 
-export type OfficeQueuedOperation = { opId:string; fileId:string; baseRevision:number; patches:OfficeOperationPatch[]; createdAt:string; kind:'SHEET'|'SHOW'|'WRITER'; clientId:string; sequence:number };
+export type OfficeQueuedOperation = { opId:string; fileId:string; baseRevision:number; patches:OfficeOperationPatch[]; createdAt:string; kind:'SHEET'|'SHOW'|'WRITER'; clientId:string; sequence:number; held?:boolean };
 const key=(fileId:string)=>`imkan:office:offline:${fileId}`;
 export function queueOfficeOperation(op:OfficeQueuedOperation){ const all=readOfficeQueue(op.fileId); all.push(op); localStorage.setItem(key(op.fileId),JSON.stringify(all.slice(-200))); }
 export function readOfficeQueue(fileId:string):OfficeQueuedOperation[]{try{const v=JSON.parse(localStorage.getItem(key(fileId))||'[]');return Array.isArray(v)?v:[]}catch{return[]}}
@@ -23,6 +23,7 @@ function readSnapshotDocument(fileId:string){
 export async function flushOfficeQueue(fileId:string,sessionId:string|undefined,onRevision?:(r:number)=>void,onConflict?:(e:unknown)=>void){
   if(typeof navigator!=='undefined'&&!navigator.onLine)return;
   for(const op of [...readOfficeQueue(fileId)]){
+    if(op.held) continue;
     let current=op;
     let attempted=false;
     while(true){

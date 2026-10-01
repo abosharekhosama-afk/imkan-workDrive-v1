@@ -51,7 +51,7 @@ export function OfficeConflictDialog({conflict,queuedCount,ar=false,canKeepLocal
           <div className="mt-1 text-[11px] text-sky-700">{ar?`Revision ${conflict.remoteRevision}`:`Revision ${conflict.remoteRevision}`}</div>
         </div>
       </div>
-      <div className="px-5 pb-2 text-[11px] text-slate-500">{ar?'الاحتفاظ بالمحلي يعيد بناء العمليات فوق أحدث Revision إذا كان الدمج آمنًا. إذا كانت المسارات متداخلة سيبقى التعارض معلقًا بدل الكتابة فوق بيانات أخرى.':'Keep local rebases queued operations onto the latest revision only when their paths can be merged safely. Overlapping paths remain pending instead of overwriting remote data.'}</div>
+      <div className="px-5 pb-2 text-[11px] text-slate-500">{ar?'الاحتفاظ بعملي يكتب تعديلاتك فوق أحدث مراجعة، مع الإبقاء على العناصر البعيدة التي لم تغيّرها. التعديل المتداخل يبقى معلقًا حتى تختار الاحتفاظ به.':'Keep my work writes your edits onto the latest revision and keeps remote items you did not change. An overlapping edit stays pending until you choose to keep it.'}</div>
       <div className="flex flex-wrap items-center justify-end gap-2 border-t px-5 py-4">
         <button className="rounded border px-3 py-2 text-xs" onClick={onDismiss}>{ar?'لاحقًا':'Later'}</button>
         <button className="rounded border border-sky-600 px-3 py-2 text-xs text-sky-700" onClick={onUseRemote}>{ar?'استخدام النسخة البعيدة':'Use remote'}</button>

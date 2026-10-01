@@ -58,6 +58,7 @@ export async function flushWriterQueue(fileId: string, sessionId?: string, onRev
   if (typeof navigator !== 'undefined' && !navigator.onLine) return;
   const queue = readWriterQueue(fileId);
   for (const operation of queue) {
+    if (operation.held) continue;
     try {
       const result = await submitWriterOperation(fileId, { opId: operation.opId, baseRevision: operation.baseRevision, patches: operation.patches, sessionId });
       removeWriterOperation(fileId, operation.opId);
