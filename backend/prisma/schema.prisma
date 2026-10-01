@@ -373,8 +373,6 @@ model Organization {
   dataTemplates       FileDataTemplate[]
   dataTemplateBindings FileDataTemplateBinding[]
   fileCollections FileCollection[]
-  workspaceLabels WorkspaceLabel[]
-  workspaceLabelResources WorkspaceLabelResource[]
 
   workflows Workflow[]
   workflowRuns WorkflowRun[] @relation("OrganizationWorkflowRuns")
@@ -418,8 +416,6 @@ model User {
   auditLogs              AuditLog[]
   officeAuditPoliciesUpdated OfficeAuditPolicy[] @relation("OfficeAuditPolicyUpdater")
   favorites              Favorite[]
-  workspaceLabels        WorkspaceLabel[]
-  workspaceLabelResources WorkspaceLabelResource[]
   resourceFollows        ResourceFollow[]
   accessEvents           AccessEvent[]
   shareRecipients        FileShareRecipient[]
@@ -597,6 +593,10 @@ model File {
   lastAccessedAt DateTime?      @map("last_accessed_at")
   storageKey      String?      @map("storage_key")
   storageObjectId String?      @map("storage_object_id") @db.Char(36)
+  isFinal         Boolean      @default(false) @map("is_final")
+  checkedOutById  String?      @map("checked_out_by_id") @db.Char(36)
+  checkedOutAt    DateTime?    @map("checked_out_at")
+  indexedAt       DateTime?    @map("indexed_at")
 
   organization   Organization    @relation(fields: [orgId], references: [id])
   folder         Folder?         @relation(fields: [folderId], references: [id], onDelete: Cascade)
@@ -1755,40 +1755,6 @@ enum DlpScopeType {
   ALL
   SELECTED_FOLDERS
   EXCLUDED_FOLDERS
-}
-
-
-model WorkspaceLabel {
-  id        String   @id @default(uuid()) @db.Char(36)
-  orgId     String   @map("org_id") @db.Char(36)
-  userId    String   @map("user_id") @db.Char(36)
-  name      String   @db.VarChar(80)
-  color     String   @default("#3B82F6") @db.VarChar(20)
-  position  Int      @default(0)
-  createdAt DateTime @default(now()) @map("created_at")
-  updatedAt DateTime @updatedAt @map("updated_at")
-  organization Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
-  resources WorkspaceLabelResource[]
-  @@unique([userId, name])
-  @@index([orgId, userId, position])
-  @@map("workspace_labels")
-}
-
-model WorkspaceLabelResource {
-  id           String       @id @default(uuid()) @db.Char(36)
-  orgId        String       @map("org_id") @db.Char(36)
-  userId       String       @map("user_id") @db.Char(36)
-  labelId      String       @map("label_id") @db.Char(36)
-  resourceType ResourceType @map("resource_type")
-  resourceId   String       @map("resource_id") @db.Char(36)
-  createdAt    DateTime     @default(now()) @map("created_at")
-  organization Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
-  label WorkspaceLabel @relation(fields: [labelId], references: [id], onDelete: Cascade)
-  @@unique([labelId, resourceType, resourceId])
-  @@index([orgId, userId, resourceType, resourceId])
-  @@map("workspace_label_resources")
 }
 
 model DlpClassificationLabel {
