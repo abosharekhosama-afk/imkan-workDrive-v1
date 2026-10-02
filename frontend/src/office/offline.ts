@@ -86,7 +86,7 @@ export function queueDocumentChange(fileId:string,kind:OfficeQueuedOperation['ki
 }
 
 export function applyQueuedOperations<T>(fileId:string,document:T):T{
-  let next=clone(document);
+  let next=officeClone(document);
   for(const op of readOfficeQueue(fileId)) next=applyOfficePatchDocument(next,op.patches);
   return next;
 }
