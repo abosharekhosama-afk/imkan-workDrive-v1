@@ -390,7 +390,6 @@ export default function ImkanWriterPage(){
      queuedChanges={writerQueueCount}
      ar={ar}
      revision={revision}
-   />
    presence={<OfficePresence items={presence} ar={ar}/>} onBack={()=>router.back()}
     onAssignWorkflow={()=>setWorkflowOpen(true)} onShare={()=>setShareOpen(true)}
     onUndo={undo} onRedo={redo} onBold={()=>applyCommand('bold')} onItalic={()=>applyCommand('italic')}
