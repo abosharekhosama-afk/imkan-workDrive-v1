@@ -26,6 +26,7 @@ import { prepareWriterPrintExport } from '@/office/writer/pdf';
 import { captureWriterSelection, restoreWriterSelection, type WriterSelectionBookmark } from '@/office/writer/history-selection';
 import { normalizeImageInspectorPatch, resetImageCrop, rotateImage } from '@/office/writer/image-inspector';
 import { findMatches, nextFindMatch, replaceAllMatches, type FindMatch } from '@/office/writer/find-replace';
+import { patchRunsInRange } from '@/office/writer/selection-format';
 import { cacheOfficeSnapshot, readOfficeSnapshot, offlineQueueCount, installOfflineSync, readOfflineConflict, prepareWriterConflict, rebaseWriterQueue, discardWriterQueue } from '@/office/offline';
 
 function t(ar: boolean, en: string, arText: string) { return ar ? arText : en; }
@@ -257,9 +258,9 @@ export default function ImkanWriterPage(){
  const handleEditorKeyDown=useCallback((event:React.KeyboardEvent<HTMLDivElement>,blockId:string)=>{
   const mod=event.ctrlKey||event.metaKey;
   if(event.key==='Enter' && mod){ event.preventDefault(); const current=docRef.current;if(current)commit(insertPageBreak(current,blockId));return; }
-  if(event.key==='Enter'){ event.preventDefault(); if(event.shiftKey){ document.execCommand('insertLineBreak'); } else splitAtCaret(blockId); return; }
+  if(event.key==='Enter'){ event.preventDefault(); if(event.shiftKey){ document.execCommand('insertLineBreak'); } else { const current=docRef.current; const block=current?.blocks.find(x=>x.id===blockId); if(block?.type==='list-item'){ const next=addParagraph(current!,blockId); const inserted=next.blocks[next.blocks.findIndex(x=>x.id===blockId)+1]; if(inserted){inserted.type='list-item';inserted.ordered=Boolean(block.ordered); inserted.runs=[{text:''}];} commit(next); requestAnimationFrame(()=>{const target=document.querySelector(`[data-writer-block="${inserted?.id}"]`) as HTMLElement|null; target?.focus();}); } else splitAtCaret(blockId); } return; }
  },[commit,splitAtCaret]);
- useEffect(()=>{const onKeyDown=(event:KeyboardEvent)=>{const mod=event.ctrlKey||event.metaKey;if(!mod)return;const key=event.key.toLowerCase();if(key==='z'){event.preventDefault();event.shiftKey?redo():undo();return;}if(key==='y'){event.preventDefault();redo();return;}if(key==='b'||key==='i'||key==='u'){event.preventDefault();applyCommand(key as 'bold'|'italic'|'underline');return;}if(key==='f'){event.preventDefault();setFindOpen(true);return;}};window.addEventListener('keydown',onKeyDown);return()=>window.removeEventListener('keydown',onKeyDown);},[history,future,historySelections,futureSelections]);
+ useEffect(()=>{const onKeyDown=(event:KeyboardEvent)=>{const mod=event.ctrlKey||event.metaKey;if(!mod)return;const key=event.key.toLowerCase();if(key==='z'){event.preventDefault();event.shiftKey?redo():undo();return;}if(key==='y'){event.preventDefault();redo();return;}if(key==='b'||key==='i'||key==='u'){event.preventDefault();applyCommand(key as 'bold'|'italic'|'underline');return;}if(key==='f'){event.preventDefault();setFindOpen(true);return;}if(key==='s'){event.preventDefault();const current=docRef.current;if(current&&!saving)persist(current,current);return;}};window.addEventListener('keydown',onKeyDown);return()=>window.removeEventListener('keydown',onKeyDown);},[history,future,historySelections,futureSelections]);
  const openLinkDialog=()=>{
   const selection=window.getSelection();
   const anchor=selection?.anchorNode?.parentElement?.closest?.('a') as HTMLAnchorElement|null;
@@ -308,7 +309,18 @@ export default function ImkanWriterPage(){
   setImageDialogOpen(false);
  };
  const onImageFile=(file:File|null)=>{if(!file)return;const reader=new FileReader();reader.onload=()=>setImageSrc(String(reader.result||''));reader.readAsDataURL(file);};
- const applyRunPatch=(patch: any)=>{const current=docRef.current;if(!current||!activeBlock)return;commit(patchBlockRuns(current,activeBlock.id,patch));};
+ const selectionOffsetsForBlock=(blockId:string)=>{
+  const selection=window.getSelection();
+  const el=document.querySelector(`[data-writer-block="${blockId}"]`) as HTMLElement|null;
+  if(!selection||selection.rangeCount===0||!el||selection.isCollapsed)return null;
+  const range=selection.getRangeAt(0);
+  if(!el.contains(range.startContainer)||!el.contains(range.endContainer))return null;
+  const beforeStart=document.createRange(); beforeStart.selectNodeContents(el); beforeStart.setEnd(range.startContainer,range.startOffset);
+  const beforeEnd=document.createRange(); beforeEnd.selectNodeContents(el); beforeEnd.setEnd(range.endContainer,range.endOffset);
+  const start=beforeStart.toString().length; const end=beforeEnd.toString().length;
+  return {start:Math.min(start,end),end:Math.max(start,end)};
+ };
+ const applyRunPatch=(patch: any)=>{const current=docRef.current;if(!current||!activeBlock)return;const offsets=selectionOffsetsForBlock(activeBlock.id);if(!offsets){commit(patchBlockRuns(current,activeBlock.id,patch));return;}const next=cloneWriterDocument(current);const block=next.blocks.find(x=>x.id===activeBlock.id);if(!block)return;block.runs=patchRunsInRange(block.runs,offsets.start,offsets.end,patch);commit(next);};
  const [selectedTableCells,setSelectedTableCells]=useState<Array<{row:number;col:number}>>([]);
  const tableSelectionAnchor=useRef<{row:number;col:number}|null>(null);
  const selectTableCell=(row:number,col:number,shift=false)=>{ if(!shift||!tableSelectionAnchor.current){tableSelectionAnchor.current={row,col};setSelectedTableCells([{row,col}]);return;} const a=tableSelectionAnchor.current; const refs:Array<{row:number;col:number}>=[]; for(let r=Math.min(a.row,row);r<=Math.max(a.row,row);r++) for(let c=Math.min(a.col,col);c<=Math.max(a.col,col);c++) refs.push({row:r,col:c}); setSelectedTableCells(refs); };
