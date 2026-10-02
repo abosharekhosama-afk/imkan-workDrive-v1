@@ -1,59 +1,75 @@
-import type { WriterDocument } from './model';
-import { applyWriterPatches, type WriterPatch } from './operation-patches';
+'use client';
+import { useEffect, useState } from 'react';
+import { getOfficePresence, heartbeatOfficePresence, type OfficePresence } from '@/lib/api/office';
 
-export type WriterOperation = {
-  opId: string;
-  fileId: string;
-  baseRevision: number;
-  patches: WriterPatch[];
-  createdAt: string;
-  held?: boolean;
-};
+export function useOfficePresence(fileId: string, sessionId: string) {
+  const [presence, setPresence] = useState<OfficePresence[]>([]);
+  useEffect(() => {
+    if (!fileId || !sessionId) return;
+    let cancelled = false;
+    const refresh = async () => { try { const next = await getOfficePresence(fileId); if (!cancelled) setPresence(Array.isArray(next) ? next : []); } catch {} };
+    const beat = async () => { try { await heartbeatOfficePresence(sessionId, { status: document.hidden ? 'IDLE' : 'ACTIVE' }); } catch {} };
+    void refresh(); void beat();
+    const refreshTimer = setInterval(() => void refresh(), 5000);
+    const beatTimer = setInterval(() => void beat(), 15000);
+    const onVisibility = () => void beat();
+    document.addEventListener('visibilitychange', onVisibility);
+    return () => { cancelled = true; clearInterval(refreshTimer); clearInterval(beatTimer); document.removeEventListener('visibilitychange', onVisibility); };
+  }, [fileId, sessionId]);
+  return presence;
+}
 
-const storageKey = (fileId: string) => `imkan:writer:offline:${fileId}`;
+import { streamOfficeEvents, type OfficeRealtimeEvent } from '@/lib/api/office';
 
-export function diffWriterDocuments(previous: WriterDocument, next: WriterDocument): WriterPatch[] {
-  const patches: WriterPatch[] = [];
-  const keys = ['title','language','page','review','sections','citations','captions','crossReferences','indexEntries','bookmarks','footnotes'] as const;
-  for (const key of keys) {
-    if (JSON.stringify(previous[key]) !== JSON.stringify(next[key])) patches.push({ op: 'set', path: `/${key}`, value: next[key] });
+export function useOfficeRealtime(fileId: string, sessionId: string, userId: string | undefined, onRemoteSave: (event: OfficeRealtimeEvent) => void) {
+  useEffect(() => {
+    if (!fileId || !sessionId) return;
+    const controller = new AbortController();
+    let stopped = false;
+    const connect = async () => {
+      try {
+        await streamOfficeEvents(fileId, (event) => {
+          if (event.type === 'document-saved' && event.sessionId !== sessionId && event.userId !== userId) onRemoteSave(event);
+        }, controller.signal);
+      } catch {}
+      if (!stopped && !controller.signal.aborted) {
+        window.setTimeout(() => { if (!stopped) void connect(); }, 1000);
+      }
+    };
+    void connect();
+    return () => { stopped = true; controller.abort(); };
+  }, [fileId, sessionId, userId, onRemoteSave]);
+}
+
+import { submitWriterOperation } from '@/lib/api/office';
+import { createWriterOperation, diffWriterDocuments, queueWriterOperation, readWriterQueue, removeWriterOperation, type WriterOperation } from './writer/collaboration';
+import type { WriterDocument } from './writer/model';
+
+export function enqueueWriterChange(fileId: string, baseRevision: number, previous: WriterDocument, next: WriterDocument, sessionId?: string) {
+  const patches = diffWriterDocuments(previous, next);
+  if (!patches.length) return null;
+  const operation = createWriterOperation(fileId, baseRevision, patches);
+  queueWriterOperation(operation);
+  void flushWriterQueue(fileId, sessionId);
+  return operation;
+}
+
+export async function flushWriterQueue(fileId: string, sessionId?: string, onRevision?: (revision: number) => void, onConflict?: (error: any) => void) {
+  if (typeof navigator !== 'undefined' && !navigator.onLine) return;
+  const queue = readWriterQueue(fileId);
+  for (const operation of queue) {
+    if (operation.held) continue;
+    try {
+      const result = await submitWriterOperation(fileId, { opId: operation.opId, baseRevision: operation.baseRevision, patches: operation.patches, sessionId });
+      removeWriterOperation(fileId, operation.opId);
+      const remaining = readWriterQueue(fileId).map(item => ({ ...item, baseRevision: result.revision }));
+      if (remaining.length) localStorage.setItem(`imkan:writer:offline:${fileId}`, JSON.stringify(remaining));
+      onRevision?.(result.revision);
+    } catch (error: any) {
+      onConflict?.(error);
+      break;
+    }
   }
-  const before = new Map(previous.blocks.map(block => [block.id, block]));
-  const after = new Map(next.blocks.map(block => [block.id, block]));
-  for (const [id, block] of after) {
-    if (JSON.stringify(before.get(id)) !== JSON.stringify(block)) patches.push({ op: 'set', path: `/blocksById/${encodeURIComponent(id)}`, value: block });
-  }
-  for (const id of before.keys()) if (!after.has(id)) patches.push({ op: 'delete', path: `/blocksById/${encodeURIComponent(id)}` });
-  if (previous.blocks.length !== next.blocks.length || previous.blocks.map(x=>x.id).join('|') !== next.blocks.map(x=>x.id).join('|')) {
-    patches.push({ op: 'set', path: '/blockOrder', value: next.blocks.map(x => x.id) });
-  }
-  return patches;
 }
 
-export function queueWriterOperation(operation: WriterOperation) {
-  const key = storageKey(operation.fileId);
-  const current = readWriterQueue(operation.fileId);
-  current.push(operation);
-  localStorage.setItem(key, JSON.stringify(current.slice(-200)));
-}
-
-export function readWriterQueue(fileId: string): WriterOperation[] {
-  try {
-    const parsed = JSON.parse(localStorage.getItem(storageKey(fileId)) || '[]');
-    return Array.isArray(parsed) ? parsed : [];
-  } catch { return []; }
-}
-
-export function removeWriterOperation(fileId: string, opId: string) {
-  const next = readWriterQueue(fileId).filter(x => x.opId !== opId);
-  if (next.length) localStorage.setItem(storageKey(fileId), JSON.stringify(next));
-  else localStorage.removeItem(storageKey(fileId));
-}
-
-export function applyQueuedWriterOperation(doc: WriterDocument, operation: WriterOperation): WriterDocument {
-  return applyWriterPatches(doc, operation.patches);
-}
-
-export function createWriterOperation(fileId: string, baseRevision: number, patches: WriterPatch[]): WriterOperation {
-  return { opId: crypto.randomUUID(), fileId, baseRevision, patches, createdAt: new Date().toISOString() };
-}
+export function writerOfflineQueueCount(fileId: string) { return readWriterQueue(fileId).length; }
