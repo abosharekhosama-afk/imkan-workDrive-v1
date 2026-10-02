@@ -371,7 +371,7 @@ export default function ImkanWriterPage(){
  const rejectAll=()=>{ if(!doc) return; commit(rejectAllChanges(doc)); };
  const changePreview=(id:string)=>{const current=docRef.current;const c=current?.review.changes.find(x=>x.id===id);return c?`${textOfRuns(c.before).slice(0,180)} → ${textOfRuns(c.after).slice(0,180)}`:'';};
  const compareRows=doc?compareSnapshot(doc,compareId):[];
- const pageLayout=useMemo(()=>doc?buildWriterPageLayout(doc):{pages:[]},[doc]);
+ const pageLayout=useMemo(()=>{if(!doc)return {pages:[],ordinals:[]};try{return buildWriterPageLayout(doc);}catch(e){console.error('[office-writer-layout]',e);return {pages:doc.blocks?.length?[doc.blocks]:[[]],ordinals:[1]};}},[doc]);
  if(!doc)return <div className="flex h-screen items-center justify-center bg-slate-100 text-sm text-slate-500">{error||t(ar,'Opening IMKAN Writer…','جارٍ فتح IMKAN Writer…')}</div>;
  const pages=pageLayout.pages;
  const activeTable=activeBlock?.type==='table'&&activeBlock.table?activeBlock.table:null;
