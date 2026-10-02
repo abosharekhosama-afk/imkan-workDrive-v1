@@ -172,6 +172,7 @@
 | — | Writer and Show show the visible Office text instead of raw Word and PowerPoint markup | ✅ Implemented |
 | — | PowerPoint pictures stay embedded and slide text keeps the package order | ✅ Implemented |
 | — | Writer page keeps the toolbar element open until its last property | ✅ Implemented |
+| — | Writer toolbar keeps its last bar inside the root element so the page parses | ✅ Implemented |
 
 ---
 

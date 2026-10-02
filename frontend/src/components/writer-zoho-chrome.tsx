@@ -544,7 +544,6 @@ export function WriterChrome(props: WriterChromeProps) {
         {toolbarLayout.overflow.includes('highlight') && <OverflowColorButton icon="highlight" color={effectiveHighlight} label="Highlight" onChange={(v) => { setHighlight(v); props.onHighlight(v); }}/>}
         {toolbarLayout.overflow.includes('textColor') && <OverflowColorButton icon="textColor" color={effectiveColor} label="Text color" onChange={(v) => { setColor(v); props.onColor(v); }}/>} 
       </div>}</div>}</div>
-    </div>
 
     <div className="flex h-[0px]" />
   </div>;
