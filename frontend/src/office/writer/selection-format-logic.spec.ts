@@ -66,8 +66,7 @@ test('Writer clear formatting affects only the selected range', () => {
     highlight: undefined, verticalAlign: 'baseline',
   }), [
     { text: 'o', bold: true, color: '#f00' },
-    { text: 'ne', bold: false, italic: false, underline: false, strike: false, fontFamily: undefined, fontSize: undefined, color: undefined, highlight: undefined, verticalAlign: 'baseline' },
-    { text: 't', bold: false, italic: false, underline: false, strike: false, fontFamily: undefined, fontSize: undefined, color: undefined, highlight: undefined, verticalAlign: 'baseline' },
+    { text: 'net', bold: false, italic: false, underline: false, strike: false, fontFamily: undefined, fontSize: undefined, color: undefined, highlight: undefined, verticalAlign: 'baseline' },
     { text: 'wo', italic: true, fontSize: 24 },
   ]);
 });
