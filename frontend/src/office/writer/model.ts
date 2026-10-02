@@ -1,4 +1,4 @@
-import { visibleMarkupText } from '../markup-text-logic';
+import { visibleMarkupText } from '../markup-text-logic.ts';
 
 export type WriterRun = {
   text: string;
@@ -16,7 +16,7 @@ export type WriterRun = {
 
 export type WriterCellVerticalAlign = 'top' | 'middle' | 'bottom';
 export type WriterTableBorder = { style?: 'solid' | 'dashed' | 'dotted' | 'double' | 'none'; width?: number; color?: string };
-export type WriterTableCell = { id: string; runs: WriterRun[]; align?: 'start' | 'center' | 'end'; verticalAlign?: WriterCellVerticalAlign; colSpan?: number; rowSpan?: number; nestedTable?: WriterTable };
+export type WriterTableCell = { id: string; runs: WriterRun[]; align?: 'start' | 'center' | 'end'; verticalAlign?: WriterCellVerticalAlign; colSpan?: number; rowSpan?: number; nestedTable?: WriterTable; hidden?: boolean };
 export type WriterTable = { rows: WriterTableCell[][]; bordered?: boolean; headerRows?: number; repeatHeaderRow?: boolean; allowRowBreak?: boolean; borders?: { top?: WriterTableBorder; right?: WriterTableBorder; bottom?: WriterTableBorder; left?: WriterTableBorder; inside?: WriterTableBorder } };
 
 export type WriterComment = {

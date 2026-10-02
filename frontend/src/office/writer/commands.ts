@@ -212,3 +212,33 @@ export function updateImage(doc: WriterDocument, id:string, patch: NonNullable<W
 export function updateTableOptions(doc: WriterDocument, id:string, patch: NonNullable<WriterBlock['table']>):WriterDocument { const next=cloneWriterDocument(doc); const b=next.blocks.find(x=>x.id===id); if(b?.table) b.table={...b.table,...patch}; return next; }
 export function setTableCellVerticalAlign(doc: WriterDocument,id:string,row:number,col:number,verticalAlign:'top'|'middle'|'bottom'):WriterDocument { const next=cloneWriterDocument(doc); const c=next.blocks.find(x=>x.id===id)?.table?.rows[row]?.[col]; if(c) c.verticalAlign=verticalAlign; return next; }
 export function addNestedTable(doc: WriterDocument,id:string,row:number,col:number,rows=2,cols=2):WriterDocument { const next=cloneWriterDocument(doc); const c=next.blocks.find(x=>x.id===id)?.table?.rows[row]?.[col]; if(!c)return next; c.nestedTable={bordered:true,rows:Array.from({length:rows},()=>Array.from({length:cols},()=>({id:crypto.randomUUID(),runs:[{text:''}],verticalAlign:'top' as const}))) }; return next; }
+
+export type TableCellRef = { row: number; col: number };
+
+function normalizeCellSelection(refs: TableCellRef[]): TableCellRef[] {
+ const seen = new Set<string>();
+ return refs.filter(r => { const key = `${r.row}:${r.col}`; if (seen.has(key)) return false; seen.add(key); return r.row >= 0 && r.col >= 0; });
+}
+
+export function mergeTableCells(doc: WriterDocument, id: string, refs: TableCellRef[]): WriterDocument {
+ const next=cloneWriterDocument(doc); const block=next.blocks.find(x=>x.id===id); const table=block?.table; if(!table)return next;
+ const selected=normalizeCellSelection(refs); if(selected.length<2)return next;
+ const rows=selected.map(x=>x.row), cols=selected.map(x=>x.col); const minRow=Math.min(...rows), maxRow=Math.max(...rows), minCol=Math.min(...cols), maxCol=Math.max(...cols);
+ const expected=(maxRow-minRow+1)*(maxCol-minCol+1); if(selected.length!==expected)return next;
+ for(let r=minRow;r<=maxRow;r++) for(let c=minCol;c<=maxCol;c++){ const cell=table.rows[r]?.[c]; if(!cell || cell.hidden || (cell.colSpan&&cell.colSpan!==1) || (cell.rowSpan&&cell.rowSpan!==1)) return next; }
+ const anchor=table.rows[minRow][minCol];
+ const mergedRuns: WriterRun[]=[];
+ for(let r=minRow;r<=maxRow;r++) for(let c=minCol;c<=maxCol;c++) { const cell=table.rows[r][c]; if(mergedRuns.length && cell.runs.length) mergedRuns.push({text:'\n'}); mergedRuns.push(...cell.runs.map(run=>({...run}))); }
+ anchor.runs=mergeAdjacentRuns(mergedRuns); anchor.colSpan=maxCol-minCol+1; anchor.rowSpan=maxRow-minRow+1; anchor.hidden=false;
+ for(let r=minRow;r<=maxRow;r++) for(let c=minCol;c<=maxCol;c++) if(r!==minRow||c!==minCol){ table.rows[r][c]={...table.rows[r][c],runs:[{text:''}],hidden:true,colSpan:1,rowSpan:1}; }
+ return next;
+}
+
+export function splitTableCell(doc: WriterDocument, id: string, row: number, col: number): WriterDocument {
+ const next=cloneWriterDocument(doc); const block=next.blocks.find(x=>x.id===id); const table=block?.table; const cell=table?.rows[row]?.[col]; if(!table||!cell)return next;
+ const rowSpan=Math.max(1,cell.rowSpan||1), colSpan=Math.max(1,cell.colSpan||1); if(rowSpan===1&&colSpan===1)return next;
+ const originalRuns=cell.runs.map(run=>({...run})); const text=originalRuns.map(r=>r.text).join('');
+ cell.rowSpan=1; cell.colSpan=1; cell.hidden=false; cell.runs=[{text}];
+ for(let r=row;r<row+rowSpan;r++) for(let c=col;c<col+colSpan;c++) if(r!==row||c!==col){ const target=table.rows[r]?.[c]; if(target){ target.hidden=false; target.colSpan=1; target.rowSpan=1; target.runs=[{text:''}]; } }
+ return next;
+}

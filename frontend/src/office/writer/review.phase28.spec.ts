@@ -1,5 +1,7 @@
-import { acceptAllChanges, acceptChange, rejectAllChanges, rejectChange, recordChange } from './review';
-import type { WriterDocument } from './model';
+import { describe, it } from 'node:test';
+import { expect } from './node-test-expect.ts';
+import { acceptAllChanges, acceptChange, rejectAllChanges, rejectChange, recordChange } from './review.ts';
+import type { WriterDocument } from './model.ts';
 
 const base = (): WriterDocument => ({
   schema: 7,

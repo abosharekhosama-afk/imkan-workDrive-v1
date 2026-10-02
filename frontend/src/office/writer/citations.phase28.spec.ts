@@ -1,5 +1,7 @@
-import { buildBibliographyEntries, findDuplicateCitationSource, formatCitationSource, rebuildCitationDisplay, removeCitationSource, setCitationStyle, upsertCitationSource } from './commands';
-import { emptyWriterDocument } from './model';
+import { describe, it } from 'node:test';
+import { expect } from './node-test-expect.ts';
+import { buildBibliographyEntries, findDuplicateCitationSource, formatCitationSource, rebuildCitationDisplay, removeCitationSource, setCitationStyle, upsertCitationSource } from './commands.ts';
+import { emptyWriterDocument } from './model.ts';
 
 describe('Phase 28 citation source registry', () => {
   it('upserts a structured source without losing metadata', () => {

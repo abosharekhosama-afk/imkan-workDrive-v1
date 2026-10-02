@@ -59,3 +59,27 @@ body {
   font-family: var(--imkan-font-latin), var(--imkan-font-arabic);
   font-size: var(--imkan-font-size-ui);
 }
+
+/* ── Office chrome tokens ────────────────────────────────────────────────────
+   Shared by Writer, Sheet and Show. Keep Office chrome on the same IMKAN One
+   visual contract; product-specific components should consume these aliases.
+*/
+:root {
+  --imkan-office-primary: var(--imkan-color-primary);
+  --imkan-office-surface: var(--imkan-color-bg);
+  --imkan-office-text: var(--imkan-color-fg);
+  --imkan-office-muted: var(--imkan-color-muted);
+  --imkan-office-border: var(--imkan-color-border);
+  --imkan-office-hover: var(--imkan-color-surface);
+  --imkan-office-control-height: 34px;
+  --imkan-office-toolbar-button: 35px;
+  --imkan-office-radius: 4px;
+}
+
+[data-office-direction="rtl"] {
+  direction: rtl;
+}
+
+[data-office-direction="ltr"] {
+  direction: ltr;
+}

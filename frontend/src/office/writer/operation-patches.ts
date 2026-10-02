@@ -1,4 +1,4 @@
-import type { WriterBlock, WriterDocument } from './model';
+import type { WriterBlock, WriterDocument } from './model.ts';
 
 export type WriterPatch = { op: 'set' | 'delete'; path: string; value?: unknown };
 

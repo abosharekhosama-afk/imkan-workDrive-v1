@@ -1,5 +1,5 @@
-import type { WriterBlock, WriterChange, WriterComment, WriterDocument, WriterRun, WriterSnapshot } from './model';
-import { cloneWriterDocument } from './commands';
+import type { WriterBlock, WriterChange, WriterComment, WriterDocument, WriterRun, WriterSnapshot } from './model.ts';
+import { cloneWriterDocument } from './commands.ts';
 
 export function textOfRuns(runs: WriterRun[]) { return runs.map(r => r.text).join(''); }
 export function textOfBlock(block: WriterBlock) { return block.runs?.length ? textOfRuns(block.runs) : ''; }
