@@ -7,7 +7,7 @@ export function useOfficePresence(fileId: string, sessionId: string) {
   useEffect(() => {
     if (!fileId || !sessionId) return;
     let cancelled = false;
-    const refresh = async () => { try { const next = await getOfficePresence(fileId); if (!cancelled) setPresence(Array.isArray(next) ? next : []); } catch {} };
+    const refresh = async () => { try { const next = await getOfficePresence(fileId); if (!cancelled) setPresence(next); } catch {} };
     const beat = async () => { try { await heartbeatOfficePresence(sessionId, { status: document.hidden ? 'IDLE' : 'ACTIVE' }); } catch {} };
     void refresh(); void beat();
     const refreshTimer = setInterval(() => void refresh(), 5000);
@@ -42,7 +42,7 @@ export function useOfficeRealtime(fileId: string, sessionId: string, userId: str
 }
 
 import { submitWriterOperation } from '@/lib/api/office';
-import { createWriterOperation, diffWriterDocuments, queueWriterOperation, readWriterQueue, removeWriterOperation, type WriterOperation } from './writer/collaboration';
+import { createWriterOperation, diffWriterDocuments, queueWriterOperation, readWriterQueue, removeWriterOperation } from './writer/collaboration';
 import type { WriterDocument } from './writer/model';
 
 export function enqueueWriterChange(fileId: string, baseRevision: number, previous: WriterDocument, next: WriterDocument, sessionId?: string) {
