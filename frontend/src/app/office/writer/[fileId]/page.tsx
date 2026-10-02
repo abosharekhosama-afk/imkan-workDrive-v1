@@ -376,9 +376,9 @@ export default function ImkanWriterPage(){
  const pages=pageLayout.pages;
  const activeTable=activeBlock?.type==='table'&&activeBlock.table?activeBlock.table:null;
  const selectedCellKeySet=new Set(selectedTableCells.map(c=>`${c.row}:${c.col}`));const {widthMm:pageWidth,heightMm:pageHeight}=pageDimensionsMm(doc.page);
- return <div dir={ar?'rtl':'ltr'} className="flex h-screen flex-col bg-[#f7f7f7] text-[#1c1c1c] print:bg-white">
-   const writerQueueCount=writerOfflineQueueCount(fileId);
+ const writerQueueCount=writerOfflineQueueCount(fileId);
  const writerSaveStatus=deriveWriterSaveStatus({saving,saved,queueCount:writerQueueCount,online:typeof navigator==='undefined'?true:navigator.onLine,conflict:Boolean(conflict),error:error||undefined});
+ return <div dir={ar?'rtl':'ltr'} className="flex h-screen flex-col bg-[#f7f7f7] text-[#1c1c1c] print:bg-white">
 <WriterChrome
     title={doc.title || 'Untitled Document'} saved={saved} selectionState={selectionState} saving={saving} saveStatus={writerSaveStatus} saveError={error} queuedChanges={writerQueueCount} ar={ar} revision={revision}
     presence={<OfficePresence items={presence} ar={ar}/>} onBack={()=>router.back()}
