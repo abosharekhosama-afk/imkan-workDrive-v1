@@ -830,6 +830,15 @@ export class OfficeConversionService {
     const preservation=await this.capturePreservation(z,'pptx');
     const diagnostics:ConversionDiagnostic[]=[];
     diagnostics.push({code:'PPTX_SLIDES_CORE',severity:'info',message:`Imported ${slides.length} slide(s) with native slide order, text, shapes, images, tables and chart data where present.`});
+    const groupCount=slides.reduce((n,s)=>n+s.elements.filter((e:any)=>e.groupId).length,0);
+    if(groupCount)diagnostics.push({code:'PPTX_GROUPS',severity:'info',message:`Preserved group membership on ${groupCount} element(s).`});
+    const bgImgCount=slides.filter((s:any)=>s.backgroundImage).length;
+    if(bgImgCount)diagnostics.push({code:'PPTX_BG_IMAGE',severity:'info',message:`Imported background image on ${bgImgCount} slide(s).`});
+    const tiny=slides.reduce((n,s)=>n+s.elements.filter((e:any)=>(e.width||0)<1||(e.height||0)<1).length,0);
+    if(tiny)diagnostics.push({code:'PPTX_TINY_GEOM',severity:'warning',message:`${tiny} element(s) had very small geometry after conversion; check layout on affected slides.`});
+    const emptyText=slides.reduce((n,s)=>n+s.elements.filter((e:any)=>e.type==='text'&&!(e.text||'').trim()).length,0);
+    if(emptyText)diagnostics.push({code:'PPTX_EMPTY_TEXT',severity:'warning',message:`${emptyText} text box(es) imported without visible text (placeholders may need layout fill).`});
+
     const noteCount=slides.filter(s=>s.notes).length;if(noteCount)diagnostics.push({code:'PPTX_NOTES',severity:'info',message:`Imported speaker notes from ${noteCount} slide(s).`});
     const chartCount=slides.reduce((n,s)=>n+s.elements.filter((e:any)=>e.type==='chart').length,0);if(chartCount)diagnostics.push({code:'PPTX_CHARTS',severity:'info',message:`Imported ${chartCount} chart object(s) using cached PPTX chart data.`});
     const unsupported=pres.match(/<p:timing\b|<p:transition\b/g)?.length||0;if(unsupported)diagnostics.push({code:'PPTX_MOTION',severity:'warning',message:'Animation/transition timing metadata was detected; visual/content import is preserved but timing is not yet fully mapped to the native Show timeline.'});

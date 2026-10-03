@@ -31,7 +31,47 @@ export function clearElementAnimation(d:ShowDocument,id:string){return setElemen
 export function setMediaSource(d:ShowDocument,id:string,src:string,patch:Partial<ShowElement>={}){const n=cloneShow(d),s=activeSlide(n),e=s?.elements.find(x=>x.id===id);if(e)Object.assign(e,{src, ...patch});return n}
 export function setSlideAutoAdvance(d:ShowDocument,ms:number|undefined){const n=cloneShow(d),s=activeSlide(n);if(s)s.autoAdvanceMs=ms===undefined?undefined:Math.max(0,Math.min(600000,Math.round(ms)));return n}
 
-export function setThemePreset(d:ShowDocument,preset:ShowThemePreset){const n=cloneShow(d);const themes:Record<ShowThemePreset,ShowDocument['theme']>={office:{fontFamily:'Arial',accent:'#2563eb',secondary:'#64748b',background:'#ffffff',headingFont:'Arial'},midnight:{fontFamily:'Inter',accent:'#60a5fa',secondary:'#94a3b8',background:'#0f172a',headingFont:'Inter'},ocean:{fontFamily:'Inter',accent:'#0891b2',secondary:'#0e7490',background:'#ecfeff',headingFont:'Inter'},forest:{fontFamily:'Inter',accent:'#16a34a',secondary:'#166534',background:'#f0fdf4',headingFont:'Inter'},sunset:{fontFamily:'Arial',accent:'#ea580c',secondary:'#9a3412',background:'#fff7ed',headingFont:'Arial'}};n.theme=themes[preset];for(const s of n.slides){if(!s.background||s.background==='#ffffff'||s.background==='#fff'||s.background==='#f8fafc')s.background=n.theme.background}return n}
+export function setThemePreset(d:ShowDocument,preset:ShowThemePreset){
+  const n=cloneShow(d);
+  const themes:Record<ShowThemePreset,ShowDocument['theme']>={
+    office:{fontFamily:'Arial',accent:'#2563eb',secondary:'#64748b',background:'#ffffff',headingFont:'Arial'},
+    midnight:{fontFamily:'Inter',accent:'#60a5fa',secondary:'#94a3b8',background:'#0f172a',headingFont:'Inter'},
+    ocean:{fontFamily:'Inter',accent:'#0891b2',secondary:'#0e7490',background:'#ecfeff',headingFont:'Inter'},
+    forest:{fontFamily:'Inter',accent:'#16a34a',secondary:'#166534',background:'#f0fdf4',headingFont:'Inter'},
+    sunset:{fontFamily:'Arial',accent:'#ea580c',secondary:'#9a3412',background:'#fff7ed',headingFont:'Arial'},
+    slate:{fontFamily:'Calibri',accent:'#475569',secondary:'#94a3b8',background:'#f8fafc',headingFont:'Calibri'},
+    rose:{fontFamily:'Georgia',accent:'#e11d48',secondary:'#9f1239',background:'#fff1f2',headingFont:'Georgia'},
+    royal:{fontFamily:'Georgia',accent:'#7c3aed',secondary:'#5b21b6',background:'#f5f3ff',headingFont:'Georgia'},
+  };
+  const theme=themes[preset]||themes.office;
+  n.theme=theme;
+  const dark=theme.background.toLowerCase()==='#0f172a';
+  const titleColor=dark?'#f8fafc':('#111827');
+  const bodyColor=dark?'#cbd5e1':('#334155');
+  for(const s of n.slides){
+    // Only replace neutral/default backgrounds so custom backgrounds are preserved when possible
+    const bg=(s.background||'').toLowerCase();
+    if(!bg || bg==='#ffffff' || bg==='#fff' || bg==='#f8fafc' || bg==='#0f172a' || bg==='#ecfeff' || bg==='#f0fdf4' || bg==='#fff7ed' || bg==='#fff1f2' || bg==='#f5f3ff'){
+      s.background=theme.background;
+    }
+    for(const e of s.elements){
+      if(e.type==='text'){
+        e.fontFamily=theme.fontFamily;
+        if((e.fontSize||0)>=28){ e.color=theme.accent; e.fontFamily=theme.headingFont; }
+        else if(!e.color || e.color==='#111827' || e.color==='#334155' || e.color==='#475569' || e.color==='#f8fafc' || e.color==='#cbd5e1'){
+          e.color=(e.fontSize||0)>=22?titleColor:bodyColor;
+        }
+      }
+      if(e.type==='shape'){
+        if(!e.fill || e.fill==='#e2e8f0' || e.fill==='#dbeafe' || e.fill==='#ffffff'){
+          e.fill=dark?'#1e293b':theme.accent+'22';
+        }
+      }
+    }
+  }
+  return n;
+}
+
 export function addSection(d:ShowDocument,name='Section'){const n=cloneShow(d);n.sections=[...(n.sections||[]),{id:uid('section'),name}];return n}
 export function renameSection(d:ShowDocument,id:string,name:string){const n=cloneShow(d);const s=(n.sections||[]).find(x=>x.id===id);if(s&&name.trim())s.name=name.trim();return n}
 export function deleteSection(d:ShowDocument,id:string){const n=cloneShow(d);n.sections=(n.sections||[]).filter(x=>x.id!==id);for(const s of n.slides)if(s.section===id)s.section=undefined;return n}

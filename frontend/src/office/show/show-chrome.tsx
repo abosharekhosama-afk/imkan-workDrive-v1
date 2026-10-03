@@ -243,6 +243,9 @@ export function ShowChrome(p: ShowChromeProps) {
             <IconBtn icon={<ShowIcons.theme size={18} />} label="Ocean" onClick={() => p.onTheme('ocean')} />
             <IconBtn icon={<ShowIcons.theme size={18} />} label="Forest" onClick={() => p.onTheme('forest')} />
             <IconBtn icon={<ShowIcons.theme size={18} />} label="Sunset" onClick={() => p.onTheme('sunset')} />
+            <IconBtn icon={<ShowIcons.theme size={18} />} label="Slate" onClick={() => p.onTheme('slate')} />
+            <IconBtn icon={<ShowIcons.theme size={18} />} label="Rose" onClick={() => p.onTheme('rose')} />
+            <IconBtn icon={<ShowIcons.theme size={18} />} label="Royal" onClick={() => p.onTheme('royal')} />
             <label className="show-color-field">Background<input type="color" aria-label="Slide background" value={p.background} onChange={(e) => p.onBackground(e.target.value)} /></label>
             <select className="show-select" aria-label="Slide size" value={p.aspect} onChange={(e) => p.onAspect(e.target.value as '16:9' | '4:3')}>
               <option value="16:9">Widescreen (16:9)</option>
@@ -316,6 +319,9 @@ export function ShowStatusBar({
   notesOpen,
   onToggleNotes,
   onZoom,
+  saving,
+  saved,
+  lastSavedAt,
 }: {
   slideIndex: number;
   slideCount: number;
@@ -323,10 +329,16 @@ export function ShowStatusBar({
   notesOpen: boolean;
   onToggleNotes: () => void;
   onZoom: (value: number) => void;
+  saving?: boolean;
+  saved?: boolean;
+  lastSavedAt?: number | null;
 }) {
+  const saveLabel = saving ? 'Saving…' : saved ? (lastSavedAt ? `Saved ${new Date(lastSavedAt).toLocaleTimeString()}` : 'Saved') : 'Unsaved changes';
   return (
     <footer className="show-status">
       <span>Slide {slideIndex} of {slideCount}</span>
+      <span className="show-status-sep" />
+      <span className={`show-save-status ${saving?'is-saving':saved?'is-saved':'is-dirty'}`}>{saveLabel}</span>
       <span className="show-status-sep" />
       <button type="button" className="show-status-btn" aria-pressed={notesOpen} onClick={onToggleNotes}>Notes</button>
       <span className="show-status-spacer" />
