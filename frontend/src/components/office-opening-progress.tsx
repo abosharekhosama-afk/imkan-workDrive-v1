@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 export type OfficeOpenStage =
   | 'connecting'
@@ -25,6 +25,7 @@ type Props = {
   product?: string; // Show | Writer | Sheet
   error?: string | null;
   ar?: boolean;
+  onReady?: () => void;
 };
 
 /** Loading screen with progress bar under the title (Zoho-like). */
@@ -34,23 +35,40 @@ export function OfficeOpeningProgress({
   product = 'IMKAN Office',
   error,
   ar,
+  onReady,
 }: Props) {
   const meta = STAGES[stage] || STAGES.document;
   const target = typeof percent === 'number' ? Math.min(100, Math.max(0, percent)) : meta.pct;
-  const [pct, setPct] = useState(0);
+  const pctRef = useRef(6);
+  const readySent = useRef(false);
+  const [pct, setPct] = useState(6);
 
   useEffect(() => {
-    let id = 0;
-    const step = () => {
-      setPct((p) => {
-        if (p >= target) return target;
-        return Math.min(target, p + Math.max(1, (target - p) * 0.15));
-      });
-      id = requestAnimationFrame(step) as unknown as number;
+    let frame = 0;
+    let stopped = false;
+    const tick = () => {
+      if (stopped) return;
+      const current = pctRef.current;
+      if (current >= target - 0.4) {
+        pctRef.current = target;
+        setPct(target);
+        if (stage === 'ready' && !error && !readySent.current) {
+          readySent.current = true;
+          onReady?.();
+        }
+        return;
+      }
+      const next = Math.min(target, current + Math.max(0.7, (target - current) * 0.2));
+      pctRef.current = next;
+      setPct(next);
+      frame = requestAnimationFrame(tick);
     };
-    id = requestAnimationFrame(step) as unknown as number;
-    return () => cancelAnimationFrame(id);
-  }, [target]);
+    frame = requestAnimationFrame(tick);
+    return () => {
+      stopped = true;
+      cancelAnimationFrame(frame);
+    };
+  }, [target, stage, error, onReady]);
 
   const title = `Loading ${product}…`;
   const titleAr = `جارٍ تحميل ${product}…`;

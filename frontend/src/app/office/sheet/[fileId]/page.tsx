@@ -1,5 +1,5 @@
 'use client';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { OfficeOpeningProgress, type OfficeOpenStage } from '@/components/office-opening-progress';
 import { officeEqual } from '@/office/performance';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
@@ -99,28 +99,56 @@ export default function SheetPage() {
   const [conflict, setConflict] = useState<any>(() => readOfflineConflict(fileId));
   const session = useRef<string | null>(null);
   const ref = useRef<Workbook | null>(null);
+  const openedSheet = useRef<{ doc: Workbook; revision: number; sessionId: string } | null>(null);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const gridFocusRef = useRef<HTMLDivElement>(null);
   const t = (en: string, arText: string) => ar ? arText : en;
 
+  const finishOpen = useCallback(() => {
+    const opened = openedSheet.current;
+    if (!opened) return;
+    openedSheet.current = null;
+    ref.current = opened.doc;
+    session.current = opened.sessionId;
+    setDoc(opened.doc);
+    setRevision(opened.revision);
+    cacheOfficeSnapshot(fileId, 'SHEET', opened.revision, opened.doc);
+  }, [fileId]);
   useEffect(() => {
     let alive = true;
-    (async () => {
-      try {
-        setOpenStage('session');
-        const r = await openOfficeSession(fileId);
-        setOpenStage('document');
-        if (!alive) return;
-        session.current = r.sessionId;
-        const w = r.document.content as Workbook;
-        const safe: Workbook = w?.type === 'SHEET' ? w : { schema: 7, type: 'SHEET', title: 'Untitled spreadsheet', activeSheet: 'sheet-1', sheets: [{ id: 'sheet-1', name: 'Sheet1', cells: {} }] };
-        ref.current = safe; setDoc(safe); setOpenStage('ready'); setRevision(r.document.revision); cacheOfficeSnapshot(fileId,'SHEET',r.document.revision,safe);
-      } catch (e: any) {
-        const cached = readOfficeSnapshot(fileId);
-        if (cached?.document?.type === 'SHEET') { const local = cached.document as Workbook; ref.current=local; setDoc(local); setRevision(cached.revision); setSaved(offlineQueueCount(fileId)===0); setError('Offline mode: using the latest local copy.'); }
-        else setError(e?.message || 'Failed to open sheet');
+    const wait = (ms: number) => new Promise((resolve) => window.setTimeout(resolve, ms));
+    setDoc(null);
+    setOpenStage('connecting');
+    void (async () => {
+      await wait(40);
+      if (!alive) return;
+      setOpenStage('session');
+      const r = await openOfficeSession(fileId);
+      if (!alive) return;
+      session.current = r.sessionId;
+      setOpenStage('document');
+      await wait(40);
+      if (!alive) return;
+      const w = r.document.content as Workbook;
+      const safe: Workbook = w?.type === 'SHEET' ? w : { schema: 7, type: 'SHEET', title: 'Untitled spreadsheet', activeSheet: 'sheet-1', sheets: [{ id: 'sheet-1', name: 'Sheet1', cells: {} }] };
+      setOpenStage('layout');
+      await wait(40);
+      if (!alive) return;
+      openedSheet.current = { doc: safe, revision: r.document.revision, sessionId: r.sessionId };
+      setOpenStage('ready');
+    })().catch((e) => {
+      if (!alive) return;
+      const cached = readOfficeSnapshot(fileId);
+      if (cached?.document?.type === 'SHEET') {
+        openedSheet.current = { doc: cached.document as Workbook, revision: cached.revision, sessionId: '' };
+        setSaved(offlineQueueCount(fileId) === 0);
+        setError('Offline mode: using the latest local copy.');
+        setOpenStage('ready');
+        return;
       }
-    })();
+      setOpenStage('error');
+      setError(e?.message || 'Failed to open sheet');
+    });
     return () => { alive = false; if (timer.current) clearTimeout(timer.current); if (session.current) closeOfficeSession(session.current).catch(() => {}); };
   }, [fileId]);
 
@@ -270,7 +298,7 @@ export default function SheetPage() {
   const textOverwriteCount = useMemo(() => textOverwriteCountForSheet(sheet, selected), [sheet, selected, dialogs.textToColumns]);
   const tableHiddenRows = useMemo(() => hiddenTableRowsForSheet(sheet, doc), [sheet, doc]);
 
-  if (!doc || !sheet) return <OfficeOpeningProgress stage={openStage==='ready'?'layout':openStage} product="IMKAN Sheet" error={openStage==='error'?(error||null):null} />;
+  if (!doc || !sheet) return <OfficeOpeningProgress stage={openStage} product="IMKAN Sheet" error={openStage==='error'?(error||null):null} onReady={finishOpen} />;
 
   const bounds = rangeBounds(anchor, selected);
   const display = formulaDisplay(cell, sheet, doc);

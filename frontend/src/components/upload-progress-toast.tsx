@@ -1,11 +1,11 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useLocale } from "./locale-provider";
 import {
   formatUploadSize,
   queueProgress,
-  queueSettled,
+  uploadQueueOutcome,
   type UploadQueueItem,
 } from "./upload-queue-logic";
 
@@ -28,27 +28,29 @@ export function UploadProgressToast({ items, onClearCompleted, onRetry, onRemove
   const { label } = useLocale();
   const [closing, setClosing] = useState(false);
 
-  const settled = queueSettled(items);
-  const hasCompleted = items.some((item) => item.status === "completed");
-  const hasFailed = items.some((item) => item.status === "failed");
+  const outcome = uploadQueueOutcome(items);
+  const settled = outcome !== "running";
   const percent = queueProgress(items);
+  const clearRef = useRef(onClearCompleted);
+  clearRef.current = onClearCompleted;
+  const signature = items.map((item) => `${item.id}:${item.status}`).join("|");
 
-  // Auto-dismiss once fully completed: fade at ~2.4s, clear rows at 3s.
+  // Auto-dismiss once every file completed. Parent re-renders must not reset the timer.
   useEffect(() => {
-    if (!items.length || !settled || hasFailed || !hasCompleted) {
+    if (outcome !== "success") {
       setClosing(false);
       return;
     }
     const fadeHandle = window.setTimeout(() => setClosing(true), UPLOAD_TOAST_DISMISS_MS - 600);
     const closeHandle = window.setTimeout(() => {
       setClosing(false);
-      onClearCompleted();
+      clearRef.current();
     }, UPLOAD_TOAST_DISMISS_MS);
     return () => {
       window.clearTimeout(fadeHandle);
       window.clearTimeout(closeHandle);
     };
-  }, [items, settled, hasFailed, hasCompleted, onClearCompleted]);
+  }, [outcome, signature]);
 
   if (items.length === 0) return null;
 
@@ -60,7 +62,7 @@ export function UploadProgressToast({ items, onClearCompleted, onRetry, onRemove
       aria-label={label("upload.progressTitle")}
     >
       <header className="zoho-upload-head">
-        <strong>{hasFailed && settled ? label("upload.completedWithErrors") : settled ? label("upload.allDone") : label("upload.progressTitle")}</strong>
+        <strong>{outcome === "partial" ? label("upload.completedWithErrors") : outcome === "failed" ? label("upload.failed") : outcome === "success" ? label("upload.allDone") : label("upload.progressTitle")}</strong>
         {settled ? (
           <button type="button" className="zoho-icon-btn sm" onClick={() => { setClosing(false); onClearCompleted(); }} aria-label={label("upload.dismiss")}>✕</button>
         ) : (

@@ -24,7 +24,8 @@ export function GlobalUploadProgressHost() {
       items={items}
       onClearCompleted={clearCompletedUploadProgress}
       onRetry={(item) => {
-        patchUploadProgressItem(item.id, { status: 'queued', error: undefined, progress: 0 } as Partial<UploadQueueItem>);
+        patchUploadProgressItem(item.id, { status: 'queued', error: undefined, progress: 0 });
+        window.dispatchEvent(new CustomEvent('workdrive:retry-upload', { detail: { id: item.id } }));
       }}
       onRemove={(id) => {
         setUploadProgressItems(getUploadProgressItems().filter((x) => x.id !== id));

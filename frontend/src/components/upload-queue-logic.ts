@@ -31,6 +31,16 @@ export function queueSettled(items: UploadQueueItem[]): boolean {
   return items.length > 0 && !items.some((item) => item.status === "queued" || item.status === "processing" || item.status === "uploading");
 }
 
+/** Headline for a settled or running queue. A successful upload is never reported as an error. */
+export function uploadQueueOutcome(items: UploadQueueItem[]): "running" | "success" | "failed" | "partial" {
+  if (!queueSettled(items)) return "running";
+  const failed = items.some((item) => item.status === "failed");
+  const completed = items.some((item) => item.status === "completed");
+  if (failed && completed) return "partial";
+  if (failed) return "failed";
+  return "success";
+}
+
 /** Live percentage of bytes transferred across the whole queue (0–100). */
 export function queueProgress(items: UploadQueueItem[]): number {
   if (items.length === 0) return 0;

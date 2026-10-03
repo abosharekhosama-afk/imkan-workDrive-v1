@@ -2,6 +2,7 @@
 
 import { useLocale } from "./locale-provider";
 import { filesFromDrop, uploadFileToFolder } from "../lib/api/upload-file";
+import { ApiError } from "../lib/api/client";
 import { createFolder } from "../lib/api/folders";
 import type { ChangeEvent, DragEvent } from "react";
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -17,13 +18,18 @@ export function UploadZone({ folderId, onUploaded, triggerOnly = false }: { fold
   const ar = locale === "ar";
   const [active, setActive] = useState(false);
   const [items, setItems] = useState<UploadQueueItem[]>([]);
-  const setItemsAndBroadcast = useCallback((updater: UploadQueueItem[] | ((prev: UploadQueueItem[]) => UploadQueueItem[])) => {
-    setItems((prev) => {
-      const next = typeof updater === 'function' ? (updater as (p: UploadQueueItem[]) => UploadQueueItem[])(prev) : updater;
-      setUploadProgressItems(next);
-      return next;
-    });
+  const itemsRef = useRef<UploadQueueItem[]>([]);
+  const publish = useCallback((next: UploadQueueItem[]) => {
+    itemsRef.current = next;
+    setItems(next);
+    setUploadProgressItems(next);
   }, []);
+  const patchItem = useCallback((id: string, update: Partial<Pick<UploadQueueItem, "status" | "progress" | "error">>) => {
+    const current = itemsRef.current.find((item) => item.id === id);
+    if (!current || current.status === "completed") return;
+    if (current.status === "failed" && update.status !== "processing" && update.status !== "queued") return;
+    publish(updateUploadQueueItem(itemsRef.current, id, update));
+  }, [publish]);
   const inputRef = useRef<HTMLInputElement | null>(null);
   const folderInputRef = useRef<HTMLInputElement | null>(null);
   const mandateResolver = useRef<((value: { templateId: string; customFields: Record<string, unknown> } | null) => void) | null>(null);
@@ -61,24 +67,42 @@ export function UploadZone({ folderId, onUploaded, triggerOnly = false }: { fold
     return await new Promise<{ templateId: string; customFields: Record<string, unknown> } | null>((resolve) => { mandateResolver.current = resolve; });
   }, [folderId]);
 
+  const refreshAfterUpload = useCallback(() => {
+    window.dispatchEvent(new Event("workdrive:content-changed"));
+    void Promise.resolve(onUploaded()).catch(() => undefined);
+  }, [onUploaded]);
   const upload = useCallback(async (item: UploadQueueItem) => {
-    setItemsAndBroadcast((current) => updateUploadQueueItem(current, item.id, { status: "processing", progress: null, error: undefined }));
+    patchItem(item.id, { status: "processing", progress: 0, error: undefined });
+    let fields: { templateId: string; customFields: Record<string, unknown> } | null | undefined;
     try {
-      const fields = await askForTemplateFields(item.file.name);
-      if (fields === null) throw new Error("UPLOAD_CANCELLED");
-      await uploadFileToFolder(folderId, item.file, (progress) => setItemsAndBroadcast((current) => updateUploadQueueItem(current, item.id, { progress })), fields?.customFields, fields?.templateId);
-      setItemsAndBroadcast((current) => updateUploadQueueItem(current, item.id, { status: "completed", progress: 100 }));
-      onUploaded();
+      fields = await askForTemplateFields(item.file.name);
     } catch {
-      setItemsAndBroadcast((current) => updateUploadQueueItem(current, item.id, { status: "failed", error: label("upload.failed") }));
+      fields = undefined;
     }
-  }, [folderId, label, onUploaded]);
+    if (fields === null) {
+      publish(itemsRef.current.filter((row) => row.id !== item.id));
+      return;
+    }
+    try {
+      await uploadFileToFolder(folderId, item.file, (progress) => patchItem(item.id, { status: "uploading", progress }), fields?.customFields, fields?.templateId);
+      patchItem(item.id, { status: "completed", progress: 100, error: undefined });
+      refreshAfterUpload();
+    } catch (error) {
+      const alreadyDone = error instanceof ApiError && (error.status === 409 || /already processed|already complete/i.test(error.message));
+      if (alreadyDone) {
+        patchItem(item.id, { status: "completed", progress: 100, error: undefined });
+        refreshAfterUpload();
+      } else {
+        patchItem(item.id, { status: "failed", error: label("upload.failed") });
+      }
+    }
+  }, [askForTemplateFields, folderId, label, patchItem, publish, refreshAfterUpload]);
 
   const enqueue = useCallback((files: File[]) => {
     const added = createUploadQueueItems(files);
-    setItemsAndBroadcast((current) => [...current, ...added]);
+    publish([...itemsRef.current, ...added]);
     void added.reduce((chain, item) => chain.then(() => upload(item)), Promise.resolve());
-  }, [upload]);
+  }, [publish, upload]);
 
   async function onFolderChange(event: ChangeEvent<HTMLInputElement>) {
     const files = Array.from(event.target.files ?? []);
@@ -99,27 +123,42 @@ export function UploadZone({ folderId, onUploaded, triggerOnly = false }: { fold
       }
       return parent;
     };
-    const items = createUploadQueueItems(files);
-    setItemsAndBroadcast((current) => [...current, ...items]);
-    for (let i = 0; i < items.length; i++) {
-      const item = items[i];
-      setItemsAndBroadcast((current) => updateUploadQueueItem(current, item.id, { status: "processing", progress: null }));
+    const queued = createUploadQueueItems(files);
+    publish([...itemsRef.current, ...queued]);
+    for (let i = 0; i < queued.length; i++) {
+      const item = queued[i];
+      patchItem(item.id, { status: "processing", progress: 0 });
       try {
         const relative = (files[i] as File & { webkitRelativePath?: string }).webkitRelativePath ?? files[i].name;
         const parts = relative.split("/").filter(Boolean);
         const target = await ensureFolder(parts.length > 1 ? parts.slice(0, -1).join("/") : "");
-        await uploadFileToFolder(target ?? folderId, item.file, (progress) => setItemsAndBroadcast((current) => updateUploadQueueItem(current, item.id, { progress })));
-        setItemsAndBroadcast((current) => updateUploadQueueItem(current, item.id, { status: "completed", progress: 100 }));
-        onUploaded();
-      } catch {
-        setItemsAndBroadcast((current) => updateUploadQueueItem(current, item.id, { status: "failed", error: label("upload.failed") }));
+        await uploadFileToFolder(target ?? folderId, item.file, (progress) => patchItem(item.id, { status: "uploading", progress }));
+        patchItem(item.id, { status: "completed", progress: 100, error: undefined });
+        refreshAfterUpload();
+      } catch (error) {
+        const alreadyDone = error instanceof ApiError && (error.status === 409 || /already processed|already complete/i.test(error.message));
+        if (alreadyDone) {
+          patchItem(item.id, { status: "completed", progress: 100, error: undefined });
+          refreshAfterUpload();
+        } else {
+          patchItem(item.id, { status: "failed", error: label("upload.failed") });
+        }
       }
     }
   }
   function onChange(event: ChangeEvent<HTMLInputElement>) { enqueue(Array.from(event.target.files ?? [])); event.target.value = ""; }
   function onDrop(event: DragEvent<HTMLLabelElement>) { event.preventDefault(); setActive(false); enqueue(filesFromDrop(event.dataTransfer)); }
   function retry(item: UploadQueueItem) { void upload(item); }
-  function remove(id: string) { setItemsAndBroadcast((current) => current.filter((item) => item.id !== id)); }
+  function remove(id: string) { publish(itemsRef.current.filter((item) => item.id !== id)); }
+  useEffect(() => {
+    const onRetry = (event: Event) => {
+      const id = (event as CustomEvent<{ id?: string }>).detail?.id;
+      const item = itemsRef.current.find((row) => row.id === id);
+      if (item) void upload({ ...item, status: "queued", error: undefined, progress: 0 });
+    };
+    window.addEventListener("workdrive:retry-upload", onRetry);
+    return () => window.removeEventListener("workdrive:retry-upload", onRetry);
+  }, [upload]);
 
   const resolveTemplatePrompt = (accepted: boolean) => {
     const resolver = mandateResolver.current;
@@ -158,12 +197,12 @@ export function UploadZone({ folderId, onUploaded, triggerOnly = false }: { fold
       <input ref={folderInputRef} type="file" multiple {...({ webkitdirectory: "", directory: "" } as React.InputHTMLAttributes<HTMLInputElement>)} className="sr-only" aria-label={label("menu.uploadFolder")} onChange={(event) => void onFolderChange(event)} />
     </label>}
     {triggerOnly ? <><input ref={inputRef} type="file" multiple className="sr-only" aria-label={label("files.upload")} onChange={(event) => onChange(event)} /><input ref={folderInputRef} type="file" multiple {...({ webkitdirectory: "", directory: "" } as React.InputHTMLAttributes<HTMLInputElement>)} className="sr-only" aria-label={label("menu.uploadFolder")} onChange={(event) => void onFolderChange(event)} /></> : null}
-    <UploadProgressToast
+    {triggerOnly ? null : <UploadProgressToast
       items={items}
-      onClearCompleted={() => setItemsAndBroadcast((current) => current.filter((item) => item.status !== "completed"))}
+      onClearCompleted={() => publish(itemsRef.current.filter((item) => item.status !== "completed"))}
       onRetry={retry}
       onRemove={remove}
-    />
+    />}
   </div>
   </>;
 }

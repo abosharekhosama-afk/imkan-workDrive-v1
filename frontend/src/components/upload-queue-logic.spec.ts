@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { createUploadQueueItems, formatUploadSize, updateUploadQueueItem } from "./upload-queue-logic.ts";
+import { createUploadQueueItems, formatUploadSize, updateUploadQueueItem, uploadQueueOutcome } from "./upload-queue-logic.ts";
 
 test("creates a stable queue item for every selected file", () => {
   const files = [{ name: "one.pdf", size: 1024 }, { name: "two.txt", size: 2048 }] as File[];
@@ -22,4 +22,12 @@ test("formats compact upload sizes without exposing file contents", () => {
   assert.equal(formatUploadSize(512), "512 B");
   assert.equal(formatUploadSize(2048), "2 KB");
   assert.equal(formatUploadSize(2 * 1024 * 1024), "2.0 MB");
+});
+
+
+test("reports a fully completed queue as success", () => {
+  const [item] = createUploadQueueItems([{ name: "a.pdf", size: 10 }] as File[], () => "id-1");
+  assert.equal(uploadQueueOutcome([{ ...item, status: "completed", progress: 100 }]), "success");
+  assert.equal(uploadQueueOutcome([{ ...item, status: "failed" }]), "failed");
+  assert.equal(uploadQueueOutcome([{ ...item, status: "completed" }, { ...item, id: "id-2", status: "failed" }]), "partial");
 });
