@@ -219,7 +219,7 @@ export class BackupService {
   async startBackup(
     user: AccessTokenPayload,
     opts: { policyId?: string; kind?: BackupRunKind } = {},
-  ) {
+  ): Promise<Prisma.BackupRun> {
     this.assertOrgAdmin(user);
     const kind = opts.kind ?? BackupRunKind.FULL;
 
