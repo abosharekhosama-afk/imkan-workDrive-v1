@@ -109,27 +109,48 @@ export default function NotificationsPage() {
               <p className="mt-1 text-[10.5px] text-slate-400">{ar ? "ستظهر التنبيهات الجديدة هنا." : "New alerts will appear here."}</p>
             </div>
           ) : (
-            <div>
-              {items.map((n) => (
-                <article key={n.id} className={`flex items-start gap-3 border-b border-slate-100 px-5 py-4 last:border-b-0 ${n.readAt ? "bg-white" : "bg-[#F7F9FF]"} ${n.resourceType === "FILE" && n.resourceId ? "cursor-pointer" : ""}`} onClick={() => { if (n.resourceType === "FILE" && n.resourceId) router.push(`/files?openFileId=${n.resourceId}`); }}>
-                  <span className={`mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-full ${n.readAt ? "bg-slate-100 text-slate-400" : "bg-[#EEF4FF] text-[#1B66EA]"}`}>
-                    <Icons.bell size={16} />
-                  </span>
-                  <div className="min-w-0 flex-1">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <h3 className="text-[12px] font-semibold text-slate-800">{n.title}</h3>
-                      {!n.readAt ? <span className="rounded-full bg-[#EEF4FF] px-2 py-0.5 text-[8.5px] font-semibold text-[#1B66EA]">{ar ? "جديد" : "New"}</span> : null}
-                    </div>
-                    {n.body ? <p className="mt-1 text-[10.5px] leading-5 text-slate-500">{n.body}</p> : null}
-                    <time className="mt-1.5 block text-[9.5px] text-slate-400">{formatDateLocalized(n.createdAt, locale)}</time>
-                  </div>
-                  {!n.readAt ? (
-                    <button type="button" className="wd-pill wd-pill-record shrink-0" onClick={() => void read(n.id)}>
-                      {label("notifications.markRead")}
-                    </button>
-                  ) : null}
-                </article>
-              ))}
+            <div className="workflow-like-list w-full max-w-full overflow-x-auto">
+              <table className="wd-table workflow-like-table borderless min-w-[36rem]">
+                <thead>
+                  <tr>
+                    <th style={{ width: 48 }}></th>
+                    <th>{ar ? "العنوان" : "Title"}</th>
+                    <th>{ar ? "التفاصيل" : "Details"}</th>
+                    <th>{ar ? "التاريخ" : "Date"}</th>
+                    <th className="num"><span className="sr-only">{label("files.actions")}</span></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {items.map((n) => (
+                    <tr
+                      key={n.id}
+                      className={`${n.readAt ? "" : "bg-[#F7F9FF]"} ${n.resourceType === "FILE" && n.resourceId ? "cursor-pointer" : ""}`}
+                      onClick={() => { if (n.resourceType === "FILE" && n.resourceId) router.push(`/files?openFileId=${n.resourceId}`); }}
+                    >
+                      <td>
+                        <span className={`flex h-8 w-8 items-center justify-center rounded-full ${n.readAt ? "bg-slate-100 text-slate-400" : "bg-[#EEF4FF] text-[#1B66EA]"}`}>
+                          <Icons.bell size={14} />
+                        </span>
+                      </td>
+                      <td>
+                        <span className="inline-flex flex-wrap items-center gap-2">
+                          <span className="wd-name-link">{n.title}</span>
+                          {!n.readAt ? <span className="rounded-full bg-[#EEF4FF] px-2 py-0.5 text-[8.5px] font-semibold text-[#1B66EA]">{ar ? "جديد" : "New"}</span> : null}
+                        </span>
+                      </td>
+                      <td className="wd-list-meta">{n.body || "—"}</td>
+                      <td className="wd-list-meta whitespace-nowrap">{formatDateLocalized(n.createdAt, locale)}</td>
+                      <td className="num">
+                        {!n.readAt ? (
+                          <button type="button" className="wd-pill wd-pill-record shrink-0" onClick={(e) => { e.stopPropagation(); void read(n.id); }}>
+                            {label("notifications.markRead")}
+                          </button>
+                        ) : null}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
           )}
         </section>
