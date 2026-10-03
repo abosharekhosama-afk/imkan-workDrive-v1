@@ -1,7 +1,7 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
 import JSZip from 'jszip';
 import type { OfficeType } from './core/office-engine.interface';
-import { blipEmbedId, boxPercent, coerceElementGeometry, drawingText, firstBox, maskBalanced, outerElements, parseLayoutPlaceholders, parseThemeSchemeColors, relationshipMap, resolvePackageTarget, resolveShapeBox, resolveSolidColor, slideCanvas, slidePieces, wordDirection, wordFlowText } from './ooxml-package-logic';
+import { blipEmbedId, boxPercent, coerceElementGeometry, drawingText, firstBox, maskBalanced, outerElements, parseLayoutPlaceholders, parseMasterPlaceholders, parseThemeSchemeColors, relationshipMap, resolvePackageTarget, resolveShapeBox, resolveSolidColor, shapeFillColor, textRunColor, slideCanvas, slidePieces, wordDirection, wordFlowText } from './ooxml-package-logic';
 
 export type ConversionCategory = 'preserved'|'converted'|'warning'|'unsupported';
 export type ConversionDiagnostic = { code: string; severity: 'info'|'warning'|'loss'; category?: ConversionCategory; message: string; path?: string };
