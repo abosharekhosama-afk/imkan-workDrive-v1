@@ -173,6 +173,7 @@
 | — | PowerPoint pictures stay embedded and slide text keeps the package order | ✅ Implemented |
 | — | Writer page keeps the toolbar element open until its last property | ✅ Implemented |
 | — | Writer toolbar keeps its last bar inside the root element so the page parses | ✅ Implemented |
+| — | Writer menu cards float on their own, and menu actions edit the document or call the file and Office APIs | ✅ Implemented |
 
 ---
 

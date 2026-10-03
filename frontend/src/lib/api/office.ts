@@ -8,6 +8,8 @@ export type OfficeDocument = {
 
 export function getOfficeCapabilities() { return apiRequest('/office/capabilities'); }
 export function createOfficeDocument(input: { name: string; type: OfficeType; folderId?: string | null }) { return apiRequest<OfficeDocument>('/office/documents', { method: 'POST', body: JSON.stringify(input) }); }
+export function importOfficeFile(input: { filename: string; dataBase64: string; folderId?: string | null }) { return apiRequest<{ fileId: string; type: OfficeType }>('/office/import', { method: 'POST', body: JSON.stringify(input) }); }
+export function exportOfficeFile(fileId: string, format: 'docx' | 'xlsx' | 'pptx') { return apiRequest<{ filename: string; mimeType: string; dataBase64: string }>(`/office/files/${fileId}/export`, { method: 'POST', body: JSON.stringify({ format }) }); }
 export function openOfficeDocument(fileId: string) { return apiRequest<OfficeDocument>(`/office/files/${fileId}`); }
 export type OfficeCopyMode = 'OPEN' | 'CONVERT';
 export type OfficeCopyResult = { fileId: string; document: OfficeDocument; created: boolean; mode: OfficeCopyMode; sourceFileId?: string; sourceFormat?: string };

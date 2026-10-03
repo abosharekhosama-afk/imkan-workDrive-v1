@@ -94,6 +94,7 @@ export type WriterBlock = {
   indentRightMm?: number;
   firstLineIndentMm?: number;
   keepWithNext?: boolean;
+  columnBreak?: boolean;
   sectionId?: string;
 };
 
@@ -113,6 +114,7 @@ export type WriterPageSettings = {
   differentOddEven?: boolean;
   pageNumberStart?: number;
   pageNumberFormat?: 'decimal' | 'roman-lower' | 'roman-upper' | 'letter-upper' | 'letter-lower';
+  background?: string;
 };
 
 export type WriterDocument = {
@@ -171,6 +173,7 @@ export function normalizeWriterDocument(value: any): WriterDocument {
     differentFirstPage: Boolean(rawPage.differentFirstPage), differentOddEven: Boolean(rawPage.differentOddEven),
     pageNumberStart: clampNumber(rawPage.pageNumberStart, 1, 99999, 1),
     pageNumberFormat: ['decimal','roman-lower','roman-upper','letter-upper','letter-lower'].includes(rawPage.pageNumberFormat) ? rawPage.pageNumberFormat : 'decimal',
+    background: typeof rawPage.background === 'string' && /^#[0-9a-f]{6}$/i.test(rawPage.background) ? rawPage.background : '#ffffff',
   };
   const blocks: WriterBlock[] = rawBlocks.map((block: any) => normalizeBlock(block));
   const rawReview = source.review && typeof source.review === 'object' ? source.review : {};
@@ -253,6 +256,7 @@ function normalizeBlock(block: any): WriterBlock {
     indentRightMm: clampNumber(block?.indentRightMm, 0, 100, 0),
     firstLineIndentMm: clampNumber(block?.firstLineIndentMm, -30, 50, 0),
     keepWithNext: Boolean(block?.keepWithNext),
+    columnBreak: Boolean(block?.columnBreak),
     sectionId: typeof block?.sectionId === 'string' ? block.sectionId : undefined,
   };
   if (type === 'table') out.table = normalizeTable(block?.table);

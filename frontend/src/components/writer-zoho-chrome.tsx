@@ -1,8 +1,9 @@
 'use client';
 
-import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
+import { createPortal } from 'react-dom';
 import { getWriterToolbarLayout, isToolbarKeyVisible } from '../office/writer/toolbar-overflow';
-import { getOfficeDirection, getLogicalMenuPlacement, officeTokens } from './office-tokens';
+import { getOfficeDirection } from './office-tokens';
 
 type IconName =
   | 'file' | 'star' | 'folder' | 'users' | 'bell' | 'settings' | 'info' | 'undo' | 'redo' | 'paint'
@@ -150,7 +151,36 @@ export type WriterChromeProps = {
   onList: (ordered: boolean) => void;
   onIndent: Action;
   onOutdent: Action;
-  onColumns: Action;
+  onColumns: (count: number) => void;
+  onColumnBreak?: Action;
+  onCut?: Action;
+  onCopy?: Action;
+  onPaste?: Action;
+  onSelectAll?: Action;
+  onDeleteBlock?: Action;
+  onViewMode?: (mode: 'page' | 'web' | 'reader') => void;
+  onBookmarks?: Action;
+  onCopyDocument?: Action;
+  onTrash?: Action;
+  onVersions?: Action;
+  onProperties?: Action;
+  onImport?: Action;
+  onSaveAs?: Action;
+  onMarkFinal?: Action;
+  onPageBackground?: (color: string) => void;
+  onInsertField?: Action;
+  onTextToTable?: Action;
+  onReadAloud?: Action;
+  onFocusTyping?: Action;
+  onTypewriter?: Action;
+  onTransliterate?: Action;
+  onReplaceText?: (mode: 'translate' | 'thesaurus' | 'autocorrect' | 'dictionary') => void;
+  onMaskSelection?: Action;
+  onAppearance?: (mode: 'light' | 'dark') => void;
+  onShortcuts?: Action;
+  onAsk?: Action;
+  onNewDocument?: Action;
+  ribbonHidden?: boolean;
   onSectionBreak: Action;
   onHeaderFooter: Action;
   onEquation: Action;
@@ -201,6 +231,40 @@ type MenuItem = {
   submenu?: { label: string; icon: IconName; onClick?: Action }[];
 };
 
+function writerCardBox(anchor: HTMLElement, width: number, ar: boolean, side = false) {
+  const rect = anchor.getBoundingClientRect();
+  if (side) {
+    const roomRight = window.innerWidth - rect.right;
+    const left = !ar && roomRight > width + 16 ? rect.right + 4 : Math.max(8, rect.left - width - 4);
+    const top = Math.max(8, Math.min(rect.top, window.innerHeight - 80));
+    return { position: 'fixed' as const, top, left, width, zIndex: 90 };
+  }
+  const left = ar ? Math.max(8, rect.right - width) : Math.max(8, Math.min(rect.left, window.innerWidth - width - 8));
+  const top = Math.min(rect.bottom + 4, window.innerHeight - 24);
+  return { position: 'fixed' as const, top, left, width, zIndex: 80 };
+}
+
+function WriterCard({ anchor, width, ar, side, className, children, onMouseEnter, onMouseLeave }: { anchor: HTMLElement | null; width: number; ar: boolean; side?: boolean; className: string; children: ReactNode; onMouseEnter?: () => void; onMouseLeave?: () => void }) {
+  const [, redraw] = useState(0);
+  useLayoutEffect(() => {
+    if (!anchor) return;
+    const redrawCard = () => redraw((value) => value + 1);
+    window.addEventListener('resize', redrawCard);
+    window.addEventListener('scroll', redrawCard, true);
+    return () => {
+      window.removeEventListener('resize', redrawCard);
+      window.removeEventListener('scroll', redrawCard, true);
+    };
+  }, [anchor]);
+  if (!anchor || typeof document === 'undefined') return null;
+  return createPortal(
+    <div data-writer-card className={className} style={writerCardBox(anchor, width, ar, side)} onMouseDown={(event) => event.stopPropagation()} onMouseEnter={onMouseEnter} onMouseLeave={onMouseLeave}>
+      {children}
+    </div>,
+    document.body,
+  );
+}
+
 export function WriterChrome(props: WriterChromeProps) {
   const [menu, setMenu] = useState<MenuName>(null);
   const [fontMenu, setFontMenu] = useState(false);
@@ -219,12 +283,18 @@ export function WriterChrome(props: WriterChromeProps) {
   const toolbarRef = useRef<HTMLDivElement>(null);
   const [lineSpacing, setLineSpacing] = useState(1.5);
   const rootRef = useRef<HTMLDivElement>(null);
+  const menuButtons = useRef<Partial<Record<string, HTMLButtonElement>>>({});
+  const fontButtonRef = useRef<HTMLButtonElement>(null);
+  const alignButtonRef = useRef<HTMLSpanElement>(null);
+  const moreButtonRef = useRef<HTMLSpanElement>(null);
   const toolbarLayout = getWriterToolbarLayout(toolbarWidth);
   const overflowHasItems = toolbarLayout.overflow.length > 0;
 
   useEffect(() => {
     const close = (event: MouseEvent) => {
-      if (!rootRef.current?.contains(event.target as Node)) {
+      const target = event.target as Node | null;
+      if (target instanceof Element && target.closest('[data-writer-card]')) return;
+      if (!rootRef.current?.contains(target)) {
         setMenu(null); setFontMenu(false); setAlignMenu(false); setMoreMenu(false);
       }
     };
@@ -248,48 +318,48 @@ export function WriterChrome(props: WriterChromeProps) {
 
   const fileItems: MenuItem[] = [
     { label: 'New Document', icon: 'document', arrow: true, submenu: [
-      { label: 'Blank Document', icon: 'document', onClick: props.onAddParagraph },
+      { label: 'Blank Document', icon: 'document', onClick: props.onNewDocument ?? props.onAddParagraph },
       { label: 'Document Using Template...', icon: 'document', onClick: () => window.location.assign('/files/templates') },
-      { label: 'Document Using AI', icon: 'automation' },
+      { label: 'Document Using AI', icon: 'automation', onClick: props.onAsk },
     ] },
-    { label: 'New Automation Template', icon: 'automation', arrow: true },
-    { label: 'Import', icon: 'import', arrow: true },
-    { label: 'Open', icon: 'open', arrow: true },
+    { label: 'New Automation Template', icon: 'automation', arrow: true, onClick: () => window.location.assign('/files/templates') },
+    { label: 'Import', icon: 'import', arrow: true, onClick: props.onImport },
+    { label: 'Open', icon: 'open', arrow: true, onClick: props.onBack },
     { label: 'Manage Documents', icon: 'document', onClick: props.onBack },
-    { label: 'Make a Copy...', icon: 'copy', shortcut: 'Ctrl+Shift+S' },
-    { label: 'Save As', icon: 'download', arrow: true },
+    { label: 'Make a Copy...', icon: 'copy', shortcut: 'Ctrl+Shift+S', onClick: props.onCopyDocument },
+    { label: 'Save As', icon: 'download', arrow: true, onClick: props.onSaveAs },
     { label: 'Download As', icon: 'download', arrow: true, onClick: props.onExport },
-    { label: 'Document Versions', icon: 'versions', arrow: true },
+    { label: 'Document Versions', icon: 'versions', arrow: true, onClick: props.onVersions },
     { label: 'Assign workflow', icon: 'workflow', onClick: props.onAssignWorkflow },
-    { label: 'Mark As Final', icon: 'final' },
+    { label: 'Mark As Final', icon: 'final', onClick: props.onMarkFinal },
     { label: 'Share', icon: 'share', arrow: true, onClick: props.onShare },
-    { label: 'Publish', icon: 'publish' },
-    { label: 'Send for sign', icon: 'sign', arrow: true },
-    { label: 'Fill As Form', icon: 'form' },
+    { label: 'Publish', icon: 'publish', onClick: props.onShare },
+    { label: 'Send for sign', icon: 'sign', arrow: true, onClick: props.onAssignWorkflow },
+    { label: 'Fill As Form', icon: 'form', onClick: props.onInsertField },
     { label: 'Page Setup', icon: 'page', onClick: props.onPageSettings },
     { label: 'Print', icon: 'print', shortcut: 'Ctrl+P', onClick: props.onPrint },
-    { label: 'Document Properties', icon: 'properties' },
-    { label: 'Move To Trash', icon: 'trash' },
+    { label: 'Document Properties', icon: 'properties', onClick: props.onProperties },
+    { label: 'Move To Trash', icon: 'trash', onClick: props.onTrash },
   ];
 
   const editItems: MenuItem[] = [
     { label: 'Undo', icon: 'undo', shortcut: 'Ctrl+Z', onClick: props.onUndo },
     { label: 'Redo', icon: 'redo', shortcut: 'Ctrl+Y', onClick: props.onRedo },
-    { label: 'Cut', icon: 'scissors' as IconName, shortcut: 'Ctrl+X' },
-    { label: 'Copy', icon: 'copy', shortcut: 'Ctrl+C' },
-    { label: 'Paste', icon: 'document', arrow: true },
+    { label: 'Cut', icon: 'scissors' as IconName, shortcut: 'Ctrl+X', onClick: props.onCut },
+    { label: 'Copy', icon: 'copy', shortcut: 'Ctrl+C', onClick: props.onCopy },
+    { label: 'Paste', icon: 'document', arrow: true, onClick: props.onPaste },
     { label: 'Find', icon: 'search', arrow: true, onClick: props.onFind },
-    { label: 'Go To...', icon: 'navigator', arrow: true },
-    { label: 'Select All ...', icon: 'checklist', shortcut: 'Ctrl+A' },
-    { label: 'Delete ...', icon: 'trash', disabled: true },
+    { label: 'Go To...', icon: 'navigator', arrow: true, onClick: props.onNavigate },
+    { label: 'Select All ...', icon: 'checklist', shortcut: 'Ctrl+A', onClick: props.onSelectAll },
+    { label: 'Delete ...', icon: 'trash', onClick: props.onDeleteBlock },
   ];
 
   const viewItems: MenuItem[] = [
     { label: 'Document View : Page View', icon: 'view', arrow: true, submenu: [
-      { label: 'Page View', icon: 'view' },
-      { label: 'Web View', icon: 'view' },
+      { label: 'Page View', icon: 'view', onClick: () => props.onViewMode?.('page') },
+      { label: 'Web View', icon: 'view', onClick: () => props.onViewMode?.('web') },
     ] },
-    { label: 'Reader View', icon: 'reader', disabled: true },
+    { label: 'Reader View', icon: 'reader', onClick: () => props.onViewMode?.('reader') },
     { label: 'Full Screen', icon: 'fullscreen', shortcut: 'F11', onClick: props.onFullscreen },
     { label: `Zoom: ${zoom}%`, icon: 'zoom', arrow: true, submenu: [
       { label: '75%', icon: 'zoom', onClick: () => { setZoom(75); props.onZoom?.(75); } },
@@ -301,15 +371,15 @@ export function WriterChrome(props: WriterChromeProps) {
     { label: 'Navigator', icon: 'navigator', onClick: props.onNavigate },
     { label: 'Hide Images', icon: 'hide', onClick: props.onToggleImages },
     { label: 'Ruler', icon: 'ruler', onClick: props.onRuler },
-    { label: 'Bookmarks', icon: 'bookmark', disabled: true },
-    { label: 'Smart Grid Lines', icon: 'grid', disabled: true },
-    { label: 'Object Indicator', icon: 'object', disabled: true },
+    { label: 'Bookmarks', icon: 'bookmark', onClick: props.onBookmarks },
+    { label: 'Smart Grid Lines', icon: 'grid', onClick: props.onRuler },
+    { label: 'Object Indicator', icon: 'object', onClick: props.onNavigate },
     { label: 'Toggle Formatting Marks', icon: 'formatting', shortcut: 'Ctrl+Shift+8', onClick: props.onToggleFormattingMarks },
     { label: 'Appearance', icon: 'design', arrow: true, submenu: [
-      { label: 'Light', icon: 'design' },
-      { label: 'Dark / Night', icon: 'design', disabled: true },
+      { label: 'Light', icon: 'design', onClick: () => props.onAppearance?.('light') },
+      { label: 'Dark / Night', icon: 'design', onClick: () => props.onAppearance?.('dark') },
     ] },
-    { label: 'More View Options ...', icon: 'more', disabled: true },
+    { label: 'More View Options ...', icon: 'more', onClick: props.onShortcuts },
   ];
 
   const insertItems: MenuItem[] = [
@@ -319,13 +389,13 @@ export function WriterChrome(props: WriterChromeProps) {
     { label: 'Break', icon: 'break', arrow: true, submenu: [
       { label: 'Page Break', icon: 'break', onClick: props.onPageBreak },
       { label: 'Section Break', icon: 'break', onClick: props.onSectionBreak },
-      { label: 'Column Break', icon: 'columns', disabled: true },
+      { label: 'Column Break', icon: 'columns', onClick: props.onColumnBreak },
     ] },
     { label: 'Header / Footer', icon: 'header', onClick: props.onHeaderFooter },
     { label: 'Columns', icon: 'columns', arrow: true, submenu: [
-      { label: 'One Column', icon: 'columns', onClick: () => props.onColumns() },
-      { label: 'Two Columns', icon: 'columns', onClick: () => props.onColumns() },
-      { label: 'Three Columns', icon: 'columns', disabled: true },
+      { label: 'One Column', icon: 'columns', onClick: () => props.onColumns(1) },
+      { label: 'Two Columns', icon: 'columns', onClick: () => props.onColumns(2) },
+      { label: 'Three Columns', icon: 'columns', onClick: () => props.onColumns(3) },
     ] },
     { label: 'Equation', icon: 'equation', onClick: props.onEquation },
     { label: 'Symbol', icon: 'symbol', onClick: props.onSymbol },
@@ -342,7 +412,7 @@ export function WriterChrome(props: WriterChromeProps) {
   const reviewItems: MenuItem[] = [
     { label: 'Add Comments', icon: 'comments', onClick: props.onComments },
     { label: 'Show Comments', icon: 'comment', onClick: props.onComments },
-    { label: 'Collaboration: Off', icon: 'users', arrow: true, disabled: true },
+    { label: 'Collaboration', icon: 'users', arrow: true, onClick: props.onComments },
     { label: 'Track Changes: Off', icon: 'track', arrow: true, onClick: props.onTrackChanges },
     { label: 'View Suggestions', icon: 'comments', onClick: props.onComments },
     { label: 'Markup View : All Markup', icon: 'review', arrow: true, submenu: [
@@ -358,10 +428,10 @@ export function WriterChrome(props: WriterChromeProps) {
       { label: 'Orange', icon: 'textColor', onClick: () => props.onMarkupColor?.('#f59e0b') },
     ] },
     { label: 'Compare Versions', icon: 'versions', onClick: props.onSnapshot },
-    { label: 'Combine Revisions', icon: 'versions', disabled: true },
-    { label: 'Lock/Unlock Content', icon: 'lock', disabled: true },
-    { label: 'Mask Content', icon: 'mask', disabled: true },
-    { label: 'Notification Settings', icon: 'notification', disabled: true },
+    { label: 'Combine Revisions', icon: 'versions', onClick: props.onSnapshot },
+    { label: 'Lock/Unlock Content', icon: 'lock', onClick: props.onMarkFinal },
+    { label: 'Mask Content', icon: 'mask', onClick: props.onMaskSelection },
+    { label: 'Notification Settings', icon: 'notification', onClick: () => window.location.assign('/settings') },
   ];
 
   const itemsForMenu = (name: MenuName): MenuItem[] => {
@@ -410,54 +480,58 @@ export function WriterChrome(props: WriterChromeProps) {
       { label: 'Outdent', icon: 'outdent', onClick: props.onOutdent },
     ];
     if (name === 'Design') return [
-      { label: 'Current Design : The Writer', icon: 'design', arrow: true },
-      { label: 'Design Gallery', icon: 'design', arrow: true },
+      { label: 'Current Design : The Writer', icon: 'design', arrow: true, onClick: () => props.onPageBackground?.('#ffffff') },
+      { label: 'Design Gallery', icon: 'design', arrow: true, submenu: [
+        { label: 'White', icon: 'design', onClick: () => props.onPageBackground?.('#ffffff') },
+        { label: 'Warm', icon: 'design', onClick: () => props.onPageBackground?.('#fff8e8') },
+        { label: 'Blue', icon: 'design', onClick: () => props.onPageBackground?.('#f3f7ff') },
+      ] },
       { label: 'Font Set', icon: 'font', arrow: true, onClick: () => setFont('Roboto') },
-      { label: 'Color Set : Default', icon: 'textColor', arrow: true },
-      { label: 'Import Design ...', icon: 'import' },
-      { label: 'Page Borders', icon: 'page' },
-      { label: 'Page Background ...', icon: 'page' },
-      { label: 'More Design Options ...', icon: 'more' },
+      { label: 'Color Set : Default', icon: 'textColor', arrow: true, onClick: () => props.onColor('#222222') },
+      { label: 'Import Design ...', icon: 'import', onClick: props.onImport },
+      { label: 'Page Borders', icon: 'page', onClick: props.onPageSettings },
+      { label: 'Page Background ...', icon: 'page', onClick: () => props.onPageBackground?.('#fff8e8') },
+      { label: 'More Design Options ...', icon: 'more', onClick: props.onPageSettings },
     ];
     if (name === 'Page Setup') return [
       { label: 'Page Size', icon: 'page', onClick: props.onPageSettings },
       { label: 'Margins', icon: 'page', onClick: props.onPageSettings },
       { label: 'Orientation', icon: 'page', onClick: props.onPageSettings },
-      { label: 'Columns', icon: 'columns', onClick: props.onColumns },
+      { label: 'Columns', icon: 'columns', onClick: props.onPageSettings },
       { label: 'Breaks', icon: 'break', onClick: props.onSectionBreak },
       { label: 'Header / Footer', icon: 'header', onClick: props.onHeaderFooter },
     ];
     if (name === 'Tools') return [
-      { label: 'Ask Zia', icon: 'automation', disabled: true },
-      { label: 'Spell Check', icon: 'spell', onClick: props.onFind },
-      { label: 'Text to Table', icon: 'table', disabled: true },
-      { label: 'Translate Content', icon: 'symbol', disabled: true },
-      { label: 'Transliteration', icon: 'symbol', disabled: true },
-      { label: 'Focus Typing', icon: 'font', disabled: true },
-      { label: 'Typewriter Sound', icon: 'font', disabled: true },
-      { label: 'Thesaurus', icon: 'document', disabled: true },
-      { label: 'Autocorrect', icon: 'font', disabled: true },
-      { label: 'Personal Dictionary', icon: 'document', disabled: true },
-      { label: 'Read Aloud', icon: 'reader', disabled: true },
+      { label: 'Ask Zia', icon: 'automation', onClick: props.onAsk },
+      { label: 'Spell Check', icon: 'spell', onClick: () => document.querySelector<HTMLElement>('[data-writer-editor]')?.focus() },
+      { label: 'Text to Table', icon: 'table', onClick: props.onTextToTable },
+      { label: 'Translate Content', icon: 'symbol', onClick: () => props.onReplaceText?.('translate') },
+      { label: 'Transliteration', icon: 'symbol', onClick: props.onTransliterate },
+      { label: 'Focus Typing', icon: 'font', onClick: props.onFocusTyping },
+      { label: 'Typewriter Sound', icon: 'font', onClick: props.onTypewriter },
+      { label: 'Thesaurus', icon: 'document', onClick: () => props.onReplaceText?.('thesaurus') },
+      { label: 'Autocorrect', icon: 'font', onClick: () => props.onReplaceText?.('autocorrect') },
+      { label: 'Personal Dictionary', icon: 'document', onClick: () => props.onReplaceText?.('dictionary') },
+      { label: 'Read Aloud', icon: 'reader', onClick: props.onReadAloud },
       { label: 'Word Count', icon: 'document', onClick: props.onWordCount },
       { label: 'View Document Images', icon: 'image', onClick: props.onToggleImages },
-      { label: 'Extensions', icon: 'plus', disabled: true },
-      { label: 'Engagement Insights', icon: 'properties', disabled: true },
+      { label: 'Extensions', icon: 'plus', onClick: () => window.location.assign('/files/workflows') },
+      { label: 'Engagement Insights', icon: 'properties', onClick: props.onDocumentStatistics },
       { label: 'Find and Replace', icon: 'search', onClick: props.onFind },
       { label: 'Document Statistics', icon: 'properties', onClick: props.onDocumentStatistics },
     ];
     if (name === 'Fields') return [
-      { label: 'Insert Field', icon: 'document' },
-      { label: 'Template Fields', icon: 'form' },
+      { label: 'Insert Field', icon: 'document', onClick: props.onInsertField },
+      { label: 'Template Fields', icon: 'form', onClick: props.onInsertField },
     ];
     if (name === 'Automate') return [
       { label: 'Assign workflow', icon: 'workflow', onClick: props.onAssignWorkflow },
-      { label: 'Automation Templates', icon: 'automation' },
+      { label: 'Automation Templates', icon: 'automation', onClick: () => window.location.assign('/files/templates') },
     ];
     if (name === 'Help') return [
-      { label: 'Keyboard Shortcuts', icon: 'document' },
-      { label: 'Writer Help', icon: 'info' },
-      { label: 'About IMKAN Writer', icon: 'info' },
+      { label: 'Keyboard Shortcuts', icon: 'document', onClick: props.onShortcuts },
+      { label: 'Writer Help', icon: 'info', onClick: props.onShortcuts },
+      { label: 'About IMKAN Writer', icon: 'info', onClick: props.onDocumentStatistics },
     ];
     return [];
   };
@@ -467,17 +541,18 @@ export function WriterChrome(props: WriterChromeProps) {
   const renderMenu = () => {
     if (!menu) return null;
     const items = itemsForMenu(menu);
-    const menuLeft: Record<Exclude<MenuName, null>, number> = {File: 0, Edit: 48, View: 104, Insert: 153, Format: 204, Design: 265, 'Page Setup': 339, Review: 420, Tools: 486, Fields: 548, Automate: 610, Help: 690};
-    return <div style={{...getLogicalMenuPlacement(props.ar, menuLeft[menu]), minWidth: `${officeTokens.controlHeight * 10}px`}} className="absolute top-[31px] z-[160] max-h-[calc(100vh-170px)] overflow-y-auto rounded-[5px] border border-[var(--imkan-office-border)] bg-white p-1.5 shadow-[0_4px_18px_rgba(0,0,0,.18)]">
-      {items.map((item) => <MenuRow key={item.label} item={item} onRun={run} />)}
-    </div>;
+    return <WriterCard anchor={menuButtons.current[menu] ?? null} width={320} ar={props.ar} className="rounded-[5px] border border-[var(--imkan-office-border)] bg-white p-1.5 shadow-[0_4px_18px_rgba(0,0,0,.18)]">
+      <div className="max-h-[min(70vh,620px)] overflow-y-auto">
+        {items.map((item) => <MenuRow key={item.label} item={item} ar={props.ar} onRun={run} />)}
+      </div>
+    </WriterCard>;
   };
 
-  return <div ref={rootRef} data-office-direction={getOfficeDirection(props.ar)} className="relative z-[150] shrink-0 select-none bg-white text-[#1c1c1c] print:hidden" style={{fontFamily:'Arial, Helvetica, sans-serif', ['--writer-primary' as string]:'var(--imkan-office-primary)', ['--writer-border' as string]:'var(--imkan-office-border)'}} dir={getOfficeDirection(props.ar)}>
+  return <div ref={rootRef} data-office-direction={getOfficeDirection(props.ar)} className="relative shrink-0 select-none bg-white text-[#1c1c1c] print:hidden" style={{fontFamily:'Arial, Helvetica, sans-serif', ['--writer-primary' as string]:'var(--imkan-office-primary)', ['--writer-border' as string]:'var(--imkan-office-border)'}} dir={getOfficeDirection(props.ar)}>
     <div className="flex h-[52px] items-stretch border-b border-[var(--imkan-office-border)] bg-white">
       <div className="flex w-[124px] shrink-0 items-center gap-2 bg-[var(--imkan-office-primary)] px-[17px] text-[22px] font-medium text-white"><Icon name="file" size={25}/><span>Writer</span></div>
       <div className="flex min-w-0 flex-1 items-center gap-[12px] px-[24px]">
-        <button className="max-w-[190px] truncate text-[18px] font-semibold hover:bg-[#f5f7fa]" title={props.title}>{props.title || 'Untitled Document'}</button>
+        <button onClick={props.onProperties} className="max-w-[190px] truncate text-[18px] font-semibold hover:bg-[#f5f7fa]" title={props.title}>{props.title || 'Untitled Document'}</button>
         <button className="p-1 text-[#6c737d] hover:bg-[#f4f6f8]" title="Favorite"><Icon name="star" size={18}/></button>
         <button className="p-1 text-[#6c737d] hover:bg-[#f4f6f8]" title="Move"><Icon name="folder" size={18}/></button>
         <button onClick={props.onAssignWorkflow} className="ml-[3px] rounded-[4px] border border-[#3475e8] bg-white px-[11px] py-[6px] text-[12px] font-medium text-[#2066d6] hover:bg-[#f3f7ff]">ASSIGN WORKFLOW</button>
@@ -485,27 +560,27 @@ export function WriterChrome(props: WriterChromeProps) {
         <div className="ml-auto flex items-center gap-[8px]">
           <button className="h-[34px] rounded-[4px] border border-[#d5d9df] bg-white px-[13px] text-[14px] hover:bg-[#f7f8fa]">Compose <span className="ms-1 text-[11px]">⌄</span></button>
           <button onClick={props.onShare} className="flex h-[34px] items-center gap-2 rounded-[4px] border border-[#3475e8] px-[13px] text-[14px] text-[#2066d6] hover:bg-[#f3f7ff]"><Icon name="share" size={17}/>Share</button>
-          <IconButton name="users" title="Collaborators" />
-          <IconButton name="bell" title="Notifications" />
-          <IconButton name="settings" title="Settings" />
-          <IconButton name="info" title="Info" />
+          <IconButton name="users" title="Collaborators" onClick={props.onShare} />
+          <IconButton name="bell" title="Notifications" onClick={() => window.location.assign('/notifications')} />
+          <IconButton name="settings" title="Settings" onClick={() => window.location.assign('/settings')} />
+          <IconButton name="info" title="Info" onClick={props.onProperties} />
           <div className="h-[34px] w-[34px] overflow-hidden rounded-full bg-[#e8edf5] text-center text-[13px] leading-[34px] text-[#5b6470]">U</div>
         </div>
       </div>
     </div>
 
-    <div className="relative flex h-[32px] items-center border-b border-[#e1e1e1] bg-white px-0">
-      {menuNames.map((name) => <button key={name} onClick={() => { setMenu(menu === name ? null : name); setFontMenu(false); setAlignMenu(false); setMoreMenu(false); }} className={`h-[31px] px-[14px] text-[14px] hover:bg-[#f2f5f9] ${menu === name ? 'bg-[#d3e3fd] text-[#1f64cf]' : ''}`}>{name}</button>)}
+    {props.ribbonHidden ? <button type="button" onClick={props.onFocusTyping} className="h-[32px] w-full border-b border-[#e1e1e1] bg-[#f7f9fc] text-[13px] text-[#1f64cf]">{props.ar ? 'إظهار الشريط' : 'Show ribbon'}</button> : <div className="relative flex h-[32px] items-center border-b border-[#e1e1e1] bg-white px-0">
+      {menuNames.map((name) => <button key={name} ref={(node) => { if (node) menuButtons.current[name] = node; }} onClick={() => { setMenu(menu === name ? null : name); setFontMenu(false); setAlignMenu(false); setMoreMenu(false); }} className={`h-[31px] px-[14px] text-[14px] hover:bg-[#f2f5f9] ${menu === name ? 'bg-[#d3e3fd] text-[#1f64cf]' : ''}`}>{name}</button>)}
       {renderMenu()}
-    </div>
+    </div>}
 
-    <div ref={toolbarRef} className="relative flex h-[47px] min-w-0 items-center gap-0 overflow-hidden border-b border-[#dddddd] bg-white px-[10px] text-[#3e4146]">
+    {!props.ribbonHidden && <div ref={toolbarRef} className="relative flex h-[47px] min-w-0 items-center gap-0 overflow-hidden border-b border-[#dddddd] bg-white px-[10px] text-[#3e4146]">
       <ToolbarButton icon="undo" title="Undo" onClick={props.onUndo}/><ToolbarButton icon="redo" title="Redo" onClick={props.onRedo}/><ToolbarButton icon="paint" title="Format Painter" onClick={props.onClearFormatting}/>
       <Divider/>
       <ToolbarSelect value="List Paragraph" width="153px" onChange={v => { const styles = ['paragraph', 'title', 'subtitle', 'heading1', 'heading2', 'heading3'] as const; const style = styles.find(x => x === v); if (style) props.onParagraphStyle?.(style); }} />
       <div className="relative shrink-0">
-        <button type="button" onClick={() => { setFontMenu(v => !v); setAlignMenu(false); setMoreMenu(false); }} className="mx-[2px] flex h-[31px] w-[148px] items-center justify-between rounded-[3px] border border-transparent bg-white px-[8px] text-[14px] hover:border-[#d7dce2]" title="Font"><span style={{fontFamily: effectiveFontFamily}}>{effectiveFontFamily}</span><Icon name="chevron" size={14}/></button>
-        {fontMenu&&<FontPicker current={fontFamily} onSelect={(value) => { setFont(value); setFontMenu(false); }} />}
+        <button ref={fontButtonRef} type="button" onClick={() => { setFontMenu(v => !v); setAlignMenu(false); setMoreMenu(false); }} className="mx-[2px] flex h-[31px] w-[148px] items-center justify-between rounded-[3px] border border-transparent bg-white px-[8px] text-[14px] hover:border-[#d7dce2]" title="Font"><span style={{fontFamily: effectiveFontFamily}}>{effectiveFontFamily}</span><Icon name="chevron" size={14}/></button>
+        {fontMenu&&<WriterCard anchor={fontButtonRef.current} width={360} ar={props.ar} className="overflow-hidden rounded-[5px] border border-[var(--imkan-office-border)] bg-white shadow-[0_4px_18px_rgba(0,0,0,.18)]"><FontPicker current={fontFamily} onSelect={(value) => { setFont(value); setFontMenu(false); }} /></WriterCard>}
       </div>
       <ToolbarSelect value={String(effectiveFontSize)} width="58px" onChange={v => setSize(Number(v))}/>
       <ToolbarButton icon="plus" title="Increase font size" onClick={() => setSize(effectiveFontSize + 1)}/><ToolbarButton icon="minus" title="Decrease font size" onClick={() => setSize(effectiveFontSize - 1)}/>
@@ -515,13 +590,13 @@ export function WriterChrome(props: WriterChromeProps) {
       {isToolbarKeyVisible(toolbarLayout, 'highlight') && <ColorButton icon="highlight" color={effectiveHighlight} title="Highlight" onChange={(v) => { setHighlight(v); props.onHighlight(v); }}/>}
       <ToolbarButton icon="eraser" title="Clear formatting" onClick={props.onClearFormatting} />
       <Divider/>
-      {isToolbarKeyVisible(toolbarLayout, 'lineSpacing') && <ToolbarButton icon="line" title={`Line spacing ${lineSpacing}`} onClick={() => { const values=[1,1.15,1.5,2]; const next=values[(values.indexOf(lineSpacing)+1)%values.length]; setLineSpacing(next); props.onLineSpacing?.(next); }}/>}<ToolbarButton icon="align" title="Alignment" onClick={() => { setAlignMenu(v => !v); setFontMenu(false); setMoreMenu(false); }} />
-      {alignMenu && <div style={{...getLogicalMenuPlacement(props.ar, 0, 225), transform: props.ar ? "translateX(100%)" : "none"}} className="absolute top-[43px] z-[170] w-[225px] rounded-[5px] border border-[var(--imkan-office-border)] bg-white p-1.5 shadow-[0_4px_18px_rgba(0,0,0,.18)]">
+      {isToolbarKeyVisible(toolbarLayout, 'lineSpacing') && <ToolbarButton icon="line" title={`Line spacing ${lineSpacing}`} onClick={() => { const values=[1,1.15,1.5,2]; const next=values[(values.indexOf(lineSpacing)+1)%values.length]; setLineSpacing(next); props.onLineSpacing?.(next); }}/>}<span ref={alignButtonRef} className="inline-flex"><ToolbarButton icon="align" title="Alignment" onClick={() => { setAlignMenu(v => !v); setFontMenu(false); setMoreMenu(false); }} /></span>
+      {alignMenu && <WriterCard anchor={alignButtonRef.current} width={225} ar={props.ar} className="rounded-[5px] border border-[var(--imkan-office-border)] bg-white p-1.5 shadow-[0_4px_18px_rgba(0,0,0,.18)]">
         <AlignRow icon="alignLeft" label="Align Left" shortcut="Ctrl+Shift+L" onClick={() => run(() => props.onAlign('start'))}/>
         <AlignRow icon="alignCenter" label="Align Center" shortcut="Ctrl+Shift+E" onClick={() => run(() => props.onAlign('center'))}/>
         <AlignRow icon="alignRight" label="Align Right" shortcut="Ctrl+Shift+R" onClick={() => run(() => props.onAlign('end'))}/>
         <AlignRow icon="justify" label="Justify" shortcut="Ctrl+Shift+J" onClick={() => run(() => props.onAlign('justify'))}/>
-      </div>}
+      </WriterCard>}
       {isToolbarKeyVisible(toolbarLayout, 'indent') && <ToolbarButton icon="indent" title="Indent" onClick={props.onIndent}/>}
       {isToolbarKeyVisible(toolbarLayout, 'outdent') && <ToolbarButton icon="outdent" title="Outdent" onClick={props.onOutdent}/>}
       {isToolbarKeyVisible(toolbarLayout, 'bullets') && <ToolbarButton icon="bullets" title="Bulleted list" onClick={() => props.onList(false)}/>}
@@ -531,7 +606,7 @@ export function WriterChrome(props: WriterChromeProps) {
       {isToolbarKeyVisible(toolbarLayout, 'table') && <ToolbarButton icon="table" title="Insert table" onClick={props.onInsertTable}/>}
       {isToolbarKeyVisible(toolbarLayout, 'link') && <ToolbarButton icon="link" title="Insert link" onClick={props.onLink}/>}
       {isToolbarKeyVisible(toolbarLayout, 'comments') && <ToolbarButton icon="comment" title="Comments" onClick={props.onComments}/>}
-      {overflowHasItems && <div className="relative"><ToolbarButton icon="more" title="More tools" onClick={() => { setMoreMenu(v => !v); setFontMenu(false); setAlignMenu(false); }}/>{moreMenu&&<div className="absolute right-0 top-[39px] z-[170] grid w-[290px] grid-cols-4 gap-1 rounded-[6px] border border-[var(--imkan-office-border)] bg-white p-2 shadow-[0_4px_18px_rgba(0,0,0,.18)]">
+      {overflowHasItems && <div className="relative"><span ref={moreButtonRef} className="inline-flex"><ToolbarButton icon="more" title="More tools" onClick={() => { setMoreMenu(v => !v); setFontMenu(false); setAlignMenu(false); }} /></span>{moreMenu&&<WriterCard anchor={moreButtonRef.current} width={290} ar={props.ar} className="grid grid-cols-4 gap-1 rounded-[6px] border border-[var(--imkan-office-border)] bg-white p-2 shadow-[0_4px_18px_rgba(0,0,0,.18)]">
         {toolbarLayout.overflow.includes('lineSpacing') && <MiniMore icon="line" label="Line spacing" onClick={() => run(() => { const values=[1,1.15,1.5,2]; const next=values[(values.indexOf(lineSpacing)+1)%values.length]; setLineSpacing(next); props.onLineSpacing?.(next); })}/>}
         {toolbarLayout.overflow.includes('indent') && <MiniMore icon="indent" label="Indent" onClick={() => run(props.onIndent)}/>}
         {toolbarLayout.overflow.includes('outdent') && <MiniMore icon="outdent" label="Outdent" onClick={() => run(props.onOutdent)}/>}
@@ -544,26 +619,28 @@ export function WriterChrome(props: WriterChromeProps) {
         {toolbarLayout.overflow.includes('comments') && <MiniMore icon="comment" label="Comments" onClick={() => run(props.onComments)}/>}
         {toolbarLayout.overflow.includes('highlight') && <OverflowColorButton icon="highlight" color={effectiveHighlight} label="Highlight" onChange={(v) => { setHighlight(v); props.onHighlight(v); }}/>}
         {toolbarLayout.overflow.includes('textColor') && <OverflowColorButton icon="textColor" color={effectiveColor} label="Text color" onChange={(v) => { setColor(v); props.onColor(v); }}/>} 
-      </div>}</div>}</div>
+      </WriterCard>}</div>}
+    </div>}
 
     <div className="flex h-[0px]" />
   </div>;
 }
 
-function IconButton({ name, title }: { name: IconName; title: string }) { return <button className="flex h-[34px] w-[34px] items-center justify-center rounded-[4px] text-[#3e4146] hover:bg-[#f4f6f8]" title={title}><Icon name={name} size={18}/></button>; }
+function IconButton({ name, title, onClick }: { name: IconName; title: string; onClick?: Action }) { return <button type="button" onClick={onClick} className="flex h-[34px] w-[34px] items-center justify-center rounded-[4px] text-[#3e4146] hover:bg-[#f4f6f8]" title={title}><Icon name={name} size={18}/></button>; }
 function Divider() { return <span className="mx-[5px] h-[26px] w-px bg-[#e1e1e1]"/>; }
 function ToolbarButton({ icon, title, onClick, active }: { icon: IconName; title: string; onClick?: Action; active?: boolean }) { return <button type="button" aria-pressed={active ?? false} onMouseDown={e => e.preventDefault()} onClick={onClick} title={title} className={`flex h-[35px] w-[34px] shrink-0 items-center justify-center rounded-[3px] text-[#41454a] hover:bg-[#f0f3f7] active:bg-[#e6edf7] ${active?'bg-[#eaf2ff] text-[#1f64cf]':''}`}><Icon name={icon} size={18}/></button>; }
 function ToolbarSelect({ value, width, onChange }: { value: string; width: string; onChange: (value: string) => void }) { return <select value={value} onChange={e => onChange(e.target.value)} className="mx-[2px] h-[31px] shrink-0 rounded-[3px] border border-transparent bg-white px-[8px] text-[14px] outline-none hover:border-[#d7dce2] focus:border-[#8db7f4]" style={{ width }}><option>{value}</option>{value === 'Roboto' && <><option>Arial</option><option>Tahoma</option><option>Times New Roman</option></>}{value === 'List Paragraph' && <><option>Paragraph</option><option>Title</option><option>Subtitle</option><option>Heading 1</option><option>Heading 2</option><option>Heading 3</option></>}{value === '12' && <><option>10</option><option>11</option><option>14</option><option>16</option><option>18</option><option>24</option><option>36</option></>}</select>; }
 function ColorButton({ icon, color, title, onChange }: { icon: IconName; color: string; title: string; onChange: (value: string) => void }) {
   const [open,setOpen]=useState(false);
+  const buttonRef=useRef<HTMLButtonElement>(null);
   const colors=['#000000','#444444','#777777','#ffffff','#ef4444','#f97316','#f59e0b','#eab308','#22c55e','#14b8a6','#06b6d4','#3b82f6','#6366f1','#8b5cf6','#ec4899','#f3e8ff','#dbeafe','#dcfce7','#fef3c7','#fee2e2'];
-  return <div className="relative shrink-0"><button type="button" onClick={()=>setOpen(v=>!v)} className="relative flex h-[35px] w-[35px] items-center justify-center rounded-[3px] hover:bg-[#f0f3f7]" title={title}><Icon name={icon} size={18}/><span className="absolute bottom-[4px] left-[8px] right-[8px] h-[3px] rounded" style={{backgroundColor:color}}/></button>{open&&<div className="absolute left-0 top-[38px] z-[190] w-[250px] rounded-[5px] border border-[#d9dde2] bg-white p-2 shadow-[0_5px_20px_rgba(0,0,0,.2)]"><div className="mb-2 text-[12px] font-medium text-[#646a72]">Theme colors</div><div className="grid grid-cols-10 gap-1.5">{colors.map(c=><button key={c} type="button" aria-label={c} onClick={()=>{onChange(c);setOpen(false);}} className="h-[20px] w-[20px] rounded-[3px] border border-[#d5d9df]" style={{backgroundColor:c}}/> )}</div><div className="mt-2 border-t pt-2"><label className="flex items-center gap-2 text-[12px] text-[#555b62]">Custom<input type="color" value={color} onChange={e=>onChange(e.target.value)} className="ms-auto h-7 w-9"/></label></div></div>}</div>;
+  return <div className="relative shrink-0"><button ref={buttonRef} type="button" onClick={()=>setOpen(v=>!v)} className="relative flex h-[35px] w-[35px] items-center justify-center rounded-[3px] hover:bg-[#f0f3f7]" title={title}><Icon name={icon} size={18}/><span className="absolute bottom-[4px] left-[8px] right-[8px] h-[3px] rounded" style={{backgroundColor:color}}/></button>{open&&<WriterCard anchor={buttonRef.current} width={250} ar={false} className="rounded-[5px] border border-[#d9dde2] bg-white p-2 shadow-[0_5px_20px_rgba(0,0,0,.2)]"><div className="mb-2 text-[12px] font-medium text-[#646a72]">Theme colors</div><div className="grid grid-cols-10 gap-1.5">{colors.map(c=><button key={c} type="button" aria-label={c} onClick={()=>{onChange(c);setOpen(false);}} className="h-[20px] w-[20px] rounded-[3px] border border-[#d5d9df]" style={{backgroundColor:c}}/> )}</div><div className="mt-2 border-t pt-2"><label className="flex items-center gap-2 text-[12px] text-[#555b62]">Custom<input type="color" value={/^#[0-9a-f]{6}$/i.test(color)?color:'#222222'} onChange={e=>onChange(e.target.value)} className="ms-auto h-7 w-9"/></label></div></WriterCard>}</div>;
 }
 function FontPicker({ current, onSelect }: { current: string; onSelect: (value: string) => void }) {
   const [query, setQuery] = useState('');
   const fonts = ['Anonymous Pro','Arimo','Arvo','Lato 2','Liberation Mono','Liberation Sans','Liberation Serif','Roboto','Rokkitt','Quicksand','Source Sans Pro','League Gothic'];
   const filtered = fonts.filter(font => font.toLowerCase().includes(query.toLowerCase()));
-  return <div className="absolute left-0 top-[36px] z-[180] w-[360px] overflow-hidden rounded-[5px] border border-[var(--imkan-office-border)] bg-white shadow-[0_4px_18px_rgba(0,0,0,.18)]">
+  return <div>
     <div className="flex items-center gap-2 border-b border-[#ececec] p-2"><input autoFocus value={query} onChange={e=>setQuery(e.target.value)} placeholder="Search" className="h-[32px] flex-1 rounded-[3px] bg-[#f4f6f8] px-2.5 text-[13px] outline-none"/><button className="h-[32px] w-[32px] rounded border border-[#d9dde2] text-[#2d67c9]">☰</button><button className="h-[32px] w-[32px] rounded border border-transparent text-[#6b7076]">▦</button></div>
     <div className="max-h-[400px] overflow-y-auto text-[14px]">
       <div className="px-3 pb-1 pt-2 text-[12px] font-medium uppercase tracking-wide text-[#777d84]">Theme Fonts</div>
@@ -578,12 +655,16 @@ function FontPicker({ current, onSelect }: { current: string; onSelect: (value: 
 }
 function OverflowColorButton({ icon, color, label, onChange }: { icon: IconName; color: string; label: string; onChange: (value: string) => void }) { return <div className="flex h-[42px] w-[60px] items-center justify-center"><ColorButton icon={icon} color={color} title={label} onChange={onChange}/></div>; }
 function MiniMore({ icon, label, onClick }: { icon: IconName; label: string; onClick: Action }) { return <button onClick={onClick} title={label} className="flex h-[42px] w-[44px] items-center justify-center rounded-[4px] text-[#555b62] hover:bg-[#edf3ff]"><Icon name={icon} size={19}/></button>; }
-function MenuRow({ item, onRun }: { item: MenuItem; onRun: (fn?: Action) => void }) {
+function MenuRow({ item, ar, onRun }: { item: MenuItem; ar: boolean; onRun: (fn?: Action) => void }) {
   const [open, setOpen] = useState(false);
-  return <div className="relative" onMouseEnter={() => item.submenu && setOpen(true)} onMouseLeave={() => item.submenu && setOpen(false)}>
-    <button disabled={item.disabled} onClick={() => onRun(item.onClick)} className={`group flex min-h-[35px] w-full items-center gap-[11px] rounded-[4px] px-[10px] text-left text-[14px] ${item.disabled ? 'cursor-default text-[#b7bbc0]' : 'text-[#1c1c1c] hover:bg-[#eaf2ff] hover:text-[#1f64cf]'}`}>
+  const buttonRef = useRef<HTMLButtonElement>(null);
+  const timer = useRef<number | null>(null);
+  const show = () => { if (timer.current) window.clearTimeout(timer.current); if (item.submenu) setOpen(true); };
+  const hide = () => { timer.current = window.setTimeout(() => setOpen(false), 160); };
+  return <div onMouseEnter={show} onMouseLeave={hide}>
+    <button ref={buttonRef} disabled={item.disabled} onClick={() => onRun(item.onClick)} className={`group flex min-h-[35px] w-full items-center gap-[11px] rounded-[4px] px-[10px] text-left text-[14px] ${item.disabled ? 'cursor-default text-[#b7bbc0]' : 'text-[#1c1c1c] hover:bg-[#eaf2ff] hover:text-[#1f64cf]'}`}>
       <span className="flex w-[18px] shrink-0 items-center justify-center"><Icon name={item.icon} size={18}/></span><span className="min-w-0 flex-1 whitespace-nowrap">{item.label}</span>{item.shortcut&&<span className="ms-auto ps-5 text-[12px] text-[#6f747a]">{item.shortcut}</span>}{item.arrow&&<Icon name="chevron" size={15}/>}</button>
-    {open&&item.submenu&&<div className="absolute left-[calc(100%-2px)] top-0 z-[180] w-[265px] rounded-[5px] border border-[var(--imkan-office-border)] bg-white p-1.5 shadow-[0_4px_18px_rgba(0,0,0,.18)]">{item.submenu.map(sub=><button key={sub.label} onClick={() => onRun(sub.onClick)} className="flex min-h-[35px] w-full items-center gap-[11px] rounded-[4px] px-[10px] text-left text-[14px] hover:bg-[#eaf2ff] hover:text-[#1f64cf]"><Icon name={sub.icon} size={18}/><span>{sub.label}</span></button>)}</div>}
+    {open&&item.submenu&&<WriterCard anchor={buttonRef.current} width={265} ar={ar} side className="rounded-[5px] border border-[var(--imkan-office-border)] bg-white p-1.5 shadow-[0_4px_18px_rgba(0,0,0,.18)]" onMouseEnter={show} onMouseLeave={hide}>{item.submenu.map(sub=><button key={sub.label} onClick={() => onRun(sub.onClick)} className="flex min-h-[35px] w-full items-center gap-[11px] rounded-[4px] px-[10px] text-left text-[14px] hover:bg-[#eaf2ff] hover:text-[#1f64cf]"><Icon name={sub.icon} size={18}/><span>{sub.label}</span></button>)}</WriterCard>}
   </div>;
 }
 function AlignRow({ icon, label, shortcut, onClick }: { icon: IconName; label: string; shortcut: string; onClick: Action }) { return <button onClick={onClick} className="flex h-[35px] w-full items-center gap-2 rounded-[4px] px-2 text-left text-[14px] hover:bg-[#eaf2ff] hover:text-[#1f64cf]"><Icon name={icon} size={18}/><span className="flex-1">{label}</span><span className="text-[12px] text-[#6f747a]">{shortcut}</span></button>; }

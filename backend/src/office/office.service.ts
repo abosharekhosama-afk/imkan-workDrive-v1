@@ -193,6 +193,7 @@ function normalizeWriterPage(value: unknown) {
     orientation: p.orientation === 'landscape' ? 'landscape' : 'portrait',
     header: typeof p.header === 'string' ? p.header.slice(0,500) : '', footer: typeof p.footer === 'string' ? p.footer.slice(0,500) : '',
     showPageNumbers: p.showPageNumbers !== false,
+    background: typeof p.background === 'string' && /^#[0-9a-f]{6}$/i.test(p.background) ? p.background : '#ffffff',
   };
 }
 function normalizeWriterRun(value: unknown) {
@@ -220,7 +221,7 @@ function normalizeWriterBlock(value: unknown) {
   const b = value && typeof value === 'object' ? value as Record<string, unknown> : {};
   const type = ['paragraph','heading1','heading2','heading3','list-item','table','image','page-break'].includes(String(b.type)) ? String(b.type) : 'paragraph';
   const runs = Array.isArray(b.runs) ? b.runs.slice(0,500).map(normalizeWriterRun) : [{text:''}];
-  const base: any = { id: typeof b.id === 'string' ? b.id.slice(0,100) : crypto.randomUUID(), type, align: ['start','center','end','justify'].includes(String(b.align)) ? String(b.align) : 'start', ordered: Boolean(b.ordered), runs, lineSpacing: clampNumber(b.lineSpacing,1,3,1.5), spaceBefore: clampNumber(b.spaceBefore,0,100,0), spaceAfter: clampNumber(b.spaceAfter,0,100,8), pageBreakBefore: Boolean(b.pageBreakBefore), indentLeftMm: clampNumber(b.indentLeftMm,0,100,0), indentRightMm: clampNumber(b.indentRightMm,0,100,0), firstLineIndentMm: clampNumber(b.firstLineIndentMm,-30,50,0), keepWithNext: Boolean(b.keepWithNext) };
+  const base: any = { id: typeof b.id === 'string' ? b.id.slice(0,100) : crypto.randomUUID(), type, align: ['start','center','end','justify'].includes(String(b.align)) ? String(b.align) : 'start', ordered: Boolean(b.ordered), runs, lineSpacing: clampNumber(b.lineSpacing,1,3,1.5), spaceBefore: clampNumber(b.spaceBefore,0,100,0), spaceAfter: clampNumber(b.spaceAfter,0,100,8), pageBreakBefore: Boolean(b.pageBreakBefore), columnBreak: Boolean(b.columnBreak), indentLeftMm: clampNumber(b.indentLeftMm,0,100,0), indentRightMm: clampNumber(b.indentRightMm,0,100,0), firstLineIndentMm: clampNumber(b.firstLineIndentMm,-30,50,0), keepWithNext: Boolean(b.keepWithNext) };
   if (type === 'image' && b.image && typeof b.image === 'object') { const i=b.image as Record<string,unknown>; base.image={src:typeof i.src==='string'?i.src.slice(0,2000000):'',alt:typeof i.alt==='string'?i.alt.slice(0,255):'',width:clampNumber(i.width,40,760,560),height:i.height?clampNumber(i.height,40,1100,315):undefined}; }
   if (type === 'table' && b.table && typeof b.table === 'object') { const t=b.table as Record<string,unknown>; base.table={bordered:t.bordered!==false,rows:Array.isArray(t.rows)?t.rows.slice(0,50).map((row:any)=>Array.isArray(row)?row.slice(0,20).map((c:any)=>({id:typeof c?.id==='string'?c.id.slice(0,100):crypto.randomUUID(),runs:Array.isArray(c?.runs)?c.runs.slice(0,500).map(normalizeWriterRun):[{text:''}],align:['start','center','end'].includes(String(c?.align))?String(c.align):'start'})):[]):[]}; }
   return base;
