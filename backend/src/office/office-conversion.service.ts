@@ -1,7 +1,7 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
 import JSZip from 'jszip';
 import type { OfficeType } from './core/office-engine.interface';
-import { blipEmbedId, boxPercent, drawingText, firstBox, maskBalanced, outerElements, relationshipMap, resolvePackageTarget, slideCanvas, slidePieces, wordDirection, wordFlowText } from './ooxml-package-logic';
+import { blipEmbedId, boxPercent, coerceElementGeometry, drawingText, firstBox, maskBalanced, outerElements, relationshipMap, resolvePackageTarget, slideCanvas, slidePieces, wordDirection, wordFlowText } from './ooxml-package-logic';
 
 export type ConversionCategory = 'preserved'|'converted'|'warning'|'unsupported';
 export type ConversionDiagnostic = { code: string; severity: 'info'|'warning'|'loss'; category?: ConversionCategory; message: string; path?: string };
@@ -660,7 +660,7 @@ export class OfficeConversionService {
     const orderedRids=[...pres.matchAll(/<p:sldId[^>]*r:id="([^"]+)"/g)].map(m=>m[1]);
     const slidePaths=orderedRids.map(r=>rels[r]).filter(Boolean).filter(p=>/^ppt\/slides\/slide\d+\.xml$/.test(p));
     const color=(body:string,tag='a:solidFill')=>{const m=new RegExp(`<${tag}>[\\s\\S]*?<a:srgbClr val="([0-9A-Fa-f]{6})"`).exec(body);return m?`#${m[1]}`:undefined};
-    const geom=(body:string)=>boxPercent(firstBox(body),cx,cy);
+    const geom=(body:string)=>coerceElementGeometry(boxPercent(firstBox(body),cx,cy),cx,cy);
     const textRuns=(body:string)=>[...body.matchAll(/<a:r(?:\s[^>]*)?>([\s\S]*?)<\/a:r>/g)].map(m=>{const b=m[1],t=[...b.matchAll(/<a:t(?:\s[^>]*)?>([\s\S]*?)<\/a:t>/g)].map(x=>decode(x[1])).join('');const rp=/<a:rPr([^>]*)>([\s\S]*?)<\/a:rPr>|<a:rPr([^>]*)\/>/.exec(b);const a=rp?.[1]||rp?.[3]||'';const fs=/\bsz="(\d+)"/.exec(a)?.[1];const f=/<a:latin[^>]*typeface="([^"]+)"/.exec(b)?.[1];const c=color(b);return {text:t,fontSize:fs?Number(fs)/100:undefined,fontFamily:f,color:c,bold:/\bb="(1|true)"/.test(a),italic:/\bi="(1|true)"/.test(a),underline:/\bu="sng|single"/.test(a)};});
     const slides=await Promise.all(slidePaths.slice(0,200).map(async(p,i)=>{
       const xml=await z.file(p)!.async('string');
@@ -669,7 +669,7 @@ export class OfficeConversionService {
       const slideRelPath=p.replace(/([^/]+)$/,'_rels/$1.rels'); const slideRelXml=z.file(slideRelPath)?await z.file(slideRelPath)!.async('string'):'';
       const relMap=relationshipMap(slideRelXml);
       for(const piece of slidePieces(xml)){
-        const g=boxPercent(piece.box,cx,cy);
+        const g=coerceElementGeometry(boxPercent(piece.box,cx,cy),cx,cy);
         const id=`el-${i+1}-${++ei}`;
         if(piece.kind==='picture'){
           const rid=blipEmbedId(piece.xml); const target=rid?relMap[rid]?.target:''; if(!target) continue;

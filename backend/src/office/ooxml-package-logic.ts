@@ -18,17 +18,34 @@ function tagAttrs(xml: string, tag: string): string {
 }
 
 export function firstBox(xml: string): EmuBox {
-  // Prefer the shape-local xfrm; fall back to any off/ext pair. Attribute order is independent.
-  const xfrm = /<a:xfrm\b[^>]*>[\s\S]*?<\/a:xfrm>|<a:xfrm\b[^>]*\/>/.exec(xml)?.[0] || xml;
-  const rotRaw = xmlAttr(tagAttrs(xfrm, 'a:xfrm') || tagAttrs(xml, 'a:xfrm'), 'rot');
-  const rot = rotRaw && Number.isFinite(Number(rotRaw)) ? Number(rotRaw) / 60000 : undefined;
-  return {
-    x: numAttr(tagAttrs(xfrm, 'a:off'), 'x'),
-    y: numAttr(tagAttrs(xfrm, 'a:off'), 'y'),
-    cx: numAttr(tagAttrs(xfrm, 'a:ext'), 'cx'),
-    cy: numAttr(tagAttrs(xfrm, 'a:ext'), 'cy'),
-    rot,
-  };
+  // Collect every xfrm on the element and pick the largest extent (ignores empty placeholders).
+  // Attribute order is independent. Supports both a:xfrm and p:xfrm.
+  const blocks = [
+    ...xml.matchAll(/<(?:a|p):xfrm\b[^>]*>[\s\S]*?<\/(?:a|p):xfrm>/g),
+    ...xml.matchAll(/<(?:a|p):xfrm\b[^>]*\/>/g),
+  ].map((m) => m[0]);
+  if (!blocks.length) blocks.push(xml);
+
+  let best: EmuBox = { x: 0, y: 0, cx: 0, cy: 0 };
+  let bestArea = -1;
+  for (const block of blocks) {
+    const off = tagAttrs(block, 'a:off') || tagAttrs(block, 'p:off');
+    const ext = tagAttrs(block, 'a:ext') || tagAttrs(block, 'p:ext');
+    // Also accept off/ext attributes written without a nested tag (rare).
+    const x = numAttr(off, 'x') || numAttr(block, 'x');
+    const y = numAttr(off, 'y') || numAttr(block, 'y');
+    const cx = numAttr(ext, 'cx') || numAttr(block, 'cx');
+    const cy = numAttr(ext, 'cy') || numAttr(block, 'cy');
+    const open = tagAttrs(block, 'a:xfrm') || tagAttrs(block, 'p:xfrm') || '';
+    const rotRaw = xmlAttr(open, 'rot');
+    const rot = rotRaw && Number.isFinite(Number(rotRaw)) ? Number(rotRaw) / 60000 : undefined;
+    const area = Math.abs(cx * cy);
+    if (area > bestArea) {
+      bestArea = area;
+      best = { x, y, cx, cy, rot };
+    }
+  }
+  return best;
 }
 
 export function groupFrame(xml: string): GroupFrame {
@@ -54,17 +71,58 @@ export function mapChildBox(group: GroupFrame, child: EmuBox): EmuBox {
 }
 
 export function boxPercent(box: EmuBox, slideCx: number, slideCy: number) {
-  const sx = 100 / (slideCx || 12192000);
-  const sy = 100 / (slideCy || 6858000);
-  // Prefer true geometry; only use tiny floors so thin lines/shapes are not inflated to 4% of the slide.
-  const rawW = (box.cx > 0 ? box.cx : slideCx * 0.05) * sx;
-  const rawH = (box.cy > 0 ? box.cy : slideCy * 0.05) * sy;
+  const slideW = slideCx > 0 ? slideCx : 12192000;
+  const slideH = slideCy > 0 ? slideCy : 6858000;
+  // Guard: if caller accidentally passes already-normalized percentages, keep them.
+  const alreadyPercent =
+    Math.abs(box.x) <= 100 &&
+    Math.abs(box.y) <= 100 &&
+    box.cx > 0 &&
+    box.cx <= 100 &&
+    box.cy > 0 &&
+    box.cy <= 100;
+  if (alreadyPercent) {
+    return {
+      x: Math.max(0, Math.min(100, box.x)),
+      y: Math.max(0, Math.min(100, box.y)),
+      width: Math.max(0.5, Math.min(100, box.cx)),
+      height: Math.max(0.5, Math.min(100, box.cy)),
+      rotation: typeof box.rot === 'number' && Number.isFinite(box.rot) ? box.rot : 0,
+    };
+  }
+  const sx = 100 / slideW;
+  const sy = 100 / slideH;
+  const rawW = (box.cx > 0 ? box.cx : slideW * 0.08) * sx;
+  const rawH = (box.cy > 0 ? box.cy : slideH * 0.08) * sy;
   return {
     x: Math.max(0, Math.min(100, box.x * sx)),
     y: Math.max(0, Math.min(100, box.y * sy)),
-    width: Math.max(0.4, Math.min(100, rawW)),
-    height: Math.max(0.4, Math.min(100, rawH)),
+    width: Math.max(0.5, Math.min(100, rawW)),
+    height: Math.max(0.5, Math.min(100, rawH)),
     rotation: typeof box.rot === 'number' && Number.isFinite(box.rot) ? box.rot : 0,
+  };
+}
+
+/** Convert a raw element box that may still be in EMUs into slide percentages. */
+export function coerceElementGeometry(
+  el: { x?: number; y?: number; width?: number; height?: number; rotation?: number },
+  slideCx = 12192000,
+  slideCy = 6858000,
+) {
+  const x = Number(el?.x) || 0;
+  const y = Number(el?.y) || 0;
+  const width = Number(el?.width) || 0;
+  const height = Number(el?.height) || 0;
+  const looksEmu = [x, y, width, height].some((v) => Math.abs(v) > 100);
+  if (looksEmu) {
+    return boxPercent({ x, y, cx: width, cy: height, rot: el?.rotation }, slideCx, slideCy);
+  }
+  return {
+    x: Math.max(0, Math.min(100, x)),
+    y: Math.max(0, Math.min(100, y)),
+    width: Math.max(0.5, Math.min(100, width || 10)),
+    height: Math.max(0.5, Math.min(100, height || 10)),
+    rotation: typeof el?.rotation === 'number' && Number.isFinite(el.rotation) ? el.rotation : 0,
   };
 }
 
