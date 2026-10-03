@@ -1,6 +1,6 @@
 export type EmuBox = { x: number; y: number; cx: number; cy: number; rot?: number };
 export type GroupFrame = EmuBox & { chX: number; chY: number; chCx: number; chCy: number };
-export type SlidePiece = { kind: 'shape' | 'picture' | 'line' | 'table'; xml: string; box: EmuBox };
+export type SlidePiece = { kind: 'shape' | 'picture' | 'line' | 'table'; xml: string; box: EmuBox; groupId?: string };
 
 const decodeXml = (value: string) => value.replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&').replace(/&quot;/g, '"').replace(/&apos;/g, "'");
 
@@ -138,7 +138,7 @@ function balancedEnd(xml: string, start: number, tag: string): number {
   return xml.length;
 }
 
-export function slidePieces(xml: string, origin?: GroupFrame): SlidePiece[] {
+export function slidePieces(xml: string, origin?: GroupFrame, groupId?: string): SlidePiece[] {
   const pieces: SlidePiece[] = [];
   const re = /<p:(sp|pic|cxnSp|graphicFrame|grpSp)(?=[\s>])/g;
   let match: RegExpExecArray | null;
@@ -157,15 +157,27 @@ export function slidePieces(xml: string, origin?: GroupFrame): SlidePiece[] {
       const placed = origin ? { ...frame, ...mapChildBox(origin, frame) } : frame;
       const bodyAt = chunk.indexOf('</p:grpSpPr>');
       const body = bodyAt >= 0 ? chunk.slice(bodyAt + '</p:grpSpPr>'.length) : chunk;
-      pieces.push(...slidePieces(body, placed));
+      // Stable group id from nvGrpSpPr id when available
+      const gid =
+        /<p:cNvPr[^>]*id="(\d+)"/.exec(chunk)?.[1]
+          ? `grp-${/<p:cNvPr[^>]*id="(\d+)"/.exec(chunk)![1]}`
+          : `grp-${Math.abs(hashStr(chunk.slice(0, 120)))}`;
+      pieces.push(...slidePieces(body, placed, groupId || gid));
       continue;
     }
     const box = origin ? mapChildBox(origin, firstBox(chunk)) : firstBox(chunk);
     const kind = tag === 'pic' ? 'picture' : tag === 'cxnSp' ? 'line' : tag === 'graphicFrame' ? 'table' : 'shape';
-    pieces.push({ kind, xml: chunk, box });
+    pieces.push({ kind, xml: chunk, box, groupId });
   }
   return pieces;
 }
+
+function hashStr(s: string): number {
+  let h = 0;
+  for (let i = 0; i < s.length; i++) h = (Math.imul(31, h) + s.charCodeAt(i)) | 0;
+  return h;
+}
+
 
 export function drawingText(xml: string): string {
   const body = /<(?:p|a):txBody>([\s\S]*?)<\/(?:p|a):txBody>/.exec(xml)?.[1] ?? '';
@@ -495,3 +507,39 @@ export function parseMasterPlaceholders(masterXml: string): Map<PlaceholderKey, 
   return parseLayoutPlaceholders(masterXml);
 }
 
+
+
+/** Extract solid/gradient/image background from slide or master XML. */
+export function extractBackground(
+  xml: string,
+  scheme?: Record<string, string>,
+  relMap?: Record<string, { target: string; type: string }>,
+  resolveImage?: (target: string) => string | undefined,
+): { color?: string; imageSrc?: string; gradient?: { colors: string[]; angle: number } } {
+  const bgBlock = /<p:bg\b[\s\S]*?<\/p:bg>/.exec(xml)?.[0] || /<p:bgPr\b[\s\S]*?<\/p:bgPr>/.exec(xml)?.[0] || '';
+  if (!bgBlock) return {};
+  // Image fill
+  const embed = /<a:blip\b[^>]*(?:r:embed|embed)="([^"]+)"/.exec(bgBlock)?.[1];
+  if (embed && relMap && resolveImage) {
+    const target = relMap[embed]?.target;
+    if (target) {
+      const src = resolveImage(target);
+      if (src) return { imageSrc: src, color: scheme?.bg1 };
+    }
+  }
+  // Gradient
+  const grad = /<a:gradFill\b[\s\S]*?<\/a:gradFill>/.exec(bgBlock)?.[0];
+  if (grad) {
+    const colors: string[] = [];
+    for (const m of grad.matchAll(/<a:srgbClr\b[^>]*val="([0-9A-Fa-f]{6})"/g)) colors.push(`#${m[1]}`);
+    for (const m of grad.matchAll(/<a:schemeClr\b[^>]*val="([^"]+)"/g)) {
+      if (scheme?.[m[1]]) colors.push(scheme[m[1]]);
+    }
+    const ang = Number(/rotWithShape="0"[^>]*>[\s\S]*?<a:lin\b[^>]*ang="(\d+)"/.exec(grad)?.[1] || /<a:lin\b[^>]*ang="(\d+)"/.exec(grad)?.[1] || 0);
+    if (colors.length) return { gradient: { colors, angle: ang / 60000 }, color: colors[0] };
+  }
+  // Solid
+  const solid = resolveSolidColor(bgBlock, scheme);
+  if (solid) return { color: solid };
+  return {};
+}

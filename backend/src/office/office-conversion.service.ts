@@ -1,7 +1,7 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
 import JSZip from 'jszip';
 import type { OfficeType } from './core/office-engine.interface';
-import { blipEmbedId, boxPercent, coerceElementGeometry, drawingText, firstBox, maskBalanced, outerElements, parseLayoutPlaceholders, parseMasterPlaceholders, parseThemeSchemeColors, relationshipMap, resolvePackageTarget, resolveShapeBox, resolveSolidColor, shapeFillColor, textRunColor, slideCanvas, slidePieces, wordDirection, wordFlowText } from './ooxml-package-logic';
+import { blipEmbedId, boxPercent, coerceElementGeometry, drawingText, firstBox, maskBalanced, outerElements, parseLayoutPlaceholders, parseMasterPlaceholders, parseThemeSchemeColors, relationshipMap, resolvePackageTarget, resolveShapeBox, resolveSolidColor, shapeFillColor, textRunColor, extractBackground, slideCanvas, slidePieces, wordDirection, wordFlowText } from './ooxml-package-logic';
 
 export type ConversionCategory = 'preserved'|'converted'|'warning'|'unsupported';
 export type ConversionDiagnostic = { code: string; severity: 'info'|'warning'|'loss'; category?: ConversionCategory; message: string; path?: string };
@@ -675,43 +675,113 @@ export class OfficeConversionService {
     };
     // Cache layout placeholder geometry (PowerPoint title/body often have empty local spPr).
     const layoutCache=new Map<string,Map<string,any>>();
+    const masterCache=new Map<string,{placeholders:Map<string,any>;background?:string}>();
     const loadLayoutPlaceholders=async(slidePath:string,slideRelXml:string)=>{
       const layoutTarget=/Type="[^"]*\/slideLayout"[^>]*Target="([^"]+)"|Target="([^"]+)"[^>]*Type="[^"]*\/slideLayout"/.exec(slideRelXml);
       const target=layoutTarget?.[1]||layoutTarget?.[2];
-      if(!target) return undefined;
+      if(!target) return {layoutMap:undefined as any,masterMap:undefined as any,masterBg:undefined as string|undefined,layoutPath:''};
       const layoutPath=this.resolveRelationshipTarget(slidePath,target);
-      if(layoutCache.has(layoutPath)) return layoutCache.get(layoutPath);
-      const lf=z.file(layoutPath);
-      if(!lf) return undefined;
-      const layoutXml=await lf.async('string');
-      const map=parseLayoutPlaceholders(layoutXml);
-      layoutCache.set(layoutPath,map);
-      return map;
+      let layoutMap=layoutCache.get(layoutPath);
+      if(!layoutMap){
+        const lf=z.file(layoutPath);
+        if(lf){ layoutMap=parseLayoutPlaceholders(await lf.async('string')); layoutCache.set(layoutPath,layoutMap!); }
+      }
+      let masterMap:Map<string,any>|undefined;
+      let masterBg:string|undefined;
+      try{
+        const layoutRelPath=layoutPath.replace(/([^/]+)$/,'_rels/$1.rels');
+        const layoutRelXml=z.file(layoutRelPath)?await z.file(layoutRelPath)!.async('string'):'';
+        const masterTarget=/Type="[^"]*\/slideMaster"[^>]*Target="([^"]+)"|Target="([^"]+)"[^>]*Type="[^"]*\/slideMaster"/.exec(layoutRelXml);
+        const mt=masterTarget?.[1]||masterTarget?.[2];
+        if(mt){
+          const masterPath=this.resolveRelationshipTarget(layoutPath,mt);
+          let cached=masterCache.get(masterPath);
+          if(!cached){
+            const mf=z.file(masterPath);
+            if(mf){
+              const masterXml=await mf.async('string');
+              const placeholders=parseMasterPlaceholders(masterXml);
+              const mbgPr=(/<p:bg[\s\S]*?<\/p:bg>/.exec(masterXml)||/<p:bgPr[\s\S]*?<\/p:bgPr>/.exec(masterXml)||[])[0]||'';
+              const background=resolveSolidColor(mbgPr,scheme)||undefined;
+              cached={placeholders,background};
+              masterCache.set(masterPath,cached);
+            }
+          }
+          if(cached){ masterMap=cached.placeholders; masterBg=cached.background; }
+        }
+      }catch{}
+      return {layoutMap,masterMap,masterBg,layoutPath};
     };
     const textRuns=(body:string)=>[...body.matchAll(/<a:r(?:\s[^>]*)?>([\s\S]*?)<\/a:r>/g)].map(m=>{const b=m[1],t=[...b.matchAll(/<a:t(?:\s[^>]*)?>([\s\S]*?)<\/a:t>/g)].map(x=>decode(x[1])).join('');const rp=/<a:rPr([^>]*)>([\s\S]*?)<\/a:rPr>|<a:rPr([^>]*)\/>/.exec(b);const a=rp?.[1]||rp?.[3]||'';const fs=/\bsz="(\d+)"/.exec(a)?.[1];const f=/<a:latin[^>]*typeface="([^"]+)"/.exec(b)?.[1];const c=color(b);return {text:t,fontSize:fs?Number(fs)/100:undefined,fontFamily:f,color:c,bold:/\bb="(1|true)"/.test(a),italic:/\bi="(1|true)"/.test(a),underline:/\bu="sng|single"/.test(a)};});
     const slides=await Promise.all(slidePaths.slice(0,200).map(async(p,i)=>{
       const xml=await z.file(p)!.async('string');
       const elements:any[]=[]; let ei=0;
-      const bgPr=(/<p:bg[\s\S]*?<\/p:bg>/.exec(xml)||/<p:bgPr[\s\S]*?<\/p:bgPr>/.exec(xml)||[])[0]||''; const slideBg=resolveSolidColor(bgPr,scheme)||scheme.bg1||'#ffffff';
+      let slideBg = '';
+      let backgroundImage: string | undefined;
       const slideRelPath=p.replace(/([^/]+)$/,'_rels/$1.rels'); const slideRelXml=z.file(slideRelPath)?await z.file(slideRelPath)!.async('string'):'';
       const relMap=relationshipMap(slideRelXml);
-      const layoutMap=await loadLayoutPlaceholders(p,slideRelXml);
+      const {layoutMap,masterMap,masterBg,layoutPath}=await loadLayoutPlaceholders(p,slideRelXml);
+      const loadBgImage = async (sourceXml: string, sourcePath: string, sourceRelXml: string) => {
+        const rmap = relationshipMap(sourceRelXml);
+        const bgBlock = /<p:bg\b[\s\S]*?<\/p:bg>/.exec(sourceXml)?.[0] || '';
+        const embed = /<a:blip\b[^>]*(?:r:embed|embed)="([^"]+)"/.exec(bgBlock)?.[1];
+        if (embed && rmap[embed]?.target) {
+          const imagePath = resolvePackageTarget(sourcePath, rmap[embed].target);
+          const imageFile = z.file(imagePath);
+          if (imageFile) {
+            const imageBuf = await imageFile.async('nodebuffer');
+            const ext = (imagePath.split('.').pop() || 'png').toLowerCase();
+            const mime = ext === 'jpg' || ext === 'jpeg' ? 'jpeg' : ext === 'svg' ? 'svg+xml' : ext;
+            return `data:image/${mime};base64,${imageBuf.toString('base64')}`;
+          }
+        }
+        return undefined;
+      };
+      try {
+        const bgInfo = extractBackground(xml, scheme);
+        if (bgInfo.gradient?.colors?.length) {
+          slideBg = `linear-gradient(${bgInfo.gradient.angle || 90}deg, ${bgInfo.gradient.colors.join(', ')})`;
+        } else if (bgInfo.color) {
+          slideBg = bgInfo.color;
+        }
+        backgroundImage = await loadBgImage(xml, p, slideRelXml);
+        if (!backgroundImage && !slideBg && layoutPath) {
+          const layoutRelPath = layoutPath.replace(/([^/]+)$/, '_rels/$1.rels');
+          const layoutRelXml = z.file(layoutRelPath) ? await z.file(layoutRelPath)!.async('string') : '';
+          const layoutXml = z.file(layoutPath) ? await z.file(layoutPath)!.async('string') : '';
+          const masterTarget = /Type="[^"]*\/slideMaster"[^>]*Target="([^"]+)"|Target="([^"]+)"[^>]*Type="[^"]*\/slideMaster"/.exec(layoutRelXml);
+          const mt = masterTarget?.[1] || masterTarget?.[2];
+          if (mt) {
+            const masterPath = this.resolveRelationshipTarget(layoutPath, mt);
+            const masterXml = z.file(masterPath) ? await z.file(masterPath)!.async('string') : '';
+            const masterRelPath = masterPath.replace(/([^/]+)$/, '_rels/$1.rels');
+            const masterRelXml = z.file(masterRelPath) ? await z.file(masterRelPath)!.async('string') : '';
+            const mInfo = extractBackground(masterXml, scheme);
+            if (!slideBg && mInfo.gradient?.colors?.length) {
+              slideBg = `linear-gradient(${mInfo.gradient.angle || 90}deg, ${mInfo.gradient.colors.join(', ')})`;
+            } else if (!slideBg && mInfo.color) slideBg = mInfo.color;
+            if (!backgroundImage) backgroundImage = await loadBgImage(masterXml, masterPath, masterRelXml);
+          }
+        }
+      } catch {}
+      slideBg = slideBg || masterBg || scheme.bg1 || '#ffffff';
+
       for(const piece of slidePieces(xml)){
-        const resolvedBox=resolveShapeBox(piece.xml,piece.box,layoutMap,undefined);
+        const resolvedBox=resolveShapeBox(piece.xml,piece.box,layoutMap,masterMap);
         const g=coerceElementGeometry(boxPercent(resolvedBox,cx,cy),cx,cy);
-        const id=`el-${i+1}-${++ei}`;
+        const id=`el-${i+1}-${++ei}`; const groupId=piece.groupId;
         if(piece.kind==='picture'){
           const rid=blipEmbedId(piece.xml); const target=rid?relMap[rid]?.target:''; if(!target) continue;
           const imagePath=resolvePackageTarget(p,target); const imageFile=z.file(imagePath); if(!imageFile) continue;
           const imageBuf=await imageFile.async('nodebuffer'); const ext=(imagePath.split('.').pop()||'png').toLowerCase();
           const mime=ext==='jpg'||ext==='jpeg'?'jpeg':ext==='svg'?'svg+xml':ext;
-          elements.push({id,type:'image',...g,src:`data:image/${mime};base64,${imageBuf.toString('base64')}`,alt:'Imported image'});
+          elements.push({id,type:'image',...g,src:`data:image/${mime};base64,${imageBuf.toString('base64')}`,alt:'Imported image',groupId:piece.groupId});
           continue;
         }
-        if(piece.kind==='line'){ const line=color(piece.xml,'a:ln')||'#64748b'; elements.push({id,type:'line',...g,color:line,borderColor:line,borderWidth:1}); continue; }
+        if(piece.kind==='line'){ const line=color(piece.xml,'a:ln')||'#64748b'; elements.push({id,type:'line',...g,color:line,borderColor:line,borderWidth:1,groupId}); continue; }
         if(piece.kind==='table'){
           const rows=[...piece.xml.matchAll(/<a:tr[\s\S]*?>([\s\S]*?)<\/a:tr>/g)].map(r=>[...r[1].matchAll(/<a:tc[\s\S]*?>([\s\S]*?)<\/a:tc>/g)].map(c=>drawingText(c[1])));
-          elements.push({id,type:'table',...g,rows});
+          elements.push({id,type:'table',...g,rows,groupId});
           continue;
         }
         const tx=/<(?:p|a):txBody>([\s\S]*?)<\/(?:p|a):txBody>/.exec(piece.xml)?.[1]||'';
@@ -728,14 +798,14 @@ export class OfficeConversionService {
           const defaultSize=phType==='ctrTitle'||phType==='title'?40:phType==='subTitle'?22:phType==='body'?18:20;
           // If the shape has a real fill, emit a background shape under the text (PowerPoint text-in-shape)
           if(shapeFill){
-            elements.push({id:`${id}-bg`,type:'shape',...g,shape:shapeKind,fill:shapeFill,border:false});
+            elements.push({id:`${id}-bg`,type:'shape',...g,shape:shapeKind,fill:shapeFill,border:false,groupId});
           }
-          elements.push({id,type:'text',...g,text,fontSize:first.fontSize||defaultSize,fontFamily:first.fontFamily||'Arial',color:first.color||textColor,bold:Boolean(first.bold)||phType==='ctrTitle'||phType==='title',italic:Boolean(first.italic),underline:Boolean(first.underline),align:algn==='ctr'?'center':algn==='r'?'end':(phType==='ctrTitle'||phType==='title'?'center':'start'),textDirection:/(?:rtl|rightToLeft)\s*=\s*"(?:1|true)"/i.test(tx)?'rtl':'ltr'});
+          elements.push({id,type:'text',...g,text,fontSize:first.fontSize||defaultSize,fontFamily:first.fontFamily||'Arial',color:first.color||textColor,bold:Boolean(first.bold)||phType==='ctrTitle'||phType==='title',italic:Boolean(first.italic),underline:Boolean(first.underline),align:algn==='ctr'?'center':algn==='r'?'end':(phType==='ctrTitle'||phType==='title'?'center':'start'),textDirection:/(?:rtl|rightToLeft)\s*=\s*"(?:1|true)"/i.test(tx)?'rtl':'ltr',groupId});
           continue;
         }
         // Pure decorative shape — only when spPr actually defines a fill
         if(shapeFill){
-          elements.push({id,type:'shape',...g,shape:shapeKind,fill:shapeFill,border:false});
+          elements.push({id,type:'shape',...g,shape:shapeKind,fill:shapeFill,border:false,groupId});
         }
 
       }
@@ -755,7 +825,7 @@ export class OfficeConversionService {
       const transition=transitionMatch?.[1]||'none';
       const speed=/<p:transition[^>]*spd="(fast|med|slow)"/.exec(xml)?.[1];
       const transitionDuration=speed==='fast'?400:speed==='slow'?1800:900;
-      return {id:`slide-${i+1}`,layout:layout as any,background:slideBg||'#ffffff',elements,notes,transition,transitionDuration};
+      return {id:`slide-${i+1}`,layout:layout as any,background:slideBg||'#ffffff',backgroundImage,elements,notes,transition,transitionDuration};
     }));
     const preservation=await this.capturePreservation(z,'pptx');
     const diagnostics:ConversionDiagnostic[]=[];

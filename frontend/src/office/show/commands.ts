@@ -90,3 +90,139 @@ export function nudgeElements(d: ShowDocument, ids: string[], dx: number, dy: nu
   );
   return n;
 }
+
+
+export type ObjectAlign = 'left' | 'center' | 'right' | 'top' | 'middle' | 'bottom';
+
+function selectedOnSlide(d: ShowDocument, ids: string[]) {
+  const n = cloneShow(d);
+  const s = activeSlide(n);
+  if (!s || !ids.length) return { n, s: null as any, els: [] as any[] };
+  const els = s.elements.filter((e) => ids.includes(e.id));
+  return { n, s, els };
+}
+
+/** Align selected objects to each other (Zoho/PowerPoint Arrange behavior). */
+export function alignObjects(d: ShowDocument, ids: string[], align: ObjectAlign) {
+  const { n, s, els } = selectedOnSlide(d, ids);
+  if (!s || els.length < 1) return n;
+  if (els.length === 1) {
+    // Single object: align to slide
+    const e = els[0];
+    if (align === 'left') e.x = 0;
+    if (align === 'center') e.x = Math.max(0, (100 - (e.width || 0)) / 2);
+    if (align === 'right') e.x = Math.max(0, 100 - (e.width || 0));
+    if (align === 'top') e.y = 0;
+    if (align === 'middle') e.y = Math.max(0, (100 - (e.height || 0)) / 2);
+    if (align === 'bottom') e.y = Math.max(0, 100 - (e.height || 0));
+    return n;
+  }
+  const minX = Math.min(...els.map((e) => e.x || 0));
+  const maxR = Math.max(...els.map((e) => (e.x || 0) + (e.width || 0)));
+  const minY = Math.min(...els.map((e) => e.y || 0));
+  const maxB = Math.max(...els.map((e) => (e.y || 0) + (e.height || 0)));
+  const midX = (minX + maxR) / 2;
+  const midY = (minY + maxB) / 2;
+  for (const e of els) {
+    if (align === 'left') e.x = minX;
+    if (align === 'center') e.x = midX - (e.width || 0) / 2;
+    if (align === 'right') e.x = maxR - (e.width || 0);
+    if (align === 'top') e.y = minY;
+    if (align === 'middle') e.y = midY - (e.height || 0) / 2;
+    if (align === 'bottom') e.y = maxB - (e.height || 0);
+    e.x = Math.max(0, Math.min(100, e.x || 0));
+    e.y = Math.max(0, Math.min(100, e.y || 0));
+  }
+  return n;
+}
+
+/** Evenly distribute selected objects horizontally or vertically. */
+export function distributeObjects(d: ShowDocument, ids: string[], axis: 'horizontal' | 'vertical') {
+  const { n, s, els } = selectedOnSlide(d, ids);
+  if (!s || els.length < 3) return n;
+  if (axis === 'horizontal') {
+    const sorted = [...els].sort((a, b) => (a.x || 0) - (b.x || 0));
+    const first = sorted[0];
+    const last = sorted[sorted.length - 1];
+    const span = (last.x || 0) - (first.x || 0);
+    for (let i = 1; i < sorted.length - 1; i++) {
+      sorted[i].x = (first.x || 0) + (span * i) / (sorted.length - 1);
+    }
+  } else {
+    const sorted = [...els].sort((a, b) => (a.y || 0) - (b.y || 0));
+    const first = sorted[0];
+    const last = sorted[sorted.length - 1];
+    const span = (last.y || 0) - (first.y || 0);
+    for (let i = 1; i < sorted.length - 1; i++) {
+      sorted[i].y = (first.y || 0) + (span * i) / (sorted.length - 1);
+    }
+  }
+  return n;
+}
+
+export function rotateElements(d: ShowDocument, ids: string[], degrees: number) {
+  const { n, s, els } = selectedOnSlide(d, ids);
+  if (!s || !els.length) return n;
+  for (const e of els) {
+    const next = ((e.rotation || 0) + degrees) % 360;
+    e.rotation = next < 0 ? next + 360 : next;
+  }
+  return n;
+}
+
+export function flipElements(d: ShowDocument, ids: string[], axis: 'horizontal' | 'vertical') {
+  const { n, s, els } = selectedOnSlide(d, ids);
+  if (!s || !els.length) return n;
+  for (const e of els) {
+    // Represent flip as 180° rotation on the opposite axis via rotation + scale flags if present
+    if (axis === 'horizontal') {
+      (e as any).flipH = !(e as any).flipH;
+      e.rotation = (e.rotation || 0);
+    } else {
+      (e as any).flipV = !(e as any).flipV;
+    }
+  }
+  return n;
+}
+
+export function bringForward(d: ShowDocument, ids: string[]) {
+  const n = cloneShow(d);
+  const s = activeSlide(n);
+  if (!s || !ids.length) return n;
+  // Move each selected element one step forward (preserve relative order)
+  for (let i = s.elements.length - 2; i >= 0; i--) {
+    if (ids.includes(s.elements[i].id) && !ids.includes(s.elements[i + 1].id)) {
+      const tmp = s.elements[i];
+      s.elements[i] = s.elements[i + 1];
+      s.elements[i + 1] = tmp;
+    }
+  }
+  return n;
+}
+
+export function sendBackward(d: ShowDocument, ids: string[]) {
+  const n = cloneShow(d);
+  const s = activeSlide(n);
+  if (!s || !ids.length) return n;
+  for (let i = 1; i < s.elements.length; i++) {
+    if (ids.includes(s.elements[i].id) && !ids.includes(s.elements[i - 1].id)) {
+      const tmp = s.elements[i];
+      s.elements[i] = s.elements[i - 1];
+      s.elements[i - 1] = tmp;
+    }
+  }
+  return n;
+}
+
+/** Match width/height of selected objects to the first selected (primary). */
+export function matchObjectSize(d: ShowDocument, ids: string[], mode: 'width' | 'height' | 'both') {
+  const { n, s, els } = selectedOnSlide(d, ids);
+  if (!s || els.length < 2) return n;
+  const primary = els[0];
+  for (const e of els.slice(1)) {
+    if (mode === 'width' || mode === 'both') e.width = primary.width;
+    if (mode === 'height' || mode === 'both') e.height = primary.height;
+  }
+  return n;
+}
+

@@ -36,6 +36,13 @@ type ShowChromeProps = {
   canObject: boolean;
   onFront: () => void;
   onBack: () => void;
+  onBringForward?: () => void;
+  onSendBackward?: () => void;
+  onObjectAlign?: (align: 'left' | 'center' | 'right' | 'top' | 'middle' | 'bottom') => void;
+  onDistribute?: (axis: 'horizontal' | 'vertical') => void;
+  onRotate?: (degrees: number) => void;
+  onFlip?: (axis: 'horizontal' | 'vertical') => void;
+  onDuplicateObjects?: () => void;
   onBold: () => void;
   onItalic: () => void;
   onAlign: (align: 'start' | 'center' | 'end') => void;
@@ -198,9 +205,20 @@ export function ShowChrome(p: ShowChromeProps) {
             <Group label="Drawing">
               <IconBtn icon={<ShowIcons.group size={16} />} label="Group" onClick={p.onGroup} disabled={!p.canGroup} />
               <IconBtn icon={<ShowIcons.ungroup size={16} />} label="Ungroup" onClick={p.onUngroup} disabled={!p.canObject} />
+              <IconBtn icon={<ShowIcons.duplicate size={16} />} label="Duplicate Objects" onClick={p.onDuplicateObjects} disabled={!p.canObject} />
               <IconBtn icon={<ShowIcons.bringFront size={16} />} label="Bring to Front" onClick={p.onFront} disabled={!p.canObject} />
               <IconBtn icon={<ShowIcons.sendBack size={16} />} label="Send to Back" onClick={p.onBack} disabled={!p.canObject} />
               <IconBtn icon={<ShowIcons.delete size={16} />} label="Delete" onClick={p.onDeleteObjects} disabled={!p.canObject} />
+            </Group>
+            <Group label="Arrange">
+              <IconBtn icon={<ShowIcons.alignLeft size={16} />} label="Align Left" onClick={() => p.onObjectAlign?.('left')} disabled={!p.canObject} />
+              <IconBtn icon={<ShowIcons.alignCenter size={16} />} label="Align Center" onClick={() => p.onObjectAlign?.('center')} disabled={!p.canObject} />
+              <IconBtn icon={<ShowIcons.alignRight size={16} />} label="Align Right" onClick={() => p.onObjectAlign?.('right')} disabled={!p.canObject} />
+              <IconBtn icon={<ShowIcons.alignCenter size={16} />} label="Align Middle" onClick={() => p.onObjectAlign?.('middle')} disabled={!p.canObject} />
+              <IconBtn icon={<ShowIcons.bringFront size={16} />} label="Bring Forward" onClick={p.onBringForward} disabled={!p.canObject} />
+              <IconBtn icon={<ShowIcons.sendBack size={16} />} label="Send Backward" onClick={p.onSendBackward} disabled={!p.canObject} />
+              <IconBtn icon={<ShowIcons.transition size={16} />} label="Rotate 90°" onClick={() => p.onRotate?.(90)} disabled={!p.canObject} />
+              <IconBtn icon={<ShowIcons.animation size={16} />} label="Flip Horizontal" onClick={() => p.onFlip?.('horizontal')} disabled={!p.canObject} />
             </Group>
           </>
         ) : null}

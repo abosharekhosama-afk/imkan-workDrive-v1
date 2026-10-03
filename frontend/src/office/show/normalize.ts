@@ -33,6 +33,7 @@ function normalizeSlide(slide: any, index: number): ShowSlide {
     id: typeof slide?.id === 'string' && slide.id ? slide.id : `slide-${index + 1}`,
     layout: slide?.layout || 'blank',
     background: typeof slide?.background === 'string' && slide.background ? slide.background : '#ffffff',
+    backgroundImage: typeof slide?.backgroundImage === 'string' ? slide.backgroundImage : undefined,
     elements: Array.isArray(slide?.elements) ? slide.elements.map(normalizeElement) : [],
     notes: typeof slide?.notes === 'string' ? slide.notes : '',
     master: slide?.master,

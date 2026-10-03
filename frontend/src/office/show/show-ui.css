@@ -582,3 +582,182 @@
     display: none;
   }
 }
+
+
+/* Zoho-like object selection chrome */
+.imkan-show .show-object {
+  outline: 1.5px solid #2563eb;
+  outline-offset: 0;
+  box-shadow: 0 0 0 1px rgba(37, 99, 235, 0.25);
+}
+
+.imkan-show .show-group {
+  min-width: 72px;
+}
+.imkan-show .show-group-cmds {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px;
+  align-items: center;
+}
+
+
+/* Properties panel (Zoho-like right inspector) */
+.imkan-show .show-workspace-row {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+}
+.imkan-show .show-props-panel {
+  width: 220px;
+  flex-shrink: 0;
+  border-left: 1px solid #e2e8f0;
+  background: #f8fafc;
+  padding: 10px 12px;
+  overflow-y: auto;
+  font-size: 12px;
+}
+.imkan-show .show-props-title {
+  font-weight: 600;
+  font-size: 13px;
+  margin-bottom: 8px;
+  color: #0f172a;
+}
+.imkan-show .show-props-empty {
+  color: #64748b;
+  font-size: 12px;
+  margin: 8px 0;
+}
+.imkan-show .show-props-hint {
+  color: #94a3b8;
+  font-size: 11px;
+}
+.imkan-show .show-props-section {
+  margin: 12px 0 6px;
+  font-weight: 600;
+  color: #475569;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+.imkan-show .show-props-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+}
+.imkan-show .show-prop-field {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.imkan-show .show-prop-label {
+  font-size: 10px;
+  color: #64748b;
+}
+.imkan-show .show-prop-field input,
+.imkan-show .show-prop-field select {
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  padding: 4px 6px;
+  background: #fff;
+  font-size: 12px;
+}
+.imkan-show .show-props-toggles {
+  display: flex;
+  gap: 4px;
+  margin-top: 8px;
+}
+.imkan-show .show-props-toggles button {
+  width: 28px;
+  height: 28px;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  background: #fff;
+  font-weight: 700;
+}
+.imkan-show .show-props-toggles button.on {
+  background: #2563eb;
+  color: #fff;
+  border-color: #2563eb;
+}
+.imkan-show .show-props-styles {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+.imkan-show .show-style-chip {
+  border: 1px solid #e2e8f0;
+  background: #fff;
+  border-radius: 999px;
+  padding: 3px 8px;
+  font-size: 11px;
+  cursor: pointer;
+}
+.imkan-show .show-style-chip:hover {
+  border-color: #2563eb;
+  color: #2563eb;
+}
+
+/* Smart guides */
+.imkan-show .show-guide-x {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 0;
+  border-left: 1px dashed #f43f5e;
+  pointer-events: none;
+  z-index: 50;
+}
+.imkan-show .show-guide-y {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 0;
+  border-top: 1px dashed #f43f5e;
+  pointer-events: none;
+  z-index: 50;
+}
+
+
+.imkan-show .show-handle {
+  position: absolute;
+  width: 9px;
+  height: 9px;
+  background: #fff;
+  border: 1.5px solid #2563eb;
+  border-radius: 1px;
+  z-index: 6;
+  box-shadow: 0 0 0 1px rgba(255,255,255,0.8);
+}
+.imkan-show .show-handle-nw { left: -5px; top: -5px; cursor: nwse-resize; }
+.imkan-show .show-handle-n  { left: calc(50% - 4px); top: -5px; cursor: ns-resize; }
+.imkan-show .show-handle-ne { right: -5px; top: -5px; cursor: nesw-resize; }
+.imkan-show .show-handle-e  { right: -5px; top: calc(50% - 4px); cursor: ew-resize; }
+.imkan-show .show-handle-se { right: -5px; bottom: -5px; cursor: nwse-resize; }
+.imkan-show .show-handle-s  { left: calc(50% - 4px); bottom: -5px; cursor: ns-resize; }
+.imkan-show .show-handle-sw { left: -5px; bottom: -5px; cursor: nesw-resize; }
+.imkan-show .show-handle-w  { left: -5px; top: calc(50% - 4px); cursor: ew-resize; }
+.imkan-show .show-handle-rotate {
+  position: absolute;
+  left: calc(50% - 6px);
+  top: -28px;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: #fff;
+  border: 1.5px solid #2563eb;
+  cursor: grab;
+  z-index: 7;
+}
+.imkan-show .show-handle-rotate::after {
+  content: '';
+  position: absolute;
+  left: 4px;
+  top: 11px;
+  width: 1.5px;
+  height: 10px;
+  background: #2563eb;
+}
+.imkan-show .show-slide {
+  background-repeat: no-repeat;
+}
