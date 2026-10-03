@@ -375,12 +375,20 @@
   width: min(76vw, 960px);
   max-width: 100%;
   aspect-ratio: 16 / 9;
+  height: auto;
+  min-height: 200px;
   overflow: hidden;
   background: #fff;
   box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.06), 0 2px 8px rgba(0, 0, 0, 0.12);
   transform-origin: center center;
   --show-stage-w: min(76vw, 960px);
   container-type: size;
+}
+
+.imkan-show .show-slide > .absolute,
+.imkan-show .show-slide .show-object,
+.imkan-show .show-slide [class*="absolute"] {
+  box-sizing: border-box;
 }
 
 .imkan-show .show-slide[data-aspect="4:3"] {
