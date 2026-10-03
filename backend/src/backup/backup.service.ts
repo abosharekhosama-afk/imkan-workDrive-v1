@@ -12,6 +12,7 @@ import type { AccessTokenPayload } from '../auth/jwt.types';
 import { PrismaService } from '../prisma/prisma.service';
 import { STORAGE_SERVICE, type StorageService } from '../storage/storage.types';
 import { BackupCryptoService } from './backup-crypto.service';
+import { computeNextRunAt, shouldIncludeInIncremental } from './backup-schedule-logic';
 
 @Injectable()
 export class BackupService {
@@ -102,7 +103,7 @@ export class BackupService {
           ? input.excludeExtensions.map((x) => String(x).replace(/^\./, '').toLowerCase()).slice(0, 100)
           : [],
         createdById: user.sub,
-        nextRunAt: scheduleKind === BackupScheduleKind.MANUAL ? null : new Date(Date.now() + 60_000),
+        nextRunAt: computeNextRunAt(scheduleKind, new Date(), input.scheduleHourUtc ?? 2, input.scheduleDay ?? null),
       },
     });
     await this.audit(user, 'BACKUP_POLICY_CREATE', row.id, { name: row.name, scope: row.scope });
@@ -135,8 +136,21 @@ export class BackupService {
     if (Array.isArray(input.excludeExtensions)) {
       data.excludeExtensions = input.excludeExtensions.map((x) => String(x).replace(/^\./, '').toLowerCase()).slice(0, 100);
     }
+    // Recompute nextRunAt when schedule-related fields change
+    const mergedKind = (data.scheduleKind as BackupScheduleKind | undefined) ?? current.scheduleKind;
+    const mergedHour =
+      'scheduleHourUtc' in data ? (data.scheduleHourUtc as number | null) : current.scheduleHourUtc;
+    const mergedDay = 'scheduleDay' in data ? (data.scheduleDay as number | null) : current.scheduleDay;
+    if ('scheduleKind' in data || 'scheduleHourUtc' in data || 'scheduleDay' in data || 'enabled' in data) {
+      data.nextRunAt =
+        current.enabled === false && data.enabled !== true
+          ? null
+          : computeNextRunAt(mergedKind, new Date(), mergedHour, mergedDay);
+      if (data.enabled === false) data.nextRunAt = null;
+    }
+
     const row = await this.prisma.backupPolicy.update({ where: { id }, data });
-    await this.audit(user, 'BACKUP_POLICY_UPDATE', row.id, { enabled: row.enabled });
+    await this.audit(user, 'BACKUP_POLICY_UPDATE', row.id, { enabled: row.enabled, nextRunAt: row.nextRunAt });
     return row;
   }
 
@@ -192,17 +206,40 @@ export class BackupService {
   }
 
   /**
-   * Start a FULL backup run (manual). Execution continues asynchronously in-process.
-   * Production deployments should move executeRun to a dedicated worker process.
+   * Start a backup run (FULL or INCREMENTAL). Execution continues asynchronously.
+   * Production: prefer the dedicated `backup:worker` process for long jobs.
    */
-  async startFullBackup(user: AccessTokenPayload, policyId?: string) {
+  async startBackup(
+    user: AccessTokenPayload,
+    opts: { policyId?: string; kind?: BackupRunKind } = {},
+  ) {
     this.assertOrgAdmin(user);
-    let policy = policyId
-      ? await this.prisma.backupPolicy.findFirst({ where: { id: policyId, orgId: user.org_id } })
-      : await this.prisma.backupPolicy.findFirst({ where: { orgId: user.org_id, enabled: true }, orderBy: { createdAt: 'asc' } });
+    const kind = opts.kind ?? BackupRunKind.FULL;
+
+    let policy = opts.policyId
+      ? await this.prisma.backupPolicy.findFirst({ where: { id: opts.policyId, orgId: user.org_id } })
+      : await this.prisma.backupPolicy.findFirst({
+          where: { orgId: user.org_id, enabled: true },
+          orderBy: { createdAt: 'asc' },
+        });
 
     if (!policy) {
-      policy = await this.createPolicy(user, { name: 'Default backup policy', scheduleKind: BackupScheduleKind.MANUAL });
+      policy = await this.createPolicy(user, {
+        name: 'Default backup policy',
+        scheduleKind: BackupScheduleKind.MANUAL,
+      });
+    }
+
+    if (kind === BackupRunKind.INCREMENTAL) {
+      const baseline = await this.prisma.backupRun.findFirst({
+        where: { orgId: user.org_id, status: BackupRunStatus.COMPLETED },
+        orderBy: { snapshotAt: 'desc' },
+        select: { id: true },
+      });
+      if (!baseline) {
+        // First run must be FULL
+        return this.startBackup(user, { policyId: policy.id, kind: BackupRunKind.FULL });
+      }
     }
 
     const active = await this.prisma.backupRun.count({
@@ -215,20 +252,134 @@ export class BackupService {
         id: randomUUID(),
         orgId: user.org_id,
         policyId: policy.id,
-        kind: BackupRunKind.FULL,
+        kind,
         status: BackupRunStatus.PENDING,
         snapshotAt: new Date(),
         triggeredById: user.sub,
       },
     });
-    await this.audit(user, 'BACKUP_RUN_START', run.id, { kind: 'FULL', policyId: policy.id });
+    await this.audit(user, 'BACKUP_RUN_START', run.id, { kind, policyId: policy.id });
 
-    // Fire-and-forget; errors are recorded on the run row.
     void this.executeRun(run.id, user.org_id).catch((e) => {
       this.logger.error(`backup run ${run.id} crashed: ${e instanceof Error ? e.message : e}`);
     });
 
     return run;
+  }
+
+  /** @deprecated use startBackup({ kind: FULL }) */
+  startFullBackup(user: AccessTokenPayload, policyId?: string) {
+    return this.startBackup(user, { policyId, kind: BackupRunKind.FULL });
+  }
+
+  startIncrementalBackup(user: AccessTokenPayload, policyId?: string) {
+    return this.startBackup(user, { policyId, kind: BackupRunKind.INCREMENTAL });
+  }
+
+  /**
+   * Scheduler tick: find due enabled policies across all orgs and enqueue runs.
+   * Safe to call from an embedded interval or a dedicated worker process.
+   */
+  async processDuePolicies(limit = 20): Promise<{ started: string[]; skipped: string[] }> {
+    const now = new Date();
+    const due = await this.prisma.backupPolicy.findMany({
+      where: {
+        enabled: true,
+        scheduleKind: { not: BackupScheduleKind.MANUAL },
+        nextRunAt: { lte: now },
+      },
+      orderBy: { nextRunAt: 'asc' },
+      take: Math.min(100, Math.max(1, limit)),
+    });
+
+    const started: string[] = [];
+    const skipped: string[] = [];
+
+    for (const policy of due) {
+      const active = await this.prisma.backupRun.count({
+        where: {
+          orgId: policy.orgId,
+          status: { in: [BackupRunStatus.PENDING, BackupRunStatus.RUNNING] },
+        },
+      });
+      if (active > 0) {
+        skipped.push(policy.id);
+        // Push nextRun slightly forward so we do not tight-loop
+        await this.prisma.backupPolicy.update({
+          where: { id: policy.id },
+          data: {
+            nextRunAt: computeNextRunAt(policy.scheduleKind, now, policy.scheduleHourUtc, policy.scheduleDay),
+          },
+        });
+        continue;
+      }
+
+      const lastFull = await this.prisma.backupRun.findFirst({
+        where: { orgId: policy.orgId, status: BackupRunStatus.COMPLETED, kind: BackupRunKind.FULL },
+        orderBy: { snapshotAt: 'desc' },
+        select: { id: true },
+      });
+      const kind = lastFull ? BackupRunKind.INCREMENTAL : BackupRunKind.FULL;
+
+      const run = await this.prisma.backupRun.create({
+        data: {
+          id: randomUUID(),
+          orgId: policy.orgId,
+          policyId: policy.id,
+          kind,
+          status: BackupRunStatus.PENDING,
+          snapshotAt: now,
+          triggeredById: policy.createdById,
+        },
+      });
+
+      await this.prisma.backupPolicy.update({
+        where: { id: policy.id },
+        data: {
+          nextRunAt: computeNextRunAt(policy.scheduleKind, now, policy.scheduleHourUtc, policy.scheduleDay),
+        },
+      });
+
+      started.push(run.id);
+      void this.executeRun(run.id, policy.orgId).catch((e) => {
+        this.logger.error(`scheduled backup ${run.id} failed: ${e instanceof Error ? e.message : e}`);
+      });
+    }
+
+    // Retention cleanup (best-effort)
+    await this.enforceRetention(limit).catch((e) =>
+      this.logger.warn(`retention pass failed: ${e instanceof Error ? e.message : e}`),
+    );
+
+    return { started, skipped };
+  }
+
+  /** Delete completed runs older than each policy's retentionDays (never deletes RUNNING). */
+  async enforceRetention(orgBatch = 50) {
+    const policies = await this.prisma.backupPolicy.findMany({
+      where: { retentionDays: { not: null } },
+      select: { id: true, orgId: true, retentionDays: true },
+      take: orgBatch,
+    });
+    for (const p of policies) {
+      if (p.retentionDays == null) continue;
+      const cutoff = new Date(Date.now() - p.retentionDays * 86_400_000);
+      // Keep at least the latest completed run per org
+      const latest = await this.prisma.backupRun.findFirst({
+        where: { orgId: p.orgId, status: BackupRunStatus.COMPLETED },
+        orderBy: { snapshotAt: 'desc' },
+        select: { id: true },
+      });
+      await this.prisma.backupRun.deleteMany({
+        where: {
+          orgId: p.orgId,
+          policyId: p.id,
+          status: BackupRunStatus.COMPLETED,
+          snapshotAt: { lt: cutoff },
+          ...(latest ? { id: { not: latest.id } } : {}),
+        },
+      });
+    }
   }
 
   async executeRun(runId: string, orgId: string) {
@@ -252,6 +403,30 @@ export class BackupService {
         ),
       );
 
+      // Baseline for incremental
+      let baselineSnapshotAt: Date | null = null;
+      let baselineFileIds = new Set<string>();
+      if (run.kind === BackupRunKind.INCREMENTAL) {
+        const baseline = await this.prisma.backupRun.findFirst({
+          where: {
+            orgId,
+            status: BackupRunStatus.COMPLETED,
+            id: { not: runId },
+          },
+          orderBy: { snapshotAt: 'desc' },
+          select: { id: true, snapshotAt: true },
+        });
+        if (baseline) {
+          baselineSnapshotAt = baseline.snapshotAt;
+          const prior = await this.prisma.backupObject.findMany({
+            where: { orgId, runId: baseline.id, resourceType: 'FILE' },
+            select: { resourceId: true },
+            take: 100_000,
+          });
+          baselineFileIds = new Set(prior.map((p) => p.resourceId));
+        }
+      }
+
       const files = await this.prisma.file.findMany({
         where: {
           orgId,
@@ -268,6 +443,7 @@ export class BackupService {
           extension: true,
           storageKey: true,
           storageObjectId: true,
+          updatedAt: true,
         },
         take: 50_000,
       });
@@ -295,7 +471,12 @@ export class BackupService {
       let filesSkipped = 0;
       let bytesTotal = BigInt(0);
       let bytesCopied = BigInt(0);
-      const manifestRows: Array<{ resourceId: string; backupStorageKey: string; sha256Hash: string | null; size: bigint }> = [];
+      const manifestRows: Array<{
+        resourceId: string;
+        backupStorageKey: string;
+        sha256Hash: string | null;
+        size: bigint;
+      }> = [];
 
       for (const file of files) {
         const ext = (file.extension || '').toLowerCase().replace(/^\./, '');
@@ -303,6 +484,20 @@ export class BackupService {
           filesSkipped += 1;
           continue;
         }
+
+        if (run.kind === BackupRunKind.INCREMENTAL) {
+          const include = shouldIncludeInIncremental({
+            fileId: file.id,
+            updatedAt: file.updatedAt,
+            baselineSnapshotAt,
+            baselineFileIds,
+          });
+          if (!include) {
+            filesSkipped += 1;
+            continue;
+          }
+        }
+
         filesTotal += 1;
         bytesTotal += BigInt(file.size || 0);
 
@@ -331,7 +526,6 @@ export class BackupService {
             checksum: file.sha256Hash || undefined,
           });
         } catch (copyErr) {
-          // Fallback: record metadata-only if physical copy is unsupported in this driver.
           this.logger.warn(
             `copy failed for file ${file.id}: ${copyErr instanceof Error ? copyErr.message : copyErr}; indexing metadata only`,
           );
@@ -388,9 +582,15 @@ export class BackupService {
       });
 
       if (run.policyId) {
+        const policy = run.policy;
         await this.prisma.backupPolicy.update({
           where: { id: run.policyId },
-          data: { lastRunAt: new Date() },
+          data: {
+            lastRunAt: new Date(),
+            nextRunAt: policy
+              ? computeNextRunAt(policy.scheduleKind, new Date(), policy.scheduleHourUtc, policy.scheduleDay)
+              : undefined,
+          },
         });
       }
     } catch (e) {
