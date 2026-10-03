@@ -43,11 +43,16 @@ export class ConnectionsService {
     return this.registry.list().map((provider) => {
       const cfg = byProvider.get(provider.key);
       const envCfg = this.oauthConfigFromEnv(provider.key, provider);
+      // Built-in OAuth credentials come from environment variables (platform-level).
+      // Organizations never need to supply Client ID / Client Secret.
+      const hasPlatformCredentials = Boolean(envCfg.clientId && envCfg.clientSecret);
+      const enabled = cfg?.enabled ?? true;
       return {
         ...provider,
-        configured: !provider.oauth || Boolean((cfg?.enabled !== false && cfg?.clientId && cfg?.clientSecret) || (!cfg && envCfg.clientId && envCfg.clientSecret)),
-        providerConfigured: !!cfg && cfg.enabled && !!cfg.clientId && !!cfg.clientSecret,
-        providerEnabled: cfg?.enabled ?? true,
+        configured: !provider.oauth || (hasPlatformCredentials && enabled),
+        providerConfigured: hasPlatformCredentials,
+        providerEnabled: enabled,
+        credentialsSource: hasPlatformCredentials ? 'ENVIRONMENT' : 'NONE',
       };
     });
   }
@@ -56,18 +61,29 @@ export class ConnectionsService {
     this.assertAdmin(user);
     const rows = await this.prisma.connectionProviderConfig.findMany({ where: { orgId: user.org_id }, orderBy: { providerKey: 'asc' } });
     const byProvider = new Map(rows.map((row) => [row.providerKey, row]));
+    const isProduction = (process.env.NODE_ENV ?? 'development') === 'production';
     return this.registry.list().filter((p) => p.oauth).map((provider) => {
       const row = byProvider.get(provider.key);
       const envCfg = this.oauthConfigFromEnv(provider.key, provider);
+      const hasEnvCredentials = Boolean(envCfg.clientId && envCfg.clientSecret);
+      // Platform env is the authoritative credential source for built-in providers.
+      // DB-stored secrets are a development-only convenience when env is incomplete.
+      const source: 'ENVIRONMENT' | 'DATABASE' | 'NONE' = hasEnvCredentials
+        ? 'ENVIRONMENT'
+        : (!isProduction && row?.clientId && row?.clientSecret ? 'DATABASE' : 'NONE');
+      const configured = (source !== 'NONE') && (row?.enabled ?? true);
       return {
         provider: provider.key,
         name: provider.name,
         category: provider.category,
         enabled: row?.enabled ?? true,
-        configured: !!row && !!row.clientId && !!row.clientSecret && row.enabled || (!row && !!envCfg.clientId && !!envCfg.clientSecret),
-        source: row ? 'DATABASE' : (envCfg.clientId && envCfg.clientSecret ? 'ENVIRONMENT' : 'NONE'),
-        clientId: row?.clientId ?? envCfg.clientId ?? '',
-        hasClientSecret: !!row?.clientSecret || !!envCfg.clientSecret,
+        configured,
+        source,
+        clientId: hasEnvCredentials ? (envCfg.clientId ?? '') : (isProduction ? '' : (row?.clientId ?? '')),
+        hasClientSecret: hasEnvCredentials || (!isProduction && !!row?.clientSecret),
+        credentialsEditable: !isProduction && !hasEnvCredentials,
+        clientIdEnv: envCfg.clientIdEnv,
+        clientSecretEnv: envCfg.clientSecretEnv,
         tenantId: row?.tenantId ?? '',
         callbackUrl: row?.callbackUrl ?? envCfg.callbackUrl,
         authUrl: row?.authUrl ?? provider.oauthAuthUrl,
@@ -85,27 +101,90 @@ export class ConnectionsService {
     this.assertAdmin(user);
     const definition = this.registry.get(providerKey);
     if (!definition.oauth) throw new BadRequestException('Only OAuth providers can be configured here');
-    const clientId = String(input?.clientId ?? '').trim();
-    const clientSecret = String(input?.clientSecret ?? '').trim();
+
+    const envCfg = this.oauthConfigFromEnv(providerKey, definition);
+    const isProduction = (process.env.NODE_ENV ?? 'development') === 'production';
+    const hasEnvCredentials = Boolean(envCfg.clientId && envCfg.clientSecret);
+
+    // Built-in provider credentials are platform-level (environment variables).
+    // Organizations only control enable/disable, Microsoft tenant, scopes, and optional URL overrides.
+    // Client ID / Client Secret may be stored in DB only in development when env is not set.
+    const credentialsEditable = !isProduction && !hasEnvCredentials;
+
     const tenantId = String(input?.tenantId ?? '').trim();
-    const callbackUrl = String(input?.callbackUrl ?? '').trim();
-    const authUrl = String(input?.authUrl ?? definition.oauthAuthUrl ?? '').trim();
-    const tokenUrl = String(input?.tokenUrl ?? definition.oauthTokenUrl ?? '').trim();
-    const revokeUrl = String(input?.revokeUrl ?? definition.oauthRevokeUrl ?? '').trim();
     const enabled = input?.enabled !== false;
-    const requestedScopes = Array.isArray(input?.scopes) ? input.scopes.map((v: unknown) => String(v).trim()).filter(Boolean) : definition.defaultScopes;
+    const requestedScopes = Array.isArray(input?.scopes)
+      ? input.scopes.map((v: unknown) => String(v).trim()).filter(Boolean)
+      : definition.defaultScopes;
     const allowedScopes = new Set(definition.scopes.map((item) => item.value));
     const invalidScopes = requestedScopes.filter((value: string) => !allowedScopes.has(value));
     if (invalidScopes.length) throw new BadRequestException(`Unsupported OAuth scopes: ${invalidScopes.slice(0, 10).join(', ')}`);
-    if (!clientId) throw new BadRequestException('Client ID is required');
-    if (!clientSecret && !(await this.prisma.connectionProviderConfig.findUnique({ where: { orgId_providerKey: { orgId: user.org_id, providerKey } }, select: { clientSecret: true } }))?.clientSecret && !this.oauthConfigFromEnv(providerKey, definition).clientSecret) throw new BadRequestException('Client Secret is required');
+
+    const callbackUrl = String(input?.callbackUrl ?? envCfg.callbackUrl ?? '').trim();
+    const authUrl = String(input?.authUrl ?? definition.oauthAuthUrl ?? '').trim();
+    const tokenUrl = String(input?.tokenUrl ?? definition.oauthTokenUrl ?? '').trim();
+    const revokeUrl = String(input?.revokeUrl ?? definition.oauthRevokeUrl ?? '').trim();
     if (!/^https:\/\//i.test(authUrl) || !/^https:\/\//i.test(tokenUrl)) throw new BadRequestException('OAuth URLs must use HTTPS');
     if (!callbackUrl || !/^https:\/\//i.test(callbackUrl)) throw new BadRequestException('Callback URL must use HTTPS');
-    const existing = await this.prisma.connectionProviderConfig.findUnique({ where: { orgId_providerKey: { orgId: user.org_id, providerKey } } });
-    const data: any = { orgId: user.org_id, providerKey, enabled, clientId, tenantId: tenantId || null, callbackUrl, authUrl, tokenUrl, revokeUrl: revokeUrl || null, scopes: requestedScopes as Prisma.InputJsonValue, updatedById: user.sub };
-    if (clientSecret) data.clientSecret = this.crypto.encrypt(clientSecret);
-    const row = existing ? await this.prisma.connectionProviderConfig.update({ where: { id: existing.id }, data }) : await this.prisma.connectionProviderConfig.create({ data: { id: randomUUID(), ...data, createdById: user.sub } });
-    await this.audit(user, 'connection.provider_config.updated', row.id, { provider: providerKey, source: 'DATABASE', enabled });
+
+    let clientId = '';
+    let clientSecret = '';
+    if (credentialsEditable) {
+      clientId = String(input?.clientId ?? '').trim();
+      clientSecret = String(input?.clientSecret ?? '').trim();
+      // Dev convenience: allow saving incomplete config (enabled flag etc.) without secrets
+      // Runtime oauthConfig will still require env or saved secrets to authorize.
+    } else if (input?.clientId || input?.clientSecret) {
+      // Ignore secret fields in production / when env already provides credentials.
+      // Do not reject the whole request so admins can still toggle enabled / tenant.
+    }
+
+    const existing = await this.prisma.connectionProviderConfig.findUnique({
+      where: { orgId_providerKey: { orgId: user.org_id, providerKey } },
+    });
+
+    const data: any = {
+      orgId: user.org_id,
+      providerKey,
+      enabled,
+      tenantId: tenantId || null,
+      callbackUrl,
+      authUrl,
+      tokenUrl,
+      revokeUrl: revokeUrl || null,
+      scopes: requestedScopes as Prisma.InputJsonValue,
+      updatedById: user.sub,
+    };
+
+    if (credentialsEditable) {
+      if (clientId) data.clientId = clientId;
+      else if (!existing?.clientId) data.clientId = null;
+      if (clientSecret) data.clientSecret = this.crypto.encrypt(clientSecret);
+    } else {
+      // Keep any historical DB values untouched but they are not used when env is set / in production.
+      if (!existing) {
+        data.clientId = null;
+        data.clientSecret = null;
+      }
+    }
+
+    const row = existing
+      ? await this.prisma.connectionProviderConfig.update({ where: { id: existing.id }, data })
+      : await this.prisma.connectionProviderConfig.create({
+          data: { id: randomUUID(), ...data, createdById: user.sub },
+        });
+
+    await this.audit(user, 'connection.provider_config.updated', row.id, {
+      provider: providerKey,
+      source: hasEnvCredentials ? 'ENVIRONMENT' : 'DATABASE',
+      enabled,
+      credentialsEditable,
+    });
+
+    // Return the same shape as adminProviderConfigs for this provider
+    const configs = await this.adminProviderConfigs(user);
+    const match = configs.find((c) => c.provider === providerKey);
+    if (match) return match;
     return this.serializeProviderConfig(row, definition);
   }
 
@@ -145,7 +224,28 @@ export class ConnectionsService {
   }
 
   private serializeProviderConfig(row: any, definition: ConnectionProviderDefinition) {
-    return { provider: row.providerKey, name: definition.name, enabled: row.enabled, configured: !!row.clientId && !!row.clientSecret && row.enabled, clientId: row.clientId ?? '', hasClientSecret: !!row.clientSecret, tenantId: row.tenantId ?? '', callbackUrl: row.callbackUrl ?? '', authUrl: row.authUrl ?? definition.oauthAuthUrl, tokenUrl: row.tokenUrl ?? definition.oauthTokenUrl, revokeUrl: row.revokeUrl ?? definition.oauthRevokeUrl ?? '', scopes: Array.isArray(row.scopes) ? row.scopes : definition.defaultScopes, lastTestedAt: row.lastTestedAt ?? null, lastTestOk: row.lastTestOk ?? null, lastTestMessage: row.lastTestMessage ?? null };
+    const envCfg = this.oauthConfigFromEnv(row.providerKey, definition);
+    const hasEnv = Boolean(envCfg.clientId && envCfg.clientSecret);
+    const source = hasEnv ? 'ENVIRONMENT' : (row.clientId && row.clientSecret ? 'DATABASE' : 'NONE');
+    return {
+      provider: row.providerKey,
+      name: definition.name,
+      enabled: row.enabled,
+      configured: (hasEnv || (!!row.clientId && !!row.clientSecret)) && row.enabled,
+      source,
+      clientId: hasEnv ? (envCfg.clientId ?? '') : (row.clientId ?? ''),
+      hasClientSecret: hasEnv || !!row.clientSecret,
+      credentialsEditable: !hasEnv && (process.env.NODE_ENV ?? 'development') !== 'production',
+      tenantId: row.tenantId ?? '',
+      callbackUrl: row.callbackUrl ?? envCfg.callbackUrl ?? '',
+      authUrl: row.authUrl ?? definition.oauthAuthUrl,
+      tokenUrl: row.tokenUrl ?? definition.oauthTokenUrl,
+      revokeUrl: row.revokeUrl ?? definition.oauthRevokeUrl ?? '',
+      scopes: Array.isArray(row.scopes) ? row.scopes : definition.defaultScopes,
+      lastTestedAt: row.lastTestedAt ?? null,
+      lastTestOk: row.lastTestOk ?? null,
+      lastTestMessage: row.lastTestMessage ?? null,
+    };
   }
 
   templates() {
@@ -827,7 +927,7 @@ export class ConnectionsService {
     const definition = await this.resolveProviderDefinition(provider, user.org_id);
     this.assertOAuthProvider(provider, definition);
     const cfg = await this.oauthConfig(provider, definition, user?.org_id);
-    if (!cfg.clientId || !cfg.clientSecret) throw new BadRequestException(`${provider} OAuth integration is not configured. Ask an organization administrator to configure this provider in Connections → Provider Configuration.`);
+    if (!cfg.clientId || !cfg.clientSecret) throw new BadRequestException(`${provider} OAuth integration is not configured. Platform operator must set {PREFIX}_CLIENT_ID and {PREFIX}_CLIENT_SECRET environment variables.`);
     let connection: any = null;
     if (connectionId) {
       connection = await this.prisma.connection.findFirst({ where: { id: connectionId, orgId: user.org_id, ownerId: user.sub, provider, authType: ConnectionAuthType.OAUTH2 } });
@@ -1370,22 +1470,45 @@ export class ConnectionsService {
 
   private async oauthConfig(provider: OAuthProvider, definition: ResolvedProviderDefinition, orgId?: string) {
     const envCfg = this.oauthConfigFromEnv(provider, definition);
-    if (!orgId || provider.startsWith('custom:') || definition.oauthClientId) return { frontend: this.frontendUrl(), ...envCfg };
-    const row = await this.prisma.connectionProviderConfig.findUnique({ where: { orgId_providerKey: { orgId, providerKey: provider } } });
-    if (row && !row.enabled) throw new BadRequestException(`${definition.name} provider is disabled by the organization administrator`);
-    if (!row) return { frontend: this.frontendUrl(), ...envCfg };
-    const tenant = row.tenantId?.trim();
-    const authBase = row.authUrl ?? definition.oauthAuthUrl!;
-    const tokenUrl = row.tokenUrl ?? definition.oauthTokenUrl!;
-    const microsoftAuthBase = provider === 'microsoft' && tenant ? authBase.replace('/common/', `/${encodeURIComponent(tenant)}/`) : authBase;
-    const microsoftTokenUrl = provider === 'microsoft' && tenant ? tokenUrl.replace('/common/', `/${encodeURIComponent(tenant)}/`) : tokenUrl;
+    // Custom services and embedded client credentials always use definition/env path.
+    if (!orgId || provider.startsWith('custom:') || definition.oauthClientId) {
+      return { frontend: this.frontendUrl(), ...envCfg };
+    }
+
+    const row = await this.prisma.connectionProviderConfig.findUnique({
+      where: { orgId_providerKey: { orgId, providerKey: provider } },
+    });
+    if (row && !row.enabled) {
+      throw new BadRequestException(`${definition.name} provider is disabled by the organization administrator`);
+    }
+
+    // Built-in providers: Client ID / Client Secret ALWAYS come from environment variables.
+    // DB secrets are a development-only fallback when platform env is incomplete.
+    const isProduction = (process.env.NODE_ENV ?? 'development') === 'production';
+    let clientId = envCfg.clientId;
+    let clientSecret = envCfg.clientSecret;
+    if ((!clientId || !clientSecret) && !isProduction && row) {
+      clientId = clientId || row.clientId || undefined;
+      clientSecret = clientSecret || (row.clientSecret ? this.crypto.decrypt(row.clientSecret) : undefined);
+    }
+
+    const tenant = row?.tenantId?.trim();
+    const authBase = row?.authUrl ?? definition.oauthAuthUrl!;
+    const tokenUrl = row?.tokenUrl ?? definition.oauthTokenUrl!;
+    const microsoftAuthBase = provider === 'microsoft' && tenant
+      ? authBase.replace('/common/', `/${encodeURIComponent(tenant)}/`)
+      : authBase;
+    const microsoftTokenUrl = provider === 'microsoft' && tenant
+      ? tokenUrl.replace('/common/', `/${encodeURIComponent(tenant)}/`)
+      : tokenUrl;
+
     return {
       frontend: this.frontendUrl(),
-      clientId: row.clientId ?? envCfg.clientId,
-      clientSecret: row.clientSecret ? this.crypto.decrypt(row.clientSecret) : envCfg.clientSecret,
+      clientId,
+      clientSecret,
       clientIdEnv: envCfg.clientIdEnv,
       clientSecretEnv: envCfg.clientSecretEnv,
-      callbackUrl: row.callbackUrl ?? envCfg.callbackUrl,
+      callbackUrl: row?.callbackUrl ?? envCfg.callbackUrl,
       authBase: microsoftAuthBase,
       tokenUrl: microsoftTokenUrl,
     };
