@@ -368,3 +368,100 @@ export function repairShowFromPreservation(content: any): any {
   if (!slides.some((slide) => slide.elements.some((element: { type?: string; src?: string }) => element.type === 'image' && element.src))) return content;
   return { ...content, slides, activeSlide: content.activeSlide || slides[0].id };
 }
+
+
+export type PlaceholderKey = string; // `${type||'body'}:${idx||'0'}`
+
+export function placeholderMeta(xml: string): { type: string; idx: string } | null {
+  const attrs = tagAttrs(xml, 'p:ph');
+  if (!attrs && !/<p:ph\b/.test(xml)) return null;
+  const type = xmlAttr(attrs, 'type') || 'body';
+  const idx = xmlAttr(attrs, 'idx') || '0';
+  return { type, idx };
+}
+
+export function placeholderKey(type: string, idx?: string): PlaceholderKey {
+  return `${type || 'body'}:${idx || '0'}`;
+}
+
+/** Map of layout/master placeholders → EMU boxes (and optional default text style hints). */
+export function parseLayoutPlaceholders(layoutXml: string): Map<PlaceholderKey, EmuBox> {
+  const map = new Map<PlaceholderKey, EmuBox>();
+  for (const piece of slidePieces(layoutXml)) {
+    if (piece.kind !== 'shape') continue;
+    const meta = placeholderMeta(piece.xml);
+    if (!meta) continue;
+    const box = piece.box.cx > 0 && piece.box.cy > 0 ? piece.box : firstBox(piece.xml);
+    if (box.cx > 0 && box.cy > 0) {
+      map.set(placeholderKey(meta.type, meta.idx), box);
+      // Also index by type alone for first occurrence (title without idx)
+      const typeOnly = placeholderKey(meta.type, '0');
+      if (!map.has(typeOnly) || meta.idx === '0') map.set(typeOnly, box);
+    }
+  }
+  return map;
+}
+
+/** Prefer local shape geometry; otherwise inherit from layout/master placeholder. */
+export function resolveShapeBox(
+  shapeXml: string,
+  localBox: EmuBox,
+  layoutPlaceholders?: Map<PlaceholderKey, EmuBox>,
+  masterPlaceholders?: Map<PlaceholderKey, EmuBox>,
+): EmuBox {
+  if (localBox.cx > 0 && localBox.cy > 0) return localBox;
+  const meta = placeholderMeta(shapeXml);
+  if (!meta) return localBox;
+  const key = placeholderKey(meta.type, meta.idx);
+  const typeKey = placeholderKey(meta.type, '0');
+  const fromLayout = layoutPlaceholders?.get(key) || layoutPlaceholders?.get(typeKey);
+  if (fromLayout && fromLayout.cx > 0) return { ...fromLayout, rot: localBox.rot ?? fromLayout.rot };
+  const fromMaster = masterPlaceholders?.get(key) || masterPlaceholders?.get(typeKey);
+  if (fromMaster && fromMaster.cx > 0) return { ...fromMaster, rot: localBox.rot ?? fromMaster.rot };
+  // Sensible defaults by placeholder role when layout geometry is missing
+  const defaults: Record<string, EmuBox> = {
+    ctrTitle: { x: 685800, y: 2130425, cx: 7772400, cy: 1470025 },
+    title: { x: 457200, y: 274638, cx: 8229600, cy: 1143000 },
+    subTitle: { x: 1371600, y: 3886200, cx: 6400800, cy: 1752600 },
+    body: { x: 457200, y: 1600200, cx: 8229600, cy: 4525963 },
+  };
+  return defaults[meta.type] || { x: 457200, y: 457200, cx: 8229600, cy: 4572000 };
+}
+
+/** Theme scheme color map (bg1/tx1/accent1…) → #RRGGBB */
+export function parseThemeSchemeColors(themeXml: string): Record<string, string> {
+  const out: Record<string, string> = {
+    bg1: '#FFFFFF', tx1: '#000000', bg2: '#E7E6E6', tx2: '#44546A',
+    accent1: '#4472C4', accent2: '#ED7D31', accent3: '#A5A5A5',
+    accent4: '#FFC000', accent5: '#5B9BD5', accent6: '#70AD47',
+    hlink: '#0563C1', folHlink: '#954F72', dk1: '#000000', lt1: '#FFFFFF',
+    dk2: '#44546A', lt2: '#E7E6E6',
+  };
+  if (!themeXml) return out;
+  const clrScheme = /<a:clrScheme\b[^>]*>([\s\S]*?)<\/a:clrScheme>/.exec(themeXml)?.[1] || themeXml;
+  for (const m of clrScheme.matchAll(/<a:([a-zA-Z0-9]+)>[\s\S]*?<a:srgbClr\b[^>]*val="([0-9A-Fa-f]{6})"[\s\S]*?<\/a:\1>/g)) {
+    out[m[1]] = `#${m[2].toUpperCase()}`;
+  }
+  for (const m of clrScheme.matchAll(/<a:([a-zA-Z0-9]+)>[\s\S]*?<a:sysClr\b[^>]*lastClr="([0-9A-Fa-f]{6})"[\s\S]*?<\/a:\1>/g)) {
+    if (!out[m[1]] || out[m[1]].startsWith('#')) out[m[1]] = `#${m[2].toUpperCase()}`;
+  }
+  // aliases
+  out.bg1 = out.lt1 || out.bg1;
+  out.tx1 = out.dk1 || out.tx1;
+  out.bg2 = out.lt2 || out.bg2;
+  out.tx2 = out.dk2 || out.tx2;
+  return out;
+}
+
+export function resolveSolidColor(xml: string, scheme?: Record<string, string>, tag = 'a:solidFill'): string | undefined {
+  const block = new RegExp(`<${tag}>[\\s\\S]*?<\\/${tag}>`).exec(xml)?.[0] || xml;
+  const srgb = /<a:srgbClr\b[^>]*val="([0-9A-Fa-f]{6})"/.exec(block)?.[1];
+  if (srgb) return `#${srgb}`;
+  const schemeVal = /<a:schemeClr\b[^>]*val="([^"]+)"/.exec(block)?.[1];
+  if (schemeVal && scheme) {
+    const key = schemeVal;
+    if (scheme[key]) return scheme[key];
+  }
+  return undefined;
+}
+

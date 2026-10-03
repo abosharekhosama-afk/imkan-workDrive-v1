@@ -1,7 +1,7 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
 import JSZip from 'jszip';
 import type { OfficeType } from './core/office-engine.interface';
-import { blipEmbedId, boxPercent, coerceElementGeometry, drawingText, firstBox, maskBalanced, outerElements, relationshipMap, resolvePackageTarget, slideCanvas, slidePieces, wordDirection, wordFlowText } from './ooxml-package-logic';
+import { blipEmbedId, boxPercent, coerceElementGeometry, drawingText, firstBox, maskBalanced, outerElements, parseLayoutPlaceholders, parseThemeSchemeColors, relationshipMap, resolvePackageTarget, resolveShapeBox, resolveSolidColor, slideCanvas, slidePieces, wordDirection, wordFlowText } from './ooxml-package-logic';
 
 export type ConversionCategory = 'preserved'|'converted'|'warning'|'unsupported';
 export type ConversionDiagnostic = { code: string; severity: 'info'|'warning'|'loss'; category?: ConversionCategory; message: string; path?: string };
@@ -659,17 +659,46 @@ export class OfficeConversionService {
     for(const m of relXml.matchAll(/<Relationship\s+([^>]*)\/?>(?:<\/Relationship>)?/g)){const id=/Id="([^"]+)"/.exec(m[1])?.[1],target=/Target="([^"]+)"/.exec(m[1])?.[1];if(id&&target)rels[id]=target.startsWith('/')?target.slice(1):this.resolveRelationshipTarget('ppt/presentation.xml',target);}
     const orderedRids=[...pres.matchAll(/<p:sldId[^>]*r:id="([^"]+)"/g)].map(m=>m[1]);
     const slidePaths=orderedRids.map(r=>rels[r]).filter(Boolean).filter(p=>/^ppt\/slides\/slide\d+\.xml$/.test(p));
-    const color=(body:string,tag='a:solidFill')=>{const m=new RegExp(`<${tag}>[\\s\\S]*?<a:srgbClr val="([0-9A-Fa-f]{6})"`).exec(body);return m?`#${m[1]}`:undefined};
-    const geom=(body:string)=>coerceElementGeometry(boxPercent(firstBox(body),cx,cy),cx,cy);
+    // Theme scheme colors (accent1/tx1/…) so fills and text are not washed out to black/white defaults only.
+    let themeXml='';
+    try{
+      const themeRel=[...Object.values(rels)].find(t=>/theme\/theme\d+\.xml$/i.test(String(t)));
+      if(themeRel && z.file(themeRel)) themeXml=await z.file(themeRel)!.async('string');
+      else if(z.file('ppt/theme/theme1.xml')) themeXml=await z.file('ppt/theme/theme1.xml')!.async('string');
+    }catch{}
+    const scheme=parseThemeSchemeColors(themeXml);
+    const color=(body:string,tag='a:solidFill')=>resolveSolidColor(body,scheme,tag)||undefined;
+    const geom=(body:string,layoutMap?:Map<string,any>,masterMap?:Map<string,any>)=>{
+      const local=firstBox(body);
+      const resolved=resolveShapeBox(body,local,layoutMap,masterMap);
+      return coerceElementGeometry(boxPercent(resolved,cx,cy),cx,cy);
+    };
+    // Cache layout placeholder geometry (PowerPoint title/body often have empty local spPr).
+    const layoutCache=new Map<string,Map<string,any>>();
+    const loadLayoutPlaceholders=async(slidePath:string,slideRelXml:string)=>{
+      const layoutTarget=/Type="[^"]*\/slideLayout"[^>]*Target="([^"]+)"|Target="([^"]+)"[^>]*Type="[^"]*\/slideLayout"/.exec(slideRelXml);
+      const target=layoutTarget?.[1]||layoutTarget?.[2];
+      if(!target) return undefined;
+      const layoutPath=this.resolveRelationshipTarget(slidePath,target);
+      if(layoutCache.has(layoutPath)) return layoutCache.get(layoutPath);
+      const lf=z.file(layoutPath);
+      if(!lf) return undefined;
+      const layoutXml=await lf.async('string');
+      const map=parseLayoutPlaceholders(layoutXml);
+      layoutCache.set(layoutPath,map);
+      return map;
+    };
     const textRuns=(body:string)=>[...body.matchAll(/<a:r(?:\s[^>]*)?>([\s\S]*?)<\/a:r>/g)].map(m=>{const b=m[1],t=[...b.matchAll(/<a:t(?:\s[^>]*)?>([\s\S]*?)<\/a:t>/g)].map(x=>decode(x[1])).join('');const rp=/<a:rPr([^>]*)>([\s\S]*?)<\/a:rPr>|<a:rPr([^>]*)\/>/.exec(b);const a=rp?.[1]||rp?.[3]||'';const fs=/\bsz="(\d+)"/.exec(a)?.[1];const f=/<a:latin[^>]*typeface="([^"]+)"/.exec(b)?.[1];const c=color(b);return {text:t,fontSize:fs?Number(fs)/100:undefined,fontFamily:f,color:c,bold:/\bb="(1|true)"/.test(a),italic:/\bi="(1|true)"/.test(a),underline:/\bu="sng|single"/.test(a)};});
     const slides=await Promise.all(slidePaths.slice(0,200).map(async(p,i)=>{
       const xml=await z.file(p)!.async('string');
       const elements:any[]=[]; let ei=0;
-      const slideBg=color(xml,'p:bgPr');
+      const slideBg=color(xml,'p:bgPr')||color(xml,'a:solidFill')||scheme.bg1||'#ffffff';
       const slideRelPath=p.replace(/([^/]+)$/,'_rels/$1.rels'); const slideRelXml=z.file(slideRelPath)?await z.file(slideRelPath)!.async('string'):'';
       const relMap=relationshipMap(slideRelXml);
+      const layoutMap=await loadLayoutPlaceholders(p,slideRelXml);
       for(const piece of slidePieces(xml)){
-        const g=coerceElementGeometry(boxPercent(piece.box,cx,cy),cx,cy);
+        const resolvedBox=resolveShapeBox(piece.xml,piece.box,layoutMap,undefined);
+        const g=coerceElementGeometry(boxPercent(resolvedBox,cx,cy),cx,cy);
         const id=`el-${i+1}-${++ei}`;
         if(piece.kind==='picture'){
           const rid=blipEmbedId(piece.xml); const target=rid?relMap[rid]?.target:''; if(!target) continue;
@@ -688,8 +717,11 @@ export class OfficeConversionService {
         const tx=/<(?:p|a):txBody>([\s\S]*?)<\/(?:p|a):txBody>/.exec(piece.xml)?.[1]||'';
         const text=drawingText(piece.xml);
         if(text.trim()){
-          const runs=textRuns(tx); const first=runs.find(r=>r.text)||runs[0]||{}; const algn=/<a:pPr[^>]*algn="(l|ctr|r|just)"/.exec(tx)?.[1];
-          elements.push({id,type:'text',...g,text,fontSize:first.fontSize||20,fontFamily:first.fontFamily||'Arial',color:first.color||'#111827',bold:Boolean(first.bold),italic:Boolean(first.italic),underline:Boolean(first.underline),align:algn==='ctr'?'center':algn==='r'?'end':'start',textDirection:/(?:rtl|rightToLeft)\s*=\s*"(?:1|true)"/i.test(tx)?'rtl':'ltr'});
+          const runs=textRuns(tx); const first=runs.find(r=>r.text)||runs[0]||{} as any; const algn=/<a:pPr[^>]*algn="(l|ctr|r|just)"/.exec(tx)?.[1];
+          const phType=/<p:ph[^>]*type="([^"]+)"/.exec(piece.xml)?.[1]||'';
+          const defaultSize=phType==='ctrTitle'||phType==='title'?40:phType==='subTitle'?22:phType==='body'?18:20;
+          const textColor=first.color||color(tx)||color(piece.xml)||scheme.tx1||'#111827';
+          elements.push({id,type:'text',...g,text,fontSize:first.fontSize||defaultSize,fontFamily:first.fontFamily||'Arial',color:textColor,bold:Boolean(first.bold)||phType==='ctrTitle'||phType==='title',italic:Boolean(first.italic),underline:Boolean(first.underline),align:algn==='ctr'?'center':algn==='r'?'end':(phType==='ctrTitle'||phType==='title'?'center':'start'),textDirection:/(?:rtl|rightToLeft)\s*=\s*"(?:1|true)"/i.test(tx)?'rtl':'ltr'});
           continue;
         }
         const prst=/<a:prstGeom[^>]*prst="([^"]+)"/.exec(piece.xml)?.[1]||'rect';
@@ -720,7 +752,7 @@ export class OfficeConversionService {
     const noteCount=slides.filter(s=>s.notes).length;if(noteCount)diagnostics.push({code:'PPTX_NOTES',severity:'info',message:`Imported speaker notes from ${noteCount} slide(s).`});
     const chartCount=slides.reduce((n,s)=>n+s.elements.filter((e:any)=>e.type==='chart').length,0);if(chartCount)diagnostics.push({code:'PPTX_CHARTS',severity:'info',message:`Imported ${chartCount} chart object(s) using cached PPTX chart data.`});
     const unsupported=pres.match(/<p:timing\b|<p:transition\b/g)?.length||0;if(unsupported)diagnostics.push({code:'PPTX_MOTION',severity:'warning',message:'Animation/transition timing metadata was detected; visual/content import is preserved but timing is not yet fully mapped to the native Show timeline.'});
-    return {type:'SHOW',title:strip(filename),sourceFormat:'pptx',diagnostics,content:{schema:7,type:'SHOW',title:strip(filename),_ooxmlPreservation:preservation,aspectRatio:aspect,activeSlide:slides[0]?.id||'slide-1',theme:{fontFamily:'Arial',accent:'#2563eb',secondary:'#64748b',background:'#ffffff',headingFont:'Arial'},masters:[{id:'master-default',name:'Default',background:'#ffffff',elements:[]}],sections:[],presenter:{showTimer:true,showNotes:true,showNextSlide:true,rehearsalSeconds:0,loop:false,blackoutOnEnd:false},slides:slides.length?slides:[{id:'slide-1',layout:'blank',background:'#fff',elements:[]}]}};
+    return {type:'SHOW',title:strip(filename),sourceFormat:'pptx',diagnostics,content:{schema:7,type:'SHOW',title:strip(filename),_ooxmlPreservation:preservation,aspectRatio:aspect,activeSlide:slides[0]?.id||'slide-1',theme:{fontFamily:'Arial',accent:scheme.accent1||'#2563eb',secondary:scheme.accent2||'#64748b',background:scheme.bg1||'#ffffff',headingFont:'Arial'},masters:[{id:'master-default',name:'Default',background:'#ffffff',elements:[]}],sections:[],presenter:{showTimer:true,showNotes:true,showNextSlide:true,rehearsalSeconds:0,loop:false,blackoutOnEnd:false},slides:slides.length?slides:[{id:'slide-1',layout:'blank',background:'#fff',elements:[]}]}};
   }
 
   private async exportDocx(d:any){
