@@ -386,6 +386,12 @@ model Organization {
   workflowFunctionExecutions WorkflowFunctionExecution[]
   workflowDataTemplateVersions WorkflowDataTemplateVersion[]
 
+  backupPolicies       BackupPolicy[]
+  backupRuns           BackupRun[]
+  backupObjects        BackupObject[]
+  backupRestoreJobs    BackupRestoreJob[]
+  backupPurgeRequests  BackupPurgeRequest[]
+
   @@map("organizations")
 }
 
@@ -2722,4 +2728,188 @@ model WorkspaceLabelResource {
   @@unique([labelId, resourceType, resourceId])
   @@index([orgId, userId, resourceType, resourceId])
   @@map("workspace_label_resources")
+}
+
+
+// ── Backup & Recovery ──────────────────────────────────────────
+
+enum BackupScope {
+  ALL
+  TEAM_FOLDERS
+  MY_FOLDERS
+  SELECTED
+}
+
+enum BackupScheduleKind {
+  MANUAL
+  DAILY
+  WEEKLY
+  MONTHLY
+}
+
+enum BackupRunKind {
+  FULL
+  INCREMENTAL
+}
+
+enum BackupRunStatus {
+  PENDING
+  RUNNING
+  COMPLETED
+  FAILED
+  CANCELLED
+}
+
+enum BackupRestoreMode {
+  ORIGINAL
+  NEW_LOCATION
+  DOWNLOAD
+}
+
+enum BackupRestoreStatus {
+  PENDING
+  RUNNING
+  COMPLETED
+  FAILED
+  CANCELLED
+}
+
+enum BackupPurgeStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  EXECUTED
+  CANCELLED
+}
+
+model BackupPolicy {
+  id                 String             @id @default(uuid()) @db.Char(36)
+  orgId              String             @map("org_id") @db.Char(36)
+  name               String             @db.VarChar(120)
+  enabled            Boolean            @default(true)
+  scope              BackupScope        @default(ALL)
+  scopeIds           Json               @map("scope_ids")
+  scheduleKind       BackupScheduleKind @default(MANUAL) @map("schedule_kind")
+  scheduleHourUtc    Int?               @map("schedule_hour_utc")
+  scheduleDay        Int?               @map("schedule_day")
+  retentionDays      Int?               @map("retention_days")
+  excludeExtensions  Json               @map("exclude_extensions")
+  lastRunAt          DateTime?          @map("last_run_at")
+  nextRunAt          DateTime?          @map("next_run_at")
+  createdById        String?            @map("created_by_id") @db.Char(36)
+  createdAt          DateTime           @default(now()) @map("created_at")
+  updatedAt          DateTime           @updatedAt @map("updated_at")
+
+  organization Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  runs         BackupRun[]
+
+  @@index([orgId, enabled])
+  @@index([orgId, nextRunAt])
+  @@map("backup_policies")
+}
+
+model BackupRun {
+  id              String          @id @default(uuid()) @db.Char(36)
+  orgId           String          @map("org_id") @db.Char(36)
+  policyId        String?         @map("policy_id") @db.Char(36)
+  kind            BackupRunKind   @default(FULL)
+  status          BackupRunStatus @default(PENDING)
+  snapshotAt      DateTime        @default(now()) @map("snapshot_at")
+  startedAt       DateTime?       @map("started_at")
+  finishedAt      DateTime?       @map("finished_at")
+  filesTotal      Int             @default(0) @map("files_total")
+  filesCopied     Int             @default(0) @map("files_copied")
+  filesSkipped    Int             @default(0) @map("files_skipped")
+  bytesTotal      BigInt          @default(0) @map("bytes_total")
+  bytesCopied     BigInt          @default(0) @map("bytes_copied")
+  errorMessage    String?         @map("error_message") @db.Text
+  manifestSha256  String?         @map("manifest_sha256") @db.Char(64)
+  triggeredById   String?         @map("triggered_by_id") @db.Char(36)
+  locked          Boolean         @default(true)
+  immutableUntil  DateTime?       @map("immutable_until")
+  purgedAt        DateTime?       @map("purged_at")
+  createdAt       DateTime        @default(now()) @map("created_at")
+  updatedAt       DateTime        @updatedAt @map("updated_at")
+
+  organization  Organization         @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  policy        BackupPolicy?        @relation(fields: [policyId], references: [id], onDelete: SetNull)
+  objects       BackupObject[]
+  restoreJobs   BackupRestoreJob[]
+  purgeRequests BackupPurgeRequest[]
+
+  @@index([orgId, status, createdAt])
+  @@index([orgId, snapshotAt])
+  @@index([policyId])
+  @@map("backup_runs")
+}
+
+model BackupObject {
+  id                String   @id @default(uuid()) @db.Char(36)
+  orgId             String   @map("org_id") @db.Char(36)
+  runId             String   @map("run_id") @db.Char(36)
+  resourceType      String   @map("resource_type") @db.VarChar(20)
+  resourceId        String   @map("resource_id") @db.Char(36)
+  parentResourceId  String?  @map("parent_resource_id") @db.Char(36)
+  name              String   @db.VarChar(500)
+  path              String   @db.VarChar(2000)
+  mimeType          String?  @map("mime_type") @db.VarChar(200)
+  size              BigInt   @default(0)
+  sha256Hash        String?  @map("sha256_hash") @db.Char(64)
+  backupStorageKey  String   @map("backup_storage_key") @db.VarChar(1000)
+  sourceStorageKey  String?  @map("source_storage_key") @db.VarChar(1000)
+  createdAt         DateTime @default(now()) @map("created_at")
+
+  organization Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  run          BackupRun    @relation(fields: [runId], references: [id], onDelete: Cascade)
+
+  @@index([orgId, runId])
+  @@index([runId, resourceType, resourceId])
+  @@index([orgId, path])
+  @@map("backup_objects")
+}
+
+model BackupRestoreJob {
+  id              String               @id @default(uuid()) @db.Char(36)
+  orgId           String               @map("org_id") @db.Char(36)
+  runId           String               @map("run_id") @db.Char(36)
+  mode            BackupRestoreMode    @default(NEW_LOCATION)
+  status          BackupRestoreStatus  @default(PENDING)
+  objectIds       Json                 @map("object_ids")
+  targetFolderId  String?              @map("target_folder_id") @db.Char(36)
+  itemsTotal      Int                  @default(0) @map("items_total")
+  itemsDone       Int                  @default(0) @map("items_done")
+  errorMessage    String?              @map("error_message") @db.Text
+  requestedById   String               @map("requested_by_id") @db.Char(36)
+  startedAt       DateTime?            @map("started_at")
+  finishedAt      DateTime?            @map("finished_at")
+  createdAt       DateTime             @default(now()) @map("created_at")
+  updatedAt       DateTime             @updatedAt @map("updated_at")
+
+  organization Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  run          BackupRun    @relation(fields: [runId], references: [id], onDelete: Cascade)
+
+  @@index([orgId, status, createdAt])
+  @@index([runId])
+  @@map("backup_restore_jobs")
+}
+
+model BackupPurgeRequest {
+  id            String            @id @default(uuid()) @db.Char(36)
+  orgId         String            @map("org_id") @db.Char(36)
+  runId         String            @map("run_id") @db.Char(36)
+  status        BackupPurgeStatus @default(PENDING)
+  reason        String            @db.VarChar(1000)
+  requestedById String            @map("requested_by_id") @db.Char(36)
+  approvedById  String?           @map("approved_by_id") @db.Char(36)
+  decisionNote  String?           @map("decision_note") @db.VarChar(1000)
+  createdAt     DateTime          @default(now()) @map("created_at")
+  decidedAt     DateTime?         @map("decided_at")
+  executedAt    DateTime?         @map("executed_at")
+
+  organization Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  run          BackupRun    @relation(fields: [runId], references: [id], onDelete: Cascade)
+
+  @@index([orgId, status, createdAt])
+  @@index([runId])
+  @@map("backup_purge_requests")
 }
