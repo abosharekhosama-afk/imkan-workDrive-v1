@@ -1017,26 +1017,62 @@ export class OfficeConversionService {
       if(!w||!h||bit!==8||interlace!==0||colorType!==2)return null;
       const obj=alloc(); const raw=Buffer.concat(ids); imageObjects.push({obj,data:raw,width:w,height:h,colorSpace:'DeviceRGB',filter:'FlateDecode'}); return {obj,w,h};
     };
-    for(const slide of slides){
+        for(const slide of slides){
       let stream='1 1 1 rg 0 0 '+pageW+' '+pageH+' re f\n';
-      if(/^#[0-9a-f]{6}$/i.test(String(slide?.background||''))){const c=rgb(slide.background,[1,1,1]);stream=`${c[0]} ${c[1]} ${c[2]} rg 0 0 ${pageW} ${pageH} re f\n`;}
+      const bg=String(slide?.background||'');
+      if(/^#[0-9a-f]{6}$/i.test(bg)){const c=rgb(bg,[1,1,1]);stream=`${c[0]} ${c[1]} ${c[2]} rg 0 0 ${pageW} ${pageH} re f\n`;}
+      else if(bg.startsWith('linear-gradient')){
+        // Approximate gradient with top color extracted from CSS
+        const cols=[...bg.matchAll(/#([0-9a-fA-F]{6})/g)].map(m=>'#'+m[1]);
+        const c=rgb(cols[0]||'#ffffff',[1,1,1]);
+        stream=`${c[0]} ${c[1]} ${c[2]} rg 0 0 ${pageW} ${pageH} re f\n`;
+        if(cols[1]){const c2=rgb(cols[1],[1,1,1]); stream+=`${c2[0]} ${c2[1]} ${c2[2]} rg 0 0 ${pageW} ${(pageH/2).toFixed(2)} re f\n`;}
+      }
+      // Background image (master/slide)
+      if(slide?.backgroundImage){
+        const imBg=addImage(String(slide.backgroundImage));
+        if(imBg){stream+=`q ${pageW.toFixed(2)} 0 0 ${pageH.toFixed(2)} 0 0 cm /Im${imBg.obj} Do Q\n`;}
+      }
       for(const e of (Array.isArray(slide?.elements)?slide.elements:[])){
-        const x=num(e.x)/100*pageW,y=num(e.y)/100*pageH,w=num(e.width)/100*pageW,h=num(e.height)/100*pageH;
+        const x=num(e.x)/100*pageW,y=num(e.y)/100*pageH,w=Math.max(1,num(e.width)/100*pageW),h=Math.max(1,num(e.height)/100*pageH);
         if(e.type==='text'){
-          const lines=String(e.text??'').split(/\r?\n/).slice(0,100); const fs=Math.max(6,Math.min(96,num(e.fontSize)||18));
-          lines.forEach((t:string,i:number)=>{stream+=pdfText(t,x,y+i*(fs*1.25),fs,e.color||'#111827',!!e.bold,String(e.textDirection||'').toLowerCase()==='rtl');});
+          const fs=Math.max(6,Math.min(96,num(e.fontSize)||18));
+          const maxChars=Math.max(8,Math.floor(w/(fs*0.5)));
+          const rawLines=String(e.text??'').split(/\r?\n/).slice(0,80);
+          const lines:string[]=[];
+          for(const line of rawLines){
+            if(line.length<=maxChars){lines.push(line);continue;}
+            let rest=line;
+            while(rest.length>maxChars && lines.length<100){lines.push(rest.slice(0,maxChars));rest=rest.slice(maxChars);}
+            if(rest)lines.push(rest);
+          }
+          lines.slice(0,100).forEach((t:string,i:number)=>{stream+=pdfText(t,x,y+i*(fs*1.25),fs,e.color||'#111827',!!e.bold,String(e.textDirection||e.direction||'').toLowerCase()==='rtl');});
         } else if(e.type==='line'){stream+=line(x,y,x+w,y+h,e.borderColor||e.color||'#111827',num(e.borderWidth)||1);}
         else if(e.type==='image'){
           const im=addImage(String(e.src||''));
           if(im){stream+=`q ${w.toFixed(2)} 0 0 ${h.toFixed(2)} ${x.toFixed(2)} ${(pageH-y-h).toFixed(2)} cm /Im${im.obj} Do Q\n`;}
           else stream+=rect(x,y,w,h,'#e5e7eb','#9ca3af',1);
+        } else if(e.type==='table'){
+          stream+=rect(x,y,w,h,'#ffffff','#94a3b8',1);
+          const rows=Array.isArray(e.rows)?e.rows:[];
+          const rh=rows.length?h/rows.length:h;
+          rows.slice(0,30).forEach((row:any[],ri:number)=>{
+            const cols=Array.isArray(row)?row:[];
+            const cw=cols.length?w/cols.length:w;
+            cols.slice(0,12).forEach((cell:any,ci:number)=>{
+              const cx=x+ci*cw, cy=y+ri*rh;
+              if(e.tableHeader&&ri===0) stream+=rect(cx,cy,cw,rh,'#f1f5f9','#94a3b8',0.5);
+              stream+=pdfText(String(cell??'').slice(0,40),cx+2,cy+2,Math.max(6,Math.min(14,rh*0.45)),'#111827',!!(e.tableHeader&&ri===0));
+            });
+          });
         } else if(['video','audio'].includes(e.type)) stream+=rect(x,y,w,h,'#e5e7eb','#6b7280',1)+pdfText(e.type==='video'?'Video':'Audio',x+8,y+8,14,'#374151',true);
         else {
           const shape=String(e.shape||'roundRect');
-          if(shape==='line') stream+=line(x,y,x+w,y+h,e.borderColor||'#111827',num(e.borderWidth)||1); else stream+=rect(x,y,w,h,e.fill||'#ffffff',e.borderColor||'#111827',num(e.borderWidth)||1);
+          if(shape==='line') stream+=line(x,y,x+w,y+h,e.borderColor||'#111827',num(e.borderWidth)||1);
+          else stream+=rect(x,y,w,h,e.fill&&e.fill!=='transparent'?e.fill:'#ffffff',e.borderColor||(e.border?'#94a3b8':'#ffffff'),num(e.borderWidth)||(e.border?1:0));
         }
       }
-      const contentObj=alloc(); pages.push(`PAGE|${contentObj}|${stream}`);
+const contentObj=alloc(); pages.push(`PAGE|${contentObj}|${stream}`);
       objects.push(contentObj);
     }
     const font1=alloc(),font2=alloc(),pagesObj=1,catalogObj=2;

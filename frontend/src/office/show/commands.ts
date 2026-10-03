@@ -226,3 +226,33 @@ export function matchObjectSize(d: ShowDocument, ids: string[], mode: 'width' | 
   return n;
 }
 
+
+
+export function reorderElementAnimation(d: ShowDocument, id: string, index: number, direction: -1 | 1) {
+  const n = cloneShow(d);
+  const s = activeSlide(n);
+  const e = s?.elements.find((x) => x.id === id);
+  if (!e) return n;
+  const list = [...(e.animations || (e.animation ? [e.animation] : []))];
+  const j = index + direction;
+  if (j < 0 || j >= list.length) return n;
+  const tmp = list[index];
+  list[index] = list[j];
+  list[j] = tmp;
+  e.animations = list.map((a, i) => ({ ...a, order: i + 1 }));
+  e.animation = e.animations[0];
+  return n;
+}
+
+export function updateElementAnimation(d: ShowDocument, id: string, index: number, patch: Partial<NonNullable<ShowElement['animation']>>) {
+  const n = cloneShow(d);
+  const s = activeSlide(n);
+  const e = s?.elements.find((x) => x.id === id);
+  if (!e) return n;
+  const list = [...(e.animations || (e.animation ? [e.animation] : []))];
+  if (!list[index]) return n;
+  list[index] = { ...list[index], ...patch } as any;
+  e.animations = list;
+  e.animation = list[0];
+  return n;
+}
