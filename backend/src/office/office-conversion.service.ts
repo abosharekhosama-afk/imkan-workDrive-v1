@@ -692,7 +692,7 @@ export class OfficeConversionService {
     const slides=await Promise.all(slidePaths.slice(0,200).map(async(p,i)=>{
       const xml=await z.file(p)!.async('string');
       const elements:any[]=[]; let ei=0;
-      const slideBg=color(xml,'p:bgPr')||color(xml,'a:solidFill')||scheme.bg1||'#ffffff';
+      const bgPr=(/<p:bg[\s\S]*?<\/p:bg>/.exec(xml)||/<p:bgPr[\s\S]*?<\/p:bgPr>/.exec(xml)||[])[0]||''; const slideBg=resolveSolidColor(bgPr,scheme)||scheme.bg1||'#ffffff';
       const slideRelPath=p.replace(/([^/]+)$/,'_rels/$1.rels'); const slideRelXml=z.file(slideRelPath)?await z.file(slideRelPath)!.async('string'):'';
       const relMap=relationshipMap(slideRelXml);
       const layoutMap=await loadLayoutPlaceholders(p,slideRelXml);
@@ -716,17 +716,28 @@ export class OfficeConversionService {
         }
         const tx=/<(?:p|a):txBody>([\s\S]*?)<\/(?:p|a):txBody>/.exec(piece.xml)?.[1]||'';
         const text=drawingText(piece.xml);
+        const shapeFill=shapeFillColor(piece.xml,scheme);
+        const textColor=textRunColor(piece.xml,scheme)||scheme.tx1||'#111827';
+        const prst=/<a:prstGeom[^>]*prst="([^"]+)"/.exec(piece.xml)?.[1]||'rect';
+        const shapeKind=/ellipse|oval|circle/i.test(prst)?'circle':/roundRect/i.test(prst)?'roundRect':'rect';
+        // Skip empty placeholders with no visible fill (they only reserve space in PowerPoint)
+        if(!text.trim() && !shapeFill && /<p:ph\b/.test(piece.xml)) continue;
         if(text.trim()){
           const runs=textRuns(tx); const first=runs.find(r=>r.text)||runs[0]||{} as any; const algn=/<a:pPr[^>]*algn="(l|ctr|r|just)"/.exec(tx)?.[1];
           const phType=/<p:ph[^>]*type="([^"]+)"/.exec(piece.xml)?.[1]||'';
           const defaultSize=phType==='ctrTitle'||phType==='title'?40:phType==='subTitle'?22:phType==='body'?18:20;
-          const textColor=first.color||color(tx)||color(piece.xml)||scheme.tx1||'#111827';
-          elements.push({id,type:'text',...g,text,fontSize:first.fontSize||defaultSize,fontFamily:first.fontFamily||'Arial',color:textColor,bold:Boolean(first.bold)||phType==='ctrTitle'||phType==='title',italic:Boolean(first.italic),underline:Boolean(first.underline),align:algn==='ctr'?'center':algn==='r'?'end':(phType==='ctrTitle'||phType==='title'?'center':'start'),textDirection:/(?:rtl|rightToLeft)\s*=\s*"(?:1|true)"/i.test(tx)?'rtl':'ltr'});
+          // If the shape has a real fill, emit a background shape under the text (PowerPoint text-in-shape)
+          if(shapeFill){
+            elements.push({id:`${id}-bg`,type:'shape',...g,shape:shapeKind,fill:shapeFill,border:false});
+          }
+          elements.push({id,type:'text',...g,text,fontSize:first.fontSize||defaultSize,fontFamily:first.fontFamily||'Arial',color:first.color||textColor,bold:Boolean(first.bold)||phType==='ctrTitle'||phType==='title',italic:Boolean(first.italic),underline:Boolean(first.underline),align:algn==='ctr'?'center':algn==='r'?'end':(phType==='ctrTitle'||phType==='title'?'center':'start'),textDirection:/(?:rtl|rightToLeft)\s*=\s*"(?:1|true)"/i.test(tx)?'rtl':'ltr'});
           continue;
         }
-        const prst=/<a:prstGeom[^>]*prst="([^"]+)"/.exec(piece.xml)?.[1]||'rect';
-        const fill=color(piece.xml)||'#e2e8f0'; const line=color(piece.xml,'a:ln')||undefined;
-        elements.push({id,type:'shape',...g,shape:/ellipse|oval|circle/i.test(prst)?'circle':'rect',fill,border:Boolean(line),borderColor:line,borderWidth:line?1:undefined});
+        // Pure decorative shape — only when spPr actually defines a fill
+        if(shapeFill){
+          elements.push({id,type:'shape',...g,shape:shapeKind,fill:shapeFill,border:false});
+        }
+
       }
       // Chart relationship + cached values. The imported chart remains native Show chart data,
       // allowing it to be edited and later exported again without flattening to an image.

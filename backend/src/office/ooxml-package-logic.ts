@@ -454,14 +454,44 @@ export function parseThemeSchemeColors(themeXml: string): Record<string, string>
 }
 
 export function resolveSolidColor(xml: string, scheme?: Record<string, string>, tag = 'a:solidFill'): string | undefined {
-  const block = new RegExp(`<${tag}>[\\s\\S]*?<\\/${tag}>`).exec(xml)?.[0] || xml;
+  const block = new RegExp(`<${tag}>[\\s\\S]*?<\\/${tag}>`).exec(xml)?.[0] || '';
+  if (!block) return undefined;
   const srgb = /<a:srgbClr\b[^>]*val="([0-9A-Fa-f]{6})"/.exec(block)?.[1];
   if (srgb) return `#${srgb}`;
   const schemeVal = /<a:schemeClr\b[^>]*val="([^"]+)"/.exec(block)?.[1];
-  if (schemeVal && scheme) {
-    const key = schemeVal;
-    if (scheme[key]) return scheme[key];
+  if (schemeVal && scheme?.[schemeVal]) return scheme[schemeVal];
+  return undefined;
+}
+
+/** Shape fill must come from spPr only — never from text run colors in txBody. */
+export function shapeFillColor(shapeXml: string, scheme?: Record<string, string>): string | undefined {
+  const spPr = /<p:spPr\b[^>]*>([\s\S]*?)<\/p:spPr>/.exec(shapeXml)?.[1] || '';
+  if (!spPr.trim()) return undefined;
+  if (/<a:noFill\b/.test(spPr) && !/<a:solidFill>/.test(spPr)) return undefined;
+  const solid = resolveSolidColor(spPr, scheme, 'a:solidFill');
+  if (solid) return solid;
+  const gradSrgb = /<a:gradFill>[\s\S]*?<a:srgbClr\b[^>]*val="([0-9A-Fa-f]{6})"/.exec(spPr)?.[1];
+  if (gradSrgb) return `#${gradSrgb}`;
+  const gradScheme = /<a:gradFill>[\s\S]*?<a:schemeClr\b[^>]*val="([^"]+)"/.exec(spPr)?.[1];
+  if (gradScheme && scheme?.[gradScheme]) return scheme[gradScheme];
+  return undefined;
+}
+
+/** Text color from runs inside txBody. */
+export function textRunColor(shapeXml: string, scheme?: Record<string, string>): string | undefined {
+  const tx = /<(?:p|a):txBody>([\s\S]*?)<\/(?:p|a):txBody>/.exec(shapeXml)?.[1] || '';
+  if (!tx) return undefined;
+  for (const m of tx.matchAll(/<a:rPr\b[^>]*>[\s\S]*?<\/a:rPr>|<a:rPr\b[^>]*\/>/g)) {
+    const chunk = m[0];
+    const srgb = /srgbClr[^>]*val="([0-9A-Fa-f]{6})"/.exec(chunk)?.[1];
+    if (srgb) return `#${srgb}`;
+    const sc = /schemeClr[^>]*val="([^"]+)"/.exec(chunk)?.[1];
+    if (sc && scheme?.[sc]) return scheme[sc];
   }
   return undefined;
+}
+
+export function parseMasterPlaceholders(masterXml: string): Map<PlaceholderKey, EmuBox> {
+  return parseLayoutPlaceholders(masterXml);
 }
 

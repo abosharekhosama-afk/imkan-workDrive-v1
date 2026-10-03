@@ -193,7 +193,6 @@ function normalizeWriterPage(value: unknown) {
     orientation: p.orientation === 'landscape' ? 'landscape' : 'portrait',
     header: typeof p.header === 'string' ? p.header.slice(0,500) : '', footer: typeof p.footer === 'string' ? p.footer.slice(0,500) : '',
     showPageNumbers: p.showPageNumbers !== false,
-    background: typeof p.background === 'string' && /^#[0-9a-f]{6}$/i.test(p.background) ? p.background : '#ffffff',
   };
 }
 function normalizeWriterRun(value: unknown) {
@@ -221,7 +220,7 @@ function normalizeWriterBlock(value: unknown) {
   const b = value && typeof value === 'object' ? value as Record<string, unknown> : {};
   const type = ['paragraph','heading1','heading2','heading3','list-item','table','image','page-break'].includes(String(b.type)) ? String(b.type) : 'paragraph';
   const runs = Array.isArray(b.runs) ? b.runs.slice(0,500).map(normalizeWriterRun) : [{text:''}];
-  const base: any = { id: typeof b.id === 'string' ? b.id.slice(0,100) : crypto.randomUUID(), type, align: ['start','center','end','justify'].includes(String(b.align)) ? String(b.align) : 'start', ordered: Boolean(b.ordered), runs, lineSpacing: clampNumber(b.lineSpacing,1,3,1.5), spaceBefore: clampNumber(b.spaceBefore,0,100,0), spaceAfter: clampNumber(b.spaceAfter,0,100,8), pageBreakBefore: Boolean(b.pageBreakBefore), columnBreak: Boolean(b.columnBreak), indentLeftMm: clampNumber(b.indentLeftMm,0,100,0), indentRightMm: clampNumber(b.indentRightMm,0,100,0), firstLineIndentMm: clampNumber(b.firstLineIndentMm,-30,50,0), keepWithNext: Boolean(b.keepWithNext) };
+  const base: any = { id: typeof b.id === 'string' ? b.id.slice(0,100) : crypto.randomUUID(), type, align: ['start','center','end','justify'].includes(String(b.align)) ? String(b.align) : 'start', ordered: Boolean(b.ordered), runs, lineSpacing: clampNumber(b.lineSpacing,1,3,1.5), spaceBefore: clampNumber(b.spaceBefore,0,100,0), spaceAfter: clampNumber(b.spaceAfter,0,100,8), pageBreakBefore: Boolean(b.pageBreakBefore), indentLeftMm: clampNumber(b.indentLeftMm,0,100,0), indentRightMm: clampNumber(b.indentRightMm,0,100,0), firstLineIndentMm: clampNumber(b.firstLineIndentMm,-30,50,0), keepWithNext: Boolean(b.keepWithNext) };
   if (type === 'image' && b.image && typeof b.image === 'object') { const i=b.image as Record<string,unknown>; base.image={src:typeof i.src==='string'?i.src.slice(0,2000000):'',alt:typeof i.alt==='string'?i.alt.slice(0,255):'',width:clampNumber(i.width,40,760,560),height:i.height?clampNumber(i.height,40,1100,315):undefined}; }
   if (type === 'table' && b.table && typeof b.table === 'object') { const t=b.table as Record<string,unknown>; base.table={bordered:t.bordered!==false,rows:Array.isArray(t.rows)?t.rows.slice(0,50).map((row:any)=>Array.isArray(row)?row.slice(0,20).map((c:any)=>({id:typeof c?.id==='string'?c.id.slice(0,100):crypto.randomUUID(),runs:Array.isArray(c?.runs)?c.runs.slice(0,500).map(normalizeWriterRun):[{text:''}],align:['start','center','end'].includes(String(c?.align))?String(c.align):'start'})):[]):[]}; }
   return base;
@@ -513,6 +512,127 @@ export class OfficeService implements OfficeEngine {
     return { ...policy, createdAt: policy.createdAt.toISOString(), updatedAt: policy.updatedAt.toISOString() };
   }
 
+
+  /** Resolve an Office-compatible extension from file metadata + optional bytes. */
+  private resolveOfficeExtension(file: { name?: string | null; extension?: string | null; mimeType?: string | null }, bytes?: Buffer): string {
+    const fromField = String(file.extension ?? '').replace(/^\./, '').toLowerCase();
+    if (fromField) return fromField;
+    const name = String(file.name ?? '');
+    const fromName = name.includes('.') ? name.split('.').pop()!.toLowerCase() : '';
+    if (fromName && fromName.length <= 8) return fromName;
+    const mime = String(file.mimeType ?? '').toLowerCase();
+    if (mime.includes('presentationml') || mime.includes('powerpoint') || mime.includes('opendocument.presentation')) return mime.includes('opendocument') ? 'odp' : 'pptx';
+    if (mime.includes('wordprocessingml') || mime.includes('msword') || mime.includes('opendocument.text')) return mime.includes('opendocument') ? 'odt' : mime.includes('msword') && !mime.includes('openxml') ? 'doc' : 'docx';
+    if (mime.includes('spreadsheetml') || mime.includes('excel') || mime.includes('opendocument.spreadsheet') || mime === 'text/csv') {
+      if (mime === 'text/csv') return 'csv';
+      return mime.includes('opendocument') ? 'ods' : mime.includes('excel') && !mime.includes('openxml') ? 'xls' : 'xlsx';
+    }
+    if (mime.includes('vnd.imkan')) return 'imkan';
+    // Sniff OOXML zip packages when metadata is missing/wrong
+    if (bytes && bytes.length > 4 && bytes[0] === 0x50 && bytes[1] === 0x4b) {
+      const head = bytes.subarray(0, Math.min(bytes.length, 8192)).toString('utf8');
+      if (head.includes('ppt/presentation.xml') || head.includes('presentationml')) return 'pptx';
+      if (head.includes('word/document.xml') || head.includes('wordprocessingml')) return 'docx';
+      if (head.includes('xl/workbook.xml') || head.includes('spreadsheetml')) return 'xlsx';
+    }
+    return '';
+  }
+
+  private isBootstrapableOfficeExtension(extension: string): boolean {
+    return ['docx', 'xlsx', 'pptx', 'doc', 'xls', 'ppt', 'odt', 'ods', 'odp', 'rtf', 'txt', 'csv', 'imkan'].includes(extension);
+  }
+
+  private importFileNameFor(file: { name?: string | null }, extension: string): string {
+    const base = String(file.name || 'document').replace(/\.[A-Za-z0-9]{1,8}$/, '');
+    const ext = extension.replace(/^\./, '').toLowerCase();
+    // conversion.import only understands OOXML today — map legacy names to nearest supported package
+    const mapped = ext === 'ppt' ? 'pptx' : ext === 'doc' ? 'docx' : ext === 'xls' ? 'xlsx' : ext;
+    return `${base}.${mapped}`;
+  }
+
+  private async bootstrapOfficeDocumentFromStorage(user: AccessTokenPayload, file: any, fileId: string, label: string) {
+    const version = await this.prisma.fileVersion.findFirst({
+      where: { fileId, orgId: user.org_id, status: 'ACTIVE' },
+      orderBy: { versionNumber: 'desc' },
+      include: { storageObject: true },
+    });
+    const storageKey = version?.storageObject?.storageKey ?? file.storageKey;
+    if (!storageKey) {
+      throw new ConflictException('No active file bytes are available to open this document in IMKAN Office');
+    }
+    let bytes: Buffer;
+    try {
+      bytes = await this.storage.readStoredObject(storageKey);
+    } catch {
+      throw new ConflictException('Stored file content could not be read for IMKAN Office');
+    }
+    if (!bytes?.length) {
+      throw new ConflictException('This file is empty and cannot be opened in IMKAN Office');
+    }
+    let extension = this.resolveOfficeExtension(file, bytes);
+    await this.assertExternalOfficeFormatAllowed(user, extension);
+    if (!this.isBootstrapableOfficeExtension(extension)) {
+      throw new ConflictException(`This file format (${extension || 'unknown'}) cannot be opened in IMKAN Office yet. Export or convert to DOCX, XLSX, or PPTX.`);
+    }
+    if (extension === 'imkan') {
+      // Native JSON payload stored as bytes
+      try {
+        const content = this.normalizeOfficeContent(JSON.parse(bytes.toString('utf8')));
+        const type = this.normalizeType((content as any)?.type);
+        const document = await this.prisma.officeDocument.create({
+          data: { orgId: user.org_id, fileId, type: type as OfficeDocumentType, nativeFormat: TYPE_TO_FORMAT[type], content: content as Prisma.InputJsonValue },
+        });
+        await this.prisma.officeDocumentVersion.create({
+          data: { orgId: user.org_id, documentId: document.id, fileId, versionNumber: 1, revision: document.revision, type: document.type, content: content as Prisma.InputJsonValue, contentHash: computeOfficeContentHash(content), label, createdById: user.sub },
+        });
+        return document;
+      } catch {
+        throw new ConflictException('Native IMKAN Office content is corrupted and cannot be opened');
+      }
+    }
+    // Only OOXML packages are importable today
+    if (!['docx', 'xlsx', 'pptx'].includes(extension === 'ppt' ? 'pptx' : extension === 'doc' ? 'docx' : extension === 'xls' ? 'xlsx' : extension)) {
+      throw new ConflictException(`Legacy format .${extension} is recognized but binary conversion is not available yet. Please save as ${extension === 'ppt' ? 'PPTX' : extension === 'doc' ? 'DOCX' : extension === 'xls' ? 'XLSX' : 'OOXML'} and reopen.`);
+    }
+    let imported: OfficeImportResult;
+    try {
+      imported = await this.conversion.import(bytes, this.importFileNameFor(file, extension));
+    } catch (error: any) {
+      const message = error?.message || 'Import failed';
+      throw new ConflictException(`Could not convert this file for IMKAN Office: ${message}`);
+    }
+    const content = this.normalizeOfficeContent(imported.content);
+    const document = await this.prisma.officeDocument.create({
+      data: {
+        orgId: user.org_id,
+        fileId,
+        type: imported.type as OfficeDocumentType,
+        nativeFormat: TYPE_TO_FORMAT[imported.type],
+        content: content as Prisma.InputJsonValue,
+      },
+    });
+    await this.prisma.officeDocumentVersion.create({
+      data: {
+        orgId: user.org_id,
+        documentId: document.id,
+        fileId,
+        versionNumber: 1,
+        revision: document.revision,
+        type: document.type,
+        content: content as Prisma.InputJsonValue,
+        contentHash: computeOfficeContentHash(content),
+        label,
+        createdById: user.sub,
+      },
+    });
+    await this.auditOfficeEvent(user, 'OFFICE_DOCUMENT_INITIALIZED_FROM_FILE', fileId, {
+      documentId: document.id,
+      sourceFileVersionId: version?.id,
+      sourceFormat: extension,
+    });
+    return document;
+  }
+
   private async getAuthorizedFile(user: AccessTokenPayload, fileId: string, write = false) {
     const file = await this.prisma.file.findFirst({
       where: { id: fileId, orgId: user.org_id, deletedAt: null, status: FileStatus.ACTIVE },
@@ -745,56 +865,16 @@ export class OfficeService implements OfficeEngine {
     const file = await this.getAuthorizedFile(user, fileId);
     let document = await this.prisma.officeDocument.findUnique({ where: { fileId } });
 
-    // Files created/imported before Office initialization (and template working
-    // copies whose initialization was interrupted) must still be openable from
-    // the normal Files/Actions -> Edit Content flow. Bootstrap the native model
-    // from the current Office-compatible WorkDrive bytes instead of returning a
-    // generic "could not open" error.
+    // Bootstrap native Office state from WorkDrive bytes when the file was never
+    // opened in IMKAN Office (or template init was interrupted). Prefer a clear
+    // ConflictException over a generic 404 so the UI can explain the failure.
     if (!document) {
-      const extension = (file.extension ?? '').replace(/^\./, '').toLowerCase();
-      await this.assertExternalOfficeFormatAllowed(user, extension);
-      if (!['docx', 'xlsx', 'pptx'].includes(extension)) {
-        throw new NotFoundException('This file is not an IMKAN Office document yet');
-      }
-      const version = await this.prisma.fileVersion.findFirst({
-        where: { fileId, orgId: user.org_id, status: 'ACTIVE' },
-        orderBy: { versionNumber: 'desc' },
-        include: { storageObject: true },
-      });
-      if (!version?.storageObject?.storageKey) {
-        throw new NotFoundException('No active Office file version is available');
-      }
-      const bytes = await this.storage.readStoredObject(version.storageObject.storageKey);
-      const imported = await this.conversion.import(bytes, file.name);
-      const content = this.normalizeOfficeContent(imported.content);
-      document = await this.prisma.officeDocument.create({
-        data: {
-          orgId: user.org_id,
-          fileId,
-          type: imported.type as OfficeDocumentType,
-          nativeFormat: TYPE_TO_FORMAT[imported.type],
-          content: content as Prisma.InputJsonValue,
-        },
-      });
-      await this.prisma.officeDocumentVersion.create({
-        data: {
-          orgId: user.org_id,
-          documentId: document.id,
-          fileId,
-          versionNumber: 1,
-          revision: document.revision,
-          type: document.type,
-          content: content as Prisma.InputJsonValue,
-          contentHash: computeOfficeContentHash(content),
-          label: `Initialized from ${extension.toUpperCase()}`,
-          createdById: user.sub,
-        },
-      });
-      await this.auditOfficeEvent(user, 'OFFICE_DOCUMENT_INITIALIZED_FROM_FILE', fileId, {
-        documentId: document.id,
-        sourceFileVersionId: version.id,
-        sourceFormat: extension,
-      });
+      document = await this.bootstrapOfficeDocumentFromStorage(
+        user,
+        file,
+        fileId,
+        `Initialized from ${this.resolveOfficeExtension(file).toUpperCase() || 'FILE'}`,
+      );
     }
     const policy = await this.getOfficePolicy(user, fileId);
     await this.auditOfficeEvent(user, 'OFFICE_OPENED', fileId, { documentId: document.id, type: document.type, revision: document.revision });
@@ -971,22 +1051,27 @@ export class OfficeService implements OfficeEngine {
     try {
       document = await this.open(user, fileId);
     } catch (error) {
-      // Template working copies may reach the session endpoint immediately
-      // after creation. Retry once through the same authoritative file bytes;
-      // this closes the race where the initial template initialization was
-      // interrupted before OfficeDocument was persisted.
-      const file = await this.getAuthorizedFile(user, fileId, true);
-      const extension = (file.extension ?? '').replace(/^\./, '').toLowerCase();
-      if (!['docx', 'xlsx', 'pptx'].includes(extension)) throw error;
-      const version = await this.prisma.fileVersion.findFirst({ where: { fileId, orgId: user.org_id, status: 'ACTIVE' }, orderBy: { versionNumber: 'desc' }, include: { storageObject: true } });
-      if (!version?.storageObject?.storageKey) throw error;
-      const bytes = await this.storage.readStoredObject(version.storageObject.storageKey);
-      const imported = await this.conversion.import(bytes, file.name);
-      const content = this.normalizeOfficeContent(imported.content);
-      const existing = await this.prisma.officeDocument.findUnique({ where: { fileId } });
-      const persisted = existing ?? await this.prisma.officeDocument.create({ data: { orgId: user.org_id, fileId, type: imported.type as OfficeDocumentType, nativeFormat: TYPE_TO_FORMAT[imported.type], content: content as Prisma.InputJsonValue } });
-      if (!existing) await this.prisma.officeDocumentVersion.create({ data: { orgId: user.org_id, documentId: persisted.id, fileId, versionNumber: 1, revision: persisted.revision, type: persisted.type, content: content as Prisma.InputJsonValue, contentHash: computeOfficeContentHash(content), label: 'Recovered during Office session open', createdById: user.sub } });
-      document = this.toState(persisted);
+      // Race: template/working-copy may hit session before OfficeDocument exists.
+      // Retry bootstrap from storage once, then rethrow the original error.
+      try {
+        const file = await this.getAuthorizedFile(user, fileId, true);
+        const existing = await this.prisma.officeDocument.findUnique({ where: { fileId } });
+        if (existing) {
+          document = this.toState(existing);
+        } else {
+          const persisted = await this.bootstrapOfficeDocumentFromStorage(
+            user,
+            file,
+            fileId,
+            'Recovered during Office session open',
+          );
+          document = this.toState(persisted);
+        }
+      } catch (recoveryError) {
+        // Prefer the recovery message when it is more specific than a bare 404.
+        if (recoveryError instanceof ConflictException || recoveryError instanceof ForbiddenException) throw recoveryError;
+        throw error;
+      }
     }
     const session = await this.prisma.officeSession.create({
       data: { orgId: user.org_id, fileId, documentId: document.id, userId: user.sub, type: document.type as OfficeDocumentType },
