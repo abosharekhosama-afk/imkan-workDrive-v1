@@ -9,16 +9,31 @@ import { FoldersModule } from './folders/folders.module';
 import { PermissionsModule } from './permissions/permissions.module';
 import { PrismaModule } from './prisma/prisma.module';
 import { SearchModule } from './search/search.module';
+import { MetadataModule } from './metadata/metadata.module';
 import { SharesModule } from './shares/shares.module';
 import { StorageModule } from './storage/storage.module';
 import { TeamFoldersModule } from './team-folders/team-folders.module';
 import { FavoritesModule } from './favorites/favorites.module';
+import { FollowsModule } from './follows/follows.module';
 import { RecentModule } from './recent/recent.module';
 import { AdminModule } from './admin/admin.module';
 import { QuotaModule } from './quota/quota.module';
 import { CommentsModule } from './comments/comments.module';
 import { NotificationsModule } from './notifications/notifications.module';
 import { OrganizationModule } from './organization/organization.module';
+import { FolderPermissionsModule } from './folder-permissions/folder-permissions.module';
+import { WorkflowsModule } from './workflows/workflows.module';
+import { CloudImportModule } from './cloud-import/cloud-import.module';
+import { ExternalStorageModule } from './external-storage.module';
+import { GroupsModule } from './groups/groups.module';
+import { ConnectionsModule } from './connections/connections.module';
+import { TemplatesModule } from './templates/templates.module';
+import { OfficeModule } from './office/office.module';
+import { OfficeEmailModule } from './office-email/office-email.module';
+import { AiModule } from './ai/ai.module';
+import { CollectionsModule } from './collections/collections.module';
+import { WorkspaceLabelsModule } from './workspace-labels/workspace-labels.module';
+import { BackupModule } from './backup/backup.module';
 
 @Module({
   imports: [
@@ -30,15 +45,30 @@ import { OrganizationModule } from './organization/organization.module';
     FilesModule,
     SharesModule,
     SearchModule,
+    MetadataModule,
     AuditModule,
     TeamFoldersModule,
     FavoritesModule,
+    FollowsModule,
     RecentModule,
     NotificationsModule,
     CommentsModule,
     QuotaModule,
     AdminModule,
     OrganizationModule,
+    FolderPermissionsModule,
+    WorkflowsModule,
+    CloudImportModule,
+    ExternalStorageModule,
+    GroupsModule,
+    ConnectionsModule,
+    TemplatesModule,
+    OfficeModule,
+    OfficeEmailModule,
+    AiModule,
+    CollectionsModule,
+    WorkspaceLabelsModule,
+    BackupModule,
   ],
   controllers: [AppController],
   providers: [AppService],
