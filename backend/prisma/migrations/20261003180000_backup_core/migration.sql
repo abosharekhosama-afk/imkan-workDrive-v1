@@ -68,7 +68,6 @@ CREATE TABLE `backup_objects` (
   PRIMARY KEY (`id`),
   INDEX `backup_objects_org_id_run_id_idx` (`org_id`, `run_id`),
   INDEX `backup_objects_run_id_resource_type_resource_id_idx` (`run_id`, `resource_type`, `resource_id`),
-  INDEX `backup_objects_org_id_path_idx` (`org_id`, `path`),
   CONSTRAINT `backup_objects_org_id_fkey` FOREIGN KEY (`org_id`) REFERENCES `organizations`(`id`) ON DELETE CASCADE ON UPDATE CASCADE,
   CONSTRAINT `backup_objects_run_id_fkey` FOREIGN KEY (`run_id`) REFERENCES `backup_runs`(`id`) ON DELETE CASCADE ON UPDATE CASCADE
 ) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
