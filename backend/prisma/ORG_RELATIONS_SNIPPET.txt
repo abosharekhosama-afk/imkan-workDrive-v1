@@ -1,0 +1,7 @@
+Add inside model Organization before @@map:
+
+  backupPolicies      BackupPolicy[]
+  backupRuns          BackupRun[]
+  backupObjects       BackupObject[]
+  backupRestoreJobs   BackupRestoreJob[]
+  backupPurgeRequests BackupPurgeRequest[]
