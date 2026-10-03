@@ -78,8 +78,6 @@ export class BackupController {
     return this.service.processDuePolicies(50);
   }
 
-  // ── Restore (P3) ──────────────────────────────────────────
-
   @Get('restore-jobs')
   listRestoreJobs(@CurrentUser() user: AccessTokenPayload, @Query('take') take?: string) {
     return this.service.listRestoreJobs(user, take ? Number(take) : 20);
@@ -90,10 +88,6 @@ export class BackupController {
     return this.service.getRestoreJob(user, id);
   }
 
-  /**
-   * Start restore from a completed backup run.
-   * body: { runId, mode?: 'NEW_LOCATION'|'ORIGINAL'|'DOWNLOAD', objectIds?: string[], targetFolderId?: string }
-   */
   @Post('restore')
   startRestore(
     @CurrentUser() user: AccessTokenPayload,
@@ -106,5 +100,41 @@ export class BackupController {
     },
   ) {
     return this.service.startRestore(user, body);
+  }
+
+  @Get('purge-requests')
+  listPurgeRequests(@CurrentUser() user: AccessTokenPayload, @Query('take') take?: string) {
+    return this.service.listPurgeRequests(user, take ? Number(take) : 30);
+  }
+
+  @Post('purge-requests')
+  requestPurge(
+    @CurrentUser() user: AccessTokenPayload,
+    @Body() body: { runId: string; reason: string },
+  ) {
+    return this.service.requestPurge(user, body.runId, body.reason);
+  }
+
+  @Post('purge-requests/:id/approve')
+  approvePurge(
+    @CurrentUser() user: AccessTokenPayload,
+    @Param('id') id: string,
+    @Body() body?: { decisionNote?: string },
+  ) {
+    return this.service.approvePurge(user, id, body?.decisionNote);
+  }
+
+  @Post('purge-requests/:id/reject')
+  rejectPurge(
+    @CurrentUser() user: AccessTokenPayload,
+    @Param('id') id: string,
+    @Body() body?: { decisionNote?: string },
+  ) {
+    return this.service.rejectPurge(user, id, body?.decisionNote);
+  }
+
+  @Post('purge-requests/:id/execute')
+  executePurge(@CurrentUser() user: AccessTokenPayload, @Param('id') id: string) {
+    return this.service.executePurge(user, id);
   }
 }

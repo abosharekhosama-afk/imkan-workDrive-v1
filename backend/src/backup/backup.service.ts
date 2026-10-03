@@ -6,13 +6,20 @@ import {
   Logger,
   NotFoundException,
 } from '@nestjs/common';
-import { BackupRestoreMode, BackupRestoreStatus, BackupRunKind, BackupRunStatus, BackupScope, BackupScheduleKind, FileStatus, Prisma, UploadStatus, VersionStatus } from '@prisma/client';
+import { BackupPurgeStatus, BackupRestoreMode, BackupRestoreStatus, BackupRunKind, BackupRunStatus, BackupScope, BackupScheduleKind, FileStatus, Prisma, UploadStatus, VersionStatus } from '@prisma/client';
 import { createHash, randomUUID } from 'node:crypto';
 import type { AccessTokenPayload } from '../auth/jwt.types';
 import { PrismaService } from '../prisma/prisma.service';
 import { STORAGE_SERVICE, type StorageService } from '../storage/storage.types';
 import { BackupCryptoService } from './backup-crypto.service';
 import { computeNextRunAt, shouldIncludeInIncremental } from './backup-schedule-logic';
+import {
+  canApprovePurge,
+  canAutoPurge,
+  DOWNLOAD_MEMORY_LIMIT_BYTES,
+  DOWNLOAD_STREAM_LIMIT_BYTES,
+  isRunImmutable,
+} from './backup-immutability-logic';
 
 @Injectable()
 export class BackupService {
@@ -354,7 +361,11 @@ export class BackupService {
     return { started, skipped };
   }
 
-  /** Delete completed runs older than each policy's retentionDays (never deletes RUNNING). */
+  /**
+   * Retention pass (P4): never hard-deletes immutable/locked runs.
+   * Only soft-marks eligible unlocked runs as purged after dual-control unlock
+   * or after immutableUntil has passed AND locked was cleared.
+   */
   async enforceRetention(orgBatch = 50) {
     const policies = await this.prisma.backupPolicy.findMany({
       where: { retentionDays: { not: null } },
@@ -363,22 +374,46 @@ export class BackupService {
     });
     for (const p of policies) {
       if (p.retentionDays == null) continue;
-      const cutoff = new Date(Date.now() - p.retentionDays * 86_400_000);
-      // Keep at least the latest completed run per org
       const latest = await this.prisma.backupRun.findFirst({
-        where: { orgId: p.orgId, status: BackupRunStatus.COMPLETED },
+        where: { orgId: p.orgId, status: BackupRunStatus.COMPLETED, purgedAt: null },
         orderBy: { snapshotAt: 'desc' },
         select: { id: true },
       });
-      await this.prisma.backupRun.deleteMany({
+      const candidates = await this.prisma.backupRun.findMany({
         where: {
           orgId: p.orgId,
           policyId: p.id,
           status: BackupRunStatus.COMPLETED,
-          snapshotAt: { lt: cutoff },
+          purgedAt: null,
           ...(latest ? { id: { not: latest.id } } : {}),
         },
+        select: {
+          id: true,
+          locked: true,
+          immutableUntil: true,
+          snapshotAt: true,
+          purgedAt: true,
+        },
+        take: 100,
       });
+      for (const run of candidates) {
+        if (
+          !canAutoPurge({
+            locked: run.locked,
+            immutableUntil: run.immutableUntil,
+            purgedAt: run.purgedAt,
+            snapshotAt: run.snapshotAt,
+            retentionDays: p.retentionDays,
+          })
+        ) {
+          continue;
+        }
+        // Soft purge metadata only (objects GC is separate, dual-control for hard wipe)
+        await this.prisma.backupRun.update({
+          where: { id: run.id },
+          data: { purgedAt: new Date(), locked: false },
+        });
+      }
     }
   }
 
@@ -567,6 +602,11 @@ export class BackupService {
       }
 
       const manifestSha256 = this.crypto.manifestDigest(manifestRows);
+      const retentionDays = run.policy?.retentionDays ?? null;
+      const immutableUntil =
+        retentionDays == null
+          ? null
+          : new Date(Date.now() + retentionDays * 86_400_000);
       await this.prisma.backupRun.update({
         where: { id: runId },
         data: {
@@ -578,6 +618,8 @@ export class BackupService {
           bytesTotal,
           bytesCopied,
           manifestSha256,
+          locked: true,
+          immutableUntil,
         },
       });
 
@@ -981,27 +1023,42 @@ export class BackupService {
     }>,
     user: AccessTokenPayload,
   ) {
-    // Dynamic import so unit tests without jszip still load the module
-    const JSZip = (await import('jszip')).default;
-    const zip = new JSZip();
     let total = 0;
-    const maxBytes = 500 * 1024 * 1024; // 500 MB safety cap for in-memory zip
+    for (const obj of objects) total += Number(obj.size || 0);
+    if (total > DOWNLOAD_STREAM_LIMIT_BYTES) {
+      throw new BadRequestException('Selected archive exceeds 5 GB hard limit');
+    }
 
-    for (const obj of objects) {
-      total += Number(obj.size || 0);
-      if (total > maxBytes) {
-        throw new BadRequestException('Selected archive exceeds 500 MB limit limit for download mode');
+    const useMemory = total <= DOWNLOAD_MEMORY_LIMIT_BYTES && objects.length <= 2000;
+    let archive: Buffer;
+    let mode: 'memory' | 'stream' = 'memory';
+
+    if (useMemory) {
+      const JSZip = (await import('jszip')).default;
+      const zip = new JSZip();
+      for (const obj of objects) {
+        try {
+          const bytes = await this.storage.readStoredObject(obj.backupStorageKey);
+          const entry = (obj.path || obj.name).replace(/^\/+/, '') || obj.name;
+          zip.file(entry, bytes);
+        } catch (e) {
+          this.logger.warn(`skip missing backup bytes for ${obj.id}: ${e instanceof Error ? e.message : e}`);
+        }
       }
+      archive = await zip.generateAsync({ type: 'nodebuffer', compression: 'DEFLATE' });
+    } else {
+      // Streaming path: prefer `archiver` when available; otherwise sequential memory-safe chunked zip via temp buffering per file.
+      mode = 'stream';
       try {
-        const bytes = await this.storage.readStoredObject(obj.backupStorageKey);
-        const entry = (obj.path || obj.name).replace(/^\/+/, '') || obj.name;
-        zip.file(entry, bytes);
+        archive = await this.buildArchiveWithArchiver(objects);
       } catch (e) {
-        this.logger.warn(`skip missing backup bytes for ${obj.id}: ${e instanceof Error ? e.message : e}`);
+        this.logger.warn(
+          `archiver unavailable (${e instanceof Error ? e.message : e}); falling back to sequential JSZip batches`,
+        );
+        archive = await this.buildArchiveBatched(objects);
       }
     }
 
-    const archive = await zip.generateAsync({ type: 'nodebuffer', compression: 'DEFLATE' });
     const fileId = randomUUID();
     const versionId = randomUUID();
     const objectKey = this.crypto.buildBackupObjectKey(orgId, jobId, 'archive', 'zip');
@@ -1033,19 +1090,223 @@ export class BackupService {
         finishedAt: new Date(),
         itemsDone: objects.length,
         itemsTotal: objects.length,
-        // Store download metadata in errorMessage JSON channel (no schema migration in P3)
         errorMessage: JSON.stringify({
           downloadUrl: signed.url,
           expiresInSeconds: signed.expiresInSeconds,
           objectKey,
           bytes: archive.length,
+          packMode: mode,
         }),
       },
     });
     await this.audit(user, 'BACKUP_RESTORE_DOWNLOAD', jobId, {
       bytes: archive.length,
       items: objects.length,
+      packMode: mode,
     });
+  }
+
+  /** Optional dependency: archiver. Builds zip without loading all files at once into one JSZip tree. */
+  private async buildArchiveWithArchiver(
+    objects: Array<{ id: string; name: string; path: string; backupStorageKey: string }>,
+  ): Promise<Buffer> {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const archiver = require('archiver') as typeof import('archiver');
+    const { PassThrough } = await import('node:stream');
+    const chunks: Buffer[] = [];
+    const pass = new PassThrough();
+    pass.on('data', (c: Buffer) => chunks.push(Buffer.from(c)));
+    const archive = archiver('zip', { zlib: { level: 6 } });
+    archive.pipe(pass);
+    const done = new Promise<void>((resolve, reject) => {
+      pass.on('finish', () => resolve());
+      pass.on('error', reject);
+      archive.on('error', reject);
+    });
+    for (const obj of objects) {
+      try {
+        const bytes = await this.storage.readStoredObject(obj.backupStorageKey);
+        const entry = (obj.path || obj.name).replace(/^\/+/, '') || obj.name;
+        archive.append(bytes, { name: entry });
+      } catch (e) {
+        this.logger.warn(`archiver skip ${obj.id}: ${e instanceof Error ? e.message : e}`);
+      }
+    }
+    await archive.finalize();
+    await done;
+    return Buffer.concat(chunks);
+  }
+
+  /** Fallback: batch files into JSZip in groups to reduce peak memory vs one giant set. */
+  private async buildArchiveBatched(
+    objects: Array<{ id: string; name: string; path: string; backupStorageKey: string; size: bigint }>,
+  ): Promise<Buffer> {
+    const JSZip = (await import('jszip')).default;
+    const zip = new JSZip();
+    const batchSize = 50;
+    for (let i = 0; i < objects.length; i += batchSize) {
+      const batch = objects.slice(i, i + batchSize);
+      for (const obj of batch) {
+        try {
+          const bytes = await this.storage.readStoredObject(obj.backupStorageKey);
+          const entry = (obj.path || obj.name).replace(/^\/+/, '') || obj.name;
+          zip.file(entry, bytes);
+        } catch (e) {
+          this.logger.warn(`batch skip ${obj.id}: ${e instanceof Error ? e.message : e}`);
+        }
+      }
+    }
+    return zip.generateAsync({ type: 'nodebuffer', compression: 'DEFLATE' });
+  }
+
+
+  // ── Dual-control purge (P4) ───────────────────────────────
+
+  listPurgeRequests(user: AccessTokenPayload, take = 30) {
+    this.assertOrgAdmin(user);
+    return this.prisma.backupPurgeRequest.findMany({
+      where: { orgId: user.org_id },
+      orderBy: { createdAt: 'desc' },
+      take: Math.min(100, Math.max(1, take)),
+      include: {
+        run: {
+          select: {
+            id: true,
+            kind: true,
+            snapshotAt: true,
+            locked: true,
+            immutableUntil: true,
+            purgedAt: true,
+            filesCopied: true,
+            bytesCopied: true,
+          },
+        },
+      },
+    });
+  }
+
+  async requestPurge(user: AccessTokenPayload, runId: string, reason: string) {
+    this.assertOrgAdmin(user);
+    const note = String(reason || '').trim().slice(0, 1000);
+    if (note.length < 8) throw new BadRequestException('A clear reason (min 8 chars) is required');
+
+    const run = await this.prisma.backupRun.findFirst({
+      where: { id: runId, orgId: user.org_id, status: BackupRunStatus.COMPLETED },
+    });
+    if (!run) throw new NotFoundException('Backup run not found');
+    if (run.purgedAt) throw new BadRequestException('Run already purged');
+
+    const pending = await this.prisma.backupPurgeRequest.findFirst({
+      where: { orgId: user.org_id, runId, status: BackupPurgeStatus.PENDING },
+    });
+    if (pending) throw new BadRequestException('A pending purge request already exists for this run');
+
+    const row = await this.prisma.backupPurgeRequest.create({
+      data: {
+        id: randomUUID(),
+        orgId: user.org_id,
+        runId,
+        status: BackupPurgeStatus.PENDING,
+        reason: note,
+        requestedById: user.sub,
+      },
+    });
+    await this.audit(user, 'BACKUP_PURGE_REQUEST', row.id, { runId, reason: note });
+    return row;
+  }
+
+  /**
+   * Second admin approves (must differ from requester). Does not execute delete yet.
+   */
+  async approvePurge(user: AccessTokenPayload, requestId: string, decisionNote?: string) {
+    this.assertOrgAdmin(user);
+    const req = await this.prisma.backupPurgeRequest.findFirst({
+      where: { id: requestId, orgId: user.org_id, status: BackupPurgeStatus.PENDING },
+    });
+    if (!req) throw new NotFoundException('Pending purge request not found');
+    if (!canApprovePurge(req.requestedById, user.sub)) {
+      throw new ForbiddenException('Dual-control: a different organization admin must approve');
+    }
+    const row = await this.prisma.backupPurgeRequest.update({
+      where: { id: requestId },
+      data: {
+        status: BackupPurgeStatus.APPROVED,
+        approvedById: user.sub,
+        decisionNote: String(decisionNote || '').slice(0, 1000) || null,
+        decidedAt: new Date(),
+      },
+    });
+    await this.audit(user, 'BACKUP_PURGE_APPROVE', row.id, { runId: req.runId });
+    return row;
+  }
+
+  async rejectPurge(user: AccessTokenPayload, requestId: string, decisionNote?: string) {
+    this.assertOrgAdmin(user);
+    const req = await this.prisma.backupPurgeRequest.findFirst({
+      where: { id: requestId, orgId: user.org_id, status: BackupPurgeStatus.PENDING },
+    });
+    if (!req) throw new NotFoundException('Pending purge request not found');
+    if (!canApprovePurge(req.requestedById, user.sub)) {
+      throw new ForbiddenException('Dual-control: a different organization admin must reject');
+    }
+    const row = await this.prisma.backupPurgeRequest.update({
+      where: { id: requestId },
+      data: {
+        status: BackupPurgeStatus.REJECTED,
+        approvedById: user.sub,
+        decisionNote: String(decisionNote || '').slice(0, 1000) || null,
+        decidedAt: new Date(),
+      },
+    });
+    await this.audit(user, 'BACKUP_PURGE_REJECT', row.id, { runId: req.runId });
+    return row;
+  }
+
+  /**
+   * Execute an APPROVED purge: unlock + soft-purge + best-effort delete of backup objects' storage keys.
+   * Requester or approver may execute (still requires APPROVED state from dual control).
+   */
+  async executePurge(user: AccessTokenPayload, requestId: string) {
+    this.assertOrgAdmin(user);
+    const req = await this.prisma.backupPurgeRequest.findFirst({
+      where: { id: requestId, orgId: user.org_id, status: BackupPurgeStatus.APPROVED },
+      include: { run: true },
+    });
+    if (!req) throw new NotFoundException('Approved purge request not found');
+
+    const objects = await this.prisma.backupObject.findMany({
+      where: { orgId: user.org_id, runId: req.runId },
+      select: { id: true, backupStorageKey: true },
+      take: 50_000,
+    });
+
+    let deleted = 0;
+    for (const obj of objects) {
+      try {
+        await this.storage.deleteStoredObject(obj.backupStorageKey);
+        deleted += 1;
+      } catch (e) {
+        this.logger.warn(`purge storage key failed: ${e instanceof Error ? e.message : e}`);
+      }
+    }
+
+    await this.prisma.$transaction(async (tx) => {
+      await tx.backupObject.deleteMany({ where: { orgId: user.org_id, runId: req.runId } });
+      await tx.backupRun.update({
+        where: { id: req.runId },
+        data: { locked: false, purgedAt: new Date(), immutableUntil: new Date() },
+      });
+      await tx.backupPurgeRequest.update({
+        where: { id: requestId },
+        data: { status: BackupPurgeStatus.EXECUTED, executedAt: new Date() },
+      });
+    });
+
+    await this.audit(user, 'BACKUP_PURGE_EXECUTE', requestId, {
+      runId: req.runId,
+      objectsDeleted: deleted,
+    });
+    return { ok: true, objectsDeleted: deleted, runId: req.runId };
   }
 
   overview(user: AccessTokenPayload) {
