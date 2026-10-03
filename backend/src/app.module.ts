@@ -33,6 +33,7 @@ import { OfficeEmailModule } from './office-email/office-email.module';
 import { AiModule } from './ai/ai.module';
 import { CollectionsModule } from './collections/collections.module';
 import { WorkspaceLabelsModule } from './workspace-labels/workspace-labels.module';
+import { BackupModule } from './backup/backup.module';
 
 @Module({
   imports: [
@@ -67,6 +68,7 @@ import { WorkspaceLabelsModule } from './workspace-labels/workspace-labels.modul
     AiModule,
     CollectionsModule,
     WorkspaceLabelsModule,
+    BackupModule,
   ],
   controllers: [AppController],
   providers: [AppService],
