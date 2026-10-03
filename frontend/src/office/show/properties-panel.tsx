@@ -8,6 +8,7 @@ type Props = {
   selectionCount: number;
   onChange: (patch: Partial<ShowElement>) => void;
   onApplyStyle: (patch: Partial<ShowElement>) => void;
+  onClose?: () => void;
 };
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
@@ -19,10 +20,10 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
   );
 }
 
-export function ShowPropertiesPanel({ element, selectionCount, onChange, onApplyStyle }: Props) {
+export function ShowPropertiesPanel({ element, selectionCount, onChange, onApplyStyle, onClose }: Props) {
   if (!element) {
     return (
-      <aside className="show-props-panel" aria-label="Properties">
+      <aside className="show-props-panel" aria-label="Properties" onPointerDown={(e) => e.stopPropagation()}>
         <div className="show-props-title">Properties</div>
         <p className="show-props-empty">Select an object to edit its properties.</p>
         <p className="show-props-hint">Shift-click for multi-select · Ctrl+C / Ctrl+V copy-paste</p>
@@ -34,9 +35,10 @@ export function ShowPropertiesPanel({ element, selectionCount, onChange, onApply
   const styles = element.type === 'text' ? TEXT_QUICK_STYLES : SHAPE_QUICK_STYLES;
 
   return (
-    <aside className="show-props-panel" aria-label="Properties">
+    <aside className="show-props-panel" aria-label="Properties" onPointerDown={(e) => e.stopPropagation()}>
       <div className="show-props-title">
-        Properties {multi ? `(${selectionCount})` : ''}
+        <span>Properties {multi ? `(${selectionCount})` : ''}</span>
+        {onClose ? <button type="button" className="show-props-close" aria-label="Close" onClick={onClose}>×</button> : null}
       </div>
       <div className="show-props-section">Position & Size</div>
       <div className="show-props-grid">

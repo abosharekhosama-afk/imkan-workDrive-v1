@@ -875,3 +875,91 @@
 .imkan-show .show-save-status.is-saving { color: #2563eb; }
 .imkan-show .show-save-status.is-saved { color: #16a34a; }
 .imkan-show .show-save-status.is-dirty { color: #ea580c; }
+
+
+/* Design polish: contextual properties, hide when unused */
+.imkan-show .show-props-panel {
+  width: 232px;
+  flex-shrink: 0;
+  border-left: 1px solid #e2e8f0;
+  background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
+  padding: 12px 14px;
+  overflow-y: auto;
+  font-size: 12px;
+  box-shadow: -4px 0 16px rgba(15, 23, 42, 0.04);
+  animation: showPropsIn 0.15s ease-out;
+}
+@keyframes showPropsIn {
+  from { opacity: 0; transform: translateX(8px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+.imkan-show .show-props-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-weight: 600;
+  font-size: 13px;
+  margin-bottom: 10px;
+  color: #0f172a;
+}
+.imkan-show .show-props-close {
+  width: 24px;
+  height: 24px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: #64748b;
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+}
+.imkan-show .show-props-close:hover {
+  background: #e2e8f0;
+  color: #0f172a;
+}
+.imkan-show .show-canvas-wrap {
+  background: #e8eef5;
+  background-image:
+    linear-gradient(rgba(148,163,184,0.15) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(148,163,184,0.15) 1px, transparent 1px);
+  background-size: 20px 20px;
+}
+.imkan-show .show-slide {
+  box-shadow:
+    0 1px 2px rgba(15, 23, 42, 0.06),
+    0 12px 28px rgba(15, 23, 42, 0.12);
+  border-radius: 2px;
+}
+.imkan-show .show-object {
+  outline: 2px solid #2563eb;
+  outline-offset: 0;
+  box-shadow: 0 0 0 1px rgba(255,255,255,0.9);
+}
+.imkan-show .show-img-tools,
+.imkan-show .show-table-tools {
+  border-radius: 6px;
+  background: rgba(15, 23, 42, 0.85);
+  padding: 3px 4px;
+  backdrop-filter: blur(4px);
+}
+.imkan-show .show-img-btn {
+  border: none;
+  background: transparent;
+  color: #f8fafc;
+  font-size: 10px;
+  padding: 3px 7px;
+  border-radius: 4px;
+}
+.imkan-show .show-img-btn:hover {
+  background: rgba(255,255,255,0.15);
+  color: #fff;
+  border-color: transparent;
+}
+.imkan-show .show-thumbs {
+  background: #f1f5f9;
+  border-right: 1px solid #e2e8f0;
+}
+.imkan-show .show-thumb[data-active="true"] .show-thumb-slide {
+  outline: 2px solid #2563eb;
+  outline-offset: 1px;
+}
