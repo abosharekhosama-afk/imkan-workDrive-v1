@@ -174,7 +174,7 @@
 | — | Writer page keeps the toolbar element open until its last property | ✅ Implemented |
 | — | Writer toolbar keeps its last bar inside the root element so the page parses | ✅ Implemented |
 | — | Writer menu cards float on their own, and menu actions edit the document or call the file and Office APIs | ✅ Implemented |
-| — | Successful uploads refresh the file table and close the progress card, and Office opening progress follows each stage | ✅ Implemented |
+| — | Successful uploads refresh the file table and close the progress card, and Office opening progress reaches the editor | ✅ Implemented |
 
 ---
 

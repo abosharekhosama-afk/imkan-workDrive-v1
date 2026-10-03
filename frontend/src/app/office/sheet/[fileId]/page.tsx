@@ -131,11 +131,9 @@ export default function SheetPage() {
       if (!alive) return;
       const w = r.document.content as Workbook;
       const safe: Workbook = w?.type === 'SHEET' ? w : { schema: 7, type: 'SHEET', title: 'Untitled spreadsheet', activeSheet: 'sheet-1', sheets: [{ id: 'sheet-1', name: 'Sheet1', cells: {} }] };
-      setOpenStage('layout');
-      await wait(40);
-      if (!alive) return;
       openedSheet.current = { doc: safe, revision: r.document.revision, sessionId: r.sessionId };
       setOpenStage('ready');
+      window.setTimeout(() => { if (alive) finishOpen(); }, 480);
     })().catch((e) => {
       if (!alive) return;
       const cached = readOfficeSnapshot(fileId);
@@ -144,6 +142,7 @@ export default function SheetPage() {
         setSaved(offlineQueueCount(fileId) === 0);
         setError('Offline mode: using the latest local copy.');
         setOpenStage('ready');
+        window.setTimeout(() => { if (alive) finishOpen(); }, 480);
         return;
       }
       setOpenStage('error');

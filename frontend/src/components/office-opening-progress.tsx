@@ -42,33 +42,47 @@ export function OfficeOpeningProgress({
   const pctRef = useRef(6);
   const readySent = useRef(false);
   const [pct, setPct] = useState(6);
+  const live = useRef({ target, stage, error, onReady });
+  live.current = { target, stage, error, onReady };
 
+  // One loop for the life of the card. It keeps watching the latest stage, so a
+  // later "ready" still moves the bar to 100 and opens the editor.
   useEffect(() => {
     let frame = 0;
+    let timer = 0;
     let stopped = false;
     const tick = () => {
       if (stopped) return;
+      const goal = live.current.target;
       const current = pctRef.current;
-      if (current >= target - 0.4) {
-        pctRef.current = target;
-        setPct(target);
-        if (stage === 'ready' && !error && !readySent.current) {
-          readySent.current = true;
-          onReady?.();
-        }
+      if (current < goal - 0.35) {
+        const next = Math.min(goal, current + Math.max(1, (goal - current) * 0.22));
+        pctRef.current = next;
+        setPct(next);
+        frame = requestAnimationFrame(tick);
         return;
       }
-      const next = Math.min(target, current + Math.max(0.7, (target - current) * 0.2));
-      pctRef.current = next;
-      setPct(next);
-      frame = requestAnimationFrame(tick);
+      if (Math.abs(pctRef.current - goal) > 0.05) {
+        pctRef.current = goal;
+        setPct(goal);
+      }
+      const { stage: currentStage, error: currentError, onReady: ready } = live.current;
+      if (currentStage === 'ready' && !currentError && !readySent.current) {
+        readySent.current = true;
+        ready?.();
+        return;
+      }
+      timer = window.setTimeout(() => {
+        frame = requestAnimationFrame(tick);
+      }, 32);
     };
     frame = requestAnimationFrame(tick);
     return () => {
       stopped = true;
       cancelAnimationFrame(frame);
+      window.clearTimeout(timer);
     };
-  }, [target, stage, error, onReady]);
+  }, []);
 
   const title = `Loading ${product}…`;
   const titleAr = `جارٍ تحميل ${product}…`;
