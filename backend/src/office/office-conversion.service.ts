@@ -1,7 +1,7 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
 import JSZip from 'jszip';
 import type { OfficeType } from './core/office-engine.interface';
-import { blipEmbedId, boxPercent, drawingText, maskBalanced, outerElements, relationshipMap, resolvePackageTarget, slideCanvas, slidePieces, wordDirection, wordFlowText } from './ooxml-package-logic';
+import { blipEmbedId, boxPercent, drawingText, firstBox, maskBalanced, outerElements, relationshipMap, resolvePackageTarget, slideCanvas, slidePieces, wordDirection, wordFlowText } from './ooxml-package-logic';
 
 export type ConversionCategory = 'preserved'|'converted'|'warning'|'unsupported';
 export type ConversionDiagnostic = { code: string; severity: 'info'|'warning'|'loss'; category?: ConversionCategory; message: string; path?: string };
@@ -660,7 +660,7 @@ export class OfficeConversionService {
     const orderedRids=[...pres.matchAll(/<p:sldId[^>]*r:id="([^"]+)"/g)].map(m=>m[1]);
     const slidePaths=orderedRids.map(r=>rels[r]).filter(Boolean).filter(p=>/^ppt\/slides\/slide\d+\.xml$/.test(p));
     const color=(body:string,tag='a:solidFill')=>{const m=new RegExp(`<${tag}>[\\s\\S]*?<a:srgbClr val="([0-9A-Fa-f]{6})"`).exec(body);return m?`#${m[1]}`:undefined};
-    const geom=(body:string)=>{const o=/<a:off[^>]*x="(\d+)"[^>]*y="(\d+)"/.exec(body),e=/<a:ext[^>]*cx="(\d+)"[^>]*cy="(\d+)"/.exec(body);const sx=100/cx,sy=100/cy;return {x:o?Number(o[1])*sx:0,y:o?Number(o[2])*sy:0,width:e?Number(e[1])*sx:10,height:e?Number(e[2])*sy:10,rotation:(/<a:xfrm[^>]*rot="(-?\d+)"/.exec(body)?.[1]?Number(/<a:xfrm[^>]*rot="(-?\d+)"/.exec(body)![1])/60000:0)};};
+    const geom=(body:string)=>boxPercent(firstBox(body),cx,cy);
     const textRuns=(body:string)=>[...body.matchAll(/<a:r(?:\s[^>]*)?>([\s\S]*?)<\/a:r>/g)].map(m=>{const b=m[1],t=[...b.matchAll(/<a:t(?:\s[^>]*)?>([\s\S]*?)<\/a:t>/g)].map(x=>decode(x[1])).join('');const rp=/<a:rPr([^>]*)>([\s\S]*?)<\/a:rPr>|<a:rPr([^>]*)\/>/.exec(b);const a=rp?.[1]||rp?.[3]||'';const fs=/\bsz="(\d+)"/.exec(a)?.[1];const f=/<a:latin[^>]*typeface="([^"]+)"/.exec(b)?.[1];const c=color(b);return {text:t,fontSize:fs?Number(fs)/100:undefined,fontFamily:f,color:c,bold:/\bb="(1|true)"/.test(a),italic:/\bi="(1|true)"/.test(a),underline:/\bu="sng|single"/.test(a)};});
     const slides=await Promise.all(slidePaths.slice(0,200).map(async(p,i)=>{
       const xml=await z.file(p)!.async('string');

@@ -1,4 +1,4 @@
-export type EmuBox = { x: number; y: number; cx: number; cy: number };
+export type EmuBox = { x: number; y: number; cx: number; cy: number; rot?: number };
 export type GroupFrame = EmuBox & { chX: number; chY: number; chCx: number; chCy: number };
 export type SlidePiece = { kind: 'shape' | 'picture' | 'line' | 'table'; xml: string; box: EmuBox };
 
@@ -18,11 +18,16 @@ function tagAttrs(xml: string, tag: string): string {
 }
 
 export function firstBox(xml: string): EmuBox {
+  // Prefer the shape-local xfrm; fall back to any off/ext pair. Attribute order is independent.
+  const xfrm = /<a:xfrm\b[^>]*>[\s\S]*?<\/a:xfrm>|<a:xfrm\b[^>]*\/>/.exec(xml)?.[0] || xml;
+  const rotRaw = xmlAttr(tagAttrs(xfrm, 'a:xfrm') || tagAttrs(xml, 'a:xfrm'), 'rot');
+  const rot = rotRaw && Number.isFinite(Number(rotRaw)) ? Number(rotRaw) / 60000 : undefined;
   return {
-    x: numAttr(tagAttrs(xml, 'a:off'), 'x'),
-    y: numAttr(tagAttrs(xml, 'a:off'), 'y'),
-    cx: numAttr(tagAttrs(xml, 'a:ext'), 'cx'),
-    cy: numAttr(tagAttrs(xml, 'a:ext'), 'cy'),
+    x: numAttr(tagAttrs(xfrm, 'a:off'), 'x'),
+    y: numAttr(tagAttrs(xfrm, 'a:off'), 'y'),
+    cx: numAttr(tagAttrs(xfrm, 'a:ext'), 'cx'),
+    cy: numAttr(tagAttrs(xfrm, 'a:ext'), 'cy'),
+    rot,
   };
 }
 
@@ -51,11 +56,15 @@ export function mapChildBox(group: GroupFrame, child: EmuBox): EmuBox {
 export function boxPercent(box: EmuBox, slideCx: number, slideCy: number) {
   const sx = 100 / (slideCx || 12192000);
   const sy = 100 / (slideCy || 6858000);
+  // Prefer true geometry; only use tiny floors so thin lines/shapes are not inflated to 4% of the slide.
+  const rawW = (box.cx > 0 ? box.cx : slideCx * 0.05) * sx;
+  const rawH = (box.cy > 0 ? box.cy : slideCy * 0.05) * sy;
   return {
     x: Math.max(0, Math.min(100, box.x * sx)),
     y: Math.max(0, Math.min(100, box.y * sy)),
-    width: Math.max(4, Math.min(100, (box.cx || slideCx * 0.1) * sx)),
-    height: Math.max(4, Math.min(100, (box.cy || slideCy * 0.1) * sy)),
+    width: Math.max(0.4, Math.min(100, rawW)),
+    height: Math.max(0.4, Math.min(100, rawH)),
+    rotation: typeof box.rot === 'number' && Number.isFinite(box.rot) ? box.rot : 0,
   };
 }
 
