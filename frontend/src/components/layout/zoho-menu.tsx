@@ -70,19 +70,22 @@ export function ZohoMenu({ open, onClose, onSelect, items, labelledBy, align = "
   }, [open, onClose]);
   if (!open || !pos) return null;
   const rtl = typeof document !== "undefined" && document.documentElement.dir === "rtl";
+  // Show the full actions card without internal scrolling. When the card is tall
+  // (few table rows / large menu), the table/page is the scrollable surface.
+  // Flip upward if there is not enough space below the trigger.
+  const estimatedHeight = Math.min(items.length * 40 + 24, window.innerHeight - 16);
+  const spaceBelow = window.innerHeight - pos.top - 8;
+  const openUpward = spaceBelow < estimatedHeight && pos.top > estimatedHeight + 8;
   const style: React.CSSProperties = {
-    top: pos.top,
+    top: openUpward ? Math.max(8, pos.top - estimatedHeight - 4) : pos.top,
     width: menuW,
-    // Cap the card to the space left below the trigger and scroll inside it, so
-    // the tail of a long card (e.g. the New card) never ends up outside the
-    // viewport where its action buttons cannot be clicked.
-    maxHeight: Math.max(160, window.innerHeight - pos.top - 8),
-    overflowY: "auto",
+    maxHeight: "none",
+    overflowY: "visible",
     ...(rtl ? { right: Math.max(8, window.innerWidth - pos.start - menuW) } : { left: pos.start }),
   };
   return createPortal(
     <div ref={ref} role="menu" aria-labelledby={labelledBy}
-      className={`wd-menu fixed ${widthPx ? "" : width} overflow-hidden`}
+      className={`wd-menu fixed ${widthPx ? "" : width} overflow-visible`}
       style={{ ...style, zIndex }}>
       {items.map((it, i) => {
         if (it === "sep") return <div key={`sep-${i}`} className="wd-menu-sep" role="separator" />;
