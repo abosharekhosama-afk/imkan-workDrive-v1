@@ -84,7 +84,27 @@ export function ShowPropertiesPanel({ element, selectionCount, onChange, onApply
                 </Field>
               </>
             )}
-            {(element.type === 'shape' || element.fill) && (
+            {element.type === 'image' && (
+            <>
+              <Field label="Crop X">
+                <input type="number" min={0} max={100} value={element.cropX ?? 0}
+                  onChange={(e) => onChange({ cropX: Number(e.target.value) })} />
+              </Field>
+              <Field label="Crop Y">
+                <input type="number" min={0} max={100} value={element.cropY ?? 0}
+                  onChange={(e) => onChange({ cropY: Number(e.target.value) })} />
+              </Field>
+              <Field label="Crop W">
+                <input type="number" min={5} max={100} value={element.cropW ?? 100}
+                  onChange={(e) => onChange({ cropW: Number(e.target.value) })} />
+              </Field>
+              <Field label="Crop H">
+                <input type="number" min={5} max={100} value={element.cropH ?? 100}
+                  onChange={(e) => onChange({ cropH: Number(e.target.value) })} />
+              </Field>
+            </>
+          )}
+          {(element.type === 'shape' || element.fill) && (
               <Field label="Fill">
                 <input type="color" value={element.fill && element.fill !== 'transparent' ? element.fill : '#dbeafe'}
                   onChange={(e) => onChange({ fill: e.target.value })} />
