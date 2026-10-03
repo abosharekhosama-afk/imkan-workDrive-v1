@@ -148,7 +148,7 @@ function RenderItem({ item, close, rtl }: { item: ActionDropdownItem; close: () 
       </button>
       {subOpen ? (
         <div
-          className={`wd-menu absolute z-[220] top-0 max-h-[min(60vh,360px)] min-w-[220px] overflow-y-auto shadow-lg ${rtl ? "end-full me-1" : "start-full ms-1"}`}
+          className={`wd-menu absolute z-[220] top-0 min-w-[220px] overflow-visible shadow-lg ${rtl ? "end-full me-1" : "start-full ms-1"}`}
           role="menu"
           onPointerDown={(event) => event.stopPropagation()}
         >
@@ -234,7 +234,7 @@ export function ActionDropdown({ label, items, trigger }: ActionDropdownProps) {
           collisionPadding={collisionPadding}
           avoidCollisions
           sticky="always"
-          className="wd-menu z-[200] w-64 max-h-[min(70vh,420px)] overflow-y-auto overflow-x-visible"
+          className="wd-menu z-[200] w-64 overflow-visible"
           style={{ minWidth: "252px" }}
         >
           {groupedItems.map((group, groupIndex) => (

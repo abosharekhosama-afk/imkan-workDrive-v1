@@ -244,6 +244,43 @@ export function FileTable({
     return <button type="button" className="zoho-workflow-status-badge" title={`${status.workflowName} · ${label}`} onClick={() => onWorkflowStatusClick?.(status, resourceName)}>{label}</button>;
   };
 
+  /** Zoho-style status icons beside the file/folder name (checkout, final, workflow, expired). */
+  const statusIcons = (opts: { resourceId: string; status?: string | null; resourceName: string }) => {
+    const raw = String(opts.status ?? "").trim().toUpperCase().replace(/[\s-]+/g, "_");
+    const icons: ReactNode[] = [];
+    if (raw === "CHECKED_OUT" || raw === "CHECKOUT" || raw === "LOCKED") {
+      icons.push(
+        <span key="checkout" className="wd-file-status-icon" data-kind="checkout" title={label("menu.checkOut") || "Checked out"} aria-label={label("menu.checkOut") || "Checked out"}>
+          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" aria-hidden="true"><rect x="3" y="11" width="18" height="11" rx="2" /><path d="M7 11V7a5 5 0 0 1 10 0v4" /></svg>
+        </span>,
+      );
+    }
+    if (raw === "FINAL" || raw === "MARKED_FINAL" || raw === "READONLY" || raw === "READ_ONLY") {
+      icons.push(
+        <span key="final" className="wd-file-status-icon" data-kind="final" title={label("menu.markFinal") || "Marked final"} aria-label={label("menu.markFinal") || "Marked final"}>
+          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" aria-hidden="true"><path d="M20 6 9 17l-5-5" /></svg>
+        </span>,
+      );
+    }
+    if (raw === "EXPIRED" || raw === "EXPIRE") {
+      icons.push(
+        <span key="expired" className="wd-file-status-icon" data-kind="expired" title={label("files.expired") || "Expired"} aria-label={label("files.expired") || "Expired"}>
+          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" aria-hidden="true"><circle cx="12" cy="12" r="9" /><path d="M12 7v5l3 2" /></svg>
+        </span>,
+      );
+    }
+    const wf = workflowStatuses?.get(opts.resourceId);
+    if (wf && !wf.state?.terminal && wf.status !== "COMPLETED") {
+      icons.push(
+        <span key="workflow" className="wd-file-status-icon" data-kind="workflow" title={`${wf.workflowName}${wf.state?.name ? ` · ${wf.state.name}` : ""}`} aria-label={wf.workflowName}>
+          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" aria-hidden="true"><path d="M6 3v12" /><circle cx="18" cy="6" r="3" /><circle cx="6" cy="18" r="3" /><path d="M18 9a9 9 0 0 1-9 9" /></svg>
+        </span>,
+      );
+    }
+    if (icons.length === 0) return null;
+    return <span className="wd-file-status-icons" onClick={(e) => e.preventDefault()}>{icons}</span>;
+  };
+
   if (folders.length === 0 && files.length === 0) {
     return (
       <div className="wd-folder-empty-shell flex min-h-[calc(100vh-16rem)] w-full flex-col items-center justify-center">
@@ -308,7 +345,10 @@ export function FileTable({
                 <Link href={`/files/${folder.id}`} className="imkan-focusable inline-flex max-w-full items-center gap-4 truncate rounded-sm">
                   <FileIcon kind="folder" label={label("files.type.folder")} />
                   <span className="min-w-0 truncate">
-                    <span className="wd-list-name block truncate">{folder.name}</span>
+                    <span className="wd-list-name flex items-center gap-1 truncate">
+                      <span className="truncate">{folder.name}</span>
+                      {statusIcons({ resourceId: folder.id, resourceName: folder.name })}
+                    </span>
                     <span className="wd-list-meta block truncate">{label("files.uploadedBy").replace("{name}", folder.ownerName ?? folder.ownerEmail ?? label("files.type.folder"))}</span>{workflowBadge(folder.id, folder.name)}
                   </span>
                 </Link>
@@ -364,7 +404,10 @@ export function FileTable({
                 <button type="button" onClick={() => onPreview?.("FILE", file.id, file.name, file.mimeType ?? undefined, file.size ?? undefined)} className="imkan-focusable inline-flex max-w-full items-center gap-4 truncate rounded-sm text-start hover:underline">
                   <FileIcon kind="file" mimeType={file.mimeType} name={file.name} label={label("files.type.file")} />
                   <span className="min-w-0 truncate">
-                    <span className="wd-list-name block truncate">{file.name}</span>
+                    <span className="wd-list-name flex items-center gap-1 truncate">
+                      <span className="truncate">{file.name}</span>
+                      {statusIcons({ resourceId: file.id, status: file.status, resourceName: file.name })}
+                    </span>
                     <span className="wd-list-meta block truncate">{label("files.uploadedBy").replace("{name}", file.ownerName ?? file.ownerEmail ?? label("files.type.file"))}</span>{workflowBadge(file.id, file.name)}
                   </span>
                 </button>
