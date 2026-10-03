@@ -2864,7 +2864,7 @@ model BackupObject {
 
   @@index([orgId, runId])
   @@index([runId, resourceType, resourceId])
-  @@index([orgId, path])
+  // Do not index path together with orgId: path is VARCHAR(2000), which exceeds MySQL 3072-byte index limit under utf8mb4.
   @@map("backup_objects")
 }
 
