@@ -116,7 +116,11 @@ function RenderItem({ item, close, rtl }: { item: ActionDropdownItem; close: () 
     );
   }
   return (
-    <div className="relative" onMouseEnter={() => setSubOpen(true)} onMouseLeave={() => setSubOpen(false)}>
+    <div
+      className="relative"
+      onMouseEnter={() => setSubOpen(true)}
+      onMouseLeave={() => setSubOpen(false)}
+    >
       <button
         type="button"
         role="menuitem"
@@ -124,28 +128,53 @@ function RenderItem({ item, close, rtl }: { item: ActionDropdownItem; close: () 
         aria-expanded={subOpen}
         className="wd-menu-item min-h-[34px] text-start"
         data-active={subOpen || undefined}
-        onClick={() => setSubOpen((v) => !v)}
+        onPointerDown={(event) => { event.preventDefault(); event.stopPropagation(); }}
+        onMouseDown={(event) => { event.preventDefault(); event.stopPropagation(); }}
+        onClick={(event) => {
+          event.preventDefault();
+          event.stopPropagation();
+          setSubOpen((v) => !v);
+        }}
       >
-        <span className="w-5" />
+        {item.icon ?? getIconForLabel(item.label) ? (
+          <span className="flex-shrink-0 w-5 h-5 flex items-center justify-center text-current">
+            {item.icon ?? getIconForLabel(item.label)}
+          </span>
+        ) : (
+          <span className="w-5" />
+        )}
         <span className="flex-1 truncate">{item.label}</span>
         <span aria-hidden="true" className={`action-dropdown-submenu-chevron text-[length:var(--imkan-font-size-secondary)] ${rtl ? "rotate-180" : ""}`}>›</span>
       </button>
       {subOpen ? (
-        <div className={`wd-menu absolute top-0 min-w-[220px] ${rtl ? "end-full me-0.5" : "start-full ms-0.5"}`} role="menu">
+        <div
+          className={`wd-menu absolute z-[220] top-0 max-h-[min(60vh,360px)] min-w-[220px] overflow-y-auto shadow-lg ${rtl ? "end-full me-1" : "start-full ms-1"}`}
+          role="menu"
+          onPointerDown={(event) => event.stopPropagation()}
+        >
           {item.submenu.map((sub) => (
               <button
                 type="button"
                 role="menuitem"
+                data-danger={sub.destructive || undefined}
                 className="wd-menu-item min-h-[34px] text-start"
+                key={sub.label}
+                onPointerDown={(event) => { event.preventDefault(); event.stopPropagation(); }}
+                onMouseDown={(event) => { event.preventDefault(); event.stopPropagation(); }}
                 onClick={(event) => {
                   event.preventDefault();
                   event.stopPropagation();
-                  setSubOpen(false);
                   sub.onSelect();
                   close();
                 }}
               >
-                <span className="w-5" />
+                {sub.icon ?? getIconForLabel(sub.label) ? (
+                  <span className="flex-shrink-0 w-5 h-5 flex items-center justify-center text-current">
+                    {sub.icon ?? getIconForLabel(sub.label)}
+                  </span>
+                ) : (
+                  <span className="w-5" />
+                )}
                 <span className="flex-1 truncate">{sub.label}</span>
               </button>
           ))}
@@ -205,7 +234,7 @@ export function ActionDropdown({ label, items, trigger }: ActionDropdownProps) {
           collisionPadding={collisionPadding}
           avoidCollisions
           sticky="always"
-          className="wd-menu z-[200] w-64"
+          className="wd-menu z-[200] w-64 max-h-[min(70vh,420px)] overflow-y-auto overflow-x-visible"
           style={{ minWidth: "252px" }}
         >
           {groupedItems.map((group, groupIndex) => (
