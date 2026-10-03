@@ -42,3 +42,66 @@ export function addComment(d:ShowDocument,text:string,elementId?:string,authorId
 export function resolveComment(d:ShowDocument,id:string,resolved=true){const n=cloneShow(d),c=(n.comments||[]).find(x=>x.id===id);if(c)c.resolved=resolved;return n}
 export function deleteComment(d:ShowDocument,id:string){const n=cloneShow(d);n.comments=(n.comments||[]).filter(x=>x.id!==id);return n}
 export function addCommentReply(d:ShowDocument,id:string,text:string,authorId?:string){const n=cloneShow(d),c=(n.comments||[]).find(x=>x.id===id);if(c&&text.trim()){c.replies=[...(c.replies||[]),{id:uid('reply'),authorId,text:text.trim(),createdAt:new Date().toISOString()}];}return n}
+
+export function deleteElements(d: ShowDocument, ids: string[]) {
+  const n = cloneShow(d);
+  const s = activeSlide(n);
+  if (!s || !ids.length) return n;
+  s.elements = s.elements.filter((e) => !ids.includes(e.id));
+  return n;
+}
+
+export function duplicateElements(d: ShowDocument, ids: string[]) {
+  const n = cloneShow(d);
+  const s = activeSlide(n);
+  if (!s || !ids.length) return n;
+  const copies = s.elements
+    .filter((e) => ids.includes(e.id))
+    .map((e) => ({
+      ...JSON.parse(JSON.stringify(e)),
+      id: uid('el'),
+      x: Math.min(95, (e.x || 0) + 2),
+      y: Math.min(95, (e.y || 0) + 2),
+    }));
+  s.elements = [...s.elements, ...copies];
+  return n;
+}
+
+export function bringToFront(d: ShowDocument, ids: string[]) {
+  const n = cloneShow(d);
+  const s = activeSlide(n);
+  if (!s || !ids.length) return n;
+  const moving = s.elements.filter((e) => ids.includes(e.id));
+  const rest = s.elements.filter((e) => !ids.includes(e.id));
+  s.elements = [...rest, ...moving];
+  return n;
+}
+
+export function sendToBack(d: ShowDocument, ids: string[]) {
+  const n = cloneShow(d);
+  const s = activeSlide(n);
+  if (!s || !ids.length) return n;
+  const moving = s.elements.filter((e) => ids.includes(e.id));
+  const rest = s.elements.filter((e) => !ids.includes(e.id));
+  s.elements = [...moving, ...rest];
+  return n;
+}
+
+export function nudgeElements(d: ShowDocument, ids: string[], dx: number, dy: number) {
+  const n = cloneShow(d);
+  const s = activeSlide(n);
+  if (!s || !ids.length) return n;
+  const clamp = (v: number) => Math.max(0, Math.min(100, v));
+  s.elements = s.elements.map((e) =>
+    ids.includes(e.id) ? { ...e, x: clamp((e.x || 0) + dx), y: clamp((e.y || 0) + dy) } : e,
+  );
+  return n;
+}
+
+export function updateElementProps(d: ShowDocument, id: string, patch: Partial<ShowElement>) {
+  const n = cloneShow(d);
+  const s = activeSlide(n);
+  if (!s) return n;
+  s.elements = s.elements.map((e) => (e.id === id ? { ...e, ...patch } : e));
+  return n;
+}
