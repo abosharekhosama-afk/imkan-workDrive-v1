@@ -1,5 +1,6 @@
 'use client';
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { OfficeOpeningProgress, type OfficeOpenStage } from '@/components/office-opening-progress';
 import { officeEqual } from '@/office/performance';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { closeOfficeSession, openOfficeDocument, openOfficeSession, saveOfficeDocument, touchOfficeSession, getOfficePresence, heartbeatOfficePresence, streamOfficeEvents, type OfficePresence } from '@/lib/api/office';
@@ -50,6 +51,7 @@ export default function SheetPage() {
   const { locale } = useLocale();
   const ar = locale === 'ar';
   const [doc, setDoc] = useState<Workbook | null>(null);
+  const [openStage, setOpenStage] = useState<OfficeOpenStage>('connecting');
   const [revision, setRevision] = useState(0);
   const [selected, setSelected] = useState('A1');
   const [anchor, setAnchor] = useState('A1');
@@ -105,12 +107,14 @@ export default function SheetPage() {
     let alive = true;
     (async () => {
       try {
+        setOpenStage('session');
         const r = await openOfficeSession(fileId);
+        setOpenStage('document');
         if (!alive) return;
         session.current = r.sessionId;
         const w = r.document.content as Workbook;
         const safe: Workbook = w?.type === 'SHEET' ? w : { schema: 7, type: 'SHEET', title: 'Untitled spreadsheet', activeSheet: 'sheet-1', sheets: [{ id: 'sheet-1', name: 'Sheet1', cells: {} }] };
-        ref.current = safe; setDoc(safe); setRevision(r.document.revision); cacheOfficeSnapshot(fileId,'SHEET',r.document.revision,safe);
+        ref.current = safe; setDoc(safe); setOpenStage('ready'); setRevision(r.document.revision); cacheOfficeSnapshot(fileId,'SHEET',r.document.revision,safe);
       } catch (e: any) {
         const cached = readOfficeSnapshot(fileId);
         if (cached?.document?.type === 'SHEET') { const local = cached.document as Workbook; ref.current=local; setDoc(local); setRevision(cached.revision); setSaved(offlineQueueCount(fileId)===0); setError('Offline mode: using the latest local copy.'); }
@@ -266,7 +270,7 @@ export default function SheetPage() {
   const textOverwriteCount = useMemo(() => textOverwriteCountForSheet(sheet, selected), [sheet, selected, dialogs.textToColumns]);
   const tableHiddenRows = useMemo(() => hiddenTableRowsForSheet(sheet, doc), [sheet, doc]);
 
-  if (!doc || !sheet) return <div className="flex h-screen items-center justify-center text-sm text-slate-500">{error || t('Opening IMKAN Sheet…', 'جارٍ فتح IMKAN Sheet…')}</div>;
+  if (!doc || !sheet) return <OfficeOpeningProgress stage={openStage==='ready'?'layout':openStage} product="IMKAN Sheet" error={openStage==='error'?(error||null):null} />;
 
   const bounds = rangeBounds(anchor, selected);
   const display = formulaDisplay(cell, sheet, doc);

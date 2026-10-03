@@ -1,5 +1,7 @@
 'use client';
 
+use client';
+
 import { useEffect, useState } from 'react';
 
 export type OfficeOpenStage =
@@ -10,75 +12,124 @@ export type OfficeOpenStage =
   | 'ready'
   | 'error';
 
-const STAGE_META: Record<
-  Exclude<OfficeOpenStage, 'error' | 'ready'>,
-  { label: string; labelAr: string; pct: number }
-> = {
-  connecting: { label: 'Connecting…', labelAr: 'جارٍ الاتصال…', pct: 12 },
-  session: { label: 'Opening session…', labelAr: 'فتح الجلسة…', pct: 35 },
-  document: { label: 'Loading document…', labelAr: 'تحميل المستند…', pct: 65 },
-  layout: { label: 'Preparing editor…', labelAr: 'تجهيز المحرر…', pct: 88 },
+const STAGES: Record<string, { en: string; ar: string; pct: number }> = {
+  connecting: { en: 'Connecting…', ar: 'جارٍ الاتصال…', pct: 15 },
+  session: { en: 'Opening session…', ar: 'فتح الجلسة…', pct: 40 },
+  document: { en: 'Loading document…', ar: 'تحميل المستند…', pct: 70 },
+  layout: { en: 'Preparing editor…', ar: 'تجهيز المحرر…', pct: 90 },
+  ready: { en: 'Ready', ar: 'جاهز', pct: 100 },
+  error: { en: 'Failed to open', ar: 'فشل الفتح', pct: 100 },
 };
 
 type Props = {
-  stage: OfficeOpenStage;
+  stage?: OfficeOpenStage;
   percent?: number;
-  title?: string;
-  subtitle?: string;
+  product?: string; // Show | Writer | Sheet
   error?: string | null;
   ar?: boolean;
 };
 
-/** Full-screen opening progress for IMKAN Office editors (Show / Writer / Sheet). */
-export function OfficeOpeningProgress({ stage, percent, title, subtitle, error, ar }: Props) {
-  const [displayPct, setDisplayPct] = useState(0);
-  const target =
-    typeof percent === 'number'
-      ? Math.max(0, Math.min(100, percent))
-      : stage === 'ready'
-        ? 100
-        : stage === 'error'
-          ? displayPct
-          : STAGE_META[stage as keyof typeof STAGE_META]?.pct ?? 20;
+/** Loading screen with progress bar under the title (Zoho-like). */
+export function OfficeOpeningProgress({
+  stage = 'document',
+  percent,
+  product = 'IMKAN Office',
+  error,
+  ar,
+}: Props) {
+  const meta = STAGES[stage] || STAGES.document;
+  const target = typeof percent === 'number' ? Math.min(100, Math.max(0, percent)) : meta.pct;
+  const [pct, setPct] = useState(0);
 
   useEffect(() => {
-    let raf = 0;
-    const tick = () => {
-      setDisplayPct((p) => {
+    let id = 0;
+    const step = () => {
+      setPct((p) => {
         if (p >= target) return target;
-        const next = p + Math.max(0.8, (target - p) * 0.12);
-        return next >= target ? target : next;
+        return Math.min(target, p + Math.max(1, (target - p) * 0.15));
       });
-      raf = requestAnimationFrame(tick);
+      id = requestAnimationFrame(step) as unknown as number;
     };
-    raf = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(raf);
+    id = requestAnimationFrame(step) as unknown as number;
+    return () => cancelAnimationFrame(id);
   }, [target]);
 
-  const meta = stage !== 'error' && stage !== 'ready' ? STAGE_META[stage] : null;
-  const label =
-    error ||
-    (meta ? (ar ? meta.labelAr : meta.label) : ar ? 'اكتمل' : 'Ready');
+  const title = `Loading ${product}…`;
+  const titleAr = `جارٍ تحميل ${product}…`;
+  const status = error || (ar ? meta.ar : meta.en);
 
   return (
-    <div className="imkan-office-boot" role="status" aria-live="polite" aria-busy={stage !== 'ready' && !error}>
-      <div className="imkan-office-boot-card">
-        <div className="imkan-office-boot-brand">
-          <span className="imkan-office-boot-mark">IMKAN</span>
-          <span className="imkan-office-boot-product">{title || (ar ? 'مكتب إمكان' : 'IMKAN Office')}</span>
+    <div
+      style={{
+        display: 'flex',
+        height: '100vh',
+        width: '100%',
+        alignItems: 'center',
+        justifyContent: 'center',
+        background: 'linear-gradient(160deg,#f8fafc,#e2e8f0 50%,#dbeafe)',
+        padding: 24,
+      }}
+      role="status"
+      aria-live="polite"
+      aria-busy={!error && stage !== 'ready'}
+    >
+      <div
+        style={{
+          width: 'min(400px, 92vw)',
+          background: '#fff',
+          borderRadius: 12,
+          border: '1px solid #e2e8f0',
+          boxShadow: '0 12px 40px rgba(15,23,42,.1)',
+          padding: '28px 24px 22px',
+          textAlign: 'center',
+        }}
+      >
+        <div style={{ fontSize: 13, fontWeight: 700, color: '#2563eb', letterSpacing: '0.04em', marginBottom: 6 }}>
+          IMKAN
         </div>
-        <p className="imkan-office-boot-sub">{subtitle || (ar ? 'جارٍ فتح المحرر' : 'Opening editor')}</p>
-        <div className="imkan-office-boot-bar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(displayPct)}>
-          <span
-            className={`imkan-office-boot-fill${error ? ' is-error' : ''}${stage === 'ready' ? ' is-done' : ''}`}
-            style={{ width: `${displayPct}%` }}
+        <div style={{ fontSize: 15, fontWeight: 600, color: '#0f172a', marginBottom: 18 }}>
+          {ar ? titleAr : title}
+        </div>
+        <div
+          style={{
+            height: 8,
+            borderRadius: 999,
+            background: '#e2e8f0',
+            overflow: 'hidden',
+            marginBottom: 10,
+          }}
+          aria-valuemin={0}
+          aria-valuemax={100}
+          aria-valuenow={Math.round(pct)}
+        >
+          <div
+            style={{
+              height: '100%',
+              width: `${pct}%`,
+              borderRadius: 999,
+              background: error
+                ? '#dc2626'
+                : 'linear-gradient(90deg,#60a5fa,#2563eb)',
+              transition: 'width .2s ease-out',
+            }}
           />
         </div>
-        <div className="imkan-office-boot-meta">
-          <span className={error ? 'is-error' : ''}>{label}</span>
-          <span>{Math.round(displayPct)}%</span>
+        <div
+          style={{
+            display: 'flex',
+            justifyContent: 'space-between',
+            fontSize: 12,
+            color: error ? '#b91c1c' : '#64748b',
+          }}
+        >
+          <span>{status}</span>
+          <span>{Math.round(pct)}%</span>
         </div>
-        {error ? <p className="imkan-office-boot-error">{error}</p> : null}
+        {error ? (
+          <p style={{ marginTop: 12, fontSize: 12, color: '#b91c1c', background: '#fef2f2', borderRadius: 8, padding: '8px 10px' }}>
+            {error}
+          </p>
+        ) : null}
       </div>
     </div>
   );

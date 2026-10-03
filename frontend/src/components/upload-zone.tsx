@@ -7,6 +7,7 @@ import type { ChangeEvent, DragEvent } from "react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createUploadQueueItems, updateUploadQueueItem, type UploadQueueItem } from "./upload-queue-logic";
 import { UploadProgressToast } from "./upload-progress-toast";
+import { setUploadProgressItems, patchUploadProgressItem } from "./upload-progress-store";
 import { Modal } from "./modal";
 import { ImkanOptionPicker, toImkanPickerOptions } from "./imkan-option-picker";
 import { getUploadDataTemplateMandate, type DataTemplate, type DataTemplateField } from "../lib/api/metadata";
@@ -16,6 +17,13 @@ export function UploadZone({ folderId, onUploaded, triggerOnly = false }: { fold
   const ar = locale === "ar";
   const [active, setActive] = useState(false);
   const [items, setItems] = useState<UploadQueueItem[]>([]);
+  const setItemsAndBroadcast = useCallback((updater: UploadQueueItem[] | ((prev: UploadQueueItem[]) => UploadQueueItem[])) => {
+    setItems((prev) => {
+      const next = typeof updater === 'function' ? (updater as (p: UploadQueueItem[]) => UploadQueueItem[])(prev) : updater;
+      setUploadProgressItems(next);
+      return next;
+    });
+  }, []);
   const inputRef = useRef<HTMLInputElement | null>(null);
   const folderInputRef = useRef<HTMLInputElement | null>(null);
   const mandateResolver = useRef<((value: { templateId: string; customFields: Record<string, unknown> } | null) => void) | null>(null);
@@ -54,21 +62,21 @@ export function UploadZone({ folderId, onUploaded, triggerOnly = false }: { fold
   }, [folderId]);
 
   const upload = useCallback(async (item: UploadQueueItem) => {
-    setItems((current) => updateUploadQueueItem(current, item.id, { status: "processing", progress: null, error: undefined }));
+    setItemsAndBroadcast((current) => updateUploadQueueItem(current, item.id, { status: "processing", progress: null, error: undefined }));
     try {
       const fields = await askForTemplateFields(item.file.name);
       if (fields === null) throw new Error("UPLOAD_CANCELLED");
-      await uploadFileToFolder(folderId, item.file, (progress) => setItems((current) => updateUploadQueueItem(current, item.id, { progress })), fields?.customFields, fields?.templateId);
-      setItems((current) => updateUploadQueueItem(current, item.id, { status: "completed", progress: 100 }));
+      await uploadFileToFolder(folderId, item.file, (progress) => setItemsAndBroadcast((current) => updateUploadQueueItem(current, item.id, { progress })), fields?.customFields, fields?.templateId);
+      setItemsAndBroadcast((current) => updateUploadQueueItem(current, item.id, { status: "completed", progress: 100 }));
       onUploaded();
     } catch {
-      setItems((current) => updateUploadQueueItem(current, item.id, { status: "failed", error: label("upload.failed") }));
+      setItemsAndBroadcast((current) => updateUploadQueueItem(current, item.id, { status: "failed", error: label("upload.failed") }));
     }
   }, [folderId, label, onUploaded]);
 
   const enqueue = useCallback((files: File[]) => {
     const added = createUploadQueueItems(files);
-    setItems((current) => [...current, ...added]);
+    setItemsAndBroadcast((current) => [...current, ...added]);
     void added.reduce((chain, item) => chain.then(() => upload(item)), Promise.resolve());
   }, [upload]);
 
@@ -92,26 +100,26 @@ export function UploadZone({ folderId, onUploaded, triggerOnly = false }: { fold
       return parent;
     };
     const items = createUploadQueueItems(files);
-    setItems((current) => [...current, ...items]);
+    setItemsAndBroadcast((current) => [...current, ...items]);
     for (let i = 0; i < items.length; i++) {
       const item = items[i];
-      setItems((current) => updateUploadQueueItem(current, item.id, { status: "processing", progress: null }));
+      setItemsAndBroadcast((current) => updateUploadQueueItem(current, item.id, { status: "processing", progress: null }));
       try {
         const relative = (files[i] as File & { webkitRelativePath?: string }).webkitRelativePath ?? files[i].name;
         const parts = relative.split("/").filter(Boolean);
         const target = await ensureFolder(parts.length > 1 ? parts.slice(0, -1).join("/") : "");
-        await uploadFileToFolder(target ?? folderId, item.file, (progress) => setItems((current) => updateUploadQueueItem(current, item.id, { progress })));
-        setItems((current) => updateUploadQueueItem(current, item.id, { status: "completed", progress: 100 }));
+        await uploadFileToFolder(target ?? folderId, item.file, (progress) => setItemsAndBroadcast((current) => updateUploadQueueItem(current, item.id, { progress })));
+        setItemsAndBroadcast((current) => updateUploadQueueItem(current, item.id, { status: "completed", progress: 100 }));
         onUploaded();
       } catch {
-        setItems((current) => updateUploadQueueItem(current, item.id, { status: "failed", error: label("upload.failed") }));
+        setItemsAndBroadcast((current) => updateUploadQueueItem(current, item.id, { status: "failed", error: label("upload.failed") }));
       }
     }
   }
   function onChange(event: ChangeEvent<HTMLInputElement>) { enqueue(Array.from(event.target.files ?? [])); event.target.value = ""; }
   function onDrop(event: DragEvent<HTMLLabelElement>) { event.preventDefault(); setActive(false); enqueue(filesFromDrop(event.dataTransfer)); }
   function retry(item: UploadQueueItem) { void upload(item); }
-  function remove(id: string) { setItems((current) => current.filter((item) => item.id !== id)); }
+  function remove(id: string) { setItemsAndBroadcast((current) => current.filter((item) => item.id !== id)); }
 
   const resolveTemplatePrompt = (accepted: boolean) => {
     const resolver = mandateResolver.current;
@@ -152,7 +160,7 @@ export function UploadZone({ folderId, onUploaded, triggerOnly = false }: { fold
     {triggerOnly ? <><input ref={inputRef} type="file" multiple className="sr-only" aria-label={label("files.upload")} onChange={(event) => onChange(event)} /><input ref={folderInputRef} type="file" multiple {...({ webkitdirectory: "", directory: "" } as React.InputHTMLAttributes<HTMLInputElement>)} className="sr-only" aria-label={label("menu.uploadFolder")} onChange={(event) => void onFolderChange(event)} /></> : null}
     <UploadProgressToast
       items={items}
-      onClearCompleted={() => setItems((current) => current.filter((item) => item.status !== "completed"))}
+      onClearCompleted={() => setItemsAndBroadcast((current) => current.filter((item) => item.status !== "completed"))}
       onRetry={retry}
       onRemove={remove}
     />
