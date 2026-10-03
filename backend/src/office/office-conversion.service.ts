@@ -1,7 +1,7 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
 import JSZip from 'jszip';
 import type { OfficeType } from './core/office-engine.interface';
-import { blipEmbedId, boxPercent, coerceElementGeometry, drawingText, firstBox, maskBalanced, outerElements, parseLayoutPlaceholders, parseMasterPlaceholders, parseThemeSchemeColors, relationshipMap, resolvePackageTarget, resolveShapeBox, resolveSolidColor, shapeFillColor, textRunColor, extractBackground, slideCanvas, slidePieces, wordDirection, wordFlowText } from './ooxml-package-logic';
+import { blipEmbedId, boxPercent, coerceElementGeometry, drawingText, firstBox, maskBalanced, outerElements, parseLayoutPlaceholders, parseMasterPlaceholders, parseThemeSchemeColors, relationshipMap, resolvePackageTarget, resolveShapeBox, resolveSolidColor, shapeFillColor, textRunColor, textBodyFontSize, shapeLineColor, shapeLineWidthPt, extractBackground, slideCanvas, slidePieces, wordDirection, wordFlowText } from './ooxml-package-logic';
 
 export type ConversionCategory = 'preserved'|'converted'|'warning'|'unsupported';
 export type ConversionDiagnostic = { code: string; severity: 'info'|'warning'|'loss'; category?: ConversionCategory; message: string; path?: string };
@@ -784,32 +784,64 @@ export class OfficeConversionService {
           elements.push({id,type:'table',...g,rows,groupId});
           continue;
         }
-        const tx=/<(?:p|a):txBody>([\s\S]*?)<\/(?:p|a):txBody>/.exec(piece.xml)?.[1]||'';
+                const tx=/<(?:p|a):txBody>([\s\S]*?)<\/(?:p|a):txBody>/.exec(piece.xml)?.[1]||'';
         const text=drawingText(piece.xml);
         const shapeFill=shapeFillColor(piece.xml,scheme);
+        const lineColor=shapeLineColor(piece.xml,scheme);
+        const lineW=shapeLineWidthPt(piece.xml);
         const textColor=textRunColor(piece.xml,scheme)||scheme.tx1||'#111827';
         const prst=/<a:prstGeom[^>]*prst="([^"]+)"/.exec(piece.xml)?.[1]||'rect';
         const shapeKind=/ellipse|oval|circle/i.test(prst)?'circle':/roundRect/i.test(prst)?'roundRect':'rect';
-        // Skip empty placeholders with no visible fill (they only reserve space in PowerPoint)
-        if(!text.trim() && !shapeFill && /<p:ph\b/.test(piece.xml)) continue;
+        // Thin vertical/horizontal bar often used as accent (title underline / side bar)
+        const isAccentBar = (g.width>0 && g.height>0) && (g.width < 2.5 || g.height < 2.5);
+        // Skip empty placeholders with no fill and no stroke
+        if(!text.trim() && !shapeFill && !lineColor && /<p:ph\b/.test(piece.xml)) continue;
         if(text.trim()){
           const runs=textRuns(tx); const first=runs.find(r=>r.text)||runs[0]||{} as any; const algn=/<a:pPr[^>]*algn="(l|ctr|r|just)"/.exec(tx)?.[1];
           const phType=/<p:ph[^>]*type="([^"]+)"/.exec(piece.xml)?.[1]||'';
-          const defaultSize=phType==='ctrTitle'||phType==='title'?40:phType==='subTitle'?22:phType==='body'?18:20;
-          // If the shape has a real fill, emit a background shape under the text (PowerPoint text-in-shape)
+          const defaultSize=phType==='ctrTitle'||phType==='title'?44:phType==='subTitle'?24:phType==='body'?20:18;
+          const fontSize=textBodyFontSize(tx, first.fontSize)||first.fontSize||defaultSize;
+          const isTitle=phType==='ctrTitle'||phType==='title'||fontSize>=28;
           if(shapeFill){
             elements.push({id:`${id}-bg`,type:'shape',...g,shape:shapeKind,fill:shapeFill,border:false,groupId});
           }
-          elements.push({id,type:'text',...g,text,fontSize:first.fontSize||defaultSize,fontFamily:first.fontFamily||'Arial',color:first.color||textColor,bold:Boolean(first.bold)||phType==='ctrTitle'||phType==='title',italic:Boolean(first.italic),underline:Boolean(first.underline),align:algn==='ctr'?'center':algn==='r'?'end':(phType==='ctrTitle'||phType==='title'?'center':'start'),textDirection:/(?:rtl|rightToLeft)\s*=\s*"(?:1|true)"/i.test(tx)?'rtl':'ltr',groupId});
+          // Bullet-aware body text
+          const hasBullet=/^[\s]*[•\u2022\-\*]/.test(text) || /<a:buChar\b|<a:buAutoNum\b|<a:buFont\b/.test(tx);
+          elements.push({
+            id,type:'text',...g,text,
+            fontSize,
+            fontFamily:first.fontFamily||'Arial',
+            color:first.color||textColor,
+            bold:Boolean(first.bold)||isTitle,
+            italic:Boolean(first.italic),
+            underline:Boolean(first.underline),
+            align:algn==='ctr'?'center':algn==='r'?'end':(isTitle?'center':'start'),
+            bullet:hasBullet?'bullet':'none',
+            textDirection:/(?:rtl|rightToLeft)\s*=\s*"(?:1|true)"/i.test(tx)?'rtl':'ltr',
+            groupId
+          });
           continue;
         }
-        // Pure decorative shape — only when spPr actually defines a fill
+        // Decorative shape with fill
         if(shapeFill){
-          elements.push({id,type:'shape',...g,shape:shapeKind,fill:shapeFill,border:false,groupId});
+          elements.push({id,type:'shape',...g,shape:shapeKind,fill:shapeFill,border:false,color:lineColor,groupId});
+          continue;
+        }
+        // Stroke-only shape (accent line/outline) → render as thin filled bar or line
+        if(lineColor){
+          if(isAccentBar || g.width < 3 || g.height < 3){
+            // Prefer filled bar for visibility in editor
+            const bar={...g};
+            if(bar.width < bar.height && bar.width < 1.2) bar.width=Math.max(bar.width,0.35);
+            if(bar.height < bar.width && bar.height < 1.2) bar.height=Math.max(bar.height,0.35);
+            elements.push({id,type:'shape',...bar,shape:'rect',fill:lineColor,border:false,groupId});
+          } else {
+            elements.push({id,type:'shape',...g,shape:shapeKind,fill:'transparent',border:true,color:lineColor,borderColor:lineColor,borderWidth:lineW,groupId});
+          }
         }
 
       }
-      // Chart relationship + cached values. The imported chart remains native Show chart data,
+// Chart relationship + cached values. The imported chart remains native Show chart data,
       // allowing it to be edited and later exported again without flattening to an image.
       for(const gm of slideRelXml.matchAll(/<Relationship\b[^>]*Type="([^"]*\/chart)"[^>]*Target="([^"]+)"/g)){
         const chartPath=this.resolveRelationshipTarget(p,gm[2]);const chartXml=z.file(chartPath)?await z.file(chartPath)!.async('string'):'';if(!chartXml)continue;

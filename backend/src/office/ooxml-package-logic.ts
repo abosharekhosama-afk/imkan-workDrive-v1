@@ -179,19 +179,60 @@ function hashStr(s: string): number {
 }
 
 
+/** Prefix paragraph text with bullet/number based on pPr. */
+export function paragraphPlainText(paragraphXml: string): string {
+  const bits: string[] = [];
+  for (const item of paragraphXml.matchAll(/<a:br\b[^>]*\/>|<a:t(?=[\s>])[^>]*>([\s\S]*?)<\/a:t>/g)) {
+    bits.push(item[1] === undefined ? '\n' : decodeXml(item[1]));
+  }
+  let text = bits.join('');
+  if (/<a:rPr\b[^>]*\bcap="all"/i.test(paragraphXml)) text = text.toUpperCase();
+  const pPr = /<a:pPr\b[^>]*\/>|<a:pPr\b[^>]*>[\s\S]*?<\/a:pPr>/.exec(paragraphXml)?.[0] || '';
+  if (/<a:buNone\b/.test(pPr)) return text;
+  if (/<a:buChar\b/.test(pPr) || /<a:buFont\b/.test(pPr) || /<a:buAutoNum\b/.test(pPr) || /<a:buBlip\b/.test(pPr)) {
+    const ch = /<a:buChar\b[^>]*char="([^"]+)"/.exec(pPr)?.[1];
+    const bullet = ch ? decodeXml(ch) : '•';
+    if (text.trim()) return `${bullet} ${text}`;
+  }
+  const lvl = Number(/\blvl="(\d+)"/.exec(pPr)?.[1] || 0);
+  if (lvl > 0 && text.trim() && !/^\s*[•\-\u2022]/.test(text)) return `• ${text}`;
+  return text;
+}
+
 export function drawingText(xml: string): string {
   const body = /<(?:p|a):txBody>([\s\S]*?)<\/(?:p|a):txBody>/.exec(xml)?.[1] ?? '';
   if (!body) return '';
   const paragraphs = [...body.matchAll(/<a:p(?=[\s>])[\s\S]*?<\/a:p>/g)].map((item) => item[0]);
-  const sources = paragraphs.length ? paragraphs : [body];
-  return sources.map((paragraph) => {
-    const bits: string[] = [];
-    for (const item of paragraph.matchAll(/<a:br\b[^>]*\/>|<a:t(?=[\s>])[^>]*>([\s\S]*?)<\/a:t>/g)) {
-      bits.push(item[1] === undefined ? '\n' : decodeXml(item[1]));
-    }
-    return bits.join('');
-  }).join('\n');
+  if (paragraphs.length) return paragraphs.map(paragraphPlainText).join('\n');
+  const bits: string[] = [];
+  for (const item of body.matchAll(/<a:br\b[^>]*\/>|<a:t(?=[\s>])[^>]*>([\s\S]*?)<\/a:t>/g)) {
+    bits.push(item[1] === undefined ? '\n' : decodeXml(item[1]));
+  }
+  return bits.join('');
 }
+
+export function textBodyFontSize(txBodyInner: string, fallback?: number): number | undefined {
+  let max = 0;
+  for (const m of txBodyInner.matchAll(/\bsz="(\d+)"/g)) {
+    const n = Number(m[1]) / 100;
+    if (n > max) max = n;
+  }
+  if (max > 0) return max;
+  return fallback;
+}
+
+export function shapeLineColor(shapeXml: string, scheme?: Record<string, string>): string | undefined {
+  const ln = /<a:ln\b[^>]*>[\s\S]*?<\/a:ln>|<a:ln\b[^>]*\/>/.exec(shapeXml)?.[0] || '';
+  if (!ln || /<a:noFill\b/.test(ln)) return undefined;
+  return resolveSolidColor(ln, scheme) || undefined;
+}
+
+export function shapeLineWidthPt(shapeXml: string): number {
+  const w = /<a:ln\b[^>]*w="(\d+)"/.exec(shapeXml)?.[1];
+  if (!w) return 1;
+  return Math.max(0.5, Number(w) / 12700);
+}
+
 
 export function wordFlowText(xml: string): string {
   const paragraphs = [...xml.matchAll(/<w:p(?=[\s>])[\s\S]*?<\/w:p>/g)].map((item) => item[0]);
