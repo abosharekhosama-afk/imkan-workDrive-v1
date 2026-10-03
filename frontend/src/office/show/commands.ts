@@ -43,13 +43,6 @@ export function resolveComment(d:ShowDocument,id:string,resolved=true){const n=c
 export function deleteComment(d:ShowDocument,id:string){const n=cloneShow(d);n.comments=(n.comments||[]).filter(x=>x.id!==id);return n}
 export function addCommentReply(d:ShowDocument,id:string,text:string,authorId?:string){const n=cloneShow(d),c=(n.comments||[]).find(x=>x.id===id);if(c&&text.trim()){c.replies=[...(c.replies||[]),{id:uid('reply'),authorId,text:text.trim(),createdAt:new Date().toISOString()}];}return n}
 
-export function deleteElements(d: ShowDocument, ids: string[]) {
-  const n = cloneShow(d);
-  const s = activeSlide(n);
-  if (!s || !ids.length) return n;
-  s.elements = s.elements.filter((e) => !ids.includes(e.id));
-  return n;
-}
 
 export function duplicateElements(d: ShowDocument, ids: string[]) {
   const n = cloneShow(d);
@@ -95,13 +88,5 @@ export function nudgeElements(d: ShowDocument, ids: string[], dx: number, dy: nu
   s.elements = s.elements.map((e) =>
     ids.includes(e.id) ? { ...e, x: clamp((e.x || 0) + dx), y: clamp((e.y || 0) + dy) } : e,
   );
-  return n;
-}
-
-export function updateElementProps(d: ShowDocument, id: string, patch: Partial<ShowElement>) {
-  const n = cloneShow(d);
-  const s = activeSlide(n);
-  if (!s) return n;
-  s.elements = s.elements.map((e) => (e.id === id ? { ...e, ...patch } : e));
   return n;
 }
