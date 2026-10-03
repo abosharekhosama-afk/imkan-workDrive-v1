@@ -1421,8 +1421,9 @@ html[data-theme="dark"] .imkan-modal-surface .imkan-muted{color:var(--wd-sidebar
   .workflow-touch-drag-ghost { font-size:10px; padding:8px 11px; }
 }
 
-/* Touch-friendly scrolling for data tables and file lists. */
-.imkan-table-scroll,.workflow-table-scroll { overflow-x:auto; overflow-y:hidden; -webkit-overflow-scrolling:touch; scrollbar-width:thin; touch-action:pan-x; }
+/* Touch-friendly scrolling for data tables and file lists.
+   Table scrolls both axes; action cards/menus stay fully visible (no internal scroll). */
+.imkan-table-scroll,.workflow-table-scroll { overflow-x:auto; overflow-y:auto; -webkit-overflow-scrolling:touch; scrollbar-width:thin; touch-action:pan-x pan-y; max-height:min(70vh, calc(100vh - 12rem)); }
 .workflow-table-scroll > * { min-width:720px; }
 @media (max-width:640px) {
   .workflow-table-scroll { margin-inline:-10px; padding-inline:10px; }
@@ -3059,16 +3060,24 @@ html[data-sidebar-light="true"] .primary-sidebar{background:#f6f7f9!important;co
 .member-section-toolbar{padding:16px 26px 8px}.member-section-toolbar p{margin-top:4px}
 @media(max-width:700px){.account-drawer{width:100vw}.account-download-grid{grid-template-columns:1fr 1fr}.account-qr{display:none}.appearance-modes{gap:6px}.member-search-combo{width:100%}.member-team-toolbar{align-items:stretch;flex-direction:column}.member-team-toolbar-actions{justify-content:space-between}.members-table{min-height:calc(100vh - 230px)}}
 
-/* File browser tables: keep row menus visible while giving the content area room. */
+/* File browser tables: table is the scroll surface; row action menus (portals) stay fully visible. */
 .wd-file-browser .wd-file-browser-body {
   min-height: calc(100vh - 190px);
 }
-.wd-file-browser .imkan-file-table-root,
-.wd-file-browser .imkan-table-scroll,
-.wd-file-browser .imkan-table-scroll > table {
+.wd-file-browser .imkan-file-table-root {
   min-height: 0;
   height: auto;
   overflow: visible;
+}
+.wd-file-browser .imkan-table-scroll {
+  min-height: 0;
+  max-height: min(70vh, calc(100vh - 12rem));
+  overflow-x: auto;
+  overflow-y: auto;
+}
+.wd-file-browser .imkan-table-scroll > table {
+  min-height: 0;
+  height: auto;
 }
 .wd-toolbar { overflow: visible; }
 .team-folders-page { overflow: visible; }
@@ -4525,11 +4534,33 @@ html[data-theme="dark"] .zoho-admin-input{background:var(--wd-bg);color:var(--wd
 .zoho-data-template-actionbar{padding:10px 15px;border-bottom:1px solid #ededed}.zoho-data-template-associate{height:34px;padding:0 12px;border:1px solid #b9cdf7;border-radius:17px;background:#f7faff;color:#2c66dd;font-size:11px;font-weight:600;cursor:pointer}.zoho-data-template-associate:hover{background:#edf3ff}
 
 /* Workspace list tables: align Recent/Favorites/Shared with the Workflows list rhythm. */
-.workflow-like-list{border:1px solid #e7eaf0;border-radius:12px;box-shadow:0 1px 2px rgba(15,23,42,.03);background:#fff}
-.workflow-like-table{border-collapse:separate;border-spacing:0;width:100%;}
-.workflow-like-table thead th{height:44px;background:#f8fafc;border-bottom:1px solid #e7eaf0;color:#64748b;font-size:10px;font-weight:600;letter-spacing:.025em;white-space:nowrap;padding:0 14px}
+.workflow-like-list{border:none;border-radius:12px;box-shadow:none;background:#fff}
+.workflow-like-table{border-collapse:separate;border-spacing:0;width:100%;border:none;}
+.workflow-like-table thead th{height:44px;background:#f8fafc;border-bottom:1px solid #eef1f5;color:#64748b;font-size:10px;font-weight:600;letter-spacing:.025em;white-space:nowrap;padding:0 14px}
 .workflow-like-table tbody tr{height:58px;transition:background .12s ease}
-.workflow-like-table tbody tr+tr td{border-top:1px solid #edf0f4}
+.workflow-like-table tbody tr+tr td{border-top:1px solid #f3f5f8}
 .workflow-like-table tbody tr:hover{background:#fafcff}
-.workflow-like-table tbody td{padding:9px 14px;font-size:11px;color:#475569;vertical-align:middle}
+.workflow-like-table tbody td{padding:9px 14px;font-size:11px;color:#475569;vertical-align:middle;border:none;}
 .workflow-like-table .wd-name-link{font-size:12px;font-weight:600;color:#172033}
+/* Borderless table variant (notifications / recent / favorites parity with workflow users table). */
+.workflow-like-table.borderless,
+.imkan-table.borderless{border:none;box-shadow:none;}
+.workflow-like-table.borderless thead th,
+.imkan-table.borderless thead th{border:none;border-bottom:1px solid #eef1f5;background:transparent;}
+.workflow-like-table.borderless tbody td,
+.imkan-table.borderless tbody td{border:none;}
+.workflow-like-table.borderless tbody tr+tr td{border-top:1px solid #f3f5f8;}
+/* Zoho-style status indicators on file/folder rows */
+.wd-file-status-icons{display:inline-flex;align-items:center;gap:3px;margin-inline-start:6px;flex-shrink:0;vertical-align:middle;}
+.wd-file-status-icon{display:inline-flex;align-items:center;justify-content:center;width:16px;height:16px;border-radius:4px;font-size:10px;line-height:1;color:#5b6570;background:#f1f4f6;border:1px solid #e2e6ea;}
+.wd-file-status-icon[data-kind="checkout"]{color:#b45309;background:#fff7ed;border-color:#fed7aa;}
+.wd-file-status-icon[data-kind="final"]{color:#1d4ed8;background:#eff6ff;border-color:#bfdbfe;}
+.wd-file-status-icon[data-kind="workflow"]{color:#0f766e;background:#f0fdfa;border-color:#99f6e4;}
+.wd-file-status-icon[data-kind="label"]{color:#7c3aed;background:#f5f3ff;border-color:#ddd6fe;}
+.wd-file-status-icon[data-kind="expired"]{color:#b91c1c;background:#fef2f2;border-color:#fecaca;}
+html[data-theme="dark"] .wd-file-status-icon{background:#1f2933;border-color:#374151;color:#cbd5e1;}
+html[data-theme="dark"] .wd-file-status-icon[data-kind="checkout"]{color:#fdba74;background:#431407;border-color:#9a3412;}
+html[data-theme="dark"] .wd-file-status-icon[data-kind="final"]{color:#93c5fd;background:#1e3a5f;border-color:#1d4ed8;}
+html[data-theme="dark"] .wd-file-status-icon[data-kind="workflow"]{color:#5eead4;background:#134e4a;border-color:#0f766e;}
+html[data-theme="dark"] .wd-file-status-icon[data-kind="label"]{color:#c4b5fd;background:#2e1065;border-color:#6d28d9;}
+html[data-theme="dark"] .wd-file-status-icon[data-kind="expired"]{color:#fca5a5;background:#450a0a;border-color:#b91c1c;}
