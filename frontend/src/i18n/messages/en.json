@@ -389,7 +389,6 @@
   "preview.details": "Details",
   "preview.download": "Download",
   "preview.downloadToView": "Download to view",
-
   "preview.editImage": "Edit image",
   "preview.openWith": "Open With",
   "preview.copyLink": "Copy link",
@@ -844,5 +843,14 @@
   "workflow.connections": "Connections",
   "nav.collections": "Collections",
   "menu.associateDataTemplate": "Associate Data Template",
-  "menu.following": "Following"
+  "menu.following": "Following",
+  "menu.checkOut": "Check Out",
+  "menu.checkIn": "Check In",
+  "menu.markAsFinal": "Mark as Final",
+  "menu.enableEditing": "Enable Editing",
+  "menu.reindex": "Re-index",
+  "menu.openInOffice": "Open in IMKAN Office",
+  "menu.convertToOffice": "Convert to IMKAN Office",
+  "menu.labels": "Labels",
+  "menu.createShortcut": "Create shortcut"
 }

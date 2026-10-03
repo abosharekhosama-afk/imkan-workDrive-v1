@@ -389,7 +389,6 @@
   "preview.details": "التفاصيل",
   "preview.download": "تنزيل",
   "preview.downloadToView": "تنزيل للعرض",
-
   "preview.editImage": "تحرير الصورة",
   "preview.openWith": "فتح باستخدام",
   "preview.copyLink": "نسخ الرابط",
@@ -844,5 +843,14 @@
   "workflow.connections": "الاتصالات",
   "nav.collections": "مجموعات جمع الملفات",
   "menu.associateDataTemplate": "ربط قالب البيانات",
-  "menu.following": "تتم المتابعة"
+  "menu.following": "تتم المتابعة",
+  "menu.checkOut": "إخراج للتحرير",
+  "menu.checkIn": "إرجاع بعد التحرير",
+  "menu.markAsFinal": "تعيين كنهائي",
+  "menu.enableEditing": "تمكين التحرير",
+  "menu.reindex": "إعادة الفهرسة",
+  "menu.openInOffice": "فتح في محرر إمكان",
+  "menu.convertToOffice": "تحويل إلى محرر إمكان",
+  "menu.labels": "التسميات",
+  "menu.createShortcut": "إنشاء اختصار"
 }
