@@ -41,7 +41,10 @@
     "pdfjs-dist": "^6.2.108",
     "react": "19.2.8",
     "react-dom": "19.2.8",
-    "rxjs": "^7.8.1"
+    "rxjs": "^7.8.1",
+    "@univerjs/drawing": "0.25.1",
+    "@univerjs/slides": "0.25.1",
+    "@univerjs/slides-ui": "0.25.1"
   },
   "devDependencies": {
     "@playwright/test": "^1.55.0",
