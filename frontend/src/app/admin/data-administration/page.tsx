@@ -292,7 +292,7 @@ export default function AdminDataAdministrationPage() {
             </> : null}
           </div>
 
-          {tab === "deleted" ? <p className="border-b border-slate-100 bg-[#f8fafc] px-4 py-3 text-[12px] text-slate-600">{text(ar, `Deleted items will be permanently deleted after ${locations?.trashDays ?? 30} days.`, `سيتم حذف العناصر نهائياً بعد ${locations?.trashDays ?? 30} يوماً.`)} <span className="text-[#175cd3]">{text(ar, "Manage Data Retention Policy", "إدارة سياسة الاحتفاظ بالبيانات")}</span></p> : null}
+          {tab === "deleted" ? <p className="border-b border-slate-100 bg-[#f8fafc] px-4 py-3 text-[12px] text-slate-600">{text(ar, `Deleted items will be permanently deleted after ${locations?.trashDays ?? 30} days.`, `سيتم حذف العناصر نهائياً بعد ${locations?.trashDays ?? 30} يوماً.`)}{" "}<a href="/admin/settings?settingtab=dataretention" className="cursor-pointer font-semibold text-[#175cd3] underline-offset-2 hover:underline">{text(ar, "Manage Data Retention Policy", "إدارة سياسة الاحتفاظ بالبيانات")}</a></p> : null}
           {tab === "large" ? <p className="border-b border-slate-100 bg-[#f8fafc] px-4 py-3 text-[12px] text-slate-600">{text(ar, "Review files larger than 100 MB to manage storage and versions.", "راجع الملفات الأكبر من 100 ميجابايت لإدارة التخزين والإصدارات.")}</p> : null}
           {error ? <p className="bg-red-50 px-4 py-2 text-[12px] text-red-700">{error}</p> : null}
           {notice ? <p className="bg-emerald-50 px-4 py-2 text-[12px] text-emerald-700">{notice}</p> : null}
