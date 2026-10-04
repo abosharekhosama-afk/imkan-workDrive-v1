@@ -177,6 +177,7 @@
 | — | Successful uploads refresh the file table and close the progress card, and Office opening progress reaches the editor | ✅ Implemented |
 | — | My Files, the selection bar, and preview share one action card; nested menus stay on screen; the file table scrolls in its own region; labels and real share expiry show as badges | ✅ Implemented |
 | — | My Account drawer and settings show the signed-in profile, and the profile photo can be changed or removed | ✅ Implemented |
+| — | File action cards stay inside the table and a short table can scroll while the card is open; action submenus, the file table, and the admin sidebar hide their scrollbars | ✅ Implemented |
 
 ---
 

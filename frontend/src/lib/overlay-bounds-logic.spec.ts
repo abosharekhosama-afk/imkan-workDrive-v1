@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { clampBoxLeft, contentLane } from "./overlay-bounds-logic.ts";
+import { clampBoxLeft, contentLane, placeCardInScrollFrame } from "./overlay-bounds-logic.ts";
 
 describe("contentLane", () => {
   it("keeps cards to the right of a left sidebar", () => {
@@ -54,5 +54,65 @@ describe("clampBoxLeft", () => {
     const lane = contentLane(1200, { left: 0, right: 260, width: 260 });
     assert.equal(clampBoxLeft(10, 280, lane), 268);
     assert.equal(clampBoxLeft(1000, 280, lane), 912);
+  });
+});
+describe("placeCardInScrollFrame", () => {
+  it("keeps a tall card below the table header and extends a short table", () => {
+    const placed = placeCardInScrollFrame({
+      anchor: { top: 220, left: 800, right: 832, bottom: 252 },
+      width: 252,
+      height: 480,
+      frameTop: 180,
+      frameBottom: 640,
+      frameLeft: 240,
+      frameRight: 1200,
+      scrollTop: 0,
+      scrollLeft: 0,
+      stickyTop: 40,
+      contentHeight: 160,
+      align: "end",
+    });
+    assert.ok(placed.top >= 40);
+    assert.equal(placed.top, 76);
+    assert.equal(placed.left, 340);
+    assert.equal(placed.scrollPadding, 404);
+  });
+
+  it("does not open a card above the table when the row is near the header", () => {
+    const placed = placeCardInScrollFrame({
+      anchor: { top: 480, left: 400, right: 432, bottom: 512 },
+      width: 252,
+      height: 500,
+      frameTop: 180,
+      frameBottom: 400,
+      frameLeft: 0,
+      frameRight: 900,
+      scrollTop: 0,
+      scrollLeft: 0,
+      stickyTop: 40,
+      contentHeight: 220,
+      align: "end",
+    });
+    assert.ok(placed.top >= 40);
+    assert.equal(placed.top, 336);
+    assert.ok(placed.scrollPadding > 0);
+  });
+
+  it("adds no extra scroll when the table already contains the card", () => {
+    const placed = placeCardInScrollFrame({
+      anchor: { top: 240, left: 500, right: 532, bottom: 272 },
+      width: 252,
+      height: 180,
+      frameTop: 180,
+      frameBottom: 800,
+      frameLeft: 0,
+      frameRight: 1000,
+      scrollTop: 0,
+      scrollLeft: 0,
+      stickyTop: 36,
+      contentHeight: 2000,
+      align: "end",
+    });
+    assert.equal(placed.scrollPadding, 0);
   });
 });

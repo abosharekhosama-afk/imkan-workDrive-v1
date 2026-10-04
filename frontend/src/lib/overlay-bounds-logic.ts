@@ -90,3 +90,67 @@ export function placeFloatingMenu(input: {
   if (top < margin) top = margin;
   return { top, left, maxHeight };
 }
+
+export type TableCardBox = { top: number; left: number; scrollPadding: number };
+
+/**
+ * Places an action card inside a table scrollport.
+ * `top` and `left` are content coordinates. The card starts at or below the
+ * sticky header, and `scrollPadding` extends a short table so the rest of a
+ * tall card can be reached by scrolling.
+ */
+export function placeCardInScrollFrame(input: {
+  anchor: AnchorBox;
+  width: number;
+  height: number;
+  frameTop: number;
+  frameBottom: number;
+  frameLeft: number;
+  frameRight: number;
+  scrollTop: number;
+  scrollLeft: number;
+  stickyTop: number;
+  contentHeight: number;
+  rtl?: boolean;
+  margin?: number;
+  gap?: number;
+  align?: "end" | "side";
+}): TableCardBox {
+  const margin = input.margin ?? 8;
+  const gap = input.gap ?? 4;
+  const width = Math.max(0, input.width);
+  const height = Math.max(0, input.height);
+  const frameWidth = Math.max(0, input.frameRight - input.frameLeft);
+  const frameHeight = Math.max(0, input.frameBottom - input.frameTop);
+  const minTop = Math.max(0, input.stickyTop);
+  const anchorTop = input.anchor.top - input.frameTop + input.scrollTop;
+  const anchorBottom = input.anchor.bottom - input.frameTop + input.scrollTop;
+  const anchorLeft = input.anchor.left - input.frameLeft + input.scrollLeft;
+  const anchorRight = input.anchor.right - input.frameLeft + input.scrollLeft;
+  const visibleBottom = input.scrollTop + frameHeight;
+  const below = anchorBottom + gap;
+  const above = anchorTop - gap - height;
+  const spaceBelow = visibleBottom - below;
+  const spaceAbove = anchorTop - gap - minTop;
+  let top = below;
+  if (height > spaceBelow && spaceAbove > spaceBelow && above >= minTop) top = above;
+  if (top < minTop) top = minTop;
+
+  const rtl = input.rtl ?? false;
+  let unclamped: number;
+  if ((input.align ?? "end") === "end") {
+    unclamped = rtl ? anchorLeft : anchorRight - width;
+  } else {
+    const spaceOnEnd = rtl ? anchorLeft - margin : frameWidth - anchorRight - margin;
+    const spaceOnStart = rtl ? frameWidth - anchorRight - margin : anchorLeft - margin;
+    const openOnEnd = spaceOnEnd >= width || spaceOnEnd >= spaceOnStart;
+    unclamped = openOnEnd
+      ? (rtl ? anchorLeft - width - gap : anchorRight + gap)
+      : (rtl ? anchorRight + gap : anchorLeft - width - gap);
+  }
+  const minLeft = input.scrollLeft + margin;
+  const maxLeft = Math.max(minLeft, input.scrollLeft + frameWidth - width - margin);
+  const left = Math.min(Math.max(minLeft, unclamped), maxLeft);
+  const scrollPadding = Math.max(0, Math.ceil(top + height + margin - input.contentHeight));
+  return { top, left, scrollPadding };
+}

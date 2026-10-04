@@ -3089,12 +3089,20 @@ html[data-sidebar-light="true"] .primary-sidebar{background:#f6f7f9!important;co
   flex-direction: column;
 }
 .wd-file-browser .wd-file-browser-body {
+  position: relative;
   display: flex;
   flex-direction: column;
   flex: 1 1 auto;
   min-height: 0;
   overflow-x: auto;
-  overflow-y: scroll;
+  overflow-y: auto;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.wd-file-browser .wd-file-browser-body::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
 }
 .wd-file-browser .imkan-file-table-root {
   min-height: 0;
@@ -3113,9 +3121,20 @@ html[data-sidebar-light="true"] .primary-sidebar{background:#f6f7f9!important;co
 .wd-file-browser .imkan-table-scroll thead th {
   position: sticky;
   top: 0;
-  z-index: 3;
+  z-index: 30;
   background: var(--wd-bg, #fff);
 }
+.wd-menu.action-submenu {
+  overflow: visible;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.wd-menu.action-submenu::-webkit-scrollbar { display: none; width: 0; height: 0; }
+.admin-console-sidebar nav {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.admin-console-sidebar nav::-webkit-scrollbar { display: none; width: 0; height: 0; }
 .wd-row-marks { display: inline-flex; align-items: center; gap: 4px; flex: none; max-width: 46%; }
 .wd-row-label { display: inline-flex; align-items: center; gap: 4px; max-width: 7.5rem; height: 18px; padding: 0 6px; border-radius: 9px; border: 1px solid var(--wd-line); background: var(--wd-bg, #fff); font-size: 10px; font-weight: 600; line-height: 1; }
 .wd-row-label > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

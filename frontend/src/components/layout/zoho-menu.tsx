@@ -140,7 +140,7 @@ export function ZohoMenu({ open, onClose, onSelect, items, labelledBy, align = "
         const parent = items.find((item) => item !== "sep" && typeof item === "object" && "key" in item && item.key === activeKey) as MenuItem | undefined;
         if (!parent?.submenuItems?.length) return null;
         return (
-          <div role="menu" className="wd-menu fixed w-[250px] overflow-auto" style={{ top: submenuPos.top, left: submenuPos.left, maxHeight: submenuPos.maxHeight, zIndex: zIndex + 1 }}
+          <div role="menu" className="wd-menu action-submenu fixed w-[250px] overflow-visible" style={{ top: submenuPos.top, left: submenuPos.left, zIndex: zIndex + 1 }}
             onMouseLeave={() => { setActiveKey(null); setSubmenuPos(null); }}>
             {parent.submenuItems.map((child, i) => child === "sep" ? <div key={`sub-sep-${i}`} className="wd-menu-sep" role="separator" /> : (
               <button key={child.key} type="button" role="menuitem" disabled={child.disabled} data-danger={child.danger || undefined}

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import {
   Popover,
@@ -9,7 +9,7 @@ import {
   PopoverPortal,
 } from "@radix-ui/react-popover";
 import { useLocale } from "./locale-provider";
-import { placeFloatingMenu, readContentLane } from "../lib/overlay-bounds-logic";
+import { placeCardInScrollFrame, placeFloatingMenu, readContentLane } from "../lib/overlay-bounds-logic";
 
 export type ActionDropdownItem = {
   label: string;
@@ -83,18 +83,70 @@ function groupItems(items: ActionDropdownItem[]): ActionGroup[] {
   return groups;
 }
 
-function RenderItem({ item, close, rtl, zIndex }: { item: ActionDropdownItem; close: () => void; rtl: boolean; zIndex: number }) {
+function fileTableHost(node: HTMLElement | null): HTMLElement | null {
+  if (!node) return null;
+  const direct = node.closest(".wd-file-browser-body");
+  if (direct instanceof HTMLElement) return direct;
+  const browser = node.closest(".wd-file-browser");
+  const body = browser?.querySelector(".wd-file-browser-body");
+  return body instanceof HTMLElement ? body : null;
+}
+
+function tableStickyHeight(host: HTMLElement) {
+  const head = host.querySelector("thead");
+  return head instanceof HTMLElement ? head.offsetHeight : 0;
+}
+
+function tableContentHeight(host: HTMLElement) {
+  let content = 0;
+  for (const child of host.children) {
+    if (!(child instanceof HTMLElement) || child.classList.contains("wd-menu")) continue;
+    content = Math.max(content, child.offsetTop + child.offsetHeight);
+  }
+  return content;
+}
+
+function applyTableMenuPad(host: HTMLElement, pad: number) {
+  const next = Math.max(0, Math.ceil(pad));
+  host.dataset.wdMenuPad = String(next);
+  host.style.paddingBottom = next > 0 ? `${next}px` : "";
+}
+
+function RenderItem({ item, close, rtl, zIndex, host, onSubPad }: { item: ActionDropdownItem; close: () => void; rtl: boolean; zIndex: number; host: HTMLElement | null; onSubPad: (pad: number) => void }) {
   const [subOpen, setSubOpen] = useState(false);
   const anchorRef = useRef<HTMLButtonElement | null>(null);
   const closeTimer = useRef<number | null>(null);
-  const [box, setBox] = useState<{ top: number; left: number; maxHeight: number } | null>(null);
+  const [box, setBox] = useState<{ top: number; left: number } | null>(null);
   const place = () => {
     const node = anchorRef.current;
     if (!node || !item.submenu?.length) return;
     const rect = node.getBoundingClientRect();
     const height = item.submenu.length * 36 + 12;
+    const anchor = { top: rect.top, left: rect.left, right: rect.right, bottom: rect.bottom };
+    if (host) {
+      const frame = host.getBoundingClientRect();
+      const placed = placeCardInScrollFrame({
+        anchor,
+        width: 220,
+        height,
+        frameTop: frame.top,
+        frameBottom: frame.bottom,
+        frameLeft: frame.left,
+        frameRight: frame.right,
+        scrollTop: host.scrollTop,
+        scrollLeft: host.scrollLeft,
+        stickyTop: tableStickyHeight(host),
+        contentHeight: tableContentHeight(host),
+        rtl,
+        align: "side",
+      });
+      onSubPad(placed.scrollPadding);
+      setBox(placed);
+      return;
+    }
+    onSubPad(0);
     setBox(placeFloatingMenu({
-      anchor: { top: rect.top, left: rect.left, right: rect.right, bottom: rect.bottom },
+      anchor,
       width: 220,
       height,
       viewportWidth: window.innerWidth,
@@ -121,8 +173,9 @@ function RenderItem({ item, close, rtl, zIndex }: { item: ActionDropdownItem; cl
       window.removeEventListener("resize", onMove);
       window.removeEventListener("scroll", onMove, true);
       if (closeTimer.current) window.clearTimeout(closeTimer.current);
+      onSubPad(0);
     };
-  }, [subOpen, rtl]);
+  }, [subOpen, rtl, host]);
   if (!item.submenu) {
     return (
         <button
@@ -190,21 +243,31 @@ function RenderItem({ item, close, rtl, zIndex }: { item: ActionDropdownItem; cl
       </button>
       {subOpen && box && typeof document !== "undefined" ? createPortal(
         <div
-          className="wd-menu fixed min-w-[220px] overflow-auto shadow-lg"
+          className={`wd-menu action-submenu min-w-[220px] overflow-visible shadow-lg ${host ? "absolute" : "fixed"}`}
           role="menu"
-          style={{ top: box.top, left: box.left, maxHeight: box.maxHeight, zIndex: zIndex + 20, width: 220 }}
+          style={{ top: box.top, left: box.left, zIndex: zIndex + 20, width: 220 }}
           onPointerDown={(event) => event.stopPropagation()}
           onMouseEnter={openSub}
           onMouseLeave={scheduleClose}
         >
           {item.submenu.map((sub) => (
-            <RenderItem key={sub.label} item={sub} close={close} rtl={rtl} zIndex={zIndex + 20} />
+            <RenderItem key={sub.label} item={sub} close={close} rtl={rtl} zIndex={zIndex + 20} host={host} onSubPad={onSubPad} />
           ))}
         </div>,
-        document.body,
+        host ?? document.body,
       ) : null}
     </div>
   );
+}
+
+function menuPanel(grouped: ActionGroup[], close: () => void, rtl: boolean, zIndex: number, host: HTMLElement | null, onSubPad: (pad: number) => void) {
+  return grouped.map((group, groupIndex) => (
+    <div key={groupIndex} className={groupIndex > 0 ? "border-t border-[color:var(--imkan-color-border)] pt-1" : ""}>
+      {group.items.map((item) => (
+        <RenderItem key={item.label} item={item} close={close} rtl={rtl} zIndex={zIndex} host={host} onSubPad={onSubPad} />
+      ))}
+    </div>
+  ));
 }
 
 export function ActionDropdown({ label, items, trigger, zIndex = 200 }: ActionDropdownProps) {
@@ -212,12 +275,95 @@ export function ActionDropdown({ label, items, trigger, zIndex = 200 }: ActionDr
   const rtl = locale === "ar";
   const groupedItems = groupItems(items);
   const [open, setOpen] = useState(false);
+  const anchorRef = useRef<HTMLSpanElement | null>(null);
+  const menuRef = useRef<HTMLDivElement | null>(null);
+  const pads = useRef({ card: 0, sub: 0 });
+  const hostRef = useRef<HTMLElement | null>(null);
+  const [cardBox, setCardBox] = useState<{ top: number; left: number } | null>(null);
+  const [menuHeight, setMenuHeight] = useState(0);
+  const host = open ? fileTableHost(anchorRef.current) : null;
+  hostRef.current = host;
   const collisionPadding = typeof window === "undefined"
     ? 16
     : (() => {
         const lane = readContentLane();
         return { top: 8, bottom: 8, left: lane.left, right: Math.max(8, window.innerWidth - lane.right) };
       })();
+
+  const publishPad = (nextHost: HTMLElement | null) => {
+    if (!nextHost) return;
+    applyTableMenuPad(nextHost, Math.max(pads.current.card, pads.current.sub));
+  };
+  const onSubPad = (pad: number) => {
+    pads.current.sub = pad;
+    publishPad(hostRef.current);
+  };
+
+  useLayoutEffect(() => {
+    if (!open || !host || !anchorRef.current) {
+      if (hostRef.current && !open) {
+        pads.current = { card: 0, sub: 0 };
+        applyTableMenuPad(hostRef.current, 0);
+      }
+      return;
+    }
+    const place = () => {
+      const node = anchorRef.current;
+      const frameHost = hostRef.current;
+      if (!node || !frameHost) return;
+      const rect = node.getBoundingClientRect();
+      const height = menuHeight || menuRef.current?.offsetHeight || items.length * 36 + 28;
+      const frame = frameHost.getBoundingClientRect();
+      const placed = placeCardInScrollFrame({
+        anchor: { top: rect.top, left: rect.left, right: rect.right, bottom: rect.bottom },
+        width: 252,
+        height,
+        frameTop: frame.top,
+        frameBottom: frame.bottom,
+        frameLeft: frame.left,
+        frameRight: frame.right,
+        scrollTop: frameHost.scrollTop,
+        scrollLeft: frameHost.scrollLeft,
+        stickyTop: tableStickyHeight(frameHost),
+        contentHeight: tableContentHeight(frameHost),
+        rtl,
+        align: "end",
+      });
+      pads.current.card = placed.scrollPadding;
+      publishPad(frameHost);
+      setCardBox((current) => current && current.top === placed.top && current.left === placed.left ? current : { top: placed.top, left: placed.left });
+    };
+    place();
+    const onMove = () => place();
+    window.addEventListener("resize", onMove);
+    host.addEventListener("scroll", onMove);
+    return () => {
+      window.removeEventListener("resize", onMove);
+      host.removeEventListener("scroll", onMove);
+    };
+  }, [open, host, items.length, menuHeight, rtl]);
+
+  useLayoutEffect(() => {
+    const next = menuRef.current?.offsetHeight ?? 0;
+    if (next && next !== menuHeight) setMenuHeight(next);
+  }, [open, cardBox, items.length, menuHeight]);
+
+  useEffect(() => {
+    if (!open || !host) return;
+    const onKey = (event: KeyboardEvent) => { if (event.key === "Escape") setOpen(false); };
+    const onPointer = (event: PointerEvent) => {
+      const target = event.target;
+      if (!(target instanceof Node)) return;
+      if (anchorRef.current?.contains(target) || menuRef.current?.contains(target)) return;
+      setOpen(false);
+    };
+    document.addEventListener("keydown", onKey);
+    document.addEventListener("pointerdown", onPointer);
+    return () => {
+      document.removeEventListener("keydown", onKey);
+      document.removeEventListener("pointerdown", onPointer);
+    };
+  }, [open, host]);
 
   const defaultTrigger = (
       <button
@@ -242,7 +388,24 @@ export function ActionDropdown({ label, items, trigger, zIndex = 200 }: ActionDr
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
-      <PopoverTrigger asChild>{trigger ?? defaultTrigger}</PopoverTrigger>
+      <span ref={anchorRef} className="inline-flex">
+        <PopoverTrigger asChild>{trigger ?? defaultTrigger}</PopoverTrigger>
+      </span>
+      {host ? (open && cardBox && typeof document !== "undefined" ? createPortal(
+        <div
+          ref={menuRef}
+          role="menu"
+          dir={rtl ? "rtl" : "ltr"}
+          className="wd-menu absolute w-64 overflow-visible"
+          style={{ top: cardBox.top, left: cardBox.left, minWidth: "252px", zIndex: 20 }}
+          onPointerDown={(event) => event.stopPropagation()}
+          onMouseDown={(event) => event.stopPropagation()}
+          onClick={(event) => event.stopPropagation()}
+        >
+          {menuPanel(groupedItems, () => setOpen(false), rtl, 4, host, onSubPad)}
+        </div>,
+        host,
+      ) : null) : (
       <PopoverPortal>
         <PopoverContent
           onPointerDown={(event) => event.stopPropagation()}
@@ -258,15 +421,10 @@ export function ActionDropdown({ label, items, trigger, zIndex = 200 }: ActionDr
           className="wd-menu w-64 overflow-visible"
           style={{ minWidth: "252px", zIndex }}
         >
-          {groupedItems.map((group, groupIndex) => (
-            <div key={groupIndex} className={groupIndex > 0 ? "border-t border-[color:var(--imkan-color-border)] pt-1" : ""}>
-              {group.items.map((item) => (
-                <RenderItem key={item.label} item={item} close={() => setOpen(false)} rtl={rtl} zIndex={zIndex} />
-              ))}
-            </div>
-          ))}
+          {menuPanel(groupedItems, () => setOpen(false), rtl, zIndex, null, onSubPad)}
         </PopoverContent>
       </PopoverPortal>
+      )}
     </Popover>
   );
 }

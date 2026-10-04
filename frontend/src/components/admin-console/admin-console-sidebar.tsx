@@ -54,7 +54,7 @@ export function AdminConsoleSidebar() {
         </Link>
       </div>
 
-      <nav className="min-h-0 flex-1 overflow-y-auto px-2 py-4" aria-label={ar ? "تنقل وحدة الإدارة" : "Admin console navigation"}>
+      <nav className="sidebar-scroll-hidden min-h-0 flex-1 overflow-y-auto px-2 py-4" aria-label={ar ? "تنقل وحدة الإدارة" : "Admin console navigation"}>
         {items.map((item, index) => {
           const previous = items[index - 1];
           const showSection = item.section && item.section !== previous?.section;
