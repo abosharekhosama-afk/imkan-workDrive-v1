@@ -1,17 +1,13 @@
 /**
  * Bridge between WorkDrive OfficeDocument.content and Univer unit snapshots.
- *
- * Stored shape (accepted by backend normalizeOfficeContent):
- * {
- *   __engine: "univer",
- *   type: "WRITER" | "SHEET" | "SHOW",
- *   kind: "writer" | "sheet" | "show",
- *   snapshot: object,
- *   savedAt?: string
- * }
  */
 
-export type UniverKind = "writer" | "sheet" | "show";
+import {
+  imkanContentToUniverSnapshot,
+  type UniverKind,
+} from "./imkan-to-univer";
+
+export type { UniverKind };
 
 export type UniverStoredContent = {
   __engine: "univer";
@@ -43,10 +39,15 @@ export function wrapUniverContent(kind: UniverKind, snapshot: Record<string, unk
   };
 }
 
-export function extractUniverSnapshot(content: unknown): {
+export function extractUniverSnapshot(
+  content: unknown,
+  preferredKind?: UniverKind,
+  title?: string,
+): {
   kind?: UniverKind;
   snapshot: Record<string, unknown> | null;
   legacy: boolean;
+  source: "univer" | "imkan" | "empty";
 } {
   if (isUniverStoredContent(content)) {
     const kind =
@@ -58,11 +59,26 @@ export function extractUniverSnapshot(content: unknown): {
             ? "show"
             : "writer";
     const snap = content.snapshot as Record<string, unknown>;
-    // Empty object means no prior snapshot
     const hasData = snap && Object.keys(snap).length > 0;
-    return { kind, snapshot: hasData ? snap : null, legacy: false };
+    return { kind, snapshot: hasData ? snap : null, legacy: false, source: "univer" };
   }
-  return { kind: undefined, snapshot: null, legacy: content != null };
+
+  if (content && typeof content === "object") {
+    const c = content as any;
+    const kind: UniverKind =
+      preferredKind ||
+      (String(c.type).toUpperCase() === "SHEET"
+        ? "sheet"
+        : String(c.type).toUpperCase() === "SHOW"
+          ? "show"
+          : "writer");
+    const converted = imkanContentToUniverSnapshot(content, kind, title);
+    if (converted) {
+      return { kind, snapshot: converted, legacy: true, source: "imkan" };
+    }
+  }
+
+  return { kind: preferredKind, snapshot: null, legacy: content != null, source: "empty" };
 }
 
 export function officeTypeToKind(type: string | null | undefined): UniverKind {
