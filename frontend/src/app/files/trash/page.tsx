@@ -9,8 +9,6 @@ import type { FileRecord } from "../../../lib/api/types";
 import { fileIconKind, FileTypeIcon } from "../../../components/file-icon";
 import { errorMessageForStatus } from "../../../components/feedback-state-logic";
 import { formatBytes, resolveItemSize } from "../../../lib/api/quota";
-import { ConfirmActionModal } from "../../../components/confirm-action-modal";
-import { Toast } from "../../../components/toast";
 
 function formatDate(value?: string | null): string {
   if (!value) return "—";
@@ -24,8 +22,7 @@ export default function TrashPage() {
   const [notice, setNotice] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [busyId, setBusyId] = useState<string | null>(null);
-  const [confirm, setConfirm] = useState<{ title: string; description: string; confirm: string; run: () => Promise<void> } | null>(null);
-  const [toast, setToast] = useState<string | null>(null);
+  const [query, setQuery] = useState("");
 
   const load = useCallback(async () => {
     try {
@@ -54,6 +51,7 @@ export default function TrashPage() {
     () => files.reduce((sum, file) => sum + (file.size ?? 0), 0),
     [files],
   );
+  const visibleFiles = useMemo(() => { const q = query.trim().toLowerCase(); return q ? files.filter((f) => f.name.toLowerCase().includes(q) || String(f.folderName ?? "").toLowerCase().includes(q)) : files; }, [files, query]);
 
   async function handleRestore(fileId: string) {
     setBusyId(fileId);
@@ -68,64 +66,41 @@ export default function TrashPage() {
     }
   }
 
-  function handleDeleteForever(fileId: string) {
-    const ar = locale === "ar";
-    setConfirm({
-      title: ar ? "حذف الملف نهائيًا" : "Delete Forever",
-      description: ar ? "لا يمكن التراجع عن حذف الملف نهائيًا." : "This file will be permanently deleted and cannot be restored.",
-      confirm: ar ? "حذف نهائي" : "Delete Forever",
-      run: async () => {
-        setBusyId(fileId); setError(null);
-        try { await permanentDeleteFile(fileId); await load(); setToast(ar ? "تم حذف الملف نهائيًا" : "File permanently deleted"); }
-        catch { setError(label("error.generic")); throw new Error(label("error.generic")); }
-        finally { setBusyId(null); }
-      },
-    });
+  async function handleDeleteForever(fileId: string) {
+    if (!window.confirm(label("trash.confirmPermanent"))) return;
+    setBusyId(fileId);
+    setError(null);
+    try {
+      await permanentDeleteFile(fileId);
+      await load();
+    } catch {
+      setError(label("error.generic"));
+    } finally {
+      setBusyId(null);
+    }
   }
 
-  function handleEmptyTrash() {
-    const ar = locale === "ar";
-    setConfirm({
-      title: ar ? "إفراغ سلة المهملات" : "Empty Trash",
-      description: ar ? "سيتم حذف جميع العناصر الموجودة في سلة المهملات نهائيًا." : "All items currently in Trash will be permanently deleted.",
-      confirm: ar ? "إفراغ السلة" : "Empty Trash",
-      run: async () => {
-        setError(null);
-        try { await emptyTrash(); await load(); setToast(ar ? "تم إفراغ سلة المهملات" : "Trash emptied"); }
-        catch { setError(label("error.generic")); throw new Error(label("error.generic")); }
-      },
-    });
+  async function handleEmptyTrash() {
+    if (!window.confirm(label("trash.confirmEmpty"))) return;
+    setError(null);
+    try {
+      await emptyTrash();
+      await load();
+    } catch {
+      setError(label("error.generic"));
+    }
   }
 
   return (
     <div className="wd-page">
-      <header className="wd-page-head">
-        <div className="wd-page-head-titles">
-          <h1>
-            {label("files.trash")}
-            {files.length > 0 ? <span className="wd-count-pill ms-2 align-middle">{files.length}</span> : null}
-          </h1>
-          <p>
-            {files.length > 0 ? `${formatBytes(totalSize)}` : ""}
-          </p>
-        </div>
-        <div className="wd-page-head-actions">
-          <button type="button" className="wd-btn wd-btn-ghost" onClick={() => void load()} disabled={loading}>
-            ⟳ {label("recent.refresh")}
-          </button>
-          {files.length > 0 ? (
-            <button type="button" className="wd-btn wd-btn-danger" onClick={() => void handleEmptyTrash()}>
-              ⌫ {label("trash.emptyTrash")}
-            </button>
-          ) : null}
-        </div>
+      <header className="zoho-trash-head">
+        <div><h1>⌫ {label("files.trash")}</h1><p>{files.length} {locale === "ar" ? "عنصر" : "items"} · {formatBytes(totalSize)}</p></div>
+        <div className="zoho-trash-actions"><button type="button" className="wd-btn wd-btn-ghost" onClick={() => void load()} disabled={loading}>⟳ {label("recent.refresh")}</button>{files.length > 0 ? <button type="button" className="wd-btn wd-btn-danger" onClick={() => void handleEmptyTrash()}>⌫ {label("trash.emptyTrash")}</button> : null}</div>
       </header>
+      <div className="zoho-trash-toolbar"><div className="zoho-trash-search"><span>⌕</span><input value={query} onChange={(e)=>setQuery(e.target.value)} placeholder={locale === "ar" ? "البحث في سلة المحذوفات" : "Search trash"}/></div><span className="zoho-trash-retention">{locale === "ar" ? "العناصر المحذوفة يمكن استعادتها من هنا." : "Deleted items can be restored from here."}</span></div>
 
       {error ? <div className="wd-alert" role="alert">{error}</div> : null}
       {!error && notice ? <div className="wd-alert wd-alert-success" role="status">{notice}</div> : null}
-
-      {confirm ? <ConfirmActionModal title={confirm.title} description={confirm.description} confirmLabel={confirm.confirm} onClose={() => setConfirm(null)} onConfirm={async () => { await confirm.run(); setConfirm(null); }} tone="danger" /> : null}
-      {toast ? <Toast message={toast} onDismiss={() => setToast(null)} /> : null}
 
       {loading ? (
         <div className="wd-card" aria-busy="true">
@@ -152,18 +127,14 @@ export default function TrashPage() {
         </div>
       ) : (
         <div className="wd-card overflow-x-auto w-full max-w-full">
-          <table className="wd-table min-w-[48rem]">
+          <table className="zoho-info-table zoho-trash-table">
             <thead>
               <tr>
-                <th>{label("files.column.name")}</th>
-                <th>{label("trash.location")}</th>
-                <th>{label("trash.deletedAt")}</th>
-                <th className="num">{label("files.column.size")}</th>
-                <th className="num">{label("files.actions")}</th>
+                <th>{label("files.column.name")}</th><th>{label("trash.location")}</th><th>{label("trash.deletedAt")}</th><th className="num">{label("files.column.size")}</th><th className="num">{label("files.actions")}</th>
               </tr>
             </thead>
             <tbody>
-              {files.map((file) => (
+              {visibleFiles.map((file) => (
                 <tr key={file.id}>
                   <td>
                     <div className="wd-name-cell">
