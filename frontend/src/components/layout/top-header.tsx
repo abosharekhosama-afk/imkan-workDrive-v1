@@ -245,10 +245,10 @@ export function TopHeader({ adminMode = false }: { adminMode?: boolean }) {
                 <button type="button" role="menuitem" onClick={() => { setManageOpen(false); setSearchOpen(true); requestAnimationFrame(() => searchInputRef.current?.focus()); }}>
                   <Icons.search size={16} /><span>{locale === "ar" ? "بحث في مجلداتي" : "Search in My Folders"}</span>
                 </button>
-                <button type="button" role="menuitem" onClick={() => { setManageOpen(false); router.push("/files/trash"); }}>
+                <button type="button" role="menuitem" onClick={() => { setManageOpen(false); router.push("/files/manage?tab=trash"); }}>
                   <Icons.trash size={16} /><span>{locale === "ar" ? "سلة المهملات" : "Trash"}</span>
                 </button>
-                <button type="button" role="menuitem" onClick={() => { setManageOpen(false); router.push("/files/shared-by-me"); }}>
+                <button type="button" role="menuitem" onClick={() => { setManageOpen(false); router.push("/files/manage?tab=shared"); }}>
                   <Icons.share size={16} /><span>{locale === "ar" ? "العناصر المشتركة" : "Shared Items"}</span>
                 </button>
                 <button type="button" role="menuitem" onClick={() => { setManageOpen(false); router.push("/files/manage?tab=large"); }}>
