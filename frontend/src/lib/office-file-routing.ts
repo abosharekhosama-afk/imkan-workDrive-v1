@@ -22,17 +22,12 @@ export function isNativeImkanOfficeFile(fileName: string, mimeType?: string | nu
   return ext === "imkan" || (mimeType ?? "").toLowerCase().startsWith("application/vnd.imkan.");
 }
 
-/** Legacy IMKAN Office path — kept for reference only; not used as primary open. */
 export function imkanOfficeEditorPath(fileId: string, fileName: string, mimeType?: string | null): string | null {
   const editor = resolveOfficeEditor(fileName, mimeType);
   return editor ? `/office/${editor}/${encodeURIComponent(fileId)}` : null;
 }
 
-/**
- * PRIMARY editor path — always Univer for every editable office type
- * (documents, spreadsheets, presentations, including legacy .imkan).
- * IMKAN Office routes remain in the codebase but are not activated.
- */
+/** Always Univer for every editable office type. */
 export function officeEditorPath(fileId: string, fileName: string, mimeType?: string | null): string | null {
   const editor = resolveOfficeEditor(fileName, mimeType);
   if (!editor) return null;
