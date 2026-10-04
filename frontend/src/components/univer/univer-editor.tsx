@@ -135,7 +135,6 @@ async function bootUniver(
   let UniverSlidesUIPlugin: any = null;
   let UniverDrawingPlugin: any = null;
   let SlidesUIEnUS: any = null;
-  let SlidesEnUS: any = null;
 
   if (kind === 'show') {
     try {
@@ -150,11 +149,6 @@ async function bootUniver(
         /* drawing optional on some builds */
       }
       SlidesUIEnUS = (await import('@univerjs/slides-ui/locale/en-US')).default ?? (await import('@univerjs/slides-ui/locale/en-US'));
-      try {
-        SlidesEnUS = (await import('@univerjs/slides/locale/en-US')).default ?? (await import('@univerjs/slides/locale/en-US'));
-      } catch {
-        /* locale optional */
-      }
       await import('@univerjs/slides-ui/lib/index.css');
     } catch (e) {
       console.error('[Univer] slides packages missing — run npm install @univerjs/slides @univerjs/slides-ui', e);
@@ -183,7 +177,10 @@ async function bootUniver(
   container.style.minHeight = '560px';
   container.style.position = 'relative';
 
-  const localeBags = [DesignEnUS, UIEnUS, DocsUIEnUS, SheetsUIEnUS, SlidesUIEnUS, SlidesEnUS].filter(Boolean);
+  // @univerjs/slides@0.25.1 does not expose the core slides locale at
+  // @univerjs/slides/locale/en-US. Keep the Slides UI locale (when available)
+  // and let the core package fall back to the registered UI/core locale.
+  const localeBags = [DesignEnUS, UIEnUS, DocsUIEnUS, SheetsUIEnUS, SlidesUIEnUS].filter(Boolean);
   const locales = mergeLocales(...(localeBags as any[]));
 
   const univer = new Univer({
