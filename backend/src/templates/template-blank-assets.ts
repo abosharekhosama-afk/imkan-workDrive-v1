@@ -71,5 +71,6 @@ export function templateOfficeEditorPath(
 ): string | null {
   const segment = templateOfficeEditorSegment(officeType, extension);
   if (!segment) return null;
-  return `/office/${segment}/${fileId}?templateId=${encodeURIComponent(templateId)}`;
+  // Primary editor is Univer; IMKAN Office remains at /office/{segment}/...
+  return `/office/univer/${encodeURIComponent(fileId)}?kind=${segment}&templateId=${encodeURIComponent(templateId)}`;
 }
