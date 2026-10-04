@@ -20,7 +20,6 @@ import { ApiError } from "../lib/api/client";
 import type { FileRecord, FolderRecord } from "../lib/api/types";
 import { searchNames } from "../lib/api/search";
 import { DeleteModal } from "./delete-modal";
-import { ConfirmActionModal } from "./confirm-action-modal";
 import { RenameModal } from "./rename-modal";
 import { Modal } from "./modal";
 import { MoveModal } from "./move-modal";
@@ -102,8 +101,6 @@ export function FileBrowser({
     name: string;
   } | null>(null);
   const [toast, setToast] = useState<string | null>(null);
-  const [toastTone, setToastTone] = useState<"success" | "error" | "info">("success");
-  const [controlConfirmation, setControlConfirmation] = useState<{ id: string; action: FileControlAction } | null>(null);
   const [shareTarget, setShareTarget] = useState<{
     type: "FILE" | "FOLDER";
     id: string;
@@ -565,13 +562,9 @@ export function FileBrowser({
 
   async function onVersionHistory(type: "FILE" | "FOLDER", id: string, name: string, mimeType?: string, size?: number) {
     if (type !== "FILE") return;
-    setVersionHistoryTarget({
-      type,
-      id,
-      name,
-      mimeType,
-      size,
-    });
+    // Zoho WorkDrive opens Version History as a dedicated information surface
+    // (General Info / Versions / Activity / Access Stats), not as a small drawer.
+    router.push(`/files/details/${encodeURIComponent(id)}?tab=versions`);
   }
 
   useEffect(() => {
@@ -778,42 +771,23 @@ export function FileBrowser({
     return () => window.removeEventListener("workdrive:file-control", onControl);
   }, []);
 
-  const executeControl = useCallback(async (id: string, action: FileControlAction) => {
+  const runControl = useCallback(async (id: string, action: FileControlAction) => {
     const ar = locale === "ar";
+    if (action === "mark-final" && !window.confirm(ar ? "تعليم هذا الملف كمنتهٍ؟ سيصبح للقراءة فقط." : "Mark this file as final? It will become read-only.")) return;
+    if (action === "enable-editing" && !window.confirm(ar ? "تفعيل التعديل لهذا الملف المنتهي؟" : "Enable editing for this final file?")) return;
     try {
       const result = await runFileControl(id, action);
       setFiles((rows) => rows.map((row) => row.id === id ? { ...row, isFinal: result.isFinal, checkedOutById: result.checkedOutById, checkedOutAt: result.checkedOutAt, indexedAt: result.indexedAt } : row));
       const done = action === "check-out" ? (ar ? "تم سحب الملف" : "File checked out")
         : action === "check-in" ? (ar ? "تم إرجاع الملف" : "File checked in")
-        : action === "mark-final" ? (ar ? "تم تعليم الملف كنهائي" : "File marked as final")
-        : action === "enable-editing" ? (ar ? "تم تفعيل التعديل للملف" : "Editing enabled for the file")
+        : action === "mark-final" ? (ar ? "تم التعليم كمنتهٍ" : "Marked as final")
+        : action === "enable-editing" ? (ar ? "تم تفعيل التعديل" : "Editing enabled")
         : (ar ? "تم تحديث فهرس البحث" : "Search index refreshed");
-      setToastTone("success");
       setToast(done);
     } catch (error) {
-      setToastTone("error");
-      setToast(error instanceof Error ? error.message : (ar ? "تعذر تنفيذ الإجراء" : "Action failed"));
-      throw error;
+      window.alert(error instanceof Error ? error.message : (ar ? "تعذر تنفيذ الإجراء" : "Action failed"));
     }
   }, [locale]);
-
-  const requestControl = useCallback((id: string, action: FileControlAction) => {
-    if (action === "reindex") { void executeControl(id, action); return; }
-    setControlConfirmation({ id, action });
-  }, [executeControl]);
-
-  const controlConfirmationCopy = useMemo(() => {
-    if (!controlConfirmation) return null;
-    const ar = locale === "ar";
-    const copy: Record<FileControlAction, { title: string; description: string; confirm: string }> = {
-      "check-out": { title: ar ? "سحب الملف للتحرير" : "Check Out File", description: ar ? "سيتم قفل الملف للتحرير الحصري مؤقتًا حتى يتم إرجاعه." : "The file will be checked out for exclusive editing until it is checked in.", confirm: ar ? "سحب الملف" : "Check Out" },
-      "check-in": { title: ar ? "إرجاع الملف" : "Check In File", description: ar ? "سيتم إنهاء جلسة التحرير وإتاحة الملف للحالة التالية." : "The editing session will end and the file will be available again.", confirm: ar ? "إرجاع الملف" : "Check In" },
-      "mark-final": { title: ar ? "تعليم الملف كنهائي" : "Mark as Final", description: ar ? "سيصبح الملف للقراءة فقط ولن يتمكن المستخدمون من تعديله حتى يتم تفعيل التعديل مرة أخرى." : "The file will become read-only and users will not be able to edit it until editing is enabled again.", confirm: ar ? "تعليم كنهائي" : "Mark as Final" },
-      "enable-editing": { title: ar ? "تفعيل التعديل" : "Enable Editing", description: ar ? "سيتم السماح للمستخدمين بتعديل الملف مرة أخرى." : "This will allow users to edit the file again.", confirm: ar ? "تفعيل التعديل" : "Enable Editing" },
-      reindex: { title: ar ? "تحديث الفهرس" : "Refresh Search Index", description: ar ? "سيتم إعادة فهرسة الملف للبحث." : "The file will be re-indexed for search.", confirm: ar ? "تحديث الفهرس" : "Refresh Index" },
-    };
-    return copy[controlConfirmation.action];
-  }, [controlConfirmation, locale]);
 
   const singleId = selectedIds.size === 1 ? [...selectedIds][0] : undefined;
   const singleFolder = singleId ? folders.find((item) => item.id === singleId) : undefined;
@@ -833,11 +807,11 @@ export function FileBrowser({
     onLabels: () => setLabelTarget({ type: "FILE", id: singleFile.id, name: singleFile.name }),
     onFavoriteToggle: () => { void handleFavorite("FILE", singleFile.id); },
     onCopyLink: canShare ? () => { void copyShareLink({ type: "FILE", id: singleFile.id }); } : undefined,
-    onReindex: () => requestControl(singleFile.id, "reindex"),
-    onCheckOut: () => requestControl(singleFile.id, "check-out"),
-    onCheckIn: () => requestControl(singleFile.id, "check-in"),
-    onMarkFinal: () => requestControl(singleFile.id, "mark-final"),
-    onEnableEditing: () => requestControl(singleFile.id, "enable-editing"),
+    onReindex: () => { void runControl(singleFile.id, "reindex"); },
+    onCheckOut: () => { void runControl(singleFile.id, "check-out"); },
+    onCheckIn: () => { void runControl(singleFile.id, "check-in"); },
+    onMarkFinal: () => { void runControl(singleFile.id, "mark-final"); },
+    onEnableEditing: () => { void runControl(singleFile.id, "enable-editing"); },
     onOpenInOffice: officeEditorPath(singleFile.id, singleFile.name, singleFile.mimeType) ? () => {
       // Standard Office files open in Univer; native .imkan files stay on IMKAN Office.
       window.location.assign(officeEditorPath(singleFile.id, singleFile.name, singleFile.mimeType)!);
@@ -925,7 +899,7 @@ export function FileBrowser({
           onInspect={handleInspect}
           favoriteIds={favoriteIds}
           canFavorite={true}
-          onFileControl={(id, action) => { requestControl(id, action); }}
+          onFileControl={(id, action) => { void runControl(id, action); }}
         />
       ) : (
         <FileTable
@@ -958,7 +932,7 @@ export function FileBrowser({
           onLabelAs={(type,id,name)=>setLabelTarget({type,id,name})}
           onOrganize={(type,id)=>{ const item = type === "FILE" ? files.find(x=>x.id===id) : folders.find(x=>x.id===id); if (item) setDataTemplateTargets([{ type, id, name: item.name }]); }}
           followIds={followIds}
-          onFileControl={(id, action) => { requestControl(id, action); }}
+          onFileControl={(id, action) => { void runControl(id, action); }}
           workflowStatuses={workflowStatuses}
           rowLabels={rowLabels}
           rowExpiry={rowExpiry}
@@ -1125,21 +1099,6 @@ export function FileBrowser({
           }}
         />
       ) : null}
-    {controlConfirmation && controlConfirmationCopy ? (
-      <ConfirmActionModal
-        title={controlConfirmationCopy.title}
-        description={controlConfirmationCopy.description}
-        confirmLabel={controlConfirmationCopy.confirm}
-        cancelLabel={locale === "ar" ? "إلغاء" : "Cancel"}
-        onClose={() => setControlConfirmation(null)}
-        onConfirm={async () => {
-          const target = controlConfirmation;
-          if (!target) return;
-          await executeControl(target.id, target.action);
-          setControlConfirmation(null);
-        }}
-      />
-    ) : null}
     {workflowStatusTarget ? (
       <Modal title="Workflow status" onClose={() => setWorkflowStatusTarget(null)} footer={<button type="button" className="imkan-button-secondary" onClick={() => setWorkflowStatusTarget(null)}>Close</button>}>
         <div className="space-y-4"><div><div className="text-[11px] text-slate-500">Resource</div><div className="text-sm font-medium">{workflowStatusTarget.resourceName}</div></div><div><div className="text-[11px] text-slate-500">Workflow</div><div className="text-sm font-medium">{workflowStatusTarget.status.workflowName}</div></div><div className="grid grid-cols-2 gap-3"><div><div className="text-[11px] text-slate-500">Status</div><div className="text-sm">{workflowStatusTarget.status.status}</div></div><div><div className="text-[11px] text-slate-500">Current state</div><div className="text-sm">{workflowStatusTarget.status.state?.name ?? '—'}</div></div></div>{workflowStatusTarget.status.myPendingTask ? <div className="rounded-md border border-slate-200 bg-slate-50 p-3"><div className="text-[11px] font-medium text-slate-500">Your action</div><div className="mt-1 text-sm">{workflowStatusTarget.status.myPendingTask.title}</div>{workflowStatusTarget.status.myPendingTask.dueAt ? <div className="mt-1 text-[11px] text-slate-500">Due {new Date(workflowStatusTarget.status.myPendingTask.dueAt).toLocaleString()}</div> : null}</div> : null}</div>
@@ -1205,7 +1164,7 @@ export function FileBrowser({
     {followTargets?.length ? <FollowUpdatesModal targets={followTargets} onClose={() => setFollowTargets(null)} onChanged={(messageKey, name) => { refreshFollows(); if (messageKey && name) setToast(label(messageKey).replace("{name}", name)); else if (messageKey) setToast(label(messageKey).replace("{name}", followTargets[0]?.name ?? "")); }} /> : null}
     {labelTarget ? <LabelAssignmentModal target={labelTarget} onClose={()=>setLabelTarget(null)} onChanged={()=>void load()} /> : null}
     {dataTemplateTargets?.length ? <DataTemplateAssociationModal targets={dataTemplateTargets} dataTemplates={dataTemplates} onClose={() => setDataTemplateTargets(null)} onChanged={() => { void load(); }} /> : null}
-    {toast ? <Toast message={toast} tone={toastTone} onDismiss={() => setToast(null)} /> : null}
+    {toast ? <Toast message={toast} onDismiss={() => setToast(null)} /> : null}
     </section>
   );
 }
