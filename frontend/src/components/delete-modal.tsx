@@ -1,9 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { ConfirmActionModal } from "./confirm-action-modal";
 import { useLocale } from "./locale-provider";
-import { Modal } from "./modal";
-import { friendlyErrorMessageKey } from "../lib/friendly-error";
 
 export function DeleteModal({
   onClose,
@@ -12,30 +10,16 @@ export function DeleteModal({
   onClose: () => void;
   onConfirm: () => Promise<void>;
 }) {
-  const { label } = useLocale();
-  const [error, setError] = useState<string | null>(null);
-
-  async function confirm() {
-    try {
-      await onConfirm();
-      onClose();
-    } catch (cause) {
-      setError(label(friendlyErrorMessageKey(cause)));
-    }
-  }
-
+  const { label, locale } = useLocale();
   return (
-    <Modal title={label("files.delete")} onClose={onClose}>
-      <div className="text-[length:var(--imkan-font-size-ui)]">
-        <p className="mb-3 text-[length:var(--imkan-font-size-secondary)]">
-          {label("files.deleteConfirm")}
-        </p>
-        {error ? <p className="mb-3">{error}</p> : null}
-        <div className="flex justify-end gap-2">
-          <button type="button" className="imkan-button-secondary" onClick={onClose}>{label("share.cancel")}</button>
-          <button type="button" className="imkan-button-destructive" onClick={() => void confirm()}>{label("files.delete")}</button>
-        </div>
-      </div>
-    </Modal>
+    <ConfirmActionModal
+      title={locale === "ar" ? "نقل إلى سلة المهملات" : "Move to Trash"}
+      description={locale === "ar" ? "سيتم نقل العنصر إلى سلة المهملات ويمكن استعادته لاحقًا وفق سياسة الاحتفاظ." : "The item will be moved to Trash and can be restored later according to the retention policy."}
+      confirmLabel={label("files.delete")}
+      cancelLabel={label("share.cancel")}
+      onClose={onClose}
+      onConfirm={onConfirm}
+      tone="danger"
+    />
   );
 }

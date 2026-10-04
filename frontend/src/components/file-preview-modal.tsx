@@ -37,6 +37,8 @@ import { saveFileAsTemplate } from "../lib/api/templates";
 import { openResourceInNewTab } from "../lib/selection-bar-actions-logic";
 import type { ShareLaunchMode } from "../lib/share-launch-logic";
 import { useRouter } from "next/navigation";
+import { ConfirmActionModal } from "./confirm-action-modal";
+import { Toast } from "./toast";
 
 export interface FilePreviewModalTarget {
   id: string;
@@ -87,6 +89,7 @@ export function FilePreviewModal({ target, onClose, onPrevFile, onNextFile, init
   const [workflowOpen, setWorkflowOpen] = useState(false);
   const [followOpen, setFollowOpen] = useState(false);
   const [fileControl, setFileControl] = useState<FileControlState>({ status: "ACTIVE" });
+  const [confirmation, setConfirmation] = useState<{ title: string; description: string; confirm: string; danger?: boolean; run: () => Promise<void> } | null>(null);
   const router = useRouter();
 
   const open = Boolean(target);
@@ -110,6 +113,7 @@ export function FilePreviewModal({ target, onClose, onPrevFile, onNextFile, init
     setWorkflowOpen(false);
     setFollowOpen(false);
     setFileControl({ status: "ACTIVE" });
+    setConfirmation(null);
     if (!activeTarget) return;
     let live = true;
     void getFileDetails(activeTarget.id).then((details) => {
@@ -316,25 +320,39 @@ export function FilePreviewModal({ target, onClose, onPrevFile, onNextFile, init
     }
     else if (key === "moreOptions") setPanel("details");
     else if (key === "moveToTrash") {
-      if (!window.confirm(label("files.deleteConfirm"))) return;
-      void trashFile(activeTarget.id).then(() => onClose()).catch((cause) => showToast(cause instanceof Error ? cause.message : label("preview.error")));
+      setConfirmation({
+        title: locale === "ar" ? "نقل إلى سلة المهملات" : "Move to Trash",
+        description: locale === "ar" ? "سيتم نقل الملف إلى سلة المهملات ويمكن استعادته لاحقًا." : "The file will be moved to Trash and can be restored later.",
+        confirm: locale === "ar" ? "نقل إلى السلة" : "Move to Trash",
+        danger: true,
+        run: async () => { await trashFile(activeTarget.id); onClose(); },
+      });
     }
   };
-  const applyControl = (action: FileControlAction) => {
+  const executeControl = async (action: FileControlAction) => {
     if (!activeTarget) return;
     const ar = locale === "ar";
-    if (action === "mark-final" && !window.confirm(ar ? "تعليم هذا الملف كمنتهٍ؟ سيصبح للقراءة فقط." : "Mark this file as final? It will become read-only.")) return;
-    if (action === "enable-editing" && !window.confirm(ar ? "تفعيل التعديل لهذا الملف المنتهي؟" : "Enable editing for this final file?")) return;
-    void runFileControl(activeTarget.id, action).then((result) => {
-      setFileControl({ status: result.isFinal ? "FINAL" : result.checkedOutById ? "CHECKED_OUT" : "ACTIVE", isFinal: result.isFinal, checkedOutById: result.checkedOutById });
-      window.dispatchEvent(new CustomEvent("workdrive:file-control", { detail: { id: activeTarget.id, isFinal: result.isFinal, checkedOutById: result.checkedOutById, checkedOutAt: result.checkedOutAt, indexedAt: result.indexedAt } }));
-      const done = action === "check-out" ? (ar ? "تم سحب الملف" : "File checked out")
-        : action === "check-in" ? (ar ? "تم إرجاع الملف" : "File checked in")
-        : action === "mark-final" ? (ar ? "تم التعليم كمنتهٍ" : "Marked as final")
-        : action === "enable-editing" ? (ar ? "تم تفعيل التعديل" : "Editing enabled")
-        : (ar ? "تم تحديث فهرس البحث" : "Search index refreshed");
-      showToast(done);
-    }).catch((cause) => showToast(cause instanceof Error ? cause.message : label("preview.error")));
+    const result = await runFileControl(activeTarget.id, action);
+    setFileControl({ status: result.isFinal ? "FINAL" : result.checkedOutById ? "CHECKED_OUT" : "ACTIVE", isFinal: result.isFinal, checkedOutById: result.checkedOutById });
+    window.dispatchEvent(new CustomEvent("workdrive:file-control", { detail: { id: activeTarget.id, isFinal: result.isFinal, checkedOutById: result.checkedOutById, checkedOutAt: result.checkedOutAt, indexedAt: result.indexedAt } }));
+    const done = action === "check-out" ? (ar ? "تم سحب الملف" : "File checked out")
+      : action === "check-in" ? (ar ? "تم إرجاع الملف" : "File checked in")
+      : action === "mark-final" ? (ar ? "تم تعليم الملف كنهائي" : "File marked as final")
+      : action === "enable-editing" ? (ar ? "تم تفعيل التعديل للملف" : "Editing enabled for the file")
+      : (ar ? "تم تحديث فهرس البحث" : "Search index refreshed");
+    showToast(done);
+  };
+  const applyControl = (action: FileControlAction) => {
+    if (!activeTarget || action === "reindex") { if (activeTarget && action === "reindex") void executeControl(action).catch((cause) => showToast(cause instanceof Error ? cause.message : label("preview.error"))); return; }
+    const ar = locale === "ar";
+    const copy: Record<Exclude<FileControlAction, "reindex">, { title: string; description: string; confirm: string }> = {
+      "check-out": { title: ar ? "سحب الملف للتحرير" : "Check Out File", description: ar ? "سيتم قفل الملف للتحرير الحصري مؤقتًا." : "The file will be checked out for exclusive editing until it is checked in.", confirm: ar ? "سحب الملف" : "Check Out" },
+      "check-in": { title: ar ? "إرجاع الملف" : "Check In File", description: ar ? "سيتم إنهاء جلسة التحرير وإتاحة الملف مرة أخرى." : "The editing session will end and the file will be available again.", confirm: ar ? "إرجاع الملف" : "Check In" },
+      "mark-final": { title: ar ? "تعليم الملف كنهائي" : "Mark as Final", description: ar ? "سيصبح الملف للقراءة فقط حتى يتم تفعيل التعديل مرة أخرى." : "The file will become read-only until editing is enabled again.", confirm: ar ? "تعليم كنهائي" : "Mark as Final" },
+      "enable-editing": { title: ar ? "تفعيل التعديل" : "Enable Editing", description: ar ? "سيتم السماح للمستخدمين بتعديل الملف مرة أخرى." : "This will allow users to edit the file again.", confirm: ar ? "تفعيل التعديل" : "Enable Editing" },
+    };
+    const item = copy[action];
+    setConfirmation({ title: item.title, description: item.description, confirm: item.confirm, run: () => executeControl(action) });
   };
 
   return (
@@ -447,7 +465,8 @@ export function FilePreviewModal({ target, onClose, onPrevFile, onNextFile, init
         </nav>
       </div>
 
-      {toast ? <div className="zoho-preview-toast" role="status">{toast}</div> : null}
+      {toast ? <Toast message={toast} onDismiss={() => setToast(null)} /> : null}
+      {confirmation ? <ConfirmActionModal title={confirmation.title} description={confirmation.description} confirmLabel={confirmation.confirm} onClose={() => setConfirmation(null)} onConfirm={async () => { await confirmation.run(); setConfirmation(null); }} tone={confirmation.danger ? "danger" : "primary"} /> : null}
       {shareLaunch ? (
         <ShareModal
           resourceType="FILE"
