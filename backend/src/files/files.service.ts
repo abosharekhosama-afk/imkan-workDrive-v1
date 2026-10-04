@@ -1752,6 +1752,7 @@ export class FilesService {
         mimeType: true,
         extension: true,
         fileType: true,
+        orgId: true,
         ownerId: true,
         createdAt: true,
         updatedAt: true,
