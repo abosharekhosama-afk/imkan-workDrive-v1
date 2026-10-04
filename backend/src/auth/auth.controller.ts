@@ -23,7 +23,7 @@ export class AuthController {
   @Public() @Post('forgot-password') forgotPassword(@Body() body: { email: string }) { return this.auth.forgotPassword(body.email); }
   @Public() @Post('reset-password') resetPassword(@Body() body: { token: string; password: string }) { return this.auth.resetPassword(body.token, body.password); }
   @Get('me') me(@CurrentUser() user: AccessTokenPayload) { return this.auth.me(user); }
-  @Post('profile') updateProfile(@CurrentUser() user: AccessTokenPayload, @Body() body: { name: string }) { return this.auth.updateProfile(user, body.name); }
+  @Post('profile') updateProfile(@CurrentUser() user: AccessTokenPayload, @Body() body: { name?: string; avatarUrl?: string | null }) { return this.auth.updateProfile(user, body ?? {}); }
   @Get('preferences') preferences(@CurrentUser() user: AccessTokenPayload) { return this.auth.preferences(user); }
   @Patch('preferences') updatePreferences(@CurrentUser() user: AccessTokenPayload, @Body() body: { themeMode?: string; themeColor?: string; fontFamily?: string; lighterSidebar?: boolean }) { return this.auth.updatePreferences(user, body); }
   @Post('change-password') changePassword(@CurrentUser() user: AccessTokenPayload, @Body() body: { currentPassword: string; newPassword: string }) { return this.auth.changePassword(user, body.currentPassword, body.newPassword); }

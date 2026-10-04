@@ -1,7 +1,8 @@
 "use client";
 import { useEffect, useState } from "react";
 import { useLocale } from "../../components/locale-provider";
-import { me } from "../../lib/api/auth";
+import { getAppearancePreferences, me } from "../../lib/api/auth";
+import { AccountAvatar, rememberAccountProfile } from "../../components/account-avatar";
 import {
   changePassword,
   listSessions,
@@ -19,6 +20,11 @@ export default function SettingsPage() {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [role, setRole] = useState("");
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
+  const [userId, setUserId] = useState("");
+  const [organization, setOrganization] = useState("");
+  const [joinedAt, setJoinedAt] = useState<string | null>(null);
+  const [lastLoginAt, setLastLoginAt] = useState<string | null>(null);
   const [sessions, setSessions] = useState<SessionRecord[]>([]);
   const [securityEvents, setSecurityEvents] = useState<SecurityEventRecord[]>([]);
   const [message, setMessage] = useState("");
@@ -29,10 +35,16 @@ export default function SettingsPage() {
   async function load() {
     const token = getToken();
     if (!token) return;
-    const [u, s, ev] = await Promise.all([me(token), listSessions(), listSecurityEvents()]);
+    const [u, profile, s, ev] = await Promise.all([me(token), getAppearancePreferences().catch(() => null), listSessions(), listSecurityEvents()]);
     setName(u.name ?? "");
     setEmail(u.email);
-    setRole(u.role);
+    setRole(profile?.role || u.role);
+    setAvatarUrl(profile?.avatarUrl ?? u.avatarUrl ?? null);
+    setUserId(u.id);
+    setOrganization(profile?.organizationName ?? "");
+    setJoinedAt(profile?.joinedAt ?? null);
+    setLastLoginAt(profile?.lastLoginAt ?? null);
+    rememberAccountProfile({ name: u.name, email: u.email, avatarUrl: profile?.avatarUrl ?? u.avatarUrl ?? null, role: profile?.role || u.role, organizationName: profile?.organizationName });
     setSessions(s);
     setSecurityEvents(ev);
   }
@@ -45,8 +57,9 @@ export default function SettingsPage() {
     try {
       setError("");
       setMessage("");
-      const u = await updateProfile(name);
+      const u = await updateProfile({ name });
       setName(u.name ?? "");
+      rememberAccountProfile({ name: u.name, avatarUrl: u.avatarUrl ?? avatarUrl });
       setMessage(label("settings.saved"));
     } catch {
       setError(label("settings.error"));
@@ -96,24 +109,59 @@ export default function SettingsPage() {
       {message && <div className="imkan-alert">{message}</div>}
       {error && <div className="imkan-alert imkan-alert-danger">{error}</div>}
       <div className="imkan-settings-grid">
-        <section className="imkan-panel imkan-settings-card">
+        <section className="imkan-panel imkan-settings-card imkan-settings-account">
           <h2 className="imkan-panel-title">{label("settings.account")}</h2>
-          <div className="imkan-field">
-            <label className="imkan-label">{label("settings.name")}</label>
-            <input className="imkan-input" value={name} onChange={(e) => setName(e.target.value)} />
-          </div>
-          <div className="imkan-field">
-            <label className="imkan-label">{label("settings.email")}</label>
-            <input className="imkan-input" value={email} disabled />
-          </div>
-          <div className="imkan-field">
-            <label className="imkan-label">{label("settings.role")}</label>
-            <input className="imkan-input" value={role} disabled />
-          </div>
-          <div className="imkan-field-actions">
-            <button className="imkan-button" onClick={save}>
-              {label("settings.save")}
-            </button>
+          <div className="imkan-account-card">
+            <AccountAvatar
+              name={name || email}
+              email={email}
+              avatarUrl={avatarUrl}
+              size={96}
+              editable
+              changeLabel={label("settings.changePhoto")}
+              removeLabel={label("settings.removePhoto")}
+              onChange={async (next) => {
+                const saved = await updateProfile({ avatarUrl: next });
+                setAvatarUrl(saved.avatarUrl ?? null);
+                rememberAccountProfile({ name: saved.name ?? name, avatarUrl: saved.avatarUrl ?? null });
+                setMessage(label("settings.saved"));
+              }}
+            />
+            <div>
+              <div className="imkan-field">
+                <label className="imkan-label">{label("settings.name")}</label>
+                <input className="imkan-input" value={name} onChange={(e) => setName(e.target.value)} />
+              </div>
+              <div className="imkan-field">
+                <label className="imkan-label">{label("settings.email")}</label>
+                <input className="imkan-input" value={email} disabled />
+              </div>
+              <div className="imkan-field">
+                <label className="imkan-label">{label("settings.role")}</label>
+                <input className="imkan-input" value={role} disabled />
+              </div>
+              <div className="imkan-field">
+                <label className="imkan-label">{label("settings.organization")}</label>
+                <input className="imkan-input" value={organization} disabled />
+              </div>
+              <div className="imkan-field">
+                <label className="imkan-label">{label("settings.userId")}</label>
+                <input className="imkan-input" value={userId} disabled />
+              </div>
+              <div className="imkan-field">
+                <label className="imkan-label">{label("settings.memberSince")}</label>
+                <input className="imkan-input" value={joinedAt ? new Date(joinedAt).toLocaleDateString() : ""} disabled />
+              </div>
+              <div className="imkan-field">
+                <label className="imkan-label">{label("settings.lastLogin")}</label>
+                <input className="imkan-input" value={lastLoginAt ? new Date(lastLoginAt).toLocaleString() : ""} disabled />
+              </div>
+              <div className="imkan-field-actions">
+                <button className="imkan-button" onClick={save}>
+                  {label("settings.save")}
+                </button>
+              </div>
+            </div>
           </div>
         </section>
 

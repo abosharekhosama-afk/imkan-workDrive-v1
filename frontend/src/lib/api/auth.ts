@@ -97,6 +97,7 @@ export function clearSession() {
 
 export type AppearancePreferences = {
   id: string; name: string | null; email: string; avatarUrl?: string | null; role: string; organizationId: string;
+  organizationName?: string | null; joinedAt?: string | null; createdAt?: string | null; lastLoginAt?: string | null;
   themeMode: 'light' | 'dark' | 'system'; themeColor: 'blue' | 'green' | 'red' | 'yellow';
   fontFamily: 'Zoho Puvi' | 'Lato' | 'Roboto' | 'PT Sans' | 'Arial'; lighterSidebar: boolean;
 };

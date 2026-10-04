@@ -9,6 +9,7 @@ import { PrismaService } from './prisma/prisma.service';
 import type { AccessTokenPayload } from './auth/jwt.types';
 import { MailService } from './mail/mail.service';
 import { passwordResetEmail, verificationCodeEmail } from './mail/email-templates';
+import { normalizeAvatarUrl } from './auth/avatar-url-logic';
 import {
   OTP_MAX_ATTEMPTS,
   OTP_TTL_MS,
@@ -399,25 +400,34 @@ export class AuthService {
     return { ok: true };
   }
 
-  async updateProfile(user: AccessTokenPayload, nameInput: string) {
-    const name = nameInput.trim();
-    if (name.length < 2 || name.length > 120) throw new BadRequestException('Name must be between 2 and 120 characters');
-    const updated = await this.prisma.user.update({ where: { id: user.sub }, data: { name }, select: { id: true, name: true, email: true, status: true, avatarUrl: true } });
+  async updateProfile(user: AccessTokenPayload, input: { name?: string; avatarUrl?: string | null }) {
+    const data: { name?: string; avatarUrl?: string | null } = {};
+    if (typeof input.name === 'string') {
+      const name = input.name.trim();
+      if (name.length < 2 || name.length > 120) throw new BadRequestException('Name must be between 2 and 120 characters');
+      data.name = name;
+    }
+    if (input.avatarUrl !== undefined) {
+      try { data.avatarUrl = normalizeAvatarUrl(input.avatarUrl); }
+      catch (error) { throw new BadRequestException(error instanceof Error ? error.message : 'Profile photo is invalid'); }
+    }
+    if (!Object.keys(data).length) throw new BadRequestException('Nothing to update');
+    const updated = await this.prisma.user.update({ where: { id: user.sub }, data, select: { id: true, name: true, email: true, status: true, avatarUrl: true } });
     return { ...updated };
   }
 
   async preferences(user: AccessTokenPayload) {
     const found = await this.prisma.user.findUnique({
       where: { id: user.sub },
-      select: { id: true, name: true, email: true, avatarUrl: true, themeMode: true, themeColor: true, fontFamily: true, lighterSidebar: true },
+      select: { id: true, name: true, email: true, avatarUrl: true, createdAt: true, lastLoginAt: true, themeMode: true, themeColor: true, fontFamily: true, lighterSidebar: true },
     });
     if (!found) throw new UnauthorizedException('Session is no longer valid');
     const membership = await this.prisma.organizationMembership.findFirst({
       where: { userId: user.sub, organizationId: user.org_id, status: MembershipStatus.ACTIVE },
-      select: { role: true },
+      select: { role: true, joinedAt: true, organization: { select: { name: true } } },
     });
     if (!membership) throw new UnauthorizedException('Session is no longer valid');
-    return { ...found, role: membership.role, organizationId: user.org_id };
+    return { ...found, role: membership.role, organizationId: user.org_id, organizationName: membership.organization.name, joinedAt: membership.joinedAt };
   }
 
   async updatePreferences(user: AccessTokenPayload, input: { themeMode?: string; themeColor?: string; fontFamily?: string; lighterSidebar?: boolean }) {

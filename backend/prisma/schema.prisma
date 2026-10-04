@@ -403,7 +403,7 @@ model User {
   googleId             String?    @unique @map("google_id")
   emailVerifiedAt      DateTime?  @map("email_verified_at")
   status               UserStatus @default(ACTIVE)
-  avatarUrl            String?    @map("avatar_url")
+  avatarUrl            String?    @map("avatar_url") @db.LongText
   lastLoginAt          DateTime?  @map("last_login_at")
   createdAt            DateTime   @default(now()) @map("created_at")
   currentOrganizationId String?   @map("current_organization_id") @db.Char(36)

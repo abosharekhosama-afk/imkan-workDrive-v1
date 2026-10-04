@@ -46,8 +46,20 @@ export function TopHeader({ adminMode = false }: { adminMode?: boolean }) {
     listNotifications().then(setNotes).catch(() => undefined);
     setScope(readScope());
     const onScope = (e: Event) => setScope((e as CustomEvent<ScopeDetail>).detail ?? { folderId: null, folderName: null });
+    const onProfile = (event: Event) => {
+      const detail = (event as CustomEvent<{ name?: string | null; email?: string; avatarUrl?: string | null; organizationName?: string | null; role?: string }>).detail;
+      if (!detail) return;
+      if (detail.name || detail.email) setName(detail.name || detail.email || "");
+      if ("avatarUrl" in detail) setAvatarUrl(detail.avatarUrl ?? null);
+      if (detail.organizationName) setOrg(detail.organizationName);
+      if (detail.role) setRole(detail.role);
+    };
     window.addEventListener("workdrive:scope", onScope);
-    return () => window.removeEventListener("workdrive:scope", onScope);
+    window.addEventListener("workdrive:profile", onProfile);
+    return () => {
+      window.removeEventListener("workdrive:scope", onScope);
+      window.removeEventListener("workdrive:profile", onProfile);
+    };
   }, []);
   useEffect(() => {
     if (!searchOpen) return;

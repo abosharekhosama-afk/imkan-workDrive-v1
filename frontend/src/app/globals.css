@@ -427,6 +427,7 @@ html, body {
   grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
   gap: var(--imkan-space-md, 16px);
 }
+.imkan-settings-account { grid-column: 1 / -1; }
 .imkan-settings-card {
   padding: var(--imkan-space-md, 16px);
 }
@@ -3022,6 +3023,18 @@ html[data-theme="dark"] .workflow-ui .wd-card {
 .account-profile{padding:26px 22px 22px;text-align:center;border-bottom:1px solid var(--wd-line)}
 .account-profile-avatar{width:88px;height:88px;border-radius:50%;overflow:hidden;margin:0 auto 13px;display:grid;place-items:center;background:var(--wd-primary-light);color:var(--wd-primary-ink);font-size:24px;font-weight:700}
 .account-profile-avatar img{width:100%;height:100%;object-fit:cover}
+.account-avatar-block{display:flex;flex-direction:column;align-items:center;gap:8px}
+.account-avatar-wrap{position:relative}
+.account-avatar-edit{position:absolute;inset-inline-end:-2px;bottom:-2px;width:28px;height:28px;border:2px solid #fff;border-radius:50%;background:var(--wd-primary);color:#fff;display:grid;place-items:center;cursor:pointer}
+.account-avatar-edit:disabled{opacity:.6}
+.account-avatar-remove{border:0;background:transparent;color:var(--wd-primary-ink);font-size:12px;font-weight:600;cursor:pointer}
+.account-avatar-error{max-width:220px;font-size:11px;color:#b42318;text-align:center}
+.account-facts{margin-top:16px;display:grid;gap:8px;text-align:start}
+.account-fact{display:flex;justify-content:space-between;gap:12px;padding:8px 0;border-top:1px solid var(--wd-line);font-size:12px}
+.account-fact span{color:var(--wd-text-muted)}
+.account-fact b{font-weight:600;text-align:end;overflow:hidden;text-overflow:ellipsis}
+.imkan-account-card{display:grid;grid-template-columns:180px minmax(0,1fr);gap:28px;align-items:start}
+@media(max-width:700px){.imkan-account-card{grid-template-columns:1fr}}
 .account-profile-name{font-size:17px;font-weight:600}
 .account-profile-badge{display:inline-flex;margin-top:7px;padding:3px 8px;border-radius:10px;background:var(--wd-hover);font-size:11px;font-weight:600}
 .account-profile-line{margin-top:13px;font-size:13px;color:var(--wd-text-muted);display:flex;justify-content:center;align-items:center;gap:6px}

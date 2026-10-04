@@ -7,8 +7,10 @@ import { useAppearance, type Appearance } from "../appearance-provider";
 import { getAppearancePreferences } from "../../lib/api/auth";
 import { clearSession, logout as apiLogout } from "../../lib/api/auth";
 import { Icons } from "./icons";
+import { AccountAvatar, rememberAccountProfile } from "../account-avatar";
+import { updateProfile } from "../../lib/api/settings";
 
-type AccountInfo = { id: string; name: string | null; email: string; avatarUrl?: string | null; role: string };
+type AccountInfo = { id: string; name: string | null; email: string; avatarUrl?: string | null; role: string; organizationName?: string | null; joinedAt?: string | null; lastLoginAt?: string | null };
 
 type Props = { name: string; avatarUrl?: string | null; adminMode?: boolean };
 
@@ -46,7 +48,8 @@ export function AccountMenu({ name, avatarUrl, adminMode = false }: Props) {
     let live = true;
     getAppearancePreferences().then((u) => {
       if (!live) return;
-      setAccount({ id: u.id, name: u.name, email: u.email, avatarUrl: u.avatarUrl, role: u.role });
+      setAccount({ id: u.id, name: u.name, email: u.email, avatarUrl: u.avatarUrl, role: u.role, organizationName: u.organizationName, joinedAt: u.joinedAt, lastLoginAt: u.lastLoginAt });
+      rememberAccountProfile({ name: u.name, email: u.email, avatarUrl: u.avatarUrl, role: u.role, organizationName: u.organizationName });
     }).catch(() => undefined);
     const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") { setOpen(false); setAppearanceOpen(false); } };
     document.addEventListener("keydown", onKey);
@@ -64,6 +67,12 @@ export function AccountMenu({ name, avatarUrl, adminMode = false }: Props) {
     finally { clearSession(); setOpen(false); router.replace("/auth/login"); }
   }
 
+  async function changePhoto(next: string | null) {
+    const saved = await updateProfile({ avatarUrl: next });
+    setAccount((currentAccount) => ({ ...(currentAccount ?? { id: "", name: name || null, email: "", role: "MEMBER" }), avatarUrl: saved.avatarUrl ?? null, name: saved.name }));
+    rememberAccountProfile({ name: saved.name, avatarUrl: saved.avatarUrl ?? null });
+  }
+
   const current: AccountInfo = account ?? { id: "", name: name || null, email: "", avatarUrl: avatarUrl ?? null, role: "MEMBER" };
   const displayName = current.name || name || current.email.split("@")[0] || "User";
 
@@ -75,38 +84,38 @@ export function AccountMenu({ name, avatarUrl, adminMode = false }: Props) {
       </button>
       {open ? (
         <>
-          <div className="account-drawer" dir={ar ? "rtl" : "ltr"} role="dialog" aria-label={ar ? "حسابي" : "My account"}>
+          <div className="account-drawer" dir={ar ? "rtl" : "ltr"} data-admin={adminMode || undefined} role="dialog" aria-label={ar ? "حسابي" : "My account"}>
             {!appearanceOpen ? (
               <>
                 <div className="account-drawer-head"><button type="button" className="account-drawer-close" onClick={() => setOpen(false)} aria-label={ar ? "إغلاق" : "Close"}>×</button></div>
                 <div className="account-drawer-scroll">
                   <div className="account-profile">
-                    <div className="account-profile-avatar">{current.avatarUrl ? <img src={current.avatarUrl} alt="" /> : initials(displayName, current.email || name)}</div>
+                    <AccountAvatar name={displayName} email={current.email || name} avatarUrl={current.avatarUrl} editable changeLabel={ar ? "تغيير الصورة" : "Change photo"} removeLabel={ar ? "إزالة الصورة" : "Remove photo"} onChange={changePhoto} />
                     <div className="account-profile-name">{displayName}</div>
                     <span className="account-profile-badge">{roleLabel(current.role, ar)}</span>
                     {current.email ? <div className="account-profile-line">{current.email}<button type="button" onClick={() => void navigator.clipboard?.writeText(current.email)} aria-label={ar ? "نسخ البريد" : "Copy email"}>▣</button></div> : null}
+                    {current.organizationName ? <div className="account-profile-line">{current.organizationName}</div> : null}
                     {current.id ? <div className="account-profile-line">{ar ? "معرف المستخدم:" : "User ID:"} {current.id}<button type="button" onClick={() => void navigator.clipboard?.writeText(current.id)} aria-label={ar ? "نسخ المعرف" : "Copy ID"}>▣</button></div> : null}
-                    <button type="button" className="account-my-account" onClick={() => { setOpen(false); router.push(adminMode ? "/admin/settings?settingtab=profile" : "/settings"); }}>{ar ? "حسابي" : "My Account"}</button>
+                    <button type="button" className="account-my-account" onClick={() => { setOpen(false); router.push("/settings"); }}>{ar ? "حسابي" : "My Account"}</button>
                   </div>
-
-                  <div className="account-referral"><span className="account-referral-icon">♧</span><span>{ar ? <>ادعُ زملاءك واحصل على 15% من الاشتراك. <b>تعرّف على برنامج الإحالة.</b></> : <>Refer and earn 15% of the subscription. <b>Learn more about Zoho WorkDrive referral program</b></>}</span></div>
 
                   <section className="account-section">
                     <div className="account-section-title">{ar ? "WorkDrive الخاص بي" : "My WorkDrive"}</div>
                     <div className="account-action-grid">
-                      <button type="button" className="account-action" onClick={() => { setOpen(false); router.push(adminMode ? "/admin/settings?settingtab=profile" : "/settings"); }}><span className="account-action-icon">☷</span>{ar ? "تفضيلاتي" : "My Preferences"}</button>
+                      <button type="button" className="account-action" onClick={() => { setOpen(false); router.push("/settings"); }}><span className="account-action-icon">☷</span>{ar ? "تفضيلاتي" : "My Preferences"}</button>
                       <button type="button" className="account-action" onClick={() => setAppearanceOpen(true)}><span className="account-action-icon">◉</span>{ar ? "المظهر" : "Appearance"}</button>
                       <button type="button" className="account-action" onClick={() => { setOpen(false); router.push(adminMode ? "/admin/settings?settingtab=profile" : "/settings?tab=accessibility"); }}><span className="account-action-icon">◉</span>{ar ? "إعدادات إمكانية الوصول" : "Accessibility Controls"}</button>
                     </div>
                   </section>
 
-                  <section className="account-download">
-                    <div className="account-section-title">{ar ? "تنزيل التطبيقات" : "Download Apps"}</div>
-                    <div className="account-download-grid">
-                      <div className="account-download-item"><span aria-hidden="true">▱</span><div>{ar ? "سطح المكتب (Windows)" : "Desktop (Windows)"}</div></div>
-                      <div className="account-download-item"><span aria-hidden="true">●</span><div>{ar ? "iPhone/iPad" : "iPhone/iPad"}</div></div>
-                      <div className="account-qr" aria-label="QR code" />
-                      <div className="account-download-item"><span aria-hidden="true">♙</span><div>{ar ? "Android" : "Android"}</div></div>
+                  <section className="account-section">
+                    <div className="account-section-title">{ar ? "بيانات الحساب" : "Account details"}</div>
+                    <div className="account-facts">
+                      <div className="account-fact"><span>{ar ? "البريد" : "Email"}</span><b>{current.email || "—"}</b></div>
+                      <div className="account-fact"><span>{ar ? "الدور" : "Role"}</span><b>{roleLabel(current.role, ar)}</b></div>
+                      <div className="account-fact"><span>{ar ? "المؤسسة" : "Organization"}</span><b>{current.organizationName || "—"}</b></div>
+                      <div className="account-fact"><span>{ar ? "عضو منذ" : "Member since"}</span><b>{current.joinedAt ? new Date(current.joinedAt).toLocaleDateString() : "—"}</b></div>
+                      <div className="account-fact"><span>{ar ? "آخر دخول" : "Last sign-in"}</span><b>{current.lastLoginAt ? new Date(current.lastLoginAt).toLocaleString() : "—"}</b></div>
                     </div>
                   </section>
                 </div>
