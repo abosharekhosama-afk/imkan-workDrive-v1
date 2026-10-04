@@ -31,7 +31,7 @@ import {
   type TemplateRecord,
   type TemplateType,
 } from "@/lib/api/templates";
-import { officeEditorHref } from "@/lib/office-editor-route";
+import { officeEditorHref, normalizeEditorPathToUniver } from "@/lib/office-editor-route";
 import { filterTemplateRecords, shouldHydrateLibraryOnce, templatesCacheKey } from "./templates-loading-logic";
 import { searchNames } from "@/lib/api/search";
 
@@ -241,7 +241,7 @@ export default function TemplatesPage() {
         setCreateTemplateOpen(false);
         invalidateTemplateCaches();
         libraryBundleRef.current.delete(library);
-        const href = result.editorPath ?? officeEditorHref({
+        const href = normalizeEditorPathToUniver(result.editorPath) ?? officeEditorHref({
           fileId: result.file_id,
           documentType: result.office?.type ?? null,
           extension: result.template?.extension,
@@ -278,7 +278,7 @@ export default function TemplatesPage() {
       setUseTarget(null);
       setNewName("");
       setMessage(text(ar, "Preparing document…", "جارٍ تجهيز المستند…"));
-      const href = created.editorPath ?? officeEditorHref({
+      const href = normalizeEditorPathToUniver(created.editorPath) ?? officeEditorHref({
         fileId: created.file_id,
         documentType: created.office?.type ?? null,
         templateId: useTarget.id,
@@ -308,7 +308,7 @@ export default function TemplatesPage() {
       setContentEditTarget(null);
       setContentEditName("");
       if (!created.office) throw new Error(text(ar, 'The template was created, but IMKAN Office could not initialize the editable document.', 'تم إنشاء نسخة القالب، لكن تعذر تجهيز مستند IMKAN Office القابل للتحرير.'));
-      const href = created.editorPath ?? officeEditorHref({
+      const href = normalizeEditorPathToUniver(created.editorPath) ?? officeEditorHref({
         fileId: created.file_id,
         documentType: created.office.type,
         templateId,
