@@ -626,10 +626,13 @@ html[data-theme="dark"] .zoho-icon-btn:hover{background:var(--wd-hover);color:#d
     transition: background-color var(--wd-dur) var(--wd-ease), color var(--wd-dur) var(--wd-ease), box-shadow var(--wd-dur) var(--wd-ease);
   }
 }
-.admin-console-shell button:not(.wd-icon-btn):not([role="switch"]):not(.wd-menu-item):not(.admin-activity-tab):not(.admin-underline-tab):not(.team-manage-tab):not(.team-folder-pin):not(.team-folder-members):not(.team-folder-more):not(.team-filter-trigger):not(.team-view-trigger):not(.admin-audit-new-report),
-.admin-console-shell a.imkan-button {
-  border-radius: var(--wd-pill-radius, 16px);
-  transition: background-color var(--wd-dur) var(--wd-ease), color var(--wd-dur) var(--wd-ease), box-shadow var(--wd-dur) var(--wd-ease);
+/* Admin controls stay pills. The Connections page keeps the flat radii used on /files/connections. */
+@scope (.admin-console-shell) to (.imkan-connections-page) {
+  button:not(.wd-icon-btn):not([role="switch"]):not(.wd-menu-item):not(.admin-activity-tab):not(.admin-underline-tab):not(.team-manage-tab):not(.team-folder-pin):not(.team-folder-members):not(.team-folder-more):not(.team-filter-trigger):not(.team-view-trigger):not(.admin-audit-new-report),
+  a.imkan-button {
+    border-radius: var(--wd-pill-radius, 16px);
+    transition: background-color var(--wd-dur) var(--wd-ease), color var(--wd-dur) var(--wd-ease), box-shadow var(--wd-dur) var(--wd-ease);
+  }
 }
 .zoho-content .imkan-button,
 .zoho-content .wf-primary-button{background:var(--wd-primary);border-radius:var(--wd-pill-radius,16px);height:32px;padding:7px 14px;font-size:13px;font-weight:700}
@@ -3247,6 +3250,14 @@ html[data-theme="dark"] .workflow-ui .workflow-picker-search{background:var(--wd
 
 /* Connections workspace — theme/font aware surface layer (Zoho parity). */
 .imkan-connections-page{font-family:var(--user-font-family),Arial,system-ui,sans-serif;color:var(--wd-text);background:var(--wd-canvas)!important}
+.admin-console-shell:has(.imkan-connections-page) > div > .overflow-y-auto{background:#fff}
+.admin-console-shell .imkan-connections-page{min-height:100%;background:#fff!important}
+.admin-console-shell .imkan-connections-page,
+.admin-console-shell .imkan-connections-page button,
+.admin-console-shell .imkan-connections-page input,
+.admin-console-shell .imkan-connections-page textarea,
+.admin-console-shell .imkan-connections-page select,
+.admin-console-shell .imkan-connections-page a{font-family:var(--user-font-family),Arial,system-ui,sans-serif!important}
 .imkan-connections-page .connections-sidebar{background:color-mix(in srgb,var(--wd-bg) 94%,var(--wd-primary) 6%);border-color:var(--wd-line)}
 .imkan-connections-page .connections-header{border-color:var(--wd-line);background:var(--wd-bg)}
 .imkan-connections-page .connections-card,.imkan-connections-page .connections-panel,.imkan-connections-page .connections-picker,.imkan-connections-page .connections-menu,.imkan-connections-page .connections-search{background:var(--wd-bg)!important;color:var(--wd-text)}
