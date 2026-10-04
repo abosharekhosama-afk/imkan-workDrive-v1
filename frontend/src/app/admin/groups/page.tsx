@@ -48,8 +48,8 @@ export default function GroupsPage() {
     if (!name.trim()) return;
     setSaving(true);
     try {
-      if (modal === "create") { const created = await createGroup(name, description); setToast(ar ? "تم إنشاء المجموعة." : "Group created."); setModal(null); await loadGroups(created.id); }
-      else if (modal === "edit" && selected) { await updateGroup(selected.id, { name, description }); setToast(ar ? "تم تحديث المجموعة." : "Group updated."); setModal(null); await loadGroups(selected.id); }
+      if (modal === "create") { const created = await createGroup(name, description); setModal(null); await loadGroups(created.id); }
+      else if (modal === "edit" && selected) { await updateGroup(selected.id, { name, description }); setModal(null); await loadGroups(selected.id); }
     } catch (e: any) { setToast(e?.message || (ar ? "تعذر حفظ المجموعة." : "Unable to save group.")); }
     finally { setSaving(false); }
   }
@@ -57,19 +57,19 @@ export default function GroupsPage() {
     if (!selected) return;
     if (!window.confirm(ar ? `حذف المجموعة «${selected.name}»؟ سيتم إزالة صلاحياتها وعضويتها.` : `Delete “${selected.name}”? Its memberships and group permissions will be removed.`)) return;
     setSaving(true);
-    try { await deleteGroup(selected.id); setToast(ar ? "تم حذف المجموعة." : "Group deleted."); setSelected(null); await loadGroups(); }
+    try { await deleteGroup(selected.id); setSelected(null); await loadGroups(); }
     catch (e: any) { setToast(e?.message || (ar ? "تعذر حذف المجموعة." : "Unable to delete group.")); }
     finally { setSaving(false); }
   }
   async function addMember(userId: string) {
     if (!selected) return; setSaving(true);
-    try { await addGroupMember(selected.id, userId, "MEMBER"); setToast(ar ? "تمت إضافة العضو." : "Member added."); setSelected(await getGroup(selected.id)); setModal(null); }
+    try { await addGroupMember(selected.id, userId, "MEMBER"); setSelected(await getGroup(selected.id)); setModal(null); }
     catch (e: any) { setToast(e?.message || (ar ? "تعذر إضافة العضو." : "Unable to add member.")); }
     finally { setSaving(false); }
   }
   async function changeRole(member: GroupMember, role: "ADMIN" | "MEMBER") {
     if (!selected) return; setSaving(true);
-    try { await updateGroupMemberRole(selected.id, member.userId, role); setSelected(await getGroup(selected.id)); setToast(ar ? "تم تحديث دور العضو." : "Member role updated."); }
+    try { await updateGroupMemberRole(selected.id, member.userId, role); setSelected(await getGroup(selected.id)); }
     catch (e: any) { setToast(e?.message || (ar ? "تعذر تحديث الدور." : "Unable to update role.")); }
     finally { setSaving(false); }
   }
@@ -77,7 +77,7 @@ export default function GroupsPage() {
     if (!selected) return;
     if (!window.confirm(ar ? `إزالة ${member.user.name || member.user.email} من المجموعة؟` : `Remove ${member.user.name || member.user.email} from this group?`)) return;
     setSaving(true);
-    try { await removeGroupMember(selected.id, member.userId); setSelected(await getGroup(selected.id)); setToast(ar ? "تمت إزالة العضو." : "Member removed."); }
+    try { await removeGroupMember(selected.id, member.userId); setSelected(await getGroup(selected.id)); }
     catch (e: any) { setToast(e?.message || (ar ? "تعذر إزالة العضو." : "Unable to remove member.")); }
     finally { setSaving(false); }
   }
