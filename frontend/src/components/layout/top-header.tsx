@@ -27,6 +27,7 @@ export function TopHeader({ adminMode = false }: { adminMode?: boolean }) {
   const [teamContextKey, setTeamContextKey] = useState<string | null>(null);
   const [teamMemberCount, setTeamMemberCount] = useState(0);
   const [manageOpen, setManageOpen] = useState(false);
+  const manageRef = useRef<HTMLDivElement | null>(null);
   const [searchOpen, setSearchOpen] = useState(false);
   const [notifOpen, setNotifOpen] = useState(false);
   const searchInputRef = useRef<HTMLInputElement | null>(null);
@@ -76,11 +77,23 @@ export function TopHeader({ adminMode = false }: { adminMode?: boolean }) {
     window.addEventListener("workdrive:focus-search", onFocusSearch);
     return () => window.removeEventListener("workdrive:focus-search", onFocusSearch);
   }, []);
+  useEffect(() => {
+    if (!manageOpen) return;
+    const onDown = (event: MouseEvent) => {
+      const target = event.target instanceof Element ? event.target : null;
+      if (!target || !manageRef.current?.contains(target)) setManageOpen(false);
+    };
+    const onKey = (event: KeyboardEvent) => { if (event.key === "Escape") setManageOpen(false); };
+    document.addEventListener("mousedown", onDown);
+    document.addEventListener("keydown", onKey);
+    return () => { document.removeEventListener("mousedown", onDown); document.removeEventListener("keydown", onKey); };
+  }, [manageOpen]);
   const isTeamManageRoute = /^\/(?:files|admin)\/team-folders\/[^/]+\/manage/.test(pathname);
   const isTeamFoldersDirectory = pathname === "/files/team-folders" || pathname === "/admin/team-folders";
   const teamFoldersBase = pathname.startsWith("/admin/") ? "/admin/team-folders" : "/files/team-folders";
-  const namedFilesSection = /^\/files\/(templates|workflows|collections|favorites|recent|trash|activity|shared-with-me|shared-by-me|shared-links|external-storage|connections|editor)(\/|$)/.test(pathname);
+  const namedFilesSection = /^\/files\/(templates|workflows|collections|favorites|recent|trash|activity|shared-with-me|shared-by-me|shared-links|external-storage|connections|editor|manage)(\/|$)/.test(pathname);
   const isFolderRoute = /^\/files\/[^/]+$/.test(pathname) && !namedFilesSection;
+  const showMyFoldersManage = pathname === "/files" || isFolderRoute;
   const contextKey = isTeamManageRoute
     ? `manage:${decodeURIComponent(pathname.split("/")[3] ?? "")}`
     : isFolderRoute && scope.folderId
@@ -222,6 +235,29 @@ export function TopHeader({ adminMode = false }: { adminMode?: boolean }) {
       <div className="flex min-w-0 items-center gap-2">
         <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[8px] bg-[#F0F4FF] text-[var(--wd-primary)]"><Icons.folder size={18} /></span>
         <span className="max-w-[42vw] truncate text-[15px] font-semibold text-[#212121]">{resolveTopHeaderTitle({ pathname, scopeFolderName: scope.folderName, adminMode, locale, label })}</span>
+        {showMyFoldersManage ? (
+          <div ref={manageRef} className="relative ms-1">
+            <button id="my-folders-manage" type="button" className="wd-my-folders-manage" onClick={() => setManageOpen((v) => !v)} aria-expanded={manageOpen} aria-haspopup="menu">
+              <Icons.gear size={14} /> <span>{locale === "ar" ? "إدارة" : "Manage"}</span> <Icons.chevD size={12} />
+            </button>
+            {manageOpen ? (
+              <div className="wd-manage-menu" role="menu" aria-label={locale === "ar" ? "إدارة مجلداتي" : "Manage My Folders"}>
+                <button type="button" role="menuitem" onClick={() => { setManageOpen(false); setSearchOpen(true); requestAnimationFrame(() => searchInputRef.current?.focus()); }}>
+                  <Icons.search size={16} /><span>{locale === "ar" ? "بحث في مجلداتي" : "Search in My Folders"}</span>
+                </button>
+                <button type="button" role="menuitem" onClick={() => { setManageOpen(false); router.push("/files/trash"); }}>
+                  <Icons.trash size={16} /><span>{locale === "ar" ? "سلة المهملات" : "Trash"}</span>
+                </button>
+                <button type="button" role="menuitem" onClick={() => { setManageOpen(false); router.push("/files/shared-by-me"); }}>
+                  <Icons.share size={16} /><span>{locale === "ar" ? "العناصر المشتركة" : "Shared Items"}</span>
+                </button>
+                <button type="button" role="menuitem" onClick={() => { setManageOpen(false); router.push("/files/manage?tab=large"); }}>
+                  <Icons.file size={16} /><span>{locale === "ar" ? "الملفات الكبيرة" : "Large Files"}</span>
+                </button>
+              </div>
+            ) : null}
+          </div>
+        ) : null}
       </div>
       <div className="ms-auto flex min-w-0 shrink-0 items-center gap-1.5">
         <OrgSwitcher organizationName={org || "IMKAN"} userRole={role} />
