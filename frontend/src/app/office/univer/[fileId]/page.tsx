@@ -1,11 +1,5 @@
 'use client';
 
-/**
- * Univer editor with real load/save against WorkDrive Office APIs:
- *  - openOfficeSession / openOfficeDocument  → load content
- *  - saveOfficeDocument                     → persist Univer snapshot
- */
-
 import dynamic from 'next/dynamic';
 import Link from 'next/link';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
@@ -35,17 +29,7 @@ const UniverEditor = dynamic(
 
 function Center({ label }: { label: string }) {
   return (
-    <div
-      style={{
-        display: 'flex',
-        height: '100%',
-        alignItems: 'center',
-        justifyContent: 'center',
-        background: '#f1f5f9',
-        color: '#64748b',
-        fontSize: 14,
-      }}
-    >
+    <div style={{ display: 'flex', height: '100%', minHeight: 560, alignItems: 'center', justifyContent: 'center', background: '#f1f5f9', color: '#64748b', fontSize: 14 }}>
       {label}
     </div>
   );
@@ -75,14 +59,14 @@ export default function UniverOfficePage() {
 
   const [fileName, setFileName] = useState('Document');
   const [mimeType, setMimeType] = useState<string | null>(null);
-  const [loadError, setLoadError] = useState<string | null>(null);
   const [loadingDoc, setLoadingDoc] = useState(true);
   const [snapshot, setSnapshot] = useState<Record<string, unknown> | null>(null);
+  const [snapshotKey, setSnapshotKey] = useState(0);
   const [snapshotReady, setSnapshotReady] = useState(false);
   const [editorReady, setEditorReady] = useState(false);
   const [saveState, setSaveState] = useState<SaveState>('idle');
   const [saveMessage, setSaveMessage] = useState<string | null>(null);
-  const [legacyNotice, setLegacyNotice] = useState(false);
+  const [banner, setBanner] = useState<string | null>(null);
   const [officeType, setOfficeType] = useState<string | null>(null);
 
   const kind: UniverKind = useMemo(() => {
@@ -91,66 +75,83 @@ export default function UniverOfficePage() {
     return (resolveOfficeEditor(fileName, mimeType) as UniverKind) ?? 'writer';
   }, [kindParam, officeType, fileName, mimeType]);
 
-  // Load file details + office document content
   useEffect(() => {
     let cancelled = false;
     setLoadingDoc(true);
-    setLoadError(null);
     setSnapshotReady(false);
     setEditorReady(false);
     setSaveState('idle');
+    setBanner(null);
 
     (async () => {
       try {
-        const [file, sessionOrDoc] = await Promise.all([
-          getFileDetails(fileId).catch(() => null),
-          openOfficeSession(fileId).catch(async () => {
-            // Fallback when session endpoint fails: open document only
-            const doc = await openOfficeDocument(fileId);
-            return { sessionId: null as string | null, document: doc };
-          }),
-        ]);
-
+        const file = await getFileDetails(fileId).catch(() => null);
         if (cancelled) return;
-
         if (file) {
           setFileName((file as any).name || (file as any).originalName || 'Document');
           setMimeType((file as any).mimeType ?? null);
         }
 
-        const sessionId =
-          sessionOrDoc && 'sessionId' in sessionOrDoc ? (sessionOrDoc as any).sessionId : null;
-        const document: OfficeDocument =
-          sessionOrDoc && 'document' in sessionOrDoc
-            ? (sessionOrDoc as any).document
-            : (sessionOrDoc as unknown as OfficeDocument);
+        let document: OfficeDocument | null = null;
+        let sessionId: string | null = null;
+
+        try {
+          const session = await openOfficeSession(fileId);
+          sessionId = (session as any).sessionId ?? null;
+          document = (session as any).document ?? null;
+        } catch (err: any) {
+          console.warn('[Univer] openOfficeSession failed, trying openOfficeDocument', err?.message || err);
+          try {
+            document = await openOfficeDocument(fileId);
+          } catch (err2: any) {
+            console.warn('[Univer] openOfficeDocument failed — empty unit', err2?.message || err2);
+            setBanner(
+              err2?.message ||
+                err?.message ||
+                'Could not load stored office state. Opening a blank Univer editor. Save to create a new document state.',
+            );
+            document = null;
+          }
+        }
+
+        if (cancelled) return;
 
         sessionIdRef.current = sessionId;
-        revisionRef.current = document?.revision ?? 0;
-        setOfficeType(document?.type ?? null);
+        if (document) {
+          revisionRef.current = document.revision ?? 0;
+          setOfficeType(document.type ?? null);
+          const extracted = extractUniverSnapshot(document.content);
+          if (extracted.legacy && !extracted.snapshot) {
+            setBanner('Opened from a previous format. The Univer editor starts blank — Save will store the new format.');
+          }
+          setSnapshot(extracted.snapshot);
+          if (extracted.kind && !kindParam) {
+            // Prefer kind stored with Univer content
+            setOfficeType(
+              extracted.kind === 'sheet' ? 'SHEET' : extracted.kind === 'show' ? 'SHOW' : 'WRITER',
+            );
+          }
+        } else {
+          revisionRef.current = 0;
+          setSnapshot(null);
+        }
 
-        const extracted = extractUniverSnapshot(document?.content);
-        setLegacyNotice(extracted.legacy && !extracted.snapshot);
-        setSnapshot(extracted.snapshot);
+        setSnapshotKey((k) => k + 1);
         setSnapshotReady(true);
         setLoadingDoc(false);
 
-        // Keep session alive
         if (sessionId) {
           touchTimer.current = setInterval(() => {
-            void touchOfficeSession(sessionId).catch(() => undefined);
+            void touchOfficeSession(sessionId!).catch(() => undefined);
           }, 45_000);
         }
       } catch (err: unknown) {
         if (cancelled) return;
-        // No office document yet — open empty Univer unit; first save will create content via PATCH
-        // (backend bootstrap may still create OfficeDocument on open)
-        setLegacyNotice(true);
+        setBanner(err instanceof Error ? err.message : 'Failed to open file');
         setSnapshot(null);
+        setSnapshotKey((k) => k + 1);
         setSnapshotReady(true);
         setLoadingDoc(false);
-        setLoadError(null);
-        console.warn('[Univer] open failed, starting empty unit', err);
       }
     })();
 
@@ -161,7 +162,7 @@ export default function UniverOfficePage() {
       const sid = sessionIdRef.current;
       if (sid) void closeOfficeSession(sid).catch(() => undefined);
     };
-  }, [fileId]);
+  }, [fileId, kindParam]);
 
   const performSave = useCallback(async () => {
     const handle = editorRef.current;
@@ -184,12 +185,13 @@ export default function UniverOfficePage() {
       const saved = await saveOfficeDocument(
         fileId,
         payload,
-        revisionRef.current || undefined,
+        revisionRef.current > 0 ? revisionRef.current : undefined,
         sessionIdRef.current ?? undefined,
       );
       revisionRef.current = saved.revision ?? revisionRef.current + 1;
       setSaveState('saved');
       setSaveMessage(`Saved · rev ${revisionRef.current}`);
+      setBanner(null);
       setTimeout(() => setSaveState((s) => (s === 'saved' ? 'idle' : s)), 2500);
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Save failed';
@@ -206,7 +208,6 @@ export default function UniverOfficePage() {
     }, 4000);
   }, [performSave]);
 
-  // Ctrl/Cmd+S
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') {
@@ -217,17 +218,6 @@ export default function UniverOfficePage() {
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, [performSave]);
-
-  if (loadError) {
-    return (
-      <div style={{ display: 'flex', height: '100vh', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 12 }}>
-        <p style={{ color: '#b91c1c' }}>{loadError}</p>
-        <button type="button" onClick={() => router.push('/files')} style={btnStyle}>
-          Back to files
-        </button>
-      </div>
-    );
-  }
 
   const statusColor =
     saveState === 'error' ? '#f87171' : saveState === 'saved' ? '#4ade80' : saveState === 'dirty' ? '#fbbf24' : '#94a3b8';
@@ -249,25 +239,11 @@ export default function UniverOfficePage() {
         <Link href="/files" style={{ color: '#94a3b8', textDecoration: 'none', fontSize: 13 }}>
           ← Files
         </Link>
-        <span
-          style={{
-            fontWeight: 600,
-            fontSize: 14,
-            overflow: 'hidden',
-            textOverflow: 'ellipsis',
-            whiteSpace: 'nowrap',
-            maxWidth: '36vw',
-          }}
-        >
+        <span style={{ fontWeight: 600, fontSize: 14, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '36vw' }}>
           {fileName}
         </span>
         <span style={chipStyle}>Univer · {KIND_LABEL[kind]}</span>
         {templateId && <span style={{ ...chipStyle, background: '#312e81', color: '#c7d2fe' }}>Template</span>}
-        {legacyNotice && (
-          <span style={{ ...chipStyle, background: '#422006', color: '#fdba74' }} title="Previous format will be replaced on save">
-            New Univer format
-          </span>
-        )}
 
         <div style={{ marginLeft: 'auto', display: 'flex', gap: 10, alignItems: 'center' }}>
           <span style={{ fontSize: 12, color: statusColor }}>
@@ -283,10 +259,13 @@ export default function UniverOfficePage() {
             onClick={() => void performSave()}
             disabled={!editorReady || saveState === 'saving'}
             style={{
-              ...btnStyle,
+              padding: '6px 14px',
+              borderRadius: 6,
+              border: 'none',
               background: '#2563eb',
               color: '#fff',
-              border: 'none',
+              fontSize: 12,
+              cursor: 'pointer',
               opacity: !editorReady || saveState === 'saving' ? 0.6 : 1,
             }}
           >
@@ -295,37 +274,36 @@ export default function UniverOfficePage() {
         </div>
       </header>
 
-      <main style={{ flex: 1, minHeight: 0, background: '#fff' }}>
+      {banner && (
+        <div style={{ background: '#422006', color: '#fdba74', fontSize: 12, padding: '8px 16px', borderBottom: '1px solid #78350f' }}>
+          {banner}
+        </div>
+      )}
+
+      <main style={{ flex: 1, minHeight: 0, background: '#fff', display: 'flex', flexDirection: 'column' }}>
         {loadingDoc || !snapshotReady ? (
           <Center label="Loading document from storage…" />
         ) : (
-          <UniverEditor
-            ref={editorRef}
-            kind={kind}
-            title={fileName}
-            initialSnapshot={snapshot}
-            onReady={() => setEditorReady(true)}
-            onDirty={onDirty}
-            onError={(m) => {
-              setSaveState('error');
-              setSaveMessage(m);
-            }}
-          />
+          <div style={{ flex: 1, minHeight: 560, height: '100%' }}>
+            <UniverEditor
+              key={`${fileId}-${kind}-${snapshotKey}`}
+              ref={editorRef}
+              kind={kind}
+              title={fileName}
+              initialSnapshot={snapshot}
+              onReady={() => setEditorReady(true)}
+              onDirty={onDirty}
+              onError={(m) => {
+                setSaveState('error');
+                setSaveMessage(m);
+              }}
+            />
+          </div>
         )}
       </main>
     </div>
   );
 }
-
-const btnStyle: React.CSSProperties = {
-  padding: '6px 14px',
-  borderRadius: 6,
-  border: '1px solid #334155',
-  background: '#1e293b',
-  color: '#e2e8f0',
-  fontSize: 12,
-  cursor: 'pointer',
-};
 
 const chipStyle: React.CSSProperties = {
   fontSize: 11,
