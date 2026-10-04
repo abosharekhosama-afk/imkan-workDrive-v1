@@ -109,6 +109,7 @@ export type FileActivityEntry = {
   user_id: string | null;
   created_at: string;
   metadata: Record<string, unknown> | null;
+  actor: { id: string; name: string | null; email: string; avatarUrl: string | null } | null;
 };
 
 export type RestoreVersionResponse = {
@@ -1245,6 +1246,7 @@ export class FilesService {
         userId: true,
         createdAt: true,
         metadata: true,
+        user: { select: { id: true, name: true, email: true, avatarUrl: true } },
       },
     });
     return rows.map((row) => ({
@@ -1253,6 +1255,7 @@ export class FilesService {
       user_id: row.userId,
       created_at: row.createdAt.toISOString(),
       metadata: (row.metadata as Record<string, unknown> | null) ?? null,
+      actor: row.user ? { id: row.user.id, name: row.user.name, email: row.user.email, avatarUrl: row.user.avatarUrl } : null,
     }));
   }
 /**
@@ -1731,24 +1734,6 @@ export class FilesService {
       include: { file: { select: { id: true, name: true, originalName: true, size: true, mimeType: true, extension: true, deletedAt: true, updatedAt: true } } },
     });
     return entries.map((entry) => ({ ...entry, file: entry.file ? { ...entry.file, size: Number(entry.file.size) } : null }));
-  }
-
-  /** My Folders management view: files owned by the current user over 100 MiB. */
-  async listLargeFiles(user: AccessTokenPayload) {
-    const threshold = 100n * 1024n * 1024n;
-    const rows = await this.prisma.file.findMany({
-      where: {
-        orgId: user.org_id,
-        ownerId: user.sub,
-        deletedAt: null,
-        status: FileStatus.ACTIVE,
-        size: { gt: threshold },
-      },
-      orderBy: [{ size: 'desc' }, { updatedAt: 'desc' }],
-      take: 500,
-      select: { id: true, name: true, size: true, mimeType: true, extension: true, updatedAt: true, folderId: true },
-    });
-    return rows.map((row) => ({ ...row, size: Number(row.size) }));
   }
 
   async streamFile(user: AccessTokenPayload, id: string, response: Response, range?: string) {
