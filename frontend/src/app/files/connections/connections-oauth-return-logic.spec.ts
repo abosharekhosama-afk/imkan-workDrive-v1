@@ -1,9 +1,10 @@
-﻿import test from "node:test";
+import test from "node:test";
 import assert from "node:assert/strict";
 import {
   buildCleanPathAfterOAuth,
   buildOAuthFailureMessage,
   buildOAuthStartReturnPath,
+  connectionsHomePath,
   buildOAuthSuccessMessage,
   isOAuthReturnSuccess,
   parseOAuthReturnParams,
@@ -29,4 +30,11 @@ test("OAuth failure message uses backend message when present", () => {
   const params = parseOAuthReturnParams("?oauth=oauth_failed&provider=github&message=State%20expired");
   assert.equal(isOAuthReturnSuccess(params), false);
   assert.equal(buildOAuthFailureMessage(params), "State expired");
+});
+
+test("admin connections return stays on the admin path", () => {
+  assert.equal(connectionsHomePath("/admin/connections"), "/admin/connections");
+  assert.equal(connectionsHomePath("/admin/workflows/builder"), "/admin/connections");
+  assert.equal(connectionsHomePath("/files/connections"), "/files/connections");
+  assert.equal(buildOAuthStartReturnPath("/admin/connections", "?oauth=success&provider=google"), "/admin/connections");
 });

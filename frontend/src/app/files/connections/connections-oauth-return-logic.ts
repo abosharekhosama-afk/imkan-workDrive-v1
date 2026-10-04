@@ -27,6 +27,11 @@ export function stripOAuthQueryParams(search: string): string {
   return next ? `?${next}` : "";
 }
 
+/** Connections screen for the shell that started the action. */
+export function connectionsHomePath(pathname: string): string {
+  return pathname.startsWith("/admin") ? "/admin/connections" : "/files/connections";
+}
+
 export function buildOAuthStartReturnPath(pathname: string, search: string): string {
   return `${pathname}${stripOAuthQueryParams(search)}`;
 }

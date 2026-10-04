@@ -1,4 +1,5 @@
-"use client";
+import { redirect } from "next/navigation";
 
-import Page from "@/app/files/workflows/connections/page";
-export default Page;
+export default function AdminWorkflowConnectionsRedirect() {
+  redirect("/admin/connections");
+}

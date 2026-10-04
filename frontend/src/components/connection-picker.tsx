@@ -1,8 +1,9 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { usePathname } from "next/navigation";
 import { browseConnectionResources, startConnectionOAuth, uploadConnectionFile, type Connection, type ConnectionResource } from "@/lib/api/workflows";
-import { buildOAuthStartReturnPath } from "@/app/files/connections/connections-oauth-return-logic";
+import { buildOAuthStartReturnPath, connectionsHomePath } from "@/app/files/connections/connections-oauth-return-logic";
 import { readBrowserAccessToken, stashBrowserAccessTokenForOAuth } from "@/components/auth-gate-logic";
 import { connectionBrowseReady, connectionRequestReady, connectionStatusLabel, connectionUploadReady, friendlyConnectionError, googleDriveReconnectRequired, parseConnectionError, providerSupports, reconnectProviderLabel } from "@/components/connection-picker-logic";
 import { ImkanOptionPicker } from "@/components/imkan-option-picker";
@@ -36,6 +37,8 @@ export function ConnectionPicker({ connections, value, onChange, provider, capab
   }), [connections, provider, capability]);
   const selected = connections.find((item) => item.id === value) ?? rows.find((item) => item.id === value) ?? null;
   const status = connectionStatusLabel(selected?.status);
+  const pathname = usePathname();
+  const connectionsHome = connectionsHomePath(pathname);
   const label = provider === "google" ? "Google Drive" : provider === "dropbox" ? "Dropbox" : provider === "microsoft" ? "OneDrive" : capability === "request" ? "REST API" : "connection";
   const selectableRows = useMemo(() => rows.filter((item) => item.status === "ACTIVE"), [rows]);
   const inactiveRows = useMemo(() => rows.filter((item) => item.status !== "ACTIVE"), [rows]);
@@ -50,7 +53,7 @@ export function ConnectionPicker({ connections, value, onChange, provider, capab
       {rows.length === 0 ? (
         <div className="rounded-lg border border-dashed border-[var(--wd-line,var(--wd-border,#E0E6EC))] bg-[var(--wd-bg,#fff)] p-3 text-[12px] text-[var(--wd-text,#202B38)]">
           No {label} connection
-          <div className="mt-2"><a className="wd-btn wd-btn-primary" href="/files/connections">+ Connect {label}</a></div>
+          <div className="mt-2"><a className="wd-btn wd-btn-primary" href={connectionsHome}>+ Connect {label}</a></div>
         </div>
       ) : (
         <ImkanOptionPicker

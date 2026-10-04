@@ -201,7 +201,7 @@ export default function ConnectionsPage(){
       await updateConnection(editingConnection.id,{name:draft.name.trim(),baseUrl:draft.baseUrl||undefined,scope:draft.scopes});
       await reload();
       if(editingConnection.authType==="OAUTH2"){
-        const r=await reconnectConnection(editingConnection.id);
+        const r=await reconnectConnection(editingConnection.id, buildOAuthStartReturnPath(window.location.pathname, window.location.search));
         window.location.href=r.url;
         return;
       }
@@ -211,7 +211,7 @@ export default function ConnectionsPage(){
 
   const openInspect=async(c:Connection)=>{setInspect(c);setDiag(null);setGovernance(null);setReferences([]);setShares([]);setMembers([]);try{const [detail,d,s,r,g]=await Promise.all([getConnection(c.id),getConnectionDiagnostics(c.id),getConnectionShares(c.id),getConnectionReferences(c.id),getConnectionGovernance(c.id)]);setInspect(detail);setDiag(d);setShares(s.shares);setReferences(r.references);setGovernance(g);try{const rows=await listOrganizationMembers();setMembers(rows.filter((row:any)=>row.status === undefined || row.status === "ACTIVE").map((row:any)=>({ id: row.userId ?? row.id, name: row.name, email: row.email })));}catch{}}catch{}};
   const toggleConnection=async(c:Connection)=>{try{await (c.status==="DISABLED"?enableConnection(c.id):disableConnection(c.id));await reload();if(inspect?.id===c.id)setInspect({...c,status:c.status==="DISABLED"?"ACTIVE":"DISABLED"})}catch(e){setError(e instanceof Error?e.message:"Unable to update connection")}};
-  const reconnect=async(c:Connection)=>{try{stashBrowserAccessTokenForOAuth(readBrowserAccessToken(localStorage,document.cookie));const r=await reconnectConnection(c.id);window.location.href=r.url}catch(e){setError(e instanceof Error?e.message:"Unable to reconnect")}};
+  const reconnect=async(c:Connection)=>{try{stashBrowserAccessTokenForOAuth(readBrowserAccessToken(localStorage,document.cookie));const r=await reconnectConnection(c.id, buildOAuthStartReturnPath(window.location.pathname, window.location.search));window.location.href=r.url}catch(e){setError(e instanceof Error?e.message:"Unable to reconnect")}};
   const addShare=async()=>{if(!inspect||!shareUser)return;try{await shareConnection(inspect.id,shareUser,shareRole);const s=await getConnectionShares(inspect.id);setShares(s.shares);setShareUser("")}catch(e){setError(e instanceof Error?e.message:"Unable to share")}};
   const loadMembers=async()=>{try{const rows=await listOrganizationMembers();setMembers(rows.filter((row:any)=>row.status === undefined || row.status === "ACTIVE").map((row:any)=>({ id: row.userId ?? row.id, name: row.name, email: row.email })))}catch{}};
   const removeShare=async(uid:string)=>{if(!inspect)return;try{await unshareConnection(inspect.id,uid);setShares((s)=>s.filter(x=>x.userId!==uid))}catch(e){setError(e instanceof Error?e.message:"Unable to unshare")}};
