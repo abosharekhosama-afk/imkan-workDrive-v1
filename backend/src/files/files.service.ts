@@ -1733,6 +1733,24 @@ export class FilesService {
     return entries.map((entry) => ({ ...entry, file: entry.file ? { ...entry.file, size: Number(entry.file.size) } : null }));
   }
 
+  /** My Folders management view: files owned by the current user over 100 MiB. */
+  async listLargeFiles(user: AccessTokenPayload) {
+    const threshold = 100n * 1024n * 1024n;
+    const rows = await this.prisma.file.findMany({
+      where: {
+        orgId: user.org_id,
+        ownerId: user.sub,
+        deletedAt: null,
+        status: FileStatus.ACTIVE,
+        size: { gt: threshold },
+      },
+      orderBy: [{ size: 'desc' }, { updatedAt: 'desc' }],
+      take: 500,
+      select: { id: true, name: true, size: true, mimeType: true, extension: true, updatedAt: true, folderId: true },
+    });
+    return rows.map((row) => ({ ...row, size: Number(row.size) }));
+  }
+
   async streamFile(user: AccessTokenPayload, id: string, response: Response, range?: string) {
     const file = await this.prisma.file.findFirst({ where: { id, orgId: user.org_id, deletedAt: null }, include: { versions: { where: { uploadStatus: UploadStatus.COMPLETE, status: { in: [VersionStatus.ACTIVE, VersionStatus.RESTORED] } }, orderBy: { versionNumber: 'desc' }, take: 1 }, folder: { select: { teamFolderId: true } } } });
     if (!file || !file.versions[0] || !(await this.canReadFile(user, file))) throw new NotFoundException('File not found');

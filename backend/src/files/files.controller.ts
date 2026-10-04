@@ -109,6 +109,11 @@ export class FilesController {
     return this.files.listTrash(user);
   }
 
+  @Get('manage/large')
+  listLargeFiles(@CurrentUser() user: AccessTokenPayload) {
+    return this.files.listLargeFiles(user);
+  }
+
 
   @Get(':id/dlp') dlp(@CurrentUser() user: AccessTokenPayload, @Param('id', new ParseUUIDPipe({ version: '4' })) id: string) { return this.dlpService.evaluate(user, id); }
   @Post(':id/dlp/labels/:labelId') addDlpLabel(@CurrentUser() user: AccessTokenPayload, @Param('id', new ParseUUIDPipe({ version: '4' })) id: string, @Param('labelId', new ParseUUIDPipe({ version: '4' })) labelId: string) { return this.dlpService.associateLabel(user, id, labelId); }
