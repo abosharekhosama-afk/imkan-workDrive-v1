@@ -9,6 +9,8 @@ import type { FileRecord } from "../../../lib/api/types";
 import { fileIconKind, FileTypeIcon } from "../../../components/file-icon";
 import { errorMessageForStatus } from "../../../components/feedback-state-logic";
 import { formatBytes, resolveItemSize } from "../../../lib/api/quota";
+import { ConfirmActionModal } from "../../../components/confirm-action-modal";
+import { Toast } from "../../../components/toast";
 
 function formatDate(value?: string | null): string {
   if (!value) return "—";
@@ -16,12 +18,14 @@ function formatDate(value?: string | null): string {
 }
 
 export default function TrashPage() {
-  const { label } = useLocale();
+  const { label, locale } = useLocale();
   const [files, setFiles] = useState<FileRecord[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [busyId, setBusyId] = useState<string | null>(null);
+  const [confirm, setConfirm] = useState<{ title: string; description: string; confirm: string; run: () => Promise<void> } | null>(null);
+  const [toast, setToast] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     try {
@@ -64,29 +68,33 @@ export default function TrashPage() {
     }
   }
 
-  async function handleDeleteForever(fileId: string) {
-    if (!window.confirm(label("trash.confirmPermanent"))) return;
-    setBusyId(fileId);
-    setError(null);
-    try {
-      await permanentDeleteFile(fileId);
-      await load();
-    } catch {
-      setError(label("error.generic"));
-    } finally {
-      setBusyId(null);
-    }
+  function handleDeleteForever(fileId: string) {
+    const ar = locale === "ar";
+    setConfirm({
+      title: ar ? "حذف الملف نهائيًا" : "Delete Forever",
+      description: ar ? "لا يمكن التراجع عن حذف الملف نهائيًا." : "This file will be permanently deleted and cannot be restored.",
+      confirm: ar ? "حذف نهائي" : "Delete Forever",
+      run: async () => {
+        setBusyId(fileId); setError(null);
+        try { await permanentDeleteFile(fileId); await load(); setToast(ar ? "تم حذف الملف نهائيًا" : "File permanently deleted"); }
+        catch { setError(label("error.generic")); throw new Error(label("error.generic")); }
+        finally { setBusyId(null); }
+      },
+    });
   }
 
-  async function handleEmptyTrash() {
-    if (!window.confirm(label("trash.confirmEmpty"))) return;
-    setError(null);
-    try {
-      await emptyTrash();
-      await load();
-    } catch {
-      setError(label("error.generic"));
-    }
+  function handleEmptyTrash() {
+    const ar = locale === "ar";
+    setConfirm({
+      title: ar ? "إفراغ سلة المهملات" : "Empty Trash",
+      description: ar ? "سيتم حذف جميع العناصر الموجودة في سلة المهملات نهائيًا." : "All items currently in Trash will be permanently deleted.",
+      confirm: ar ? "إفراغ السلة" : "Empty Trash",
+      run: async () => {
+        setError(null);
+        try { await emptyTrash(); await load(); setToast(ar ? "تم إفراغ سلة المهملات" : "Trash emptied"); }
+        catch { setError(label("error.generic")); throw new Error(label("error.generic")); }
+      },
+    });
   }
 
   return (
@@ -115,6 +123,9 @@ export default function TrashPage() {
 
       {error ? <div className="wd-alert" role="alert">{error}</div> : null}
       {!error && notice ? <div className="wd-alert wd-alert-success" role="status">{notice}</div> : null}
+
+      {confirm ? <ConfirmActionModal title={confirm.title} description={confirm.description} confirmLabel={confirm.confirm} onClose={() => setConfirm(null)} onConfirm={async () => { await confirm.run(); setConfirm(null); }} tone="danger" /> : null}
+      {toast ? <Toast message={toast} onDismiss={() => setToast(null)} /> : null}
 
       {loading ? (
         <div className="wd-card" aria-busy="true">
