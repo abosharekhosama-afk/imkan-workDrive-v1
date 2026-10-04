@@ -44,7 +44,7 @@ import { resolveDataTemplateSchema } from "../lib/data-template-logic";
 import { canMutateContent, canShareContent } from "../lib/permissions";
 import { listSharedByMe } from "../lib/api/shared";
 import { listWorkspaceLabelResources, listWorkspaceLabels } from "../lib/api/workspace-labels";
-import { officeEditorPath, isNativeImkanOfficeFile } from "../lib/office-file-routing";
+import { officeEditorPath, isNativeImkanOfficeFile, imkanOfficeEditorPath } from "../lib/office-file-routing";
 import { createOfficeCopy } from "../lib/api/office";
 import type { FileActionHandlers, FileControlState } from "./file-actions-menu";
 import { normalizePublicAppUrl } from "../lib/public-url";
@@ -817,11 +817,15 @@ export function FileBrowser({
     onMarkFinal: () => { void runControl(singleFile.id, "mark-final"); },
     onEnableEditing: () => { void runControl(singleFile.id, "enable-editing"); },
     onOpenInOffice: officeEditorPath(singleFile.id, singleFile.name, singleFile.mimeType) ? () => {
-      if (isNativeImkanOfficeFile(singleFile.name, singleFile.mimeType)) { window.location.assign(officeEditorPath(singleFile.id, singleFile.name, singleFile.mimeType)!); return; }
-      void createOfficeCopy(singleFile.id, "OPEN").then((result) => { window.location.assign(officeEditorPath(result.fileId, `${singleFile.name}.imkan`, result.document?.nativeFormat ? `application/vnd.imkan.${String(result.document.nativeFormat).replace(/\+.*/, "")}` : undefined) || `/office/${String(result.document.type).toLowerCase()}/${encodeURIComponent(result.fileId)}`); }).catch((error) => window.alert(error instanceof Error ? error.message : "Could not open in IMKAN Office."));
+      // Standard Office files open in Univer; native .imkan files stay on IMKAN Office.
+      window.location.assign(officeEditorPath(singleFile.id, singleFile.name, singleFile.mimeType)!);
     } : undefined,
     onConvertToOffice: !isNativeImkanOfficeFile(singleFile.name, singleFile.mimeType) && officeEditorPath(singleFile.id, singleFile.name, singleFile.mimeType) ? () => {
-      void createOfficeCopy(singleFile.id, "CONVERT").then((result) => { window.location.assign(officeEditorPath(result.fileId, `${singleFile.name}.imkan`, `application/vnd.imkan.${String(result.document.nativeFormat).toLowerCase()}+json`) || `/office/${String(result.document.type).toLowerCase()}/${encodeURIComponent(result.fileId)}`); }).catch((error) => window.alert(error instanceof Error ? error.message : "Conversion failed."));
+      // Explicit conversion still produces a native IMKAN Office working copy.
+      void createOfficeCopy(singleFile.id, "CONVERT").then((result) => {
+        const href = `/office/${String(result.document.type).toLowerCase()}/${encodeURIComponent(result.fileId)}`;
+        window.location.assign(href);
+      }).catch((error) => window.alert(error instanceof Error ? error.message : "Conversion failed."));
     } : undefined,
   } : undefined;
   const singleControl: FileControlState | undefined = singleFile ? { status: singleFile.status, isFinal: singleFile.isFinal, checkedOutById: singleFile.checkedOutById } : undefined;

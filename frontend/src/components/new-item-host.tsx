@@ -88,7 +88,7 @@ export function NewItemHost() {
 
   const createOfficeItem = async (kind: "doc" | "sheet" | "slide", folderId: string | null) => {
     const typeMap: Record<typeof kind, OfficeType> = { doc: "WRITER", sheet: "SHEET", slide: "SHOW" };
-    const routeMap: Record<typeof kind, string> = { doc: "writer", sheet: "sheet", slide: "show" };
+    const kindMap: Record<typeof kind, string> = { doc: "writer", sheet: "sheet", slide: "show" };
     const type = typeMap[kind];
     setBusy(true);
     setError("");
@@ -97,7 +97,8 @@ export function NewItemHost() {
       if (!fields) return;
       const result = await createOfficeDocument({ name: DEFINITIONS[kind].defaultName, type, folderId });
       window.dispatchEvent(new Event("workdrive:content-changed"));
-      router.push(`/office/${routeMap[kind]}/${result.fileId}`);
+      // Open in Univer (primary editor). IMKAN Office remains on /office/writer|sheet|show.
+      router.push(`/office/univer/${encodeURIComponent(result.fileId)}?kind=${kindMap[kind]}`);
     } catch (e) {
       setError(e instanceof Error ? e.message : (ar ? "تعذر إنشاء المستند." : "Unable to create the document."));
     } finally {
