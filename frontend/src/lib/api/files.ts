@@ -88,6 +88,21 @@ export function trashFile(id: string): Promise<{ id: string; deleted: boolean }>
   return apiRequest(`/files/${id}`, { method: "DELETE" });
 }
 
+export type LargeFileRecord = {
+  id: string;
+  name: string;
+  size: number;
+  mimeType: string | null;
+  extension: string | null;
+  updatedAt: string;
+  folderId: string | null;
+};
+
+/** List the current user's active files larger than 100 MiB. */
+export function listLargeFiles(): Promise<LargeFileRecord[]> {
+  return apiRequest<LargeFileRecord[]>("/files/manage/large");
+}
+
 export async function sha256Hex(file: File): Promise<string> {
   const buffer = await file.arrayBuffer();
   const digest = await crypto.subtle.digest("SHA-256", buffer);
