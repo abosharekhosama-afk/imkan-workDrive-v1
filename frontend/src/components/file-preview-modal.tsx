@@ -29,7 +29,8 @@ import { usePreviewUrl } from "./preview/use-preview-url";
 import { resolveMimeType } from "../lib/api/mime";
 import { getLanguageFromMime, getPreviewMimeCategory, isBrowserRenderableImage } from "../lib/api/preview";
 import { formatBytes } from "../lib/api/quota";
-import { copyFile, getFileDlp, moveFile, renameFile, requestDownload, trashFile, type FileDlpDecision } from "../lib/api/files";
+import { copyFile, getFileDetails, getFileDlp, moveFile, renameFile, requestDownload, runFileControl, trashFile, type FileControlAction, type FileDlpDecision } from "../lib/api/files";
+import type { FileControlState } from "./file-actions-menu";
 import { triggerDownload } from "../lib/api/download";
 import { getViewPreferences } from "../lib/api/enterprise";
 import { saveFileAsTemplate } from "../lib/api/templates";
@@ -71,7 +72,7 @@ function WorkDriveLogo() {
  * details/activity sidebar.
  */
 export function FilePreviewModal({ target, onClose, onPrevFile, onNextFile, initialPanel, focusCommentId }: FilePreviewModalProps) {
-  const { label } = useLocale();
+  const { label, locale } = useLocale();
   const previousActiveRef = useRef<HTMLElement | null>(null);
   const [panel, setPanel] = useState<"details" | "comments" | "dataTemplate" | "watermark" | "zia" | null>(initialPanel ?? null);
   const [commentCount, setCommentCount] = useState(0);
@@ -85,6 +86,7 @@ export function FilePreviewModal({ target, onClose, onPrevFile, onNextFile, init
   const [renameOpen, setRenameOpen] = useState(false);
   const [workflowOpen, setWorkflowOpen] = useState(false);
   const [followOpen, setFollowOpen] = useState(false);
+  const [fileControl, setFileControl] = useState<FileControlState>({ status: "ACTIVE" });
   const router = useRouter();
 
   const open = Boolean(target);
@@ -107,8 +109,13 @@ export function FilePreviewModal({ target, onClose, onPrevFile, onNextFile, init
     setRenameOpen(false);
     setWorkflowOpen(false);
     setFollowOpen(false);
+    setFileControl({ status: "ACTIVE" });
     if (!activeTarget) return;
     let live = true;
+    void getFileDetails(activeTarget.id).then((details) => {
+      if (!live) return;
+      setFileControl({ status: details.status, isFinal: details.isFinal, checkedOutById: details.checkedOutById });
+    }).catch(() => undefined);
     void getFileDlp(activeTarget.id).then((value) => {
       if (!live) return;
       setDlp(value);
@@ -312,6 +319,22 @@ export function FilePreviewModal({ target, onClose, onPrevFile, onNextFile, init
       void trashFile(activeTarget.id).then(() => onClose()).catch((cause) => showToast(cause instanceof Error ? cause.message : label("preview.error")));
     }
   };
+  const applyControl = (action: FileControlAction) => {
+    if (!activeTarget) return;
+    const ar = locale === "ar";
+    if (action === "mark-final" && !window.confirm(ar ? "تعليم هذا الملف كمنتهٍ؟ سيصبح للقراءة فقط." : "Mark this file as final? It will become read-only.")) return;
+    if (action === "enable-editing" && !window.confirm(ar ? "تفعيل التعديل لهذا الملف المنتهي؟" : "Enable editing for this final file?")) return;
+    void runFileControl(activeTarget.id, action).then((result) => {
+      setFileControl({ status: result.isFinal ? "FINAL" : result.checkedOutById ? "CHECKED_OUT" : "ACTIVE", isFinal: result.isFinal, checkedOutById: result.checkedOutById });
+      window.dispatchEvent(new CustomEvent("workdrive:file-control", { detail: { id: activeTarget.id, isFinal: result.isFinal, checkedOutById: result.checkedOutById, checkedOutAt: result.checkedOutAt, indexedAt: result.indexedAt } }));
+      const done = action === "check-out" ? (ar ? "تم سحب الملف" : "File checked out")
+        : action === "check-in" ? (ar ? "تم إرجاع الملف" : "File checked in")
+        : action === "mark-final" ? (ar ? "تم التعليم كمنتهٍ" : "Marked as final")
+        : action === "enable-editing" ? (ar ? "تم تفعيل التعديل" : "Editing enabled")
+        : (ar ? "تم تحديث فهرس البحث" : "Search index refreshed");
+      showToast(done);
+    }).catch((cause) => showToast(cause instanceof Error ? cause.message : label("preview.error")));
+  };
 
   return (
     <div className="zoho-preview-modal" role="dialog" aria-modal="true" aria-label={`${activeTarget.name} — ${label("preview.title")}`}>
@@ -358,9 +381,15 @@ export function FilePreviewModal({ target, onClose, onPrevFile, onNextFile, init
           <button type="button" className="zoho-preview-icon-top" onClick={() => void copyPermalink()} aria-label={label("preview.copyLink")} title={label("preview.copyLink")}><Icons.link size={15} /></button>
           <button type="button" className="zoho-preview-icon-top" onClick={() => void handleDownload()} aria-label={label("preview.download")} title={label("preview.download")}><Icons.download size={15} /></button>
           <FileActionsMenu
-            zIndex={260}
+            zIndex={280}
+            control={fileControl}
             context={{ resourceType: "FILE", canMutate: true, canShare: true, canFavorite: false }}
             handlers={{
+              onCheckOut: () => applyControl("check-out"),
+              onCheckIn: () => applyControl("check-in"),
+              onMarkFinal: () => applyControl("mark-final"),
+              onEnableEditing: () => applyControl("enable-editing"),
+              onReindex: () => applyControl("reindex"),
               onOpen: () => runAction("openNewTab"),
               onShare: () => runAction("share"),
               onCopyLink: () => runAction("copyPermalink"),

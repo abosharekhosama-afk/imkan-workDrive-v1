@@ -178,6 +178,7 @@
 | — | My Files, the selection bar, and preview share one action card; nested menus stay on screen; the file table scrolls in its own region; labels and real share expiry show as badges | ✅ Implemented |
 | — | My Account drawer and settings show the signed-in profile, and the profile photo can be changed or removed | ✅ Implemented |
 | — | File action cards stay inside the table and a short table can scroll while the card is open; action submenus, the file table, and the admin sidebar hide their scrollbars | ✅ Implemented |
+| — | Check out, mark as final, re-index, and follow updates change the action menu and mark the file row; preview actions open above the preview; the top bars and row hover text follow dark mode | ✅ Implemented |
 
 ---
 

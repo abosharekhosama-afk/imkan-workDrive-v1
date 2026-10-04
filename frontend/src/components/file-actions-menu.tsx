@@ -7,6 +7,7 @@ import type { RowActionContext } from "./file-row-actions-logic";
 import { followUpdatesMenuLabel } from "../lib/follow-updates-logic";
 import { FileMenuIcons } from "../lib/file-menu-icons";
 import type { ShareLaunchMode } from "../lib/share-launch-logic";
+import { fileControlFromRecord } from "../lib/file-control-logic";
 
 export interface FileActionHandlers {
   onOpen?: () => void;
@@ -45,6 +46,8 @@ export interface FileActionHandlers {
 export type FileControlState = {
   /** CHECKED_OUT | FINAL | ACTIVE | unknown */
   status?: string | null;
+  isFinal?: boolean | null;
+  checkedOutById?: string | null;
 };
 
 export function normalizeFileControlStatus(status?: string | null): "CHECKED_OUT" | "FINAL" | "ACTIVE" {
@@ -62,7 +65,7 @@ export function resolveControlHandlers(
   handlers: FileActionHandlers,
   control?: FileControlState,
 ): Pick<FileActionHandlers, "onCheckOut" | "onCheckIn" | "onMarkFinal" | "onEnableEditing" | "onReindex"> {
-  const state = normalizeFileControlStatus(control?.status);
+  const state = fileControlFromRecord(control);
   return {
     onReindex: handlers.onReindex,
     onCheckOut: state === "ACTIVE" ? handlers.onCheckOut : undefined,

@@ -2,7 +2,8 @@
 
 import { officeEditorPath, isNativeImkanOfficeFile } from "../lib/office-file-routing";
 import { createOfficeCopy } from "../lib/api/office";
-import { runFileControl } from "../lib/api/files";
+import type { FileControlAction } from "../lib/api/files";
+import { fileControlFromRecord } from "../lib/file-control-logic";
 import { useLocale } from"./locale-provider";
 import { FileIcon } from"./file-icon";
 import { OwnerCell } from"./owner-cell";
@@ -35,6 +36,7 @@ export interface FileGridViewProps {
   canFavorite?: boolean;
   folderSizes?: ReadonlyMap<string, number>;
   folderUpdatedAt?: ReadonlyMap<string, string | null>;
+  onFileControl?: (fileId: string, action: FileControlAction) => void;
 }
 function buildFolderContext(canMutate: boolean, canShare: boolean): RowActionContext {
   return { resourceType:"FOLDER", canMutate, canShare, canFavorite: false, isFavorite: false };
@@ -77,6 +79,7 @@ export function FileGridView({
   canFavorite = false,
   folderSizes,
   folderUpdatedAt,
+  onFileControl,
 }: FileGridViewProps) {
   const { label, locale } = useLocale();
   const formatDate = (value?: string | null) => formatDateLocalized(value, locale);
@@ -127,7 +130,7 @@ export function FileGridView({
           isFavorite: favoriteIds.has(file.id),
           onInspect: onInspect ? () => onInspect("FILE", file.id, file.name) : undefined,
           onPreview: onPreview ? () => onPreview(file) : undefined,
-          onReindex: () => { void runFileControl(file.id, "reindex").then(() => window.alert("Search index refreshed from available file metadata." )).catch((e) => window.alert(e instanceof Error ? e.message : "Re-index failed.")); }, onCheckOut: () => { void runFileControl(file.id, "check-out").then(() => window.location.reload()).catch((e) => window.alert(e instanceof Error ? e.message : "Check-out failed.")); }, onCheckIn: () => { void runFileControl(file.id, "check-in").then(() => window.location.reload()).catch((e) => window.alert(e instanceof Error ? e.message : "Check-in failed.")); }, onMarkFinal: () => { if (window.confirm("Mark this file as final? It will become read-only.")) void runFileControl(file.id, "mark-final").then(() => window.location.reload()).catch((e) => window.alert(e instanceof Error ? e.message : "Could not mark final.")); }, onEnableEditing: () => { if (window.confirm("Enable editing for this final file?")) void runFileControl(file.id, "enable-editing").then(() => window.location.reload()).catch((e) => window.alert(e instanceof Error ? e.message : "Could not enable editing.")); }, onOpenInOffice: officeEditorPath(file.id, file.name, file.mimeType) ? () => { if (isNativeImkanOfficeFile(file.name, file.mimeType)) { window.location.assign(officeEditorPath(file.id, file.name, file.mimeType)!); return; } void createOfficeCopy(file.id, "OPEN").then((result) => { window.location.assign(officeEditorPath(result.fileId, `${file.name}.imkan`, result.document?.nativeFormat ? `application/vnd.imkan.${String(result.document.nativeFormat).replace(/\+.*/, "")}` : undefined) || `/office/${String(result.document.type).toLowerCase()}/${encodeURIComponent(result.fileId)}`); }).catch((error) => window.alert(error instanceof Error ? error.message : "Could not open in IMKAN Office.")); } : undefined, onConvertToOffice: !isNativeImkanOfficeFile(file.name, file.mimeType) && officeEditorPath(file.id, file.name, file.mimeType) ? () => { void createOfficeCopy(file.id, "CONVERT").then((result) => { window.location.assign(officeEditorPath(result.fileId, `${file.name}.imkan`, `application/vnd.imkan.${String(result.document.nativeFormat).toLowerCase()}+json`) || `/office/${String(result.document.type).toLowerCase()}/${encodeURIComponent(result.fileId)}`); }).catch((error) => window.alert(error instanceof Error ? error.message : "Conversion failed.")); } : undefined,
+          onReindex: () => onFileControl?.(file.id, "reindex"), onCheckOut: () => onFileControl?.(file.id, "check-out"), onCheckIn: () => onFileControl?.(file.id, "check-in"), onMarkFinal: () => onFileControl?.(file.id, "mark-final"), onEnableEditing: () => onFileControl?.(file.id, "enable-editing"), onOpenInOffice: officeEditorPath(file.id, file.name, file.mimeType) ? () => { if (isNativeImkanOfficeFile(file.name, file.mimeType)) { window.location.assign(officeEditorPath(file.id, file.name, file.mimeType)!); return; } void createOfficeCopy(file.id, "OPEN").then((result) => { window.location.assign(officeEditorPath(result.fileId, `${file.name}.imkan`, result.document?.nativeFormat ? `application/vnd.imkan.${String(result.document.nativeFormat).replace(/\+.*/, "")}` : undefined) || `/office/${String(result.document.type).toLowerCase()}/${encodeURIComponent(result.fileId)}`); }).catch((error) => window.alert(error instanceof Error ? error.message : "Could not open in IMKAN Office.")); } : undefined, onConvertToOffice: !isNativeImkanOfficeFile(file.name, file.mimeType) && officeEditorPath(file.id, file.name, file.mimeType) ? () => { void createOfficeCopy(file.id, "CONVERT").then((result) => { window.location.assign(officeEditorPath(result.fileId, `${file.name}.imkan`, `application/vnd.imkan.${String(result.document.nativeFormat).toLowerCase()}+json`) || `/office/${String(result.document.type).toLowerCase()}/${encodeURIComponent(result.fileId)}`); }).catch((error) => window.alert(error instanceof Error ? error.message : "Conversion failed.")); } : undefined,
           onComment: onComment ? () => onComment(file) : undefined,
           onDownload: onDownload ? () => onDownload(file.id) : undefined,
           onShare: onShare ? (mode) => onShare("FILE", file.id, mode) : undefined,
@@ -139,7 +142,7 @@ export function FileGridView({
           onAssignWorkflow: canMutate && onAssignWorkflow ? () => onAssignWorkflow("FILE", file.id, file.name) : undefined,
         };
         return (
-          <div key={file.id} role="listitem" className="zoho-grid-card">
+          <div key={file.id} role="listitem" className="zoho-grid-card" data-control={fileControlFromRecord(file) === "ACTIVE" ? undefined : fileControlFromRecord(file).toLowerCase()}>
             <button
               type="button"
               className="zoho-grid-main"
@@ -155,7 +158,7 @@ export function FileGridView({
               <span className="zoho-grid-date">{formatDate(file.updatedAt)}</span>
             </div>
             <div className="zoho-grid-actions">
-              <FileActionsMenu context={fileContext} handlers={fileHandlers} />
+              <FileActionsMenu context={fileContext} control={{ status: file.status, isFinal: file.isFinal, checkedOutById: file.checkedOutById }} handlers={fileHandlers} />
             </div>
           </div>
         );

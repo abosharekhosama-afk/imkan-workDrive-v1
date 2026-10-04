@@ -13,7 +13,7 @@ import { FileTable } from "./file-table";
 import { ShareModal } from "./share-modal";
 import { useLocale } from "./locale-provider";
 import { bulkTrashFolders, createFolder, deleteFolder, getFolder, listRootContents, renameFolder, moveFolder, copyFolder } from "../lib/api/folders";
-import { bulkTrashFiles, renameFile, requestDownload, trashFile, moveFile, copyFile, getFileDetails, runFileControl } from "../lib/api/files";
+import { bulkTrashFiles, renameFile, requestDownload, trashFile, moveFile, copyFile, getFileDetails, runFileControl, type FileControlAction } from "../lib/api/files";
 import { triggerDownload } from "../lib/api/download";
 import { addFavorite, listFavorites, removeFavorite } from "../lib/api/favorites";
 import { ApiError } from "../lib/api/client";
@@ -765,6 +765,34 @@ export function FileBrowser({
     label,
   ]);
 
+  useEffect(() => {
+    const onControl = (event: Event) => {
+      const detail = (event as CustomEvent<{ id?: string; isFinal?: boolean; checkedOutById?: string | null; checkedOutAt?: string | null; indexedAt?: string | null }>).detail;
+      if (!detail?.id) return;
+      setFiles((rows) => rows.map((row) => row.id === detail.id ? { ...row, isFinal: detail.isFinal, checkedOutById: detail.checkedOutById, checkedOutAt: detail.checkedOutAt, indexedAt: detail.indexedAt } : row));
+    };
+    window.addEventListener("workdrive:file-control", onControl);
+    return () => window.removeEventListener("workdrive:file-control", onControl);
+  }, []);
+
+  const runControl = useCallback(async (id: string, action: FileControlAction) => {
+    const ar = locale === "ar";
+    if (action === "mark-final" && !window.confirm(ar ? "تعليم هذا الملف كمنتهٍ؟ سيصبح للقراءة فقط." : "Mark this file as final? It will become read-only.")) return;
+    if (action === "enable-editing" && !window.confirm(ar ? "تفعيل التعديل لهذا الملف المنتهي؟" : "Enable editing for this final file?")) return;
+    try {
+      const result = await runFileControl(id, action);
+      setFiles((rows) => rows.map((row) => row.id === id ? { ...row, isFinal: result.isFinal, checkedOutById: result.checkedOutById, checkedOutAt: result.checkedOutAt, indexedAt: result.indexedAt } : row));
+      const done = action === "check-out" ? (ar ? "تم سحب الملف" : "File checked out")
+        : action === "check-in" ? (ar ? "تم إرجاع الملف" : "File checked in")
+        : action === "mark-final" ? (ar ? "تم التعليم كمنتهٍ" : "Marked as final")
+        : action === "enable-editing" ? (ar ? "تم تفعيل التعديل" : "Editing enabled")
+        : (ar ? "تم تحديث فهرس البحث" : "Search index refreshed");
+      setToast(done);
+    } catch (error) {
+      window.alert(error instanceof Error ? error.message : (ar ? "تعذر تنفيذ الإجراء" : "Action failed"));
+    }
+  }, [locale]);
+
   const singleId = selectedIds.size === 1 ? [...selectedIds][0] : undefined;
   const singleFolder = singleId ? folders.find((item) => item.id === singleId) : undefined;
   const singleFile = singleId && !singleFolder ? files.find((item) => item.id === singleId) : undefined;
@@ -783,11 +811,11 @@ export function FileBrowser({
     onLabels: () => setLabelTarget({ type: "FILE", id: singleFile.id, name: singleFile.name }),
     onFavoriteToggle: () => { void handleFavorite("FILE", singleFile.id); },
     onCopyLink: canShare ? () => { void copyShareLink({ type: "FILE", id: singleFile.id }); } : undefined,
-    onReindex: () => { void runFileControl(singleFile.id, "reindex").then(() => window.alert("Search index refreshed from available file metadata.")).catch((error) => window.alert(error instanceof Error ? error.message : "Re-index failed.")); },
-    onCheckOut: () => { void runFileControl(singleFile.id, "check-out").then(() => window.location.reload()).catch((error) => window.alert(error instanceof Error ? error.message : "Check-out failed.")); },
-    onCheckIn: () => { void runFileControl(singleFile.id, "check-in").then(() => window.location.reload()).catch((error) => window.alert(error instanceof Error ? error.message : "Check-in failed.")); },
-    onMarkFinal: () => { if (window.confirm("Mark this file as final? It will become read-only.")) void runFileControl(singleFile.id, "mark-final").then(() => window.location.reload()).catch((error) => window.alert(error instanceof Error ? error.message : "Could not mark final.")); },
-    onEnableEditing: () => { if (window.confirm("Enable editing for this final file?")) void runFileControl(singleFile.id, "enable-editing").then(() => window.location.reload()).catch((error) => window.alert(error instanceof Error ? error.message : "Could not enable editing.")); },
+    onReindex: () => { void runControl(singleFile.id, "reindex"); },
+    onCheckOut: () => { void runControl(singleFile.id, "check-out"); },
+    onCheckIn: () => { void runControl(singleFile.id, "check-in"); },
+    onMarkFinal: () => { void runControl(singleFile.id, "mark-final"); },
+    onEnableEditing: () => { void runControl(singleFile.id, "enable-editing"); },
     onOpenInOffice: officeEditorPath(singleFile.id, singleFile.name, singleFile.mimeType) ? () => {
       if (isNativeImkanOfficeFile(singleFile.name, singleFile.mimeType)) { window.location.assign(officeEditorPath(singleFile.id, singleFile.name, singleFile.mimeType)!); return; }
       void createOfficeCopy(singleFile.id, "OPEN").then((result) => { window.location.assign(officeEditorPath(result.fileId, `${singleFile.name}.imkan`, result.document?.nativeFormat ? `application/vnd.imkan.${String(result.document.nativeFormat).replace(/\+.*/, "")}` : undefined) || `/office/${String(result.document.type).toLowerCase()}/${encodeURIComponent(result.fileId)}`); }).catch((error) => window.alert(error instanceof Error ? error.message : "Could not open in IMKAN Office."));
@@ -796,7 +824,7 @@ export function FileBrowser({
       void createOfficeCopy(singleFile.id, "CONVERT").then((result) => { window.location.assign(officeEditorPath(result.fileId, `${singleFile.name}.imkan`, `application/vnd.imkan.${String(result.document.nativeFormat).toLowerCase()}+json`) || `/office/${String(result.document.type).toLowerCase()}/${encodeURIComponent(result.fileId)}`); }).catch((error) => window.alert(error instanceof Error ? error.message : "Conversion failed."));
     } : undefined,
   } : undefined;
-  const singleControl: FileControlState | undefined = singleFile ? { status: singleFile.status } : undefined;
+  const singleControl: FileControlState | undefined = singleFile ? { status: singleFile.status, isFinal: singleFile.isFinal, checkedOutById: singleFile.checkedOutById } : undefined;
 
   return (
     <section className="wd-file-browser flex min-h-0 flex-1 flex-col w-full max-w-full overflow-x-hidden">
@@ -877,6 +905,7 @@ export function FileBrowser({
           onInspect={handleInspect}
           favoriteIds={favoriteIds}
           canFavorite={true}
+          onFileControl={(id, action) => { void runControl(id, action); }}
         />
       ) : (
         <FileTable
@@ -909,6 +938,7 @@ export function FileBrowser({
           onLabelAs={(type,id,name)=>setLabelTarget({type,id,name})}
           onOrganize={(type,id)=>{ const item = type === "FILE" ? files.find(x=>x.id===id) : folders.find(x=>x.id===id); if (item) setDataTemplateTargets([{ type, id, name: item.name }]); }}
           followIds={followIds}
+          onFileControl={(id, action) => { void runControl(id, action); }}
           workflowStatuses={workflowStatuses}
           rowLabels={rowLabels}
           rowExpiry={rowExpiry}

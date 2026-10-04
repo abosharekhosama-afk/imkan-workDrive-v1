@@ -84,7 +84,7 @@ function groupItems(items: ActionDropdownItem[]): ActionGroup[] {
 }
 
 function fileTableHost(node: HTMLElement | null): HTMLElement | null {
-  if (!node) return null;
+  if (!node || node.closest(".zoho-preview-modal")) return null;
   const direct = node.closest(".wd-file-browser-body");
   if (direct instanceof HTMLElement) return direct;
   const browser = node.closest(".wd-file-browser");
@@ -183,8 +183,8 @@ function RenderItem({ item, close, rtl, zIndex, host, onSubPad }: { item: Action
           role="menuitem"
           data-danger={item.destructive || undefined}
           className="wd-menu-item min-h-[34px] text-start"
-          onPointerDown={(event) => { event.preventDefault(); event.stopPropagation(); }}
-          onMouseDown={(event) => { event.preventDefault(); event.stopPropagation(); }}
+          onPointerDown={(event) => event.stopPropagation()}
+          onMouseDown={(event) => event.stopPropagation()}
           onClick={(event) => {
             // Action items are commands, never navigation targets. Prevent the
             // browser/router from following an ancestor link and keep the
@@ -222,8 +222,8 @@ function RenderItem({ item, close, rtl, zIndex, host, onSubPad }: { item: Action
         aria-expanded={subOpen}
         className="wd-menu-item min-h-[34px] text-start"
         data-active={subOpen || undefined}
-        onPointerDown={(event) => { event.preventDefault(); event.stopPropagation(); }}
-        onMouseDown={(event) => { event.preventDefault(); event.stopPropagation(); }}
+        onPointerDown={(event) => event.stopPropagation()}
+        onMouseDown={(event) => event.stopPropagation()}
         onClick={(event) => {
           event.preventDefault();
           event.stopPropagation();

@@ -110,6 +110,10 @@ export type FileDetailsResponse = {
   owner: { id: string; name: string | null; email: string };
   location: { id: string; name: string } | null;
   visibility: string; status: string;
+  isFinal?: boolean;
+  checkedOutById?: string | null;
+  checkedOutAt?: string | null;
+  indexedAt?: string | null;
   metadata: Record<string, unknown> | null;
   tags: Array<{ id: string; name: string }>;
 };

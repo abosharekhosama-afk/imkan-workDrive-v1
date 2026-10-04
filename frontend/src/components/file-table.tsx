@@ -19,7 +19,8 @@ import { followResourceKey } from "../lib/follow-updates-logic";
 import type { ShareLaunchMode } from "../lib/share-launch-logic";
 import { officeEditorPath, isNativeImkanOfficeFile } from "../lib/office-file-routing";
 import { createOfficeCopy } from "../lib/api/office";
-import { runFileControl } from "../lib/api/files";
+import type { FileControlAction } from "../lib/api/files";
+import { fileControlFromRecord } from "../lib/file-control-logic";
 
 function compareText(a: string, b: string, direction: "asc" | "desc") {
   const result = a.localeCompare(b);
@@ -105,6 +106,7 @@ interface FileTableProps {
   onLabelAs?: (resourceType: "FILE" | "FOLDER", resourceId: string, resourceName: string) => void;
   onDataTemplateBadgeClick?: (resourceType: "FILE" | "FOLDER", resourceId: string) => void;
   onFollowUpdates?: (resourceType: "FILE" | "FOLDER", resourceId: string, resourceName: string) => void;
+  onFileControl?: (fileId: string, action: FileControlAction) => void;
   followIds?: Set<string>;
   workflowStatuses?: ReadonlyMap<string, WorkflowResourceStatus>;
   onWorkflowStatusClick?: (status: WorkflowResourceStatus, resourceName: string) => void;
@@ -155,6 +157,7 @@ export function FileTable({
   onOrganize,
   onLabelAs,
   onFollowUpdates,
+  onFileControl,
   followIds = new Set(),
   workflowStatuses,
   onWorkflowStatusClick,
@@ -251,8 +254,8 @@ export function FileTable({
   };
 
   /** Zoho-style status icons beside the file/folder name (checkout, final, workflow, expired). */
-  const statusIcons = (opts: { resourceId: string; status?: string | null; resourceName: string }) => {
-    const raw = String(opts.status ?? "").trim().toUpperCase().replace(/[\s-]+/g, "_");
+  const statusIcons = (opts: { resourceId: string; status?: string | null; resourceName: string; following?: boolean }) => {
+    const raw = fileControlFromRecord({ status: opts.status });
     const icons: ReactNode[] = [];
     if (raw === "CHECKED_OUT" || raw === "CHECKOUT" || raw === "LOCKED") {
       icons.push(
@@ -273,6 +276,13 @@ export function FileTable({
       icons.push(
         <span key="workflow" className="wd-file-status-icon" data-kind="workflow" title={`${wf.workflowName}${wf.state?.name ? ` · ${wf.state.name}` : ""}`} aria-label={wf.workflowName}>
           <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" aria-hidden="true"><path d="M6 3v12" /><circle cx="18" cy="6" r="3" /><circle cx="6" cy="18" r="3" /><path d="M18 9a9 9 0 0 1-9 9" /></svg>
+        </span>,
+      );
+    }
+    if (opts.following) {
+      icons.push(
+        <span key="follow" className="wd-file-status-icon" data-kind="follow" title={label("menu.followUpdates") || "Following"} aria-label={label("menu.followUpdates") || "Following"}>
+          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" aria-hidden="true"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9" /><path d="M13.73 21a2 2 0 0 1-3.46 0" /></svg>
         </span>,
       );
     }
@@ -330,7 +340,7 @@ export function FileTable({
               }}
               onCopyLink={onCopyLink ? () => onCopyLink(folder.id) : undefined}
               x={e.clientX} y={e.clientY} onClose={() => setCtxMenu(null)}
-            />)});             }} onDragStart={(e) => { e.dataTransfer.effectAllowed="move"; e.dataTransfer.setData("application/x-workdrive", JSON.stringify({type:"FOLDER",id:folder.id,name:folder.name})); }} className="wd-list-row group cursor-grab" data-compact={compact || undefined} data-selected={selectedIds.has(folder.id) || undefined} onClick={(e) => inspectFromRowClick(e, "FOLDER", folder.id, folder.name)} onDragOver={(e) => { e.preventDefault(); e.currentTarget.classList.add("ring-2","ring-[var(--wd-primary)]"); }} onDragLeave={(e) => e.currentTarget.classList.remove("ring-2","ring-[var(--wd-primary)]")} onDrop={(e) => { e.preventDefault(); e.currentTarget.classList.remove("ring-2","ring-[var(--wd-primary)]"); try { const item=JSON.parse(e.dataTransfer.getData("application/x-workdrive")); if(item.id !== folder.id) onDropMove?.(item.type,item.id,folder.id); } catch {} }}>
+            />)});             }} onDragStart={(e) => { e.dataTransfer.effectAllowed="move"; e.dataTransfer.setData("application/x-workdrive", JSON.stringify({type:"FOLDER",id:folder.id,name:folder.name})); }} className="wd-list-row group cursor-grab" data-compact={compact || undefined} data-selected={selectedIds.has(folder.id) || undefined} data-following={followIds.has(followResourceKey("FOLDER", folder.id)) || undefined} onClick={(e) => inspectFromRowClick(e, "FOLDER", folder.id, folder.name)} onDragOver={(e) => { e.preventDefault(); e.currentTarget.classList.add("ring-2","ring-[var(--wd-primary)]"); }} onDragLeave={(e) => e.currentTarget.classList.remove("ring-2","ring-[var(--wd-primary)]")} onDrop={(e) => { e.preventDefault(); e.currentTarget.classList.remove("ring-2","ring-[var(--wd-primary)]"); try { const item=JSON.parse(e.dataTransfer.getData("application/x-workdrive")); if(item.id !== folder.id) onDropMove?.(item.type,item.id,folder.id); } catch {} }}>
               <td className="ps-[13px]">
                 <input
                   type="checkbox"
@@ -346,7 +356,7 @@ export function FileTable({
                   <span className="min-w-0">
                     <span className="wd-list-name flex min-w-0 items-center gap-1">
                       <span className="truncate">{folder.name}</span>
-                      {statusIcons({ resourceId: folder.id, resourceName: folder.name })}
+                      {statusIcons({ resourceId: folder.id, resourceName: folder.name, following: followIds.has(followResourceKey("FOLDER", folder.id)) })}
                       <FileRowMarks labels={rowLabels?.get(folder.id) ?? []} expiresAt={rowExpiry?.get(folder.id)} status={null} expiredLabel={label("shared.expired")} />
                     </span>
                     <span className="wd-list-meta block truncate">{label("files.uploadedBy").replace("{name}", folder.ownerName ?? folder.ownerEmail ?? label("files.type.folder"))}</span>{workflowBadge(folder.id, folder.name)}
@@ -388,11 +398,11 @@ export function FileTable({
           ))}
           {sortedFiles.map((file) => (
             <tr key={file.id} draggable={Boolean(canMutate)} onDragStart={(e) => { e.dataTransfer.effectAllowed="move"; e.dataTransfer.setData("application/x-workdrive", JSON.stringify({type:"FILE",id:file.id,name:file.name})); }} onContextMenu={(e) => { e.preventDefault(); setCtxMenu({ x: e.clientX, y: e.clientY, node: (<FileContextMenu
-              control={{ status: file.status }} handlers={{ onOpen: onOpen ? () => onOpen("FILE", file.id, file.name) : undefined, onReindex: () => { void runFileControl(file.id, "reindex").then(() => window.alert("Search index refreshed from available file metadata." )).catch((e) => window.alert(e instanceof Error ? e.message : "Re-index failed.")); }, onCheckOut: () => { void runFileControl(file.id, "check-out").then(() => window.location.reload()).catch((e) => window.alert(e instanceof Error ? e.message : "Check-out failed.")); }, onCheckIn: () => { void runFileControl(file.id, "check-in").then(() => window.location.reload()).catch((e) => window.alert(e instanceof Error ? e.message : "Check-in failed.")); }, onMarkFinal: () => { if (window.confirm("Mark this file as final? It will become read-only.")) void runFileControl(file.id, "mark-final").then(() => window.location.reload()).catch((e) => window.alert(e instanceof Error ? e.message : "Could not mark final.")); }, onEnableEditing: () => { if (window.confirm("Enable editing for this final file?")) void runFileControl(file.id, "enable-editing").then(() => window.location.reload()).catch((e) => window.alert(e instanceof Error ? e.message : "Could not enable editing.")); }, onOpenInOffice: officeEditorPath(file.id, file.name, file.mimeType) ? () => { if (isNativeImkanOfficeFile(file.name, file.mimeType)) { window.location.assign(officeEditorPath(file.id, file.name, file.mimeType)!); return; } void createOfficeCopy(file.id, "OPEN").then((result) => { window.location.assign(officeEditorPath(result.fileId, `${file.name}.imkan`, result.document?.nativeFormat ? `application/vnd.imkan.${String(result.document.nativeFormat).replace(/\+.*/, "")}` : undefined) || `/office/${String(result.document.type).toLowerCase()}/${encodeURIComponent(result.fileId)}`); }).catch((error) => window.alert(error instanceof Error ? error.message : "Could not open in IMKAN Office.")); } : undefined, onConvertToOffice: !isNativeImkanOfficeFile(file.name, file.mimeType) && officeEditorPath(file.id, file.name, file.mimeType) ? () => { void createOfficeCopy(file.id, "CONVERT").then((result) => { window.location.assign(officeEditorPath(result.fileId, `${file.name}.imkan`, `application/vnd.imkan.${String(result.document.nativeFormat).toLowerCase()}+json`) || `/office/${String(result.document.type).toLowerCase()}/${encodeURIComponent(result.fileId)}`); }).catch((error) => window.alert(error instanceof Error ? error.message : "Conversion failed.")); } : undefined, onInspect: onInspect ? () => onInspect("FILE", file.id, file.name) : undefined, onPreview: onPreview ? () => onPreview("FILE", file.id, file.name, file.mimeType ?? undefined, file.size ?? undefined) : undefined, onComment: onComment ? () => onComment("FILE", file.id, file.name, file.mimeType ?? undefined, file.size ?? undefined) : undefined, onDownload: () => onDownload(file.id), onShare: canShare ? (mode) => onShare("FILE", file.id, mode) : undefined, onRename: canMutate ? () => onRename("FILE", file.id, file.name) : undefined, onMove: onMove && canMutate ? () => onMove("FILE", file.id, file.name) : undefined,
+              control={{ status: file.status, isFinal: file.isFinal, checkedOutById: file.checkedOutById }} handlers={{ onOpen: onOpen ? () => onOpen("FILE", file.id, file.name) : undefined, onReindex: () => onFileControl?.(file.id, "reindex"), onCheckOut: () => onFileControl?.(file.id, "check-out"), onCheckIn: () => onFileControl?.(file.id, "check-in"), onMarkFinal: () => onFileControl?.(file.id, "mark-final"), onEnableEditing: () => onFileControl?.(file.id, "enable-editing"), onOpenInOffice: officeEditorPath(file.id, file.name, file.mimeType) ? () => { if (isNativeImkanOfficeFile(file.name, file.mimeType)) { window.location.assign(officeEditorPath(file.id, file.name, file.mimeType)!); return; } void createOfficeCopy(file.id, "OPEN").then((result) => { window.location.assign(officeEditorPath(result.fileId, `${file.name}.imkan`, result.document?.nativeFormat ? `application/vnd.imkan.${String(result.document.nativeFormat).replace(/\+.*/, "")}` : undefined) || `/office/${String(result.document.type).toLowerCase()}/${encodeURIComponent(result.fileId)}`); }).catch((error) => window.alert(error instanceof Error ? error.message : "Could not open in IMKAN Office.")); } : undefined, onConvertToOffice: !isNativeImkanOfficeFile(file.name, file.mimeType) && officeEditorPath(file.id, file.name, file.mimeType) ? () => { void createOfficeCopy(file.id, "CONVERT").then((result) => { window.location.assign(officeEditorPath(result.fileId, `${file.name}.imkan`, `application/vnd.imkan.${String(result.document.nativeFormat).toLowerCase()}+json`) || `/office/${String(result.document.type).toLowerCase()}/${encodeURIComponent(result.fileId)}`); }).catch((error) => window.alert(error instanceof Error ? error.message : "Conversion failed.")); } : undefined, onInspect: onInspect ? () => onInspect("FILE", file.id, file.name) : undefined, onPreview: onPreview ? () => onPreview("FILE", file.id, file.name, file.mimeType ?? undefined, file.size ?? undefined) : undefined, onComment: onComment ? () => onComment("FILE", file.id, file.name, file.mimeType ?? undefined, file.size ?? undefined) : undefined, onDownload: () => onDownload(file.id), onShare: canShare ? (mode) => onShare("FILE", file.id, mode) : undefined, onRename: canMutate ? () => onRename("FILE", file.id, file.name) : undefined, onMove: onMove && canMutate ? () => onMove("FILE", file.id, file.name) : undefined,
                     onCopy: onCopy && canMutate ? () => onCopy("FILE", file.id, file.name) : undefined, onFavoriteToggle: onFavorite ? () => onFavorite("FILE", file.id) : undefined, onVersionHistory: onVersionHistory ? () => onVersionHistory("FILE", file.id, file.name, file.mimeType ?? undefined, file.size ?? undefined) : undefined, onDelete: canMutate ? () => onDelete("FILE", file.id) : undefined, onAssignWorkflow: onAssignWorkflow && canMutate ? () => onAssignWorkflow("FILE", file.id, file.name) : undefined, onOrganize: onOrganize && canMutate ? () => onOrganize("FILE", file.id) : undefined, onFollowUpdates: onFollowUpdates ? () => onFollowUpdates("FILE", file.id, file.name) : undefined, isFollowingUpdates: followIds.has(followResourceKey("FILE", file.id)), isFavorite: favoriteIds.has(file.id) }}
               onCopyLink={onCopyLink ? () => onCopyLink(file.id) : undefined}
               x={e.clientX} y={e.clientY} onClose={() => setCtxMenu(null)}
-            />)}); }} className="wd-list-row group relative cursor-grab active:cursor-grabbing" data-compact={compact || undefined} data-selected={selectedIds.has(file.id) || undefined} onClick={(e) => inspectFromRowClick(e, "FILE", file.id, file.name)}>
+            />)}); }} className="wd-list-row group relative cursor-grab active:cursor-grabbing" data-compact={compact || undefined} data-selected={selectedIds.has(file.id) || undefined} data-control={fileControlFromRecord(file) === "ACTIVE" ? undefined : fileControlFromRecord(file).toLowerCase()} data-following={followIds.has(followResourceKey("FILE", file.id)) || undefined} onClick={(e) => inspectFromRowClick(e, "FILE", file.id, file.name)}>
               <td className="ps-[13px]">
                 <input
                   type="checkbox"
@@ -408,7 +418,7 @@ export function FileTable({
                   <span className="min-w-0">
                     <span className="wd-list-name flex min-w-0 items-center gap-1">
                       <span className="truncate">{file.name}</span>
-                      {statusIcons({ resourceId: file.id, status: file.status, resourceName: file.name })}
+                      {statusIcons({ resourceId: file.id, status: fileControlFromRecord(file), resourceName: file.name, following: followIds.has(followResourceKey("FILE", file.id)) })}
                       <FileRowMarks labels={rowLabels?.get(file.id) ?? []} expiresAt={rowExpiry?.get(file.id)} status={file.status} expiredLabel={label("shared.expired")} />
                     </span>
                     <span className="wd-list-meta block truncate">{label("files.uploadedBy").replace("{name}", file.ownerName ?? file.ownerEmail ?? label("files.type.file"))}</span>{workflowBadge(file.id, file.name)}
@@ -422,7 +432,7 @@ export function FileTable({
               {colOn("extension") ? <td className="wd-list-meta whitespace-nowrap px-3">{fileExtText(file)}</td> : null}
               <td className="px-3 py-2 text-end" onClick={(event) => event.stopPropagation()} onMouseDown={(event) => event.stopPropagation()}>
                 <FileActionsMenu
-                  control={{ status: file.status }} context={{
+                  control={{ status: file.status, isFinal: file.isFinal, checkedOutById: file.checkedOutById }} context={{
                     resourceType: "FILE",
                     canMutate,
                     canShare,
@@ -431,7 +441,7 @@ export function FileTable({
                   }}
                   handlers={{
                     onOpen: onOpen ? () => onOpen("FILE", file.id, file.name) : undefined,
-                    onReindex: () => { void runFileControl(file.id, "reindex").then(() => window.alert("Search index refreshed from available file metadata." )).catch((e) => window.alert(e instanceof Error ? e.message : "Re-index failed.")); }, onCheckOut: () => { void runFileControl(file.id, "check-out").then(() => window.location.reload()).catch((e) => window.alert(e instanceof Error ? e.message : "Check-out failed.")); }, onCheckIn: () => { void runFileControl(file.id, "check-in").then(() => window.location.reload()).catch((e) => window.alert(e instanceof Error ? e.message : "Check-in failed.")); }, onMarkFinal: () => { if (window.confirm("Mark this file as final? It will become read-only.")) void runFileControl(file.id, "mark-final").then(() => window.location.reload()).catch((e) => window.alert(e instanceof Error ? e.message : "Could not mark final.")); }, onEnableEditing: () => { if (window.confirm("Enable editing for this final file?")) void runFileControl(file.id, "enable-editing").then(() => window.location.reload()).catch((e) => window.alert(e instanceof Error ? e.message : "Could not enable editing.")); }, onOpenInOffice: officeEditorPath(file.id, file.name, file.mimeType) ? () => { if (isNativeImkanOfficeFile(file.name, file.mimeType)) { window.location.assign(officeEditorPath(file.id, file.name, file.mimeType)!); return; } void createOfficeCopy(file.id, "OPEN").then((result) => { window.location.assign(officeEditorPath(result.fileId, `${file.name}.imkan`, result.document?.nativeFormat ? `application/vnd.imkan.${String(result.document.nativeFormat).replace(/\+.*/, "")}` : undefined) || `/office/${String(result.document.type).toLowerCase()}/${encodeURIComponent(result.fileId)}`); }).catch((error) => window.alert(error instanceof Error ? error.message : "Could not open in IMKAN Office.")); } : undefined, onConvertToOffice: !isNativeImkanOfficeFile(file.name, file.mimeType) && officeEditorPath(file.id, file.name, file.mimeType) ? () => { void createOfficeCopy(file.id, "CONVERT").then((result) => { window.location.assign(officeEditorPath(result.fileId, `${file.name}.imkan`, `application/vnd.imkan.${String(result.document.nativeFormat).toLowerCase()}+json`) || `/office/${String(result.document.type).toLowerCase()}/${encodeURIComponent(result.fileId)}`); }).catch((error) => window.alert(error instanceof Error ? error.message : "Conversion failed.")); } : undefined,
+                    onReindex: () => onFileControl?.(file.id, "reindex"), onCheckOut: () => onFileControl?.(file.id, "check-out"), onCheckIn: () => onFileControl?.(file.id, "check-in"), onMarkFinal: () => onFileControl?.(file.id, "mark-final"), onEnableEditing: () => onFileControl?.(file.id, "enable-editing"), onOpenInOffice: officeEditorPath(file.id, file.name, file.mimeType) ? () => { if (isNativeImkanOfficeFile(file.name, file.mimeType)) { window.location.assign(officeEditorPath(file.id, file.name, file.mimeType)!); return; } void createOfficeCopy(file.id, "OPEN").then((result) => { window.location.assign(officeEditorPath(result.fileId, `${file.name}.imkan`, result.document?.nativeFormat ? `application/vnd.imkan.${String(result.document.nativeFormat).replace(/\+.*/, "")}` : undefined) || `/office/${String(result.document.type).toLowerCase()}/${encodeURIComponent(result.fileId)}`); }).catch((error) => window.alert(error instanceof Error ? error.message : "Could not open in IMKAN Office.")); } : undefined, onConvertToOffice: !isNativeImkanOfficeFile(file.name, file.mimeType) && officeEditorPath(file.id, file.name, file.mimeType) ? () => { void createOfficeCopy(file.id, "CONVERT").then((result) => { window.location.assign(officeEditorPath(result.fileId, `${file.name}.imkan`, `application/vnd.imkan.${String(result.document.nativeFormat).toLowerCase()}+json`) || `/office/${String(result.document.type).toLowerCase()}/${encodeURIComponent(result.fileId)}`); }).catch((error) => window.alert(error instanceof Error ? error.message : "Conversion failed.")); } : undefined,
                     onInspect: onInspect ? () => onInspect("FILE", file.id, file.name) : undefined,
                     onPreview: onPreview ? () => onPreview("FILE", file.id, file.name, file.mimeType ?? undefined, file.size ?? undefined) : undefined,
                     onComment: onComment ? () => onComment("FILE", file.id, file.name, file.mimeType ?? undefined, file.size ?? undefined) : undefined,

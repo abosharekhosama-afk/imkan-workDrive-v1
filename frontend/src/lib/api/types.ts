@@ -9,6 +9,10 @@ export type FileRecord = {
   updatedAt?: string | null;
   createdAt?: string | null;
   status?: string | null;
+  isFinal?: boolean | null;
+  checkedOutById?: string | null;
+  checkedOutAt?: string | null;
+  indexedAt?: string | null;
   fileType?: string | null;
   extension?: string | null;
   size?: number | null;
