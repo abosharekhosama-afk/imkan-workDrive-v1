@@ -22,6 +22,7 @@ import { DataTemplateSidebar } from "./preview/data-template-sidebar";
 import { DEFAULT_WATERMARK_CONFIG, PreviewWatermark, WatermarkSidebar, type WatermarkConfig } from "./preview/watermark-sidebar";
 import { Icons } from "./layout/icons";
 import { ZohoMenu } from "./layout/zoho-menu";
+import { FileActionsMenu } from "./file-actions-menu";
 import { FileMenuIcons } from "../lib/file-menu-icons";
 import { listFileComments } from "../lib/api/comments";
 import { usePreviewUrl } from "./preview/use-preview-url";
@@ -78,7 +79,6 @@ export function FilePreviewModal({ target, onClose, onPrevFile, onNextFile, init
   const [dlp, setDlp] = useState<FileDlpDecision | null>(null);
   const [watermarkConfig, setWatermarkConfig] = useState<WatermarkConfig>(DEFAULT_WATERMARK_CONFIG);
   const [shareMenuOpen, setShareMenuOpen] = useState(false);
-  const [actionsOpen, setActionsOpen] = useState(false);
   const [shareLaunch, setShareLaunch] = useState<ShareLaunchMode | null>(null);
   const [versionOpen, setVersionOpen] = useState(false);
   const [moveMode, setMoveMode] = useState<"move" | "copy" | null>(null);
@@ -101,7 +101,6 @@ export function FilePreviewModal({ target, onClose, onPrevFile, onNextFile, init
     setDlp(null);
     setWatermarkConfig(DEFAULT_WATERMARK_CONFIG);
     setShareMenuOpen(false);
-    setActionsOpen(false);
     setShareLaunch(null);
     setVersionOpen(false);
     setMoveMode(null);
@@ -150,7 +149,7 @@ export function FilePreviewModal({ target, onClose, onPrevFile, onNextFile, init
     if (!open) return;
     const onKeyDown = (event: KeyboardEvent) => {
       const node = event.target instanceof Element ? event.target : null;
-      const overlay = Boolean(shareMenuOpen || actionsOpen || shareLaunch || versionOpen || moveMode || renameOpen || workflowOpen || followOpen || node?.closest(".wd-menu, .imkan-modal-backdrop, [data-radix-popper-content-wrapper]"));
+      const overlay = Boolean(shareMenuOpen || shareLaunch || versionOpen || moveMode || renameOpen || workflowOpen || followOpen || node?.closest(".wd-menu, .imkan-modal-backdrop, [data-radix-popper-content-wrapper]"));
       if (overlay) return;
       if (event.key === "Escape") {
         event.preventDefault();
@@ -165,7 +164,7 @@ export function FilePreviewModal({ target, onClose, onPrevFile, onNextFile, init
     };
     document.addEventListener("keydown", onKeyDown);
     return () => document.removeEventListener("keydown", onKeyDown);
-  }, [open, onClose, onPrevFile, onNextFile, shareMenuOpen, actionsOpen, shareLaunch, versionOpen, moveMode, renameOpen, workflowOpen, followOpen]);
+  }, [open, onClose, onPrevFile, onNextFile, shareMenuOpen, shareLaunch, versionOpen, moveMode, renameOpen, workflowOpen, followOpen]);
 
   const showToast = useCallback((message: string) => {
     setToast(message);
@@ -327,7 +326,7 @@ export function FilePreviewModal({ target, onClose, onPrevFile, onNextFile, init
         </span>
         <div className="zoho-preview-actions">
           <div className="zoho-preview-menu-wrap">
-            <button id="preview-share-btn" type="button" className="zoho-preview-share" aria-expanded={shareMenuOpen} aria-haspopup="menu" onClick={() => { setActionsOpen(false); setShareMenuOpen((openMenu) => !openMenu); }}>
+            <button id="preview-share-btn" type="button" className="zoho-preview-share" aria-expanded={shareMenuOpen} aria-haspopup="menu" onClick={() => { setShareMenuOpen((openMenu) => !openMenu); }}>
               <span><Icons.share size={15} /></span>{label("preview.share")}<span><Icons.chevD size={13} /></span>
             </button>
             <ZohoMenu
@@ -358,38 +357,28 @@ export function FilePreviewModal({ target, onClose, onPrevFile, onNextFile, init
           ) : null}
           <button type="button" className="zoho-preview-icon-top" onClick={() => void copyPermalink()} aria-label={label("preview.copyLink")} title={label("preview.copyLink")}><Icons.link size={15} /></button>
           <button type="button" className="zoho-preview-icon-top" onClick={() => void handleDownload()} aria-label={label("preview.download")} title={label("preview.download")}><Icons.download size={15} /></button>
-          <button id="preview-actions-btn" type="button" className="zoho-preview-icon-top" aria-expanded={actionsOpen} aria-haspopup="menu" onClick={() => { setShareMenuOpen(false); setActionsOpen((openMenu) => !openMenu); }} aria-label={label("files.actions")} title={label("files.actions")}><Icons.dots size={16} /></button>
-          <ZohoMenu
-            open={actionsOpen}
-            onClose={() => setActionsOpen(false)}
-            labelledBy="preview-actions-btn"
-            align="end"
-            widthPx={252}
-            zIndex={240}
-            constrainToLane={false}
-            onSelect={runAction}
-            items={[
-              { key: "openNewTab", labelKey: "menu.openNewTab", icon: FileMenuIcons.openNewTab },
-              "sep",
-              { key: "share", labelKey: "menu.shareMenu", icon: FileMenuIcons.shareMenu, chevron: true },
-              { key: "copyPermalink", labelKey: "menu.copyPermalink", icon: FileMenuIcons.copyPermalink },
-              { key: "saveAsTemplate", label: label("menu.saveAsTemplate") || "Save as template", icon: FileMenuIcons.organize },
-              "sep",
-              { key: "moveTo", labelKey: "menu.moveTo", icon: FileMenuIcons.moveTo, hint: "Z" },
-              { key: "copyTo", labelKey: "menu.copyTo", icon: FileMenuIcons.copyTo, hint: "C" },
-              { key: "assignWorkflow", labelKey: "menu.assignWorkflow", icon: FileMenuIcons.assignWorkflow },
-              { key: "organize", labelKey: "menu.organize", icon: FileMenuIcons.organize, chevron: true, submenuItems: [
-                { key: "associateDataTemplate", labelKey: "menu.associateDataTemplate", icon: FileMenuIcons.associateDataTemplate },
-              ] },
-              "sep",
-              { key: "searchInFold", labelKey: "menu.searchInFold", icon: FileMenuIcons.searchInFold },
-              { key: "download", labelKey: "menu.download", icon: FileMenuIcons.download, hint: "⌃S" },
-              { key: "rename", labelKey: "menu.rename", icon: FileMenuIcons.rename },
-              { key: "followUpdates", labelKey: "menu.followUpdates", icon: FileMenuIcons.followUpdates },
-              { key: "moreOptions", labelKey: "menu.moreOptions", icon: FileMenuIcons.moreOptions },
-              "sep",
-              { key: "moveToTrash", labelKey: "menu.moveToTrash", icon: FileMenuIcons.moveToTrash, danger: true },
-            ]}
+          <FileActionsMenu
+            zIndex={260}
+            context={{ resourceType: "FILE", canMutate: true, canShare: true, canFavorite: false }}
+            handlers={{
+              onOpen: () => runAction("openNewTab"),
+              onShare: () => runAction("share"),
+              onCopyLink: () => runAction("copyPermalink"),
+              onSaveAsTemplate: () => runAction("saveAsTemplate"),
+              onMove: () => runAction("moveTo"),
+              onCopy: () => runAction("copyTo"),
+              onAssignWorkflow: () => runAction("assignWorkflow"),
+              onOrganize: () => runAction("organize"),
+              onSearchInFolder: () => runAction("searchInFold"),
+              onDownload: () => runAction("download"),
+              onRename: () => runAction("rename"),
+              onFollowUpdates: () => runAction("followUpdates"),
+              onComment: () => setPanel("comments"),
+              onInspect: () => runAction("moreOptions"),
+              onVersionHistory: () => setVersionOpen(true),
+              onDelete: () => runAction("moveToTrash"),
+            }}
+            trigger={<button type="button" className="zoho-preview-icon-top" onClick={() => setShareMenuOpen(false)} aria-label={label("files.actions")} title={label("files.actions")}><Icons.dots size={16} /></button>}
           />
           <button type="button" className="zoho-preview-icon-top close" onClick={onClose} aria-label={label("preview.close")}><Icons.x size={16} /></button>
         </div>

@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useLocale } from "../locale-provider";
 import type { MessageKey } from "../../i18n";
-import { clampBoxLeft, readContentLane } from "../../lib/overlay-bounds-logic";
+import { clampBoxLeft, placeFloatingMenu, readContentLane } from "../../lib/overlay-bounds-logic";
 export type MenuItem = {
   key: string;
   labelKey: MessageKey;
@@ -28,7 +28,7 @@ export function ZohoMenu({ open, onClose, onSelect, items, labelledBy, align = "
   const ref = useRef<HTMLDivElement | null>(null);
   const [pos, setPos] = useState<{ top: number; start: number } | null>(null);
   const [activeKey, setActiveKey] = useState<string | null>(null);
-  const [submenuPos, setSubmenuPos] = useState<{ top: number; start: number } | null>(null);
+  const [submenuPos, setSubmenuPos] = useState<{ top: number; left: number; maxHeight: number } | null>(null);
   const anchorRef = useRef<Element | null>(null);
   const menuW = widthPx ?? 240;
   useEffect(() => {
@@ -100,10 +100,17 @@ export function ZohoMenu({ open, onClose, onSelect, items, labelledBy, align = "
           const r = target.getBoundingClientRect();
           const subW = 250;
           const isRtl = typeof document !== "undefined" && document.documentElement.dir === "rtl";
-          const start = clampBoxLeft(isRtl ? r.left - subW - 4 : r.right + 4, subW, readContentLane());
-          const top = Math.min(Math.max(8, r.top), Math.max(8, window.innerHeight - 300));
+          const height = (m.submenuItems?.length ?? 1) * 36 + 12;
+          const placed = placeFloatingMenu({
+            anchor: { top: r.top, left: r.left, right: r.right, bottom: r.bottom },
+            width: subW,
+            height,
+            viewportWidth: window.innerWidth,
+            viewportHeight: window.innerHeight,
+            rtl: isRtl,
+          });
           setActiveKey(m.key);
-          setSubmenuPos({ top, start });
+          setSubmenuPos({ top: placed.top, left: placed.left, maxHeight: placed.maxHeight });
         };
         return (
           <button key={m.key} type="button" role="menuitem" disabled={m.disabled}
@@ -133,7 +140,7 @@ export function ZohoMenu({ open, onClose, onSelect, items, labelledBy, align = "
         const parent = items.find((item) => item !== "sep" && typeof item === "object" && "key" in item && item.key === activeKey) as MenuItem | undefined;
         if (!parent?.submenuItems?.length) return null;
         return (
-          <div role="menu" className="wd-menu fixed w-[250px] overflow-hidden" style={{ top: submenuPos.top, zIndex: zIndex + 1, ...(rtl ? { right: window.innerWidth - submenuPos.start - 250 } : { left: submenuPos.start }) }}
+          <div role="menu" className="wd-menu fixed w-[250px] overflow-auto" style={{ top: submenuPos.top, left: submenuPos.left, maxHeight: submenuPos.maxHeight, zIndex: zIndex + 1 }}
             onMouseLeave={() => { setActiveKey(null); setSubmenuPos(null); }}>
             {parent.submenuItems.map((child, i) => child === "sep" ? <div key={`sub-sep-${i}`} className="wd-menu-sep" role="separator" /> : (
               <button key={child.key} type="button" role="menuitem" disabled={child.disabled} data-danger={child.danger || undefined}

@@ -1,5 +1,6 @@
 "use client";
 
+import type { ReactNode } from "react";
 import { useLocale } from "./locale-provider";
 import { ActionDropdown, type ActionDropdownItem } from "./action-dropdown";
 import type { RowActionContext } from "./file-row-actions-logic";
@@ -36,6 +37,8 @@ export interface FileActionHandlers {
   /** Optional organize submenu targets (Zoho-style secondary panel). */
   onLabels?: () => void;
   onCreateShortcut?: () => void;
+  onSearchInFolder?: () => void;
+  onSaveAsTemplate?: () => void;
 }
 
 /** Normalized lock / final state for Zoho-parity menu visibility. */
@@ -75,6 +78,10 @@ interface FileActionsMenuProps {
   onCopyLink?: () => void;
   /** When provided, drives Check-in/out and Mark final visibility (Zoho parity). */
   control?: FileControlState;
+  /** Custom trigger. The row icon is used when this is omitted. */
+  trigger?: ReactNode;
+  /** Stacking level. Preview sits above the page, so it passes a higher value. */
+  zIndex?: number;
 }
 
 /** Shared item builder so row menu, context menu, toolbar, and preview stay aligned. */
@@ -130,6 +137,7 @@ export function buildUnifiedFileActionItems(opts: {
   // —— Move / Copy / Workflow / Organize (submenu) ——
   if (handlers.onMove) push({ label: label("menu.moveTo"), icon: FileMenuIcons.moveTo, onSelect: handlers.onMove, dividerBefore: true });
   if (handlers.onCopy) push({ label: label("menu.copyTo"), icon: FileMenuIcons.copyTo, onSelect: handlers.onCopy });
+  if (handlers.onSaveAsTemplate) push({ label: label("menu.saveAsTemplate"), icon: FileMenuIcons.organize, onSelect: handlers.onSaveAsTemplate });
   if (handlers.onAssignWorkflow) push({ label: label("menu.assignWorkflow"), icon: FileMenuIcons.assignWorkflow, onSelect: handlers.onAssignWorkflow });
 
   if (handlers.onOrganize || handlers.onLabels || handlers.onCreateShortcut || handlers.onInspect) {
@@ -162,6 +170,9 @@ export function buildUnifiedFileActionItems(opts: {
   }
   if (handlers.onVersionHistory) {
     push({ label: label("files.versionHistory"), icon: FileMenuIcons.versionHistory, onSelect: handlers.onVersionHistory });
+  }
+  if (handlers.onSearchInFolder) {
+    push({ label: label("menu.searchInFold"), icon: FileMenuIcons.searchInFold, onSelect: handlers.onSearchInFolder });
   }
 
   // —— More options (secondary panel) ——
@@ -211,9 +222,9 @@ export function buildUnifiedFileActionItems(opts: {
  * Open → controls (status-aware) → Share submenu → Move/Copy/Workflow/Organize submenu
  * → Download/Rename/Follow → More options submenu → Trash
  */
-export function FileActionsMenu({ context, handlers, onCopyLink, control }: FileActionsMenuProps) {
+export function FileActionsMenu({ context, handlers, onCopyLink, control, trigger, zIndex }: FileActionsMenuProps) {
   const { label } = useLocale();
   const items = buildUnifiedFileActionItems({ label: (k) => label(k as never), context, handlers, onCopyLink, control });
   if (items.length === 0) return null;
-  return <ActionDropdown label={label("files.actions")} items={items} />;
+  return <ActionDropdown label={label("files.actions")} items={items} trigger={trigger} zIndex={zIndex} />;
 }

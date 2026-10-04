@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import {
   Popover,
   PopoverTrigger,
@@ -8,7 +9,7 @@ import {
   PopoverPortal,
 } from "@radix-ui/react-popover";
 import { useLocale } from "./locale-provider";
-import { readContentLane } from "../lib/overlay-bounds-logic";
+import { placeFloatingMenu, readContentLane } from "../lib/overlay-bounds-logic";
 
 export type ActionDropdownItem = {
   label: string;
@@ -28,6 +29,7 @@ interface ActionDropdownProps {
   label: string;
   items: ActionDropdownItem[];
   trigger?: React.ReactNode;
+  zIndex?: number;
 }
 
 const actionIcons: Record<string, React.ReactNode> = {
@@ -81,8 +83,46 @@ function groupItems(items: ActionDropdownItem[]): ActionGroup[] {
   return groups;
 }
 
-function RenderItem({ item, close, rtl }: { item: ActionDropdownItem; close: () => void; rtl: boolean }) {
+function RenderItem({ item, close, rtl, zIndex }: { item: ActionDropdownItem; close: () => void; rtl: boolean; zIndex: number }) {
   const [subOpen, setSubOpen] = useState(false);
+  const anchorRef = useRef<HTMLButtonElement | null>(null);
+  const closeTimer = useRef<number | null>(null);
+  const [box, setBox] = useState<{ top: number; left: number; maxHeight: number } | null>(null);
+  const place = () => {
+    const node = anchorRef.current;
+    if (!node || !item.submenu?.length) return;
+    const rect = node.getBoundingClientRect();
+    const height = item.submenu.length * 36 + 12;
+    setBox(placeFloatingMenu({
+      anchor: { top: rect.top, left: rect.left, right: rect.right, bottom: rect.bottom },
+      width: 220,
+      height,
+      viewportWidth: window.innerWidth,
+      viewportHeight: window.innerHeight,
+      rtl,
+    }));
+  };
+  const openSub = () => {
+    if (closeTimer.current) window.clearTimeout(closeTimer.current);
+    setSubOpen(true);
+    place();
+  };
+  const scheduleClose = () => {
+    if (closeTimer.current) window.clearTimeout(closeTimer.current);
+    closeTimer.current = window.setTimeout(() => setSubOpen(false), 160);
+  };
+  useEffect(() => {
+    if (!subOpen) return;
+    place();
+    const onMove = () => place();
+    window.addEventListener("resize", onMove);
+    window.addEventListener("scroll", onMove, true);
+    return () => {
+      window.removeEventListener("resize", onMove);
+      window.removeEventListener("scroll", onMove, true);
+      if (closeTimer.current) window.clearTimeout(closeTimer.current);
+    };
+  }, [subOpen, rtl]);
   if (!item.submenu) {
     return (
         <button
@@ -118,10 +158,11 @@ function RenderItem({ item, close, rtl }: { item: ActionDropdownItem; close: () 
   return (
     <div
       className="relative"
-      onMouseEnter={() => setSubOpen(true)}
-      onMouseLeave={() => setSubOpen(false)}
+      onMouseEnter={openSub}
+      onMouseLeave={scheduleClose}
     >
       <button
+        ref={anchorRef}
         type="button"
         role="menuitem"
         aria-haspopup="menu"
@@ -133,7 +174,8 @@ function RenderItem({ item, close, rtl }: { item: ActionDropdownItem; close: () 
         onClick={(event) => {
           event.preventDefault();
           event.stopPropagation();
-          setSubOpen((v) => !v);
+          if (subOpen) setSubOpen(false);
+          else openSub();
         }}
       >
         {item.icon ?? getIconForLabel(item.label) ? (
@@ -144,47 +186,28 @@ function RenderItem({ item, close, rtl }: { item: ActionDropdownItem; close: () 
           <span className="w-5" />
         )}
         <span className="flex-1 truncate">{item.label}</span>
-        <span aria-hidden="true" className={`action-dropdown-submenu-chevron text-[length:var(--imkan-font-size-secondary)] ${rtl ? "rotate-180" : ""}`}>›</span>
+        <span aria-hidden="true" className="action-dropdown-submenu-chevron text-[length:var(--imkan-font-size-secondary)]">›</span>
       </button>
-      {subOpen ? (
+      {subOpen && box && typeof document !== "undefined" ? createPortal(
         <div
-          className={`wd-menu absolute z-[220] top-0 min-w-[220px] overflow-visible shadow-lg ${rtl ? "end-full me-1" : "start-full ms-1"}`}
+          className="wd-menu fixed min-w-[220px] overflow-auto shadow-lg"
           role="menu"
+          style={{ top: box.top, left: box.left, maxHeight: box.maxHeight, zIndex: zIndex + 20, width: 220 }}
           onPointerDown={(event) => event.stopPropagation()}
+          onMouseEnter={openSub}
+          onMouseLeave={scheduleClose}
         >
           {item.submenu.map((sub) => (
-              <button
-                type="button"
-                role="menuitem"
-                data-danger={sub.destructive || undefined}
-                className="wd-menu-item min-h-[34px] text-start"
-                key={sub.label}
-                onPointerDown={(event) => { event.preventDefault(); event.stopPropagation(); }}
-                onMouseDown={(event) => { event.preventDefault(); event.stopPropagation(); }}
-                onClick={(event) => {
-                  event.preventDefault();
-                  event.stopPropagation();
-                  sub.onSelect();
-                  close();
-                }}
-              >
-                {sub.icon ?? getIconForLabel(sub.label) ? (
-                  <span className="flex-shrink-0 w-5 h-5 flex items-center justify-center text-current">
-                    {sub.icon ?? getIconForLabel(sub.label)}
-                  </span>
-                ) : (
-                  <span className="w-5" />
-                )}
-                <span className="flex-1 truncate">{sub.label}</span>
-              </button>
+            <RenderItem key={sub.label} item={sub} close={close} rtl={rtl} zIndex={zIndex + 20} />
           ))}
-        </div>
+        </div>,
+        document.body,
       ) : null}
     </div>
   );
 }
 
-export function ActionDropdown({ label, items, trigger }: ActionDropdownProps) {
+export function ActionDropdown({ label, items, trigger, zIndex = 200 }: ActionDropdownProps) {
   const { label: t, locale } = useLocale();
   const rtl = locale === "ar";
   const groupedItems = groupItems(items);
@@ -197,7 +220,6 @@ export function ActionDropdown({ label, items, trigger }: ActionDropdownProps) {
       })();
 
   const defaultTrigger = (
-    <PopoverTrigger asChild>
       <button
         type="button"
         aria-label={label}
@@ -216,12 +238,11 @@ export function ActionDropdown({ label, items, trigger }: ActionDropdownProps) {
       >
         <span aria-hidden="true" className="text-[length:var(--imkan-font-size-ui)]">⋯</span>
       </button>
-    </PopoverTrigger>
   );
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
-      {trigger ?? defaultTrigger}
+      <PopoverTrigger asChild>{trigger ?? defaultTrigger}</PopoverTrigger>
       <PopoverPortal>
         <PopoverContent
           onPointerDown={(event) => event.stopPropagation()}
@@ -234,13 +255,13 @@ export function ActionDropdown({ label, items, trigger }: ActionDropdownProps) {
           collisionPadding={collisionPadding}
           avoidCollisions
           sticky="always"
-          className="wd-menu z-[200] w-64 overflow-visible"
-          style={{ minWidth: "252px" }}
+          className="wd-menu w-64 overflow-visible"
+          style={{ minWidth: "252px", zIndex }}
         >
           {groupedItems.map((group, groupIndex) => (
             <div key={groupIndex} className={groupIndex > 0 ? "border-t border-[color:var(--imkan-color-border)] pt-1" : ""}>
               {group.items.map((item) => (
-                <RenderItem key={item.label} item={item} close={() => setOpen(false)} rtl={rtl} />
+                <RenderItem key={item.label} item={item} close={() => setOpen(false)} rtl={rtl} zIndex={zIndex} />
               ))}
             </div>
           ))}

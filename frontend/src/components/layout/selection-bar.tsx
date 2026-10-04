@@ -2,9 +2,10 @@
 import { useLocale } from "../locale-provider";
 import { Icons } from "./icons";
 import { ZohoMenu } from "./zoho-menu";
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import type { SelectionBarActionKey } from "../../lib/selection-bar-actions-logic";
 import { FileMenuIcons } from "../../lib/file-menu-icons";
+import { FileActionsMenu, type FileActionHandlers, type FileControlState } from "../file-actions-menu";
 
 export function SelectionBar({
   folderCount,
@@ -18,6 +19,10 @@ export function SelectionBar({
   onAction,
   onClear,
   isFollowingSelected = false,
+  extraHandlers,
+  control,
+  menuResourceType,
+  menuFavorite = false,
 }: {
   folderCount: number;
   fileCount: number;
@@ -30,36 +35,37 @@ export function SelectionBar({
   onAction: (key: SelectionBarActionKey) => void;
   onClear: () => void;
   isFollowingSelected?: boolean;
+  /** Row-equivalent actions for the one selected item. Multi-select keeps the shared set. */
+  extraHandlers?: FileActionHandlers;
+  control?: FileControlState;
+  menuResourceType?: "FILE" | "FOLDER";
+  menuFavorite?: boolean;
 }) {
   const { label } = useLocale();
   const [shareOpen, setShareOpen] = useState(false);
-  const [moreOpen, setMoreOpen] = useState(false);
   const total = folderCount + fileCount;
-  const needsSingle = !singleSelected;
-  const moreItems = useMemo(
-    () => [
-      { key: "openNewTab", labelKey: "menu.openNewTab" as const, icon: FileMenuIcons.openNewTab, disabled: needsSingle },
-      "sep" as const,
-      { key: "share", labelKey: "menu.shareMenu" as const, icon: FileMenuIcons.shareMenu, chevron: true, disabled: !canShare || needsSingle },
-      { key: "copyPermalink", labelKey: "menu.copyPermalink" as const, icon: FileMenuIcons.copyPermalink, disabled: !canShare || needsSingle },
-      "sep" as const,
-      { key: "moveTo", labelKey: "menu.moveTo" as const, icon: FileMenuIcons.moveTo, hint: "Z", disabled: !canMutate || needsSingle },
-      { key: "copyTo", labelKey: "menu.copyTo" as const, icon: FileMenuIcons.copyTo, hint: "C", disabled: !canMutate || needsSingle },
-      { key: "assignWorkflow", labelKey: "menu.assignWorkflow" as const, icon: FileMenuIcons.assignWorkflow, disabled: !canMutate || needsSingle },
-      { key: "organize", labelKey: "menu.organize" as const, icon: FileMenuIcons.organize, chevron: true, disabled: !canMutate, submenuItems: [
-        { key: "associateDataTemplate", labelKey: "menu.associateDataTemplate" as const, icon: FileMenuIcons.associateDataTemplate },
-      ] },
-      "sep" as const,
-      { key: "searchInFold", labelKey: "menu.searchInFold" as const, icon: FileMenuIcons.searchInFold },
-      { key: "download", labelKey: "sel.download" as const, icon: FileMenuIcons.download, hint: "⌃S", disabled: fileCount === 0 },
-      { key: "rename", labelKey: "menu.rename" as const, icon: FileMenuIcons.rename, disabled: !canMutate || needsSingle },
-      { key: "followUpdates", labelKey: (isFollowingSelected ? "menu.unfollowUpdates" : "menu.followUpdates") as const, icon: isFollowingSelected ? FileMenuIcons.unfollowUpdates : FileMenuIcons.followUpdates, disabled: false },
-      { key: "moreOptions", labelKey: "menu.moreOptions" as const, icon: FileMenuIcons.moreOptions, disabled: needsSingle },
-      "sep" as const,
-      { key: "moveToTrash", labelKey: "menu.moveToTrash" as const, icon: FileMenuIcons.moveToTrash, danger: true, disabled: !canMutate },
-    ],
-    [canMutate, canShare, fileCount, needsSingle, isFollowingSelected],
-  );
+  const menuHandlers: FileActionHandlers = {
+    onOpen: singleSelected ? () => onAction("openNewTab") : undefined,
+    onShare: singleSelected && canShare ? () => onAction("share") : undefined,
+    onCopyLink: singleSelected && canShare ? onCopyLink : undefined,
+    onMove: singleSelected && canMutate ? () => onAction("moveTo") : undefined,
+    onCopy: singleSelected && canMutate ? () => onAction("copyTo") : undefined,
+    onAssignWorkflow: singleSelected && canMutate ? () => onAction("assignWorkflow") : undefined,
+    onOrganize: canMutate ? () => onAction("organize") : undefined,
+    onSearchInFolder: () => onAction("searchInFold"),
+    onDownload: fileCount > 0 ? onDownload : undefined,
+    onRename: singleSelected && canMutate ? () => onAction("rename") : undefined,
+    onFollowUpdates: () => onAction("followUpdates"),
+    isFollowingUpdates: isFollowingSelected,
+    onInspect: singleSelected ? () => onAction("moreOptions") : undefined,
+    onDelete: canMutate ? () => onAction("moveToTrash") : undefined,
+  };
+  const handlers: FileActionHandlers = { ...menuHandlers };
+  if (singleSelected && extraHandlers) {
+    for (const [key, value] of Object.entries(extraHandlers)) {
+      if (value !== undefined) (handlers as Record<string, unknown>)[key] = value;
+    }
+  }
   if (total === 0) return null;
   const text = (folderCount > 0 && fileCount === 0
     ? label("sel.foldersSelected")
@@ -91,18 +97,18 @@ export function SelectionBar({
           className="flex h-7 w-7 items-center justify-center rounded-full text-[color:var(--wd-primary-ink)] hover:bg-[var(--wd-active)]"><Icons.link size={14} /></button>
         <button type="button" onClick={onDownload} title={label("sel.download")} aria-label={label("sel.download")}
           className="flex h-7 w-7 items-center justify-center rounded-full text-[color:var(--wd-primary-ink)] hover:bg-[var(--wd-active)]"><Icons.download size={14} /></button>
-        <button id="sel-more-btn" type="button" onClick={() => setMoreOpen((v) => !v)} aria-expanded={moreOpen} aria-haspopup="menu"
-          title={label("sel.more")} aria-label={label("sel.more")}
-          className={`flex h-7 w-7 items-center justify-center rounded-full text-[color:var(--wd-primary-ink)] hover:bg-[var(--wd-active)] ${moreOpen ? "bg-[var(--wd-active)]" : ""}`}><Icons.dots size={14} /></button>
-        <ZohoMenu open={moreOpen} onClose={() => setMoreOpen(false)} labelledBy="sel-more-btn" align="end" widthPx={252}
-          onSelect={(k) => {
-            if (k === "share" || k === "addMembers") onShare("invite");
-            else if (k === "copy" || k === "copyPermalink") onCopyLink();
-            else if (k === "download") onDownload();
-            else if (k === "organize:associateDataTemplate") onAction("organize");
-            else if (!k.includes(":")) onAction(k as SelectionBarActionKey);
+        <FileActionsMenu
+          context={{
+            resourceType: menuResourceType ?? (folderCount > 0 && fileCount === 0 ? "FOLDER" : "FILE"),
+            canMutate,
+            canShare,
+            canFavorite: Boolean(handlers.onFavoriteToggle),
+            isFavorite: menuFavorite,
           }}
-          items={moreItems} />
+          control={singleSelected ? control : undefined}
+          handlers={handlers}
+          trigger={<button type="button" title={label("sel.more")} aria-label={label("files.actions")} className="flex h-7 w-7 items-center justify-center rounded-full text-[color:var(--wd-primary-ink)] hover:bg-[var(--wd-active)]"><Icons.dots size={14} /></button>}
+        />
         <button type="button" onClick={onClear} aria-label={label("sel.clear")} title="Esc"
           className="inline-flex h-8 items-center gap-1 rounded-full bg-[var(--wd-active)] px-3 text-[12px] font-medium text-[color:var(--wd-primary-ink)] transition-colors duration-150 ease-in-out hover:bg-[color:var(--wd-active)]">Esc <Icons.x size={12} /></button>
       </div>

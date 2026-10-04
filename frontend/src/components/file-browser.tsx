@@ -13,7 +13,7 @@ import { FileTable } from "./file-table";
 import { ShareModal } from "./share-modal";
 import { useLocale } from "./locale-provider";
 import { bulkTrashFolders, createFolder, deleteFolder, getFolder, listRootContents, renameFolder, moveFolder, copyFolder } from "../lib/api/folders";
-import { bulkTrashFiles, renameFile, requestDownload, trashFile, moveFile, copyFile, getFileDetails } from "../lib/api/files";
+import { bulkTrashFiles, renameFile, requestDownload, trashFile, moveFile, copyFile, getFileDetails, runFileControl } from "../lib/api/files";
 import { triggerDownload } from "../lib/api/download";
 import { addFavorite, listFavorites, removeFavorite } from "../lib/api/favorites";
 import { ApiError } from "../lib/api/client";
@@ -43,6 +43,10 @@ import { resolveDataTemplateSchema } from "../lib/data-template-logic";
 
 import { canMutateContent, canShareContent } from "../lib/permissions";
 import { listSharedByMe } from "../lib/api/shared";
+import { listWorkspaceLabelResources, listWorkspaceLabels } from "../lib/api/workspace-labels";
+import { officeEditorPath, isNativeImkanOfficeFile } from "../lib/office-file-routing";
+import { createOfficeCopy } from "../lib/api/office";
+import type { FileActionHandlers, FileControlState } from "./file-actions-menu";
 import { normalizePublicAppUrl } from "../lib/public-url";
 import { findActiveShareForResource, resolveShareTarget } from "../lib/share-resource-logic";
 import {
@@ -140,6 +144,9 @@ export function FileBrowser({
   const [searchActive, setSearchActive] = useState(false);
   const [loading, setLoading] = useState(true);
   const [favoriteIds, setFavoriteIds] = useState<Set<string>>(new Set());
+  const [rowLabels, setRowLabels] = useState<Map<string, { id: string; name: string; color: string }[]>>(new Map());
+  const [rowExpiry, setRowExpiry] = useState<Map<string, string | null>>(new Map());
+  const [marksTick, setMarksTick] = useState(0);
   // Dual view preference (list/table ↔ grid), persisted per browser.
   const [viewMode, setViewMode] = useState<ViewMode>("list");
   const [sortDir, setSortDir] = useState<SortDir>("desc");
@@ -366,8 +373,41 @@ export function FileBrowser({
       }));
     } finally {
       setLoading(false);
+      setMarksTick((tick) => tick + 1);
     }
   }, [folderId, label, routeQuery, advancedFilter]);
+
+  useEffect(() => {
+    let live = true;
+    void (async () => {
+      const [labels, shares] = await Promise.all([
+        listWorkspaceLabels().catch(() => []),
+        listSharedByMe().catch(() => []),
+      ]);
+      const attached = await Promise.all(labels.map((item) => listWorkspaceLabelResources(item.id).then((rows) => ({ item, rows })).catch(() => ({ item, rows: [] }))));
+      if (!live) return;
+      const nextLabels = new Map<string, { id: string; name: string; color: string }[]>();
+      for (const { item, rows } of attached) {
+        for (const row of rows) {
+          const list = nextLabels.get(row.resourceId) ?? [];
+          if (!list.some((entry) => entry.id === item.id)) list.push({ id: item.id, name: item.name, color: item.color });
+          nextLabels.set(row.resourceId, list);
+        }
+      }
+      const nextExpiry = new Map<string, string | null>();
+      const now = Date.now();
+      for (const share of shares) {
+        if (!share.expiresAt) continue;
+        const time = Date.parse(share.expiresAt);
+        if (!Number.isFinite(time) || time > now) continue;
+        const previous = nextExpiry.get(share.resourceId);
+        if (!previous || Date.parse(previous) > time) nextExpiry.set(share.resourceId, new Date(time).toISOString());
+      }
+      setRowLabels(nextLabels);
+      setRowExpiry(nextExpiry);
+    })();
+    return () => { live = false; };
+  }, [marksTick]);
 
   useEffect(() => {
     const focusNewFolder = () => setNewFolderOpen(true);
@@ -725,6 +765,39 @@ export function FileBrowser({
     label,
   ]);
 
+  const singleId = selectedIds.size === 1 ? [...selectedIds][0] : undefined;
+  const singleFolder = singleId ? folders.find((item) => item.id === singleId) : undefined;
+  const singleFile = singleId && !singleFolder ? files.find((item) => item.id === singleId) : undefined;
+  const singleExtra: FileActionHandlers | undefined = singleFolder ? {
+    onOpen: () => handleOpen("FOLDER", singleFolder.id, singleFolder.name),
+    onInspect: () => handleInspect("FOLDER", singleFolder.id),
+    onLabels: () => setLabelTarget({ type: "FOLDER", id: singleFolder.id, name: singleFolder.name }),
+    onFavoriteToggle: () => { void handleFavorite("FOLDER", singleFolder.id); },
+    onCopyLink: canShare ? () => { void copyShareLink({ type: "FOLDER", id: singleFolder.id }); } : undefined,
+  } : singleFile ? {
+    onOpen: () => handleOpen("FILE", singleFile.id, singleFile.name),
+    onPreview: () => { void onPreview("FILE", singleFile.id, singleFile.name, singleFile.mimeType ?? undefined, singleFile.size ?? undefined); },
+    onComment: () => { void onPreview("FILE", singleFile.id, singleFile.name, singleFile.mimeType ?? undefined, singleFile.size ?? undefined, "comments"); },
+    onVersionHistory: () => { void onVersionHistory("FILE", singleFile.id, singleFile.name, singleFile.mimeType ?? undefined, singleFile.size ?? undefined); },
+    onInspect: () => handleInspect("FILE", singleFile.id),
+    onLabels: () => setLabelTarget({ type: "FILE", id: singleFile.id, name: singleFile.name }),
+    onFavoriteToggle: () => { void handleFavorite("FILE", singleFile.id); },
+    onCopyLink: canShare ? () => { void copyShareLink({ type: "FILE", id: singleFile.id }); } : undefined,
+    onReindex: () => { void runFileControl(singleFile.id, "reindex").then(() => window.alert("Search index refreshed from available file metadata.")).catch((error) => window.alert(error instanceof Error ? error.message : "Re-index failed.")); },
+    onCheckOut: () => { void runFileControl(singleFile.id, "check-out").then(() => window.location.reload()).catch((error) => window.alert(error instanceof Error ? error.message : "Check-out failed.")); },
+    onCheckIn: () => { void runFileControl(singleFile.id, "check-in").then(() => window.location.reload()).catch((error) => window.alert(error instanceof Error ? error.message : "Check-in failed.")); },
+    onMarkFinal: () => { if (window.confirm("Mark this file as final? It will become read-only.")) void runFileControl(singleFile.id, "mark-final").then(() => window.location.reload()).catch((error) => window.alert(error instanceof Error ? error.message : "Could not mark final.")); },
+    onEnableEditing: () => { if (window.confirm("Enable editing for this final file?")) void runFileControl(singleFile.id, "enable-editing").then(() => window.location.reload()).catch((error) => window.alert(error instanceof Error ? error.message : "Could not enable editing.")); },
+    onOpenInOffice: officeEditorPath(singleFile.id, singleFile.name, singleFile.mimeType) ? () => {
+      if (isNativeImkanOfficeFile(singleFile.name, singleFile.mimeType)) { window.location.assign(officeEditorPath(singleFile.id, singleFile.name, singleFile.mimeType)!); return; }
+      void createOfficeCopy(singleFile.id, "OPEN").then((result) => { window.location.assign(officeEditorPath(result.fileId, `${singleFile.name}.imkan`, result.document?.nativeFormat ? `application/vnd.imkan.${String(result.document.nativeFormat).replace(/\+.*/, "")}` : undefined) || `/office/${String(result.document.type).toLowerCase()}/${encodeURIComponent(result.fileId)}`); }).catch((error) => window.alert(error instanceof Error ? error.message : "Could not open in IMKAN Office."));
+    } : undefined,
+    onConvertToOffice: !isNativeImkanOfficeFile(singleFile.name, singleFile.mimeType) && officeEditorPath(singleFile.id, singleFile.name, singleFile.mimeType) ? () => {
+      void createOfficeCopy(singleFile.id, "CONVERT").then((result) => { window.location.assign(officeEditorPath(result.fileId, `${singleFile.name}.imkan`, `application/vnd.imkan.${String(result.document.nativeFormat).toLowerCase()}+json`) || `/office/${String(result.document.type).toLowerCase()}/${encodeURIComponent(result.fileId)}`); }).catch((error) => window.alert(error instanceof Error ? error.message : "Conversion failed."));
+    } : undefined,
+  } : undefined;
+  const singleControl: FileControlState | undefined = singleFile ? { status: singleFile.status } : undefined;
+
   return (
     <section className="wd-file-browser flex min-h-0 flex-1 flex-col w-full max-w-full overflow-x-hidden">
       <ShellScopeSync folderId={folderId} folderName={folderName} />
@@ -767,6 +840,10 @@ export function FileBrowser({
               for (const id of fileIds) void onDownload(id);
             }}
             onAction={handleSelectionAction}
+            extraHandlers={singleExtra}
+            control={singleControl}
+            menuResourceType={singleFolder ? "FOLDER" : singleFile ? "FILE" : undefined}
+            menuFavorite={singleId ? favoriteIds.has(singleId) : false}
             onClear={() => setSelectedIds(new Set())}
           />
         )}
@@ -833,6 +910,8 @@ export function FileBrowser({
           onOrganize={(type,id)=>{ const item = type === "FILE" ? files.find(x=>x.id===id) : folders.find(x=>x.id===id); if (item) setDataTemplateTargets([{ type, id, name: item.name }]); }}
           followIds={followIds}
           workflowStatuses={workflowStatuses}
+          rowLabels={rowLabels}
+          rowExpiry={rowExpiry}
           onWorkflowStatusClick={(status, resourceName) => setWorkflowStatusTarget({ status, resourceName })}
           onDataTemplateBadgeClick={(type,id) => { handleInspect(type,id); setInspectorTab("dataTemplates"); setInspectorOpen(true); setMobileInspectorOpen(true); }}
           onCopyLink={(id) => {

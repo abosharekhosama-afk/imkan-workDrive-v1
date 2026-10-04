@@ -175,6 +175,7 @@
 | — | Writer toolbar keeps its last bar inside the root element so the page parses | ✅ Implemented |
 | — | Writer menu cards float on their own, and menu actions edit the document or call the file and Office APIs | ✅ Implemented |
 | — | Successful uploads refresh the file table and close the progress card, and Office opening progress reaches the editor | ✅ Implemented |
+| — | My Files, the selection bar, and preview share one action card; nested menus stay on screen; the file table scrolls in its own region; labels and real share expiry show as badges | ✅ Implemented |
 
 ---
 

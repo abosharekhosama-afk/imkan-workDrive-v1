@@ -8,6 +8,7 @@ import { Icons } from "./layout/icons";
 import { useLocale } from "./locale-provider";
 import { FileIcon } from "./file-icon";
 import { FileActionsMenu } from "./file-actions-menu";
+import { FileRowMarks } from "./file-row-marks";
 import { FileContextMenu } from "./file-context-menu";
 import { EmptyState } from "./empty-state";
 import type { FileRecord, FolderRecord } from "../lib/api/types";
@@ -101,6 +102,8 @@ interface FileTableProps {
   onToast?: (message: string) => void;
   onAssignWorkflow?: (resourceType: "FILE" | "FOLDER", resourceId: string, resourceName: string) => void;
   onOrganize?: (resourceType: "FILE" | "FOLDER", resourceId: string) => void;
+  onLabelAs?: (resourceType: "FILE" | "FOLDER", resourceId: string, resourceName: string) => void;
+  onDataTemplateBadgeClick?: (resourceType: "FILE" | "FOLDER", resourceId: string) => void;
   onFollowUpdates?: (resourceType: "FILE" | "FOLDER", resourceId: string, resourceName: string) => void;
   followIds?: Set<string>;
   workflowStatuses?: ReadonlyMap<string, WorkflowResourceStatus>;
@@ -113,6 +116,8 @@ interface FileTableProps {
   onSortDir?: (d: SortDir) => void;
   columns?: Partial<Record<ColumnKey, boolean>>;
   onColumns?: (cols: Partial<Record<ColumnKey, boolean>>) => void;
+  rowLabels?: ReadonlyMap<string, Array<{ id: string; name: string; color: string }>>;
+  rowExpiry?: ReadonlyMap<string, string | null>;
 }
 
 
@@ -148,12 +153,13 @@ export function FileTable({
   onToast,
   onAssignWorkflow,
   onOrganize,
+  onLabelAs,
   onFollowUpdates,
   followIds = new Set(),
   workflowStatuses,
   onWorkflowStatusClick,
   compact = false,
-  sortField, sortDir, onSortField, onSortDir, columns, onColumns,
+  sortField, sortDir, onSortField, onSortDir, columns, onColumns, rowLabels, rowExpiry,
 }: FileTableProps) {
   const { label, locale } = useLocale();
   const controlled = sortField !== undefined && sortDir !== undefined;
@@ -262,13 +268,6 @@ export function FileTable({
         </span>,
       );
     }
-    if (raw === "EXPIRED" || raw === "EXPIRE") {
-      icons.push(
-        <span key="expired" className="wd-file-status-icon" data-kind="expired" title={label("files.expired") || "Expired"} aria-label={label("files.expired") || "Expired"}>
-          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" aria-hidden="true"><circle cx="12" cy="12" r="9" /><path d="M12 7v5l3 2" /></svg>
-        </span>,
-      );
-    }
     const wf = workflowStatuses?.get(opts.resourceId);
     if (wf && !wf.state?.terminal && wf.status !== "COMPLETED") {
       icons.push(
@@ -291,7 +290,7 @@ export function FileTable({
 
   return (
     <div className="imkan-file-table-root relative w-full max-w-full min-h-0">
-      <div className="imkan-table-scroll w-full max-w-full max-h-[min(70vh,calc(100vh-12rem))] overflow-x-auto overflow-y-auto">
+      <div className="imkan-table-scroll w-full max-w-full min-h-0 flex-1">
         <table className="imkan-table min-w-[56rem] w-full table-auto">
           <thead>
           <tr className="wd-list-head">
@@ -341,13 +340,14 @@ export function FileTable({
                   onClick={(e) => handleRowSelect(folder.id, (e.currentTarget as HTMLInputElement).checked, e.shiftKey)}
                 />
               </td>
-              <td className="max-w-[18rem] truncate px-2">
-                <Link href={`/files/${folder.id}`} className="imkan-focusable inline-flex max-w-full items-center gap-4 truncate rounded-sm">
+              <td className="max-w-[18rem] px-2">
+                <Link href={`/files/${folder.id}`} className="imkan-focusable inline-flex max-w-full items-center gap-4 rounded-sm">
                   <FileIcon kind="folder" label={label("files.type.folder")} />
-                  <span className="min-w-0 truncate">
-                    <span className="wd-list-name flex items-center gap-1 truncate">
+                  <span className="min-w-0">
+                    <span className="wd-list-name flex min-w-0 items-center gap-1">
                       <span className="truncate">{folder.name}</span>
                       {statusIcons({ resourceId: folder.id, resourceName: folder.name })}
+                      <FileRowMarks labels={rowLabels?.get(folder.id) ?? []} expiresAt={rowExpiry?.get(folder.id)} status={null} expiredLabel={label("shared.expired")} />
                     </span>
                     <span className="wd-list-meta block truncate">{label("files.uploadedBy").replace("{name}", folder.ownerName ?? folder.ownerEmail ?? label("files.type.folder"))}</span>{workflowBadge(folder.id, folder.name)}
                   </span>
@@ -378,6 +378,8 @@ export function FileTable({
                     onDelete: canMutate ? () => onDelete("FOLDER", folder.id) : undefined, onAssignWorkflow: onAssignWorkflow && canMutate ? () => onAssignWorkflow("FOLDER", folder.id, folder.name) : undefined,
                     onOrganize: onOrganize && canMutate ? () => onOrganize("FOLDER", folder.id) : undefined,
                     onFollowUpdates: onFollowUpdates ? () => onFollowUpdates("FOLDER", folder.id, folder.name) : undefined,
+                    onCopyLink: onCopyLink ? () => onCopyLink(folder.id) : undefined,
+                    onLabels: onLabelAs ? () => onLabelAs("FOLDER", folder.id, folder.name) : undefined,
                     isFollowingUpdates: followIds.has(followResourceKey("FOLDER", folder.id)), isFavorite: favoriteIds.has(folder.id),
                   }}
                 />
@@ -400,13 +402,14 @@ export function FileTable({
                   onClick={(e) => handleRowSelect(file.id, (e.currentTarget as HTMLInputElement).checked, e.shiftKey)}
                 />
               </td>
-              <td className="max-w-[18rem] truncate px-2">
-                <button type="button" onClick={() => onPreview?.("FILE", file.id, file.name, file.mimeType ?? undefined, file.size ?? undefined)} className="imkan-focusable inline-flex max-w-full items-center gap-4 truncate rounded-sm text-start hover:underline">
+              <td className="max-w-[18rem] px-2">
+                <button type="button" onClick={() => onPreview?.("FILE", file.id, file.name, file.mimeType ?? undefined, file.size ?? undefined)} className="imkan-focusable inline-flex max-w-full items-center gap-4 rounded-sm text-start hover:underline">
                   <FileIcon kind="file" mimeType={file.mimeType} name={file.name} label={label("files.type.file")} />
-                  <span className="min-w-0 truncate">
-                    <span className="wd-list-name flex items-center gap-1 truncate">
+                  <span className="min-w-0">
+                    <span className="wd-list-name flex min-w-0 items-center gap-1">
                       <span className="truncate">{file.name}</span>
                       {statusIcons({ resourceId: file.id, status: file.status, resourceName: file.name })}
+                      <FileRowMarks labels={rowLabels?.get(file.id) ?? []} expiresAt={rowExpiry?.get(file.id)} status={file.status} expiredLabel={label("shared.expired")} />
                     </span>
                     <span className="wd-list-meta block truncate">{label("files.uploadedBy").replace("{name}", file.ownerName ?? file.ownerEmail ?? label("files.type.file"))}</span>{workflowBadge(file.id, file.name)}
                   </span>
@@ -442,6 +445,8 @@ export function FileTable({
                     onDelete: canMutate ? () => onDelete("FILE", file.id) : undefined, onAssignWorkflow: onAssignWorkflow && canMutate ? () => onAssignWorkflow("FILE", file.id, file.name) : undefined,
                     onOrganize: onOrganize && canMutate ? () => onOrganize("FILE", file.id) : undefined,
                     onFollowUpdates: onFollowUpdates ? () => onFollowUpdates("FILE", file.id, file.name) : undefined,
+                    onCopyLink: onCopyLink ? () => onCopyLink(file.id) : undefined,
+                    onLabels: onLabelAs ? () => onLabelAs("FILE", file.id, file.name) : undefined,
                     isFollowingUpdates: followIds.has(followResourceKey("FILE", file.id)),
                   }}
                 />

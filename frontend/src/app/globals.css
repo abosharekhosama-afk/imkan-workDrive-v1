@@ -3061,8 +3061,24 @@ html[data-sidebar-light="true"] .primary-sidebar{background:#f6f7f9!important;co
 @media(max-width:700px){.account-drawer{width:100vw}.account-download-grid{grid-template-columns:1fr 1fr}.account-qr{display:none}.appearance-modes{gap:6px}.member-search-combo{width:100%}.member-team-toolbar{align-items:stretch;flex-direction:column}.member-team-toolbar-actions{justify-content:space-between}.members-table{min-height:calc(100vh - 230px)}}
 
 /* File browser tables: table is the scroll surface; row action menus (portals) stay fully visible. */
+.workdrive-main-scroll:has(.wd-file-browser) {
+  overflow: hidden;
+}
+.workdrive-main-scroll:has(.wd-file-browser) > .imkan-workspace-layout,
+.workdrive-main-scroll:has(.wd-file-browser) .imkan-workspace-content,
+.wd-file-browser {
+  height: 100%;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
 .wd-file-browser .wd-file-browser-body {
-  min-height: calc(100vh - 190px);
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-x: auto;
+  overflow-y: scroll;
 }
 .wd-file-browser .imkan-file-table-root {
   min-height: 0;
@@ -3071,14 +3087,23 @@ html[data-sidebar-light="true"] .primary-sidebar{background:#f6f7f9!important;co
 }
 .wd-file-browser .imkan-table-scroll {
   min-height: 0;
-  max-height: min(70vh, calc(100vh - 12rem));
-  overflow-x: auto;
-  overflow-y: auto;
+  max-height: none;
+  overflow: visible;
 }
 .wd-file-browser .imkan-table-scroll > table {
   min-height: 0;
   height: auto;
 }
+.wd-file-browser .imkan-table-scroll thead th {
+  position: sticky;
+  top: 0;
+  z-index: 3;
+  background: var(--wd-bg, #fff);
+}
+.wd-row-marks { display: inline-flex; align-items: center; gap: 4px; flex: none; max-width: 46%; }
+.wd-row-label { display: inline-flex; align-items: center; gap: 4px; max-width: 7.5rem; height: 18px; padding: 0 6px; border-radius: 9px; border: 1px solid var(--wd-line); background: var(--wd-bg, #fff); font-size: 10px; font-weight: 600; line-height: 1; }
+.wd-row-label > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.wd-row-label i { width: 6px; height: 6px; border-radius: 50%; flex: none; }
 .wd-toolbar { overflow: visible; }
 .team-folders-page { overflow: visible; }
 .team-folders-toolbar { overflow: visible; position: relative; z-index: 25; }
