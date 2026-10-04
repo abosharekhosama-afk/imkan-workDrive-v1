@@ -252,7 +252,7 @@ export function TopHeader({ adminMode = false }: { adminMode?: boolean }) {
                   <Icons.share size={16} /><span>{locale === "ar" ? "العناصر المشتركة" : "Shared Items"}</span>
                 </button>
                 <button type="button" role="menuitem" onClick={() => { setManageOpen(false); router.push("/files/manage?tab=large"); }}>
-                  <Icons.file size={16} /><span>{locale === "ar" ? "الملفات الكبيرة" : "Large Files"}</span>
+                  <Icons.doc size={16} /><span>{locale === "ar" ? "الملفات الكبيرة" : "Large Files"}</span>
                 </button>
               </div>
             ) : null}
