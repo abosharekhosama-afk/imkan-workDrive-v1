@@ -1727,6 +1727,63 @@ export class FilesService {
     await this.prisma.storageObject.updateMany({ where: { id: { in: objects.map((o) => o.id) }, orgId: user.org_id }, data: { status: StorageObjectStatus.DELETED } });
   }
 
+  /**
+   * Returns the largest readable files for the current organization.
+   * This powers the Files > Manage "Large files" view.
+   *
+   * The permission check is intentionally performed per file so that this
+   * endpoint never exposes files the current user cannot read.
+   */
+  async listLargeFiles(user: AccessTokenPayload) {
+    const candidates = await this.prisma.file.findMany({
+      where: {
+        orgId: user.org_id,
+        deletedAt: null,
+        status: FileStatus.ACTIVE,
+        size: { gt: 0 },
+      },
+      orderBy: { size: 'desc' },
+      take: 250,
+      select: {
+        id: true,
+        name: true,
+        originalName: true,
+        size: true,
+        mimeType: true,
+        extension: true,
+        fileType: true,
+        ownerId: true,
+        createdAt: true,
+        updatedAt: true,
+        lastAccessedAt: true,
+        folderId: true,
+        folder: { select: { id: true, name: true, teamFolderId: true } },
+      },
+    });
+
+    const readable = [];
+    for (const file of candidates) {
+      if (!(await this.canReadFile(user, file))) continue;
+      readable.push({
+        id: file.id,
+        name: file.name,
+        originalName: file.originalName,
+        size: Number(file.size),
+        mimeType: file.mimeType,
+        extension: file.extension,
+        fileType: file.fileType,
+        ownerId: file.ownerId,
+        createdAt: file.createdAt.toISOString(),
+        updatedAt: file.updatedAt.toISOString(),
+        lastAccessedAt: file.lastAccessedAt?.toISOString() ?? null,
+        folderId: file.folderId,
+        folder: file.folder,
+      });
+    }
+
+    return readable;
+  }
+
   async listTrash(user: AccessTokenPayload) {
     const entries = await this.prisma.trashEntry.findMany({
       where: { orgId: user.org_id, restoredAt: null, fileId: { not: null } },
