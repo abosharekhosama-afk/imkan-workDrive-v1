@@ -1,5 +1,10 @@
 'use client';
 
+/**
+ * Univer host for Documents (writer), Spreadsheets (sheet), and Presentations (show).
+ * Presentations use @univerjs/slides + @univerjs/slides-ui (UNIVER_SLIDE unit).
+ */
+
 import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react';
 
 export type UniverEditorKind = 'writer' | 'sheet' | 'show';
@@ -29,35 +34,23 @@ function defaultSheetData(title: string) {
     id: `workbook-${Date.now()}`,
     name: title || 'Workbook',
     appVersion: '0.25.1',
+    locale: 'enUS',
+    sheetOrder: ['sheet-1'],
+    styles: {},
     sheets: {
       'sheet-1': {
         id: 'sheet-1',
         name: 'Sheet1',
-        tabColor: '',
-        hidden: 0,
         rowCount: 100,
         columnCount: 26,
         zoomRatio: 1,
-        freeze: { startRow: -1, startColumn: -1, ySplit: 0, xSplit: 0 },
-        scrollTop: 0,
-        scrollLeft: 0,
-        defaultColumnWidth: 88,
-        defaultRowHeight: 24,
+        cellData: { 0: { 0: { v: 'Welcome', t: 1 } } },
         mergeData: [],
-        cellData: {
-          0: { 0: { v: 'Welcome', t: 1 } },
-        },
         rowData: {},
         columnData: {},
         showGridlines: 1,
-        rowHeader: { width: 46, hidden: 0 },
-        columnHeader: { height: 20, hidden: 0 },
-        rightToLeft: 0,
       },
     },
-    locale: 'enUS',
-    sheetOrder: ['sheet-1'],
-    styles: {},
   };
 }
 
@@ -74,14 +67,48 @@ function defaultDocData(title: string) {
   };
 }
 
+/** Minimal ISlideData-compatible presentation snapshot */
+function defaultSlideData(title: string) {
+  const slideId = 'slide-1';
+  const pageId = 'page-1';
+  return {
+    id: `presentation-${Date.now()}`,
+    title: title || 'Presentation',
+    name: title || 'Presentation',
+    slideOrder: [slideId],
+    slides: {
+      [slideId]: {
+        id: slideId,
+        pageElements: {
+          [pageId]: {
+            id: pageId,
+            type: 0, // text-ish element — structure varies by version; empty page is valid
+            left: 80,
+            top: 120,
+            width: 800,
+            height: 120,
+          },
+        },
+        pageType: 0,
+      },
+    },
+    defaultPageSize: {
+      width: 960,
+      height: 540,
+    },
+  };
+}
+
 async function bootUniver(
   container: HTMLElement,
   kind: UniverEditorKind,
   title: string,
   initialSnapshot: Record<string, unknown> | null | undefined,
 ): Promise<BootResult> {
+  const core = await import('@univerjs/core');
+  const { LocaleType, mergeLocales, Univer, UniverInstanceType } = core;
+
   const [
-    core,
     { UniverRenderEnginePlugin },
     { UniverFormulaEnginePlugin },
     { UniverUIPlugin },
@@ -92,7 +119,6 @@ async function bootUniver(
     { UniverSheetsFormulaPlugin },
     { UniverSheetsNumfmtPlugin },
   ] = await Promise.all([
-    import('@univerjs/core'),
     import('@univerjs/engine-render'),
     import('@univerjs/engine-formula'),
     import('@univerjs/ui'),
@@ -104,7 +130,39 @@ async function bootUniver(
     import('@univerjs/sheets-numfmt'),
   ]);
 
-  const { LocaleType, mergeLocales, Univer, UniverInstanceType } = core;
+  // Slides (presentations) — open-source packages
+  let UniverSlidesPlugin: any = null;
+  let UniverSlidesUIPlugin: any = null;
+  let UniverDrawingPlugin: any = null;
+  let SlidesUIEnUS: any = null;
+  let SlidesEnUS: any = null;
+
+  if (kind === 'show') {
+    try {
+      const slidesMod = await import('@univerjs/slides');
+      const slidesUiMod = await import('@univerjs/slides-ui');
+      UniverSlidesPlugin = slidesMod.UniverSlidesPlugin;
+      UniverSlidesUIPlugin = slidesUiMod.UniverSlidesUIPlugin;
+      try {
+        const drawingMod = await import('@univerjs/drawing');
+        UniverDrawingPlugin = (drawingMod as any).UniverDrawingPlugin;
+      } catch {
+        /* drawing optional on some builds */
+      }
+      SlidesUIEnUS = (await import('@univerjs/slides-ui/locale/en-US')).default ?? (await import('@univerjs/slides-ui/locale/en-US'));
+      try {
+        SlidesEnUS = (await import('@univerjs/slides/locale/en-US')).default ?? (await import('@univerjs/slides/locale/en-US'));
+      } catch {
+        /* locale optional */
+      }
+      await import('@univerjs/slides-ui/lib/index.css');
+    } catch (e) {
+      console.error('[Univer] slides packages missing — run npm install @univerjs/slides @univerjs/slides-ui', e);
+      throw new Error(
+        'Presentation editor requires @univerjs/slides and @univerjs/slides-ui. Run: npm install @univerjs/slides@0.25.1 @univerjs/slides-ui@0.25.1',
+      );
+    }
+  }
 
   const [DesignEnUS, UIEnUS, DocsUIEnUS, SheetsUIEnUS] = await Promise.all([
     import('@univerjs/design/locale/en-US').then((m) => m.default ?? m),
@@ -113,7 +171,6 @@ async function bootUniver(
     import('@univerjs/sheets-ui/locale/en-US').then((m) => m.default ?? m),
   ]);
 
-  // CSS is required for the canvas UI to appear
   await Promise.all([
     import('@univerjs/design/lib/index.css'),
     import('@univerjs/ui/lib/index.css'),
@@ -121,13 +178,14 @@ async function bootUniver(
     import('@univerjs/sheets-ui/lib/index.css'),
   ]);
 
-  // Ensure container has layout dimensions before Univer mounts
   container.style.width = '100%';
   container.style.height = '100%';
-  container.style.minHeight = '480px';
+  container.style.minHeight = '560px';
   container.style.position = 'relative';
 
-  const locales = mergeLocales(DesignEnUS as any, UIEnUS as any, DocsUIEnUS as any, SheetsUIEnUS as any);
+  const localeBags = [DesignEnUS, UIEnUS, DocsUIEnUS, SheetsUIEnUS, SlidesUIEnUS, SlidesEnUS].filter(Boolean);
+  const locales = mergeLocales(...(localeBags as any[]));
+
   const univer = new Univer({
     locale: LocaleType.EN_US,
     locales: { [LocaleType.EN_US]: locales },
@@ -148,25 +206,41 @@ async function bootUniver(
   univer.registerPlugin(UniverSheetsFormulaPlugin);
   univer.registerPlugin(UniverSheetsNumfmtPlugin);
 
-  const isSheet = kind === 'sheet';
+  if (kind === 'show') {
+    if (UniverDrawingPlugin) univer.registerPlugin(UniverDrawingPlugin);
+    univer.registerPlugin(UniverSlidesPlugin);
+    univer.registerPlugin(UniverSlidesUIPlugin);
+  }
+
+  const hasSnapshot = !!(initialSnapshot && typeof initialSnapshot === 'object' && Object.keys(initialSnapshot).length > 0);
   let activeUnit: any = null;
 
-  const hasSnapshot = initialSnapshot && typeof initialSnapshot === 'object' && Object.keys(initialSnapshot).length > 0;
-
-  if (isSheet) {
+  if (kind === 'sheet') {
     const data = hasSnapshot
       ? { ...defaultSheetData(title), ...initialSnapshot, name: (initialSnapshot as any).name || title || 'Workbook' }
       : defaultSheetData(title);
     activeUnit = univer.createUnit(UniverInstanceType.UNIVER_SHEET, data as any);
+  } else if (kind === 'show') {
+    const slideType =
+      (UniverInstanceType as any).UNIVER_SLIDE ??
+      (UniverInstanceType as any).SLIDE ??
+      'slide';
+    const data = hasSnapshot
+      ? {
+          ...defaultSlideData(title),
+          ...initialSnapshot,
+          title: (initialSnapshot as any).title || (initialSnapshot as any).name || title || 'Presentation',
+          name: (initialSnapshot as any).name || (initialSnapshot as any).title || title || 'Presentation',
+        }
+      : defaultSlideData(title);
+    activeUnit = univer.createUnit(slideType, data as any);
   } else {
-    // writer + show (open-source slides limited → Docs surface with visible starter text)
     const data = hasSnapshot
       ? { ...defaultDocData(title), ...initialSnapshot, title: (initialSnapshot as any).title || title || 'Document' }
-      : defaultDocData(kind === 'show' ? title || 'Presentation' : title);
+      : defaultDocData(title);
     activeUnit = univer.createUnit(UniverInstanceType.UNIVER_DOC, data as any);
   }
 
-  // Force a layout pass so the canvas paints
   requestAnimationFrame(() => {
     try {
       window.dispatchEvent(new Event('resize'));
@@ -187,10 +261,14 @@ async function bootUniver(
         // eslint-disable-next-line @typescript-eslint/no-require-imports
         const { FUniver } = require('@univerjs/core/facade');
         const api = FUniver.newAPI(univer);
-        if (isSheet) {
+        if (kind === 'sheet') {
           const wb = api.getActiveWorkbook?.();
           if (wb?.save) return wb.save() as Record<string, unknown>;
           if (wb?.getSnapshot) return wb.getSnapshot() as Record<string, unknown>;
+        } else if (kind === 'show') {
+          const pres = api.getActivePresentation?.() ?? api.getActiveSlide?.();
+          if (pres?.save) return pres.save() as Record<string, unknown>;
+          if (pres?.getSnapshot) return pres.getSnapshot() as Record<string, unknown>;
         } else {
           const doc = api.getActiveDocument?.();
           if (doc?.save) return doc.save() as Record<string, unknown>;
@@ -199,8 +277,10 @@ async function bootUniver(
       } catch {
         /* optional */
       }
-      if (hasSnapshot) return { ...(initialSnapshot as object), __clientTouchedAt: new Date().toISOString() } as Record<string, unknown>;
-      return isSheet ? (defaultSheetData(title) as unknown as Record<string, unknown>) : (defaultDocData(title) as unknown as Record<string, unknown>);
+      if (hasSnapshot) return { ...(initialSnapshot as object) } as Record<string, unknown>;
+      if (kind === 'sheet') return defaultSheetData(title) as unknown as Record<string, unknown>;
+      if (kind === 'show') return defaultSlideData(title) as unknown as Record<string, unknown>;
+      return defaultDocData(title) as unknown as Record<string, unknown>;
     } catch {
       return null;
     }
@@ -286,14 +366,13 @@ export const UniverEditor = forwardRef<UniverEditorHandle, UniverEditorProps>(fu
     <div className={className} style={{ position: 'relative', width: '100%', height: '100%', minHeight: 560, background: '#fff' }}>
       {status === 'loading' && (
         <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#f8fafc', color: '#64748b', fontSize: 14, zIndex: 2 }}>
-          Loading editor UI…
+          {kind === 'show' ? 'Loading presentation editor…' : kind === 'sheet' ? 'Loading spreadsheet…' : 'Loading document…'}
         </div>
       )}
       {status === 'error' && (
         <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 8, background: '#fef2f2', color: '#991b1b', fontSize: 14, zIndex: 2, padding: 24, textAlign: 'center' }}>
-          <strong>Could not start Univer</strong>
+          <strong>Could not start Univer ({kind})</strong>
           <span>{errorMessage}</span>
-          <span style={{ color: '#64748b', fontSize: 12 }}>Ensure @univerjs packages are installed (npm install in frontend/).</span>
         </div>
       )}
       <div ref={containerRef} style={{ width: '100%', height: '100%', minHeight: 560 }} />
