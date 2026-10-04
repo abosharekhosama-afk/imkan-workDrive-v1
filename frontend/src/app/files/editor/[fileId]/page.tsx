@@ -1,14 +1,11 @@
 "use client";
 
-/**
- * Legacy /files/editor/[fileId] redirect → Univer (or IMKAN Office for .imkan).
- */
-
 import { useEffect } from "react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { getFileDetails } from "@/lib/api/files";
-import { officeEditorPath, isNativeImkanOfficeFile } from "@/lib/office-file-routing";
+import { officeEditorPath, resolveOfficeEditor } from "@/lib/office-file-routing";
 
+/** Legacy editor entry — always routes to Univer. */
 export default function LegacyEditorRedirect() {
   const params = useParams<{ fileId: string }>();
   const router = useRouter();
@@ -17,29 +14,16 @@ export default function LegacyEditorRedirect() {
 
   useEffect(() => {
     void getFileDetails(params.fileId)
-      .then((file) => {
-        const href = officeEditorPath(params.fileId, file.name || "", file.mimeType);
-        if (href) {
-          const url = templateId
-            ? `${href}${href.includes("?") ? "&" : "?"}templateId=${encodeURIComponent(templateId)}`
-            : href;
-          router.replace(url);
-          return;
+      .then((file: any) => {
+        let href = officeEditorPath(params.fileId, file.name || "", file.mimeType);
+        if (!href) {
+          const kind = resolveOfficeEditor(file.name || "", file.mimeType) ?? "writer";
+          href = `/office/univer/${encodeURIComponent(params.fileId)}?kind=${kind}`;
         }
-        // Fallback by extension
-        const ext = (file.extension || "").toLowerCase();
-        const kind = ["xls", "xlsx", "csv", "ods"].includes(ext)
-          ? "sheet"
-          : ["ppt", "pptx", "odp"].includes(ext)
-            ? "show"
-            : "writer";
-        if (isNativeImkanOfficeFile(file.name || "", file.mimeType)) {
-          router.replace(`/office/${kind}/${params.fileId}${templateId ? `?templateId=${encodeURIComponent(templateId)}` : ""}`);
-        } else {
-          router.replace(
-            `/office/univer/${encodeURIComponent(params.fileId)}?kind=${kind}${templateId ? `&templateId=${encodeURIComponent(templateId)}` : ""}`,
-          );
+        if (templateId) {
+          href += `${href.includes("?") ? "&" : "?"}templateId=${encodeURIComponent(templateId)}`;
         }
+        router.replace(href);
       })
       .catch(() => router.replace("/files"));
   }, [params.fileId, router, templateId]);
