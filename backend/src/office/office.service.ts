@@ -575,9 +575,10 @@ export class OfficeService implements OfficeEngine {
       throw new ConflictException(`This file format (${extension || 'unknown'}) cannot be opened in IMKAN Office yet. Export or convert to DOCX, XLSX, or PPTX.`);
     }
     if (extension === 'imkan') {
-      // Native JSON payload stored as bytes
+      // Native JSON payload stored as bytes (IMKAN schema or Univer engine)
       try {
-        const content = this.normalizeOfficeContent(JSON.parse(bytes.toString('utf8')));
+        const parsed = JSON.parse(bytes.toString('utf8'));
+        const content = this.normalizeOfficeContent(parsed);
         const type = this.normalizeType((content as any)?.type);
         const document = await this.prisma.officeDocument.create({
           data: { orgId: user.org_id, fileId, type: type as OfficeDocumentType, nativeFormat: TYPE_TO_FORMAT[type], content: content as Prisma.InputJsonValue },
@@ -586,29 +587,83 @@ export class OfficeService implements OfficeEngine {
           data: { orgId: user.org_id, documentId: document.id, fileId, versionNumber: 1, revision: document.revision, type: document.type, content: content as Prisma.InputJsonValue, contentHash: computeOfficeContentHash(content), label, createdById: user.sub },
         });
         return document;
-      } catch {
-        throw new ConflictException('Native IMKAN Office content is corrupted and cannot be opened');
+      } catch (e: any) {
+        // Last resort: empty Univer shell so the file can still open in the primary editor
+        const fallbackType = this.officeTypeFromExtension(extension) ?? 'WRITER';
+        const content = this.normalizeOfficeContent({
+          __engine: 'univer',
+          type: fallbackType,
+          kind: fallbackType === 'SHEET' ? 'sheet' : fallbackType === 'SHOW' ? 'show' : 'writer',
+          snapshot: {},
+        });
+        const document = await this.prisma.officeDocument.create({
+          data: { orgId: user.org_id, fileId, type: fallbackType as OfficeDocumentType, nativeFormat: TYPE_TO_FORMAT[fallbackType as OfficeType], content: content as Prisma.InputJsonValue },
+        });
+        await this.prisma.officeDocumentVersion.create({
+          data: { orgId: user.org_id, documentId: document.id, fileId, versionNumber: 1, revision: document.revision, type: document.type, content: content as Prisma.InputJsonValue, contentHash: computeOfficeContentHash(content), label: label + ' (Univer empty)', createdById: user.sub },
+        });
+        return document;
       }
     }
     // Only OOXML packages are importable today
     if (!['docx', 'xlsx', 'pptx'].includes(extension === 'ppt' ? 'pptx' : extension === 'doc' ? 'docx' : extension === 'xls' ? 'xlsx' : extension)) {
       throw new ConflictException(`Legacy format .${extension} is recognized but binary conversion is not available yet. Please save as ${extension === 'ppt' ? 'PPTX' : extension === 'doc' ? 'DOCX' : extension === 'xls' ? 'XLSX' : 'OOXML'} and reopen.`);
     }
-    let imported: OfficeImportResult;
+    let imported: OfficeImportResult | null = null;
     try {
       imported = await this.conversion.import(bytes, this.importFileNameFor(file, extension));
     } catch (error: any) {
-      const message = error?.message || 'Import failed';
-      throw new ConflictException(`Could not convert this file for IMKAN Office: ${message}`);
+      // Conversion into IMKAN schema failed — open an empty Univer unit so editing still works
+      console.warn(`[Office] conversion failed for ${fileId} (.${extension}): ${error?.message || error}`);
+      imported = null;
     }
-    const content = this.normalizeOfficeContent(imported.content);
+    if (imported) {
+      const content = this.normalizeOfficeContent(imported.content);
+      const document = await this.prisma.officeDocument.create({
+        data: {
+          orgId: user.org_id,
+          fileId,
+          type: imported.type as OfficeDocumentType,
+          nativeFormat: TYPE_TO_FORMAT[imported.type],
+          content: content as Prisma.InputJsonValue,
+        },
+      });
+      await this.prisma.officeDocumentVersion.create({
+        data: {
+          orgId: user.org_id,
+          documentId: document.id,
+          fileId,
+          versionNumber: 1,
+          revision: document.revision,
+          type: document.type,
+          content: content as Prisma.InputJsonValue,
+          contentHash: computeOfficeContentHash(content),
+          label,
+          createdById: user.sub,
+        },
+      });
+      await this.auditOfficeEvent(user, 'OFFICE_DOCUMENT_INITIALIZED_FROM_FILE', fileId, {
+        documentId: document.id,
+        sourceFileVersionId: version?.id,
+        sourceFormat: extension,
+      });
+      return document;
+    }
+    // Univer empty shell by extension
+    const fallbackType = this.officeTypeFromExtension(extension) ?? 'WRITER';
+    const univerContent = this.normalizeOfficeContent({
+      __engine: 'univer',
+      type: fallbackType,
+      kind: fallbackType === 'SHEET' ? 'sheet' : fallbackType === 'SHOW' ? 'show' : 'writer',
+      snapshot: {},
+    });
     const document = await this.prisma.officeDocument.create({
       data: {
         orgId: user.org_id,
         fileId,
-        type: imported.type as OfficeDocumentType,
-        nativeFormat: TYPE_TO_FORMAT[imported.type],
-        content: content as Prisma.InputJsonValue,
+        type: fallbackType as OfficeDocumentType,
+        nativeFormat: TYPE_TO_FORMAT[fallbackType as OfficeType],
+        content: univerContent as Prisma.InputJsonValue,
       },
     });
     await this.prisma.officeDocumentVersion.create({
@@ -619,9 +674,9 @@ export class OfficeService implements OfficeEngine {
         versionNumber: 1,
         revision: document.revision,
         type: document.type,
-        content: content as Prisma.InputJsonValue,
-        contentHash: computeOfficeContentHash(content),
-        label,
+        content: univerContent as Prisma.InputJsonValue,
+        contentHash: computeOfficeContentHash(univerContent),
+        label: `${label} (Univer)`,
         createdById: user.sub,
       },
     });
@@ -629,6 +684,7 @@ export class OfficeService implements OfficeEngine {
       documentId: document.id,
       sourceFileVersionId: version?.id,
       sourceFormat: extension,
+      engine: 'univer',
     });
     return document;
   }
@@ -644,6 +700,14 @@ export class OfficeService implements OfficeEngine {
       throw new ForbiddenException(write ? 'You do not have permission to edit this file' : 'You do not have permission to open this file');
     }
     return file;
+  }
+
+  private officeTypeFromExtension(extension: string): OfficeType | null {
+    const ext = String(extension || '').replace(/^\./, '').toLowerCase();
+    if (['xlsx', 'xls', 'xlsm', 'ods', 'csv'].includes(ext)) return 'SHEET';
+    if (['pptx', 'ppt', 'pptm', 'odp', 'pps', 'ppsx'].includes(ext)) return 'SHOW';
+    if (['docx', 'doc', 'docm', 'odt', 'rtf', 'txt', 'imkan'].includes(ext)) return 'WRITER';
+    return null;
   }
 
   private normalizeType(value: unknown): OfficeType {
@@ -946,8 +1010,35 @@ export class OfficeService implements OfficeEngine {
     if (policy.readOnly) throw new ForbiddenException('Office document is read-only by policy');
     this.assertContentSize(content);
     content = this.normalizeOfficeContent(content);
-    const existing = await this.prisma.officeDocument.findUnique({ where: { fileId } });
-    if (!existing) throw new NotFoundException('Office document not found');
+    let existing = await this.prisma.officeDocument.findUnique({ where: { fileId } });
+    if (!existing) {
+      // Allow first save from Univer without a prior bootstrap
+      const type = this.normalizeType((content as any)?.type ?? 'WRITER');
+      existing = await this.prisma.officeDocument.create({
+        data: {
+          orgId: user.org_id,
+          fileId,
+          type: type as OfficeDocumentType,
+          nativeFormat: TYPE_TO_FORMAT[type],
+          content: content as Prisma.InputJsonValue,
+        },
+      });
+      await this.prisma.officeDocumentVersion.create({
+        data: {
+          orgId: user.org_id,
+          documentId: existing.id,
+          fileId,
+          versionNumber: 1,
+          revision: existing.revision,
+          type: existing.type,
+          content: content as Prisma.InputJsonValue,
+          contentHash: computeOfficeContentHash(content),
+          label: 'Initial Univer save',
+          createdById: user.sub,
+        },
+      });
+      return this.toState(existing);
+    }
     if (expectedRevision !== undefined && expectedRevision !== existing.revision) {
       throw new ConflictException({ message: 'The document changed while you were editing it', code: 'OFFICE_REVISION_CONFLICT', revision: existing.revision });
     }
@@ -1300,6 +1391,21 @@ export class OfficeService implements OfficeEngine {
   private normalizeOfficeContent(content: unknown) {
     if (!content || typeof content !== 'object') throw new ConflictException({ message: 'Invalid Office document state', code: 'OFFICE_INVALID_DOCUMENT' });
     const value = content as Record<string, unknown>;
+    // Univer engine payload — must not be forced through IMKAN writer/sheet schemas
+    if (value.__engine === 'univer') {
+      const kindRaw = String(value.kind ?? '').toLowerCase();
+      const typeFromKind = kindRaw === 'sheet' ? 'SHEET' : kindRaw === 'show' ? 'SHOW' : kindRaw === 'writer' ? 'WRITER' : null;
+      const type = this.normalizeType(value.type ?? typeFromKind ?? 'WRITER');
+      const kind = type === 'SHEET' ? 'sheet' : type === 'SHOW' ? 'show' : 'writer';
+      const snapshot = value.snapshot && typeof value.snapshot === 'object' ? value.snapshot : {};
+      return {
+        __engine: 'univer',
+        type,
+        kind,
+        snapshot,
+        savedAt: typeof value.savedAt === 'string' ? value.savedAt : new Date().toISOString(),
+      };
+    }
     const type = this.normalizeType(value.type);
     if (type === 'WRITER') {
       const blocks = Array.isArray(value.blocks) ? value.blocks.slice(0, 5000) : [];
