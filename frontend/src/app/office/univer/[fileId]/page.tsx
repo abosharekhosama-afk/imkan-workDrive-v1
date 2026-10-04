@@ -120,9 +120,12 @@ export default function UniverOfficePage() {
         if (document) {
           revisionRef.current = document.revision ?? 0;
           setOfficeType(document.type ?? null);
-          const extracted = extractUniverSnapshot(document.content);
-          if (extracted.legacy && !extracted.snapshot) {
-            setBanner('Opened from a previous format. The Univer editor starts blank — Save will store the new format.');
+          const preferredKind = kindParam === 'sheet' || kindParam === 'show' || kindParam === 'writer' ? kindParam : undefined;
+          const extracted = extractUniverSnapshot(document.content, preferredKind, (file as any)?.name);
+          if (extracted.source === 'imkan') {
+            setBanner('Loaded file content into Univer. Save to store in Univer format.');
+          } else if (extracted.legacy && !extracted.snapshot) {
+            setBanner('Could not map this file content. Starting blank — Save will create Univer format.');
           }
           setSnapshot(extracted.snapshot);
           if (extracted.kind && !kindParam) {
