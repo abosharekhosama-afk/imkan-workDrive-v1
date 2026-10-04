@@ -28,6 +28,7 @@ export type FileActivityRecord = {
   user_id: string | null;
   created_at: string;
   metadata: Record<string, unknown> | null;
+  actor?: { id: string; name: string | null; email: string; avatarUrl?: string | null } | null;
 };
 
 /**
