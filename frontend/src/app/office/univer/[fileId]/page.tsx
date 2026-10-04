@@ -179,21 +179,7 @@ export default function UniverOfficePage() {
         )}
         <div style={{ marginLeft: 'auto', display: 'flex', gap: 8, alignItems: 'center' }}>
           {ready && <span style={{ fontSize: 11, color: '#64748b' }}>Ready</span>}
-          <Link
-            href={imkanHref}
-            style={{
-              fontSize: 12,
-              padding: '6px 12px',
-              borderRadius: 6,
-              background: '#1e293b',
-              color: '#e2e8f0',
-              textDecoration: 'none',
-              border: '1px solid #334155',
-            }}
-            title="Open the same file in the built-in IMKAN Office editor"
-          >
-            Open in IMKAN Office
-          </Link>
+          
         </div>
       </header>
 
