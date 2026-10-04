@@ -204,7 +204,8 @@ export function FilePreviewModal({ target, onClose, onPrevFile, onNextFile, init
 
   const openWith = useCallback((kind: "writer" | "sheet" | "show") => {
     if (!activeTarget) return;
-    router.push(`/office/${kind}/${activeTarget.id}`);
+    // Primary editor is Univer (IMKAN Office is not activated).
+    router.push(`/office/univer/${encodeURIComponent(activeTarget.id)}?kind=${kind}`);
   }, [activeTarget, router]);
 
   // Binary/unrenderable payloads: elegant card with a prominent download CTA.

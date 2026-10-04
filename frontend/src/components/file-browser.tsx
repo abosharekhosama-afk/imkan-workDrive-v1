@@ -820,13 +820,7 @@ export function FileBrowser({
       // Standard Office files open in Univer; native .imkan files stay on IMKAN Office.
       window.location.assign(officeEditorPath(singleFile.id, singleFile.name, singleFile.mimeType)!);
     } : undefined,
-    onConvertToOffice: !isNativeImkanOfficeFile(singleFile.name, singleFile.mimeType) && officeEditorPath(singleFile.id, singleFile.name, singleFile.mimeType) ? () => {
-      // Explicit conversion still produces a native IMKAN Office working copy.
-      void createOfficeCopy(singleFile.id, "CONVERT").then((result) => {
-        const href = `/office/${String(result.document.type).toLowerCase()}/${encodeURIComponent(result.fileId)}`;
-        window.location.assign(href);
-      }).catch((error) => window.alert(error instanceof Error ? error.message : "Conversion failed."));
-    } : undefined,
+    onConvertToOffice: undefined, // IMKAN Office not activated — Univer is primary
   } : undefined;
   const singleControl: FileControlState | undefined = singleFile ? { status: singleFile.status, isFinal: singleFile.isFinal, checkedOutById: singleFile.checkedOutById } : undefined;
 
