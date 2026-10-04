@@ -1,4 +1,5 @@
 import { apiRequest } from "./client";
+import { emitGlobalToast } from "../global-toast";
 
 export type UploadRequestResponse = {
   upload_url: string;
@@ -72,21 +73,12 @@ export function requestDownload(fileId: string): Promise<{ download_url: string 
   return apiRequest(`/files/${fileId}/download`);
 }
 
-export function renameFile(id: string, name: string): Promise<{ id: string; name: string }> {
-  return apiRequest(`/files/${id}`, {
-    method: "PATCH",
-    body: JSON.stringify({ name }),
-  });
-}
+export async function renameFile(id: string, name: string): Promise<{ id: string; name: string }> { const result=await apiRequest(`/files/${id}`, { method:"PATCH", body:JSON.stringify({name}) }); emitGlobalToast({message:"File renamed",messageAr:"تمت إعادة تسمية الملف"}); return result; }
 
 export type FileControlAction = "check-out" | "check-in" | "mark-final" | "enable-editing" | "reindex";
-export function runFileControl(id: string, action: FileControlAction) {
-  return apiRequest<{ id: string; isFinal: boolean; checkedOutById: string | null; checkedOutAt: string | null; indexedAt: string | null; action: string }>(`/files/${id}/control/${action}`, { method: "POST" });
-}
+export async function runFileControl(id: string, action: FileControlAction) { const result=await apiRequest<{ id: string; isFinal: boolean; checkedOutById: string | null; checkedOutAt: string | null; indexedAt: string | null; action: string }>(`/files/${id}/control/${action}`, { method: "POST" }); const labels: Record<FileControlAction,string>={"check-out":"File checked out","check-in":"File checked in","mark-final":"File marked as final","enable-editing":"Editing enabled","reindex":"File reindexed"}; const labelsAr: Record<FileControlAction,string>={"check-out":"تم إجراء الحجز على الملف","check-in":"تم إيداع الملف","mark-final":"تم جعل الملف نهائيًا","enable-editing":"تم تمكين التحرير","reindex":"تمت إعادة فهرسة الملف"}; emitGlobalToast({message:labels[action],messageAr:labelsAr[action]}); return result; }
 
-export function trashFile(id: string): Promise<{ id: string; deleted: boolean }> {
-  return apiRequest(`/files/${id}`, { method: "DELETE" });
-}
+export async function trashFile(id: string): Promise<{ id: string; deleted: boolean }> { const result=await apiRequest(`/files/${id}`, { method: "DELETE" }); emitGlobalToast({message:"File moved to Trash",messageAr:"تم نقل الملف إلى سلة المهملات"}); return result; }
 
 export type LargeFileRecord = {
   id: string;
@@ -113,10 +105,10 @@ export async function sha256Hex(file: File): Promise<string> {
 
 export function moveFile(id: string, destinationFolderId: string | null, templateId?: string, customFields?: Record<string, unknown>) { return apiRequest(`/files/${id}/move`, { method: "PATCH", body: JSON.stringify({ destinationFolderId, ...(templateId ? { templateId } : {}), ...(customFields ? { customFields } : {}) }) }); }
 export function copyFile(id: string, destinationFolderId: string | null, templateId?: string, customFields?: Record<string, unknown>) { return apiRequest(`/files/${id}/copy`, { method: "POST", body: JSON.stringify({ destinationFolderId, ...(templateId ? { templateId } : {}), ...(customFields ? { customFields } : {}) }) }); }
-export function permanentDeleteFile(id: string) { return apiRequest(`/files/${id}/permanent`, { method: "DELETE" }); }
+export async function permanentDeleteFile(id: string) { const result=await apiRequest(`/files/${id}/permanent`, { method: "DELETE" }); emitGlobalToast({message:"File permanently deleted",messageAr:"تم حذف الملف نهائيًا"}); return result; }
 export function bulkMoveFiles(ids: string[], destinationFolderId: string | null) { return apiRequest(`/files/bulk/move`, { method: "POST", body: JSON.stringify({ ids, destinationFolderId }) }); }
-export function bulkTrashFiles(ids: string[]) { return apiRequest(`/files/bulk/trash`, { method: "POST", body: JSON.stringify({ ids }) }); }
-export function emptyTrash() { return apiRequest(`/files/trash/empty`, { method: "POST" }); }
+export async function bulkTrashFiles(ids: string[]) { const result=await apiRequest(`/files/bulk/trash`, { method: "POST", body: JSON.stringify({ ids }) }); emitGlobalToast({message:`${ids.length} items moved to Trash`,messageAr:`تم نقل ${ids.length} عناصر إلى سلة المهملات`}); return result; }
+export async function emptyTrash() { const result=await apiRequest(`/files/trash/empty`, { method: "POST" }); emitGlobalToast({message:"Trash emptied",messageAr:"تم إفراغ سلة المهملات"}); return result; }
 
 export type FileDetailsResponse = {
   id: string; resourceType: 'FILE'; name: string; originalName: string;

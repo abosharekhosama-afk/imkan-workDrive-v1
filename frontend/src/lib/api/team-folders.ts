@@ -1,4 +1,5 @@
 import { apiRequest } from "./client.ts";
+import { emitGlobalToast } from "../global-toast";
 
 export type TeamFolderRole = "ADMIN" | "ORGANIZER" | "EDITOR" | "COMMENTER" | "VIEWER";
 export type TeamFolderUserRole = TeamFolderRole | "ORG_ADMIN";
@@ -38,12 +39,7 @@ export type TeamFolderMember = {
 };
 export type TeamFolderGroup = { groupId: string; name: string; description: string | null; memberCount: number; role: TeamFolderRole };
 
-export function createTeamFolder(name: string, options?: { isPublicToOrg?: boolean }): Promise<TeamFolderRecord> {
-  return apiRequest<TeamFolderRecord>("/team-folders", {
-    method: "POST",
-    body: JSON.stringify(options ? { name, isPublicToOrg: options.isPublicToOrg === true } : { name }),
-  });
-}
+export async function createTeamFolder(name: string, options?: { isPublicToOrg?: boolean }): Promise<TeamFolderRecord> { const result=await apiRequest<TeamFolderRecord>("/team-folders", { method:"POST", body:JSON.stringify(options ? { name, isPublicToOrg: options.isPublicToOrg === true } : { name }) }); emitGlobalToast({message:"Team Folder created",messageAr:"تم إنشاء مجلد الفريق"}); return result; }
 
 export function listTeamFolders(): Promise<{ teamFolders: TeamFolderListItem[] }> {
   return apiRequest<{ teamFolders: TeamFolderListItem[] }>("/team-folders");
@@ -58,28 +54,16 @@ export function getTeamFolder(id: string): Promise<TeamFolderRecord> {
   return apiRequest<TeamFolderRecord>(`/team-folders/${id}`);
 }
 
-export function renameTeamFolder(id: string, name: string): Promise<TeamFolderRecord> {
-  return apiRequest<TeamFolderRecord>(`/team-folders/${id}`, {
-    method: "PATCH",
-    body: JSON.stringify({ name }),
-  });
-}
+export async function renameTeamFolder(id: string, name: string): Promise<TeamFolderRecord> { const result=await apiRequest<TeamFolderRecord>(`/team-folders/${id}`, { method:"PATCH", body:JSON.stringify({name}) }); emitGlobalToast({message:"Team Folder renamed",messageAr:"تمت إعادة تسمية مجلد الفريق"}); return result; }
 
 export function updateTeamFolderSettings(
   id: string,
   settings: { isPublicToOrg?: boolean; allowExternalSharing?: boolean; allowViewerDownloads?: boolean },
 ): Promise<TeamFolderRecord> {
-  return apiRequest<TeamFolderRecord>(`/team-folders/${id}/settings`, {
-    method: "PATCH",
-    body: JSON.stringify(settings),
-  });
+  return apiRequest<TeamFolderRecord>(`/team-folders/${id}/settings`, { method: "PATCH", body: JSON.stringify(settings) }).then((result) => { emitGlobalToast({message:"Team Folder settings updated",messageAr:"تم تحديث إعدادات مجلد الفريق"}); return result; });
 }
 
-export function deleteTeamFolder(id: string): Promise<{ id: string; deleted: boolean }> {
-  return apiRequest<{ id: string; deleted: boolean }>(`/team-folders/${id}`, {
-    method: "DELETE",
-  });
-}
+export async function deleteTeamFolder(id: string): Promise<{ id: string; deleted: boolean }> { const result=await apiRequest<{ id: string; deleted: boolean }>(`/team-folders/${id}`, { method:"DELETE" }); emitGlobalToast({message:"Team Folder deleted",messageAr:"تم حذف مجلد الفريق"}); return result; }
 
 export type TeamFolderActivity = {
   id: string; action: string; resourceType: string; resourceId: string; actorId: string | null; createdAt: string;

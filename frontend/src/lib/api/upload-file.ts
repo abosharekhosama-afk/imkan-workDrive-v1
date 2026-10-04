@@ -11,6 +11,7 @@ import { associateFileDataTemplate } from "./metadata";
 import { getAccessToken, getApiBaseUrl } from "./client";
 import { filesFromDrop } from "./drop-files";
 import { resolveMimeType } from "./mime";
+import { emitGlobalToast } from "../global-toast";
 
 export { filesFromDrop };
 
@@ -96,6 +97,7 @@ export async function uploadFileToFolder(folderId: string | null, file: File, on
 
   if (file.size >= RESUMABLE_THRESHOLD) {
     await uploadLargeFile(folderId, file, mimeType, sha256, customFields, templateId, onProgress);
+    emitGlobalToast({ message: "File uploaded", messageAr: "تم رفع الملف" });
     return;
   }
 
@@ -111,4 +113,5 @@ export async function uploadFileToFolder(folderId: string | null, file: File, on
   });
   if (templateId) await associateFileDataTemplate(request.file_id, templateId, customFields ?? {});
   await completeUpload(request.upload_id);
+  emitGlobalToast({ message: "File uploaded", messageAr: "تم رفع الملف" });
 }

@@ -1,4 +1,5 @@
 import { apiRequest } from "./client";
+import { emitGlobalToast } from "../global-toast";
 import type { FolderContents, FolderDetail, FolderRecord } from "./types";
 
 export type ContentFilters = { type?: string; status?: string; owner?: string; date?: string; dateField?: string; dateFrom?: string; dateTo?: string; query?: string };
@@ -31,23 +32,14 @@ export function listFolderTree(): Promise<FolderTreeItem[]> {
   return apiRequest<FolderTreeItem[]>('/folders/tree');
 }
 
-export function createFolder(name: string, parentId?: string, templateId?: string, customFields?: Record<string, unknown>): Promise<FolderRecord> {
-  return apiRequest<FolderRecord>("/folders", {
-    method: "POST",
-    body: JSON.stringify({ name, parentId, ...(templateId ? { templateId } : {}), ...(customFields ? { customFields } : {}) }),
-  });
+export async function createFolder(name: string, parentId?: string, templateId?: string, customFields?: Record<string, unknown>): Promise<FolderRecord> {
+  const result = await apiRequest<FolderRecord>("/folders", { method: "POST", body: JSON.stringify({ name, parentId, ...(templateId ? { templateId } : {}), ...(customFields ? { customFields } : {}) }) });
+  emitGlobalToast({ message: "Folder created", messageAr: "تم إنشاء المجلد" }); return result;
 }
 
-export function renameFolder(id: string, name: string): Promise<FolderRecord> {
-  return apiRequest<FolderRecord>(`/folders/${id}`, {
-    method: "PATCH",
-    body: JSON.stringify({ name }),
-  });
-}
+export async function renameFolder(id: string, name: string): Promise<FolderRecord> { const result=await apiRequest<FolderRecord>(`/folders/${id}`, { method: "PATCH", body: JSON.stringify({ name }) }); emitGlobalToast({message:"Folder renamed",messageAr:"تمت إعادة تسمية المجلد"}); return result; }
 
-export function deleteFolder(id: string): Promise<{ id: string; deleted: boolean }> {
-  return apiRequest(`/folders/${id}`, { method: "DELETE" });
-}
+export async function deleteFolder(id: string): Promise<{ id: string; deleted: boolean }> { const result=await apiRequest(`/folders/${id}`, { method: "DELETE" }); emitGlobalToast({message:"Folder deleted",messageAr:"تم حذف المجلد"}); return result; }
 
 export function moveFolder(id: string, destinationFolderId: string | null, templateId?: string, customFields?: Record<string, unknown>) { return apiRequest(`/folders/${id}/move`, { method: "PATCH", body: JSON.stringify({ destinationFolderId, ...(templateId ? { templateId } : {}), ...(customFields ? { customFields } : {}) }) }); }
 export function copyFolder(id: string, destinationFolderId: string | null, templateId?: string, customFields?: Record<string, unknown>) { return apiRequest(`/folders/${id}/copy`, { method: "POST", body: JSON.stringify({ destinationFolderId, ...(templateId ? { templateId } : {}), ...(customFields ? { customFields } : {}) }) }); }
