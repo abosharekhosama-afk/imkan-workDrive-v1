@@ -83,20 +83,101 @@ export class EnterpriseService {
 
   async retentionPolicy(user: AccessTokenPayload) {
     this.assertAdmin(user);
-    const rows = await this.prisma.$queryRawUnsafe<any[]>(`SELECT id,trash_days AS trashDays,deleted_items_days AS deletedItemsDays,version_limit AS versionLimit FROM retention_policies WHERE org_id=? LIMIT 1`, user.org_id);
-    return rows[0] ?? { orgId: user.org_id, trashDays: 30, deletedItemsDays: 365, versionLimit: null };
+    try {
+      const row = await this.prisma.retentionPolicy.findUnique({ where: { orgId: user.org_id } });
+      if (row) {
+        return {
+          id: row.id,
+          orgId: row.orgId,
+          trashDays: row.trashDays,
+          deletedItemsDays: row.deletedItemsDays,
+          versionLimit: row.versionLimit,
+        };
+      }
+    } catch {
+      try {
+        const rows = await this.prisma.$queryRawUnsafe<any[]>(
+          `SELECT id, trash_days AS trashDays, deleted_items_days AS deletedItemsDays, version_limit AS versionLimit FROM retention_policies WHERE org_id=? LIMIT 1`,
+          user.org_id,
+        );
+        if (rows[0]) return rows[0];
+      } catch {
+        /* table may not exist yet — return defaults */
+      }
+    }
+    return { orgId: user.org_id, trashDays: 30, deletedItemsDays: 365, versionLimit: null };
   }
 
   async updateRetentionPolicy(user: AccessTokenPayload, input: { trashDays?: number; deletedItemsDays?: number; versionLimit?: number | null }) {
     this.assertAdmin(user);
     const current = await this.retentionPolicy(user);
-    const id = current.id ?? randomUUID();
-    const trashDays = input.trashDays ?? current.trashDays;
-    const deletedItemsDays = input.deletedItemsDays ?? current.deletedItemsDays;
-    if (![7,15,30,90,120].includes(trashDays)) throw new BadRequestException('Invalid trash retention');
-    if (deletedItemsDays < 7 || deletedItemsDays > 3650) throw new BadRequestException('Invalid deleted-items retention');
-    await this.prisma.$executeRawUnsafe(`INSERT INTO retention_policies (id,org_id,trash_days,deleted_items_days,version_limit) VALUES (?,?,?,?,?) ON DUPLICATE KEY UPDATE trash_days=VALUES(trash_days),deleted_items_days=VALUES(deleted_items_days),version_limit=VALUES(version_limit),updated_at=CURRENT_TIMESTAMP(3)`, id, user.org_id, trashDays, deletedItemsDays, input.versionLimit ?? current.versionLimit ?? null);
-    return this.retentionPolicy(user);
+    const trashDays = Number(input.trashDays ?? current.trashDays);
+    const deletedItemsDays = Number(input.deletedItemsDays ?? current.deletedItemsDays);
+    const versionLimit =
+      input.versionLimit === undefined
+        ? (current.versionLimit ?? null)
+        : input.versionLimit === null
+          ? null
+          : Math.max(1, Math.trunc(Number(input.versionLimit)));
+
+    if (![7, 15, 30, 90, 120].includes(trashDays)) {
+      throw new BadRequestException('Invalid trash retention');
+    }
+    if (!Number.isFinite(deletedItemsDays) || deletedItemsDays < 7 || deletedItemsDays > 3650) {
+      throw new BadRequestException('Invalid deleted-items retention');
+    }
+
+    try {
+      const row = await this.prisma.retentionPolicy.upsert({
+        where: { orgId: user.org_id },
+        create: {
+          id: randomUUID(),
+          orgId: user.org_id,
+          trashDays,
+          deletedItemsDays,
+          versionLimit,
+        },
+        update: {
+          trashDays,
+          deletedItemsDays,
+          versionLimit,
+        },
+      });
+      return {
+        id: row.id,
+        orgId: row.orgId,
+        trashDays: row.trashDays,
+        deletedItemsDays: row.deletedItemsDays,
+        versionLimit: row.versionLimit,
+      };
+    } catch (error) {
+      const id = (current as { id?: string }).id ?? randomUUID();
+      try {
+        await this.prisma.$executeRawUnsafe(
+          `INSERT INTO retention_policies (id, org_id, trash_days, deleted_items_days, version_limit, created_at, updated_at)
+           VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP(3), CURRENT_TIMESTAMP(3))
+           ON DUPLICATE KEY UPDATE
+             trash_days = VALUES(trash_days),
+             deleted_items_days = VALUES(deleted_items_days),
+             version_limit = VALUES(version_limit),
+             updated_at = CURRENT_TIMESTAMP(3)`,
+          id,
+          user.org_id,
+          trashDays,
+          deletedItemsDays,
+          versionLimit,
+        );
+        return this.retentionPolicy(user);
+      } catch (rawError) {
+        const message =
+          rawError instanceof Error
+            ? rawError.message
+            : error instanceof Error
+              ? error.message
+              : 'Unable to update retention policy';
+        throw new BadRequestException(message);
+      }
+    }
   }
 
   async audit(user: AccessTokenPayload, limit = 100) {
