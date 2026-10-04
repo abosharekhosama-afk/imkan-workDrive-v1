@@ -32,12 +32,16 @@ export function DetailsSidebar({ open, fileId, fileName, mimeType, size, version
   const ar = locale === "ar";
   const [activities, setActivities] = useState<FileActivityRecord[] | null>(null);
   const [details, setDetails] = useState<FileDetailsResponse | null>(null);
+  const [description, setDescription] = useState("");
+  const [editingDescription, setEditingDescription] = useState(false);
 
   useEffect(() => {
     if (!open) return;
     let cancelled = false;
     setActivities(null);
     setDetails(null);
+    try { setDescription(localStorage.getItem(`imkan.file.description.${fileId}`) ?? ""); } catch { setDescription(""); }
+    setEditingDescription(false);
     void Promise.all([getFileActivities(fileId, 50), getFileDetails(fileId)])
       .then(([rows, value]) => { if (!cancelled) { setActivities(rows); setDetails(value); } })
       .catch(() => { if (!cancelled) { setActivities([]); setDetails(null); } });
@@ -60,7 +64,11 @@ export function DetailsSidebar({ open, fileId, fileName, mimeType, size, version
         {onClose ? <button type="button" className="zoho-panel-close" onClick={onClose} aria-label={label("preview.close")}>×</button> : null}
       </header>
       <section className="zoho-side-section zoho-details-owner">
-        <button type="button" className="zoho-details-description">{ar ? "إضافة وصف" : "Add description"}</button>
+        {editingDescription ? (
+          <div className="zoho-details-description-edit"><input autoFocus value={description} onChange={(e) => setDescription(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") { localStorage.setItem(`imkan.file.description.${fileId}`, description); setEditingDescription(false); } if (e.key === "Escape") setEditingDescription(false); }} /><button type="button" onClick={() => { localStorage.setItem(`imkan.file.description.${fileId}`, description); setEditingDescription(false); }}>✓</button></div>
+        ) : (
+          <button type="button" className="zoho-details-description" onClick={() => setEditingDescription(true)}>{description || (ar ? "إضافة وصف" : "Add description")}</button>
+        )}
         <div className="zoho-details-owner-row">
           <span className="zoho-details-avatar">{(details?.owner?.name || details?.owner?.email || "?").slice(0, 1).toUpperCase()}</span>
           <div><span>{ar ? "أنشأه" : "Created by"}</span><strong>{details?.owner?.name || details?.owner?.email || "—"}</strong></div>
@@ -74,9 +82,11 @@ export function DetailsSidebar({ open, fileId, fileName, mimeType, size, version
       <section className="zoho-side-section">
         <div className="zoho-details-meta-block"><span>{ar ? "الرابط الدائم" : "Permalink"}</span><a href={permalink} title={permalink}>{permalink}</a></div>
         <div className="zoho-details-meta-block"><span>{ar ? "الموقع" : "Location"}</span><strong>{details?.location?.name || (ar ? "مجلداتي" : "My Folders")}</strong><small>{ar ? "فتح موقع الملف" : "Go to file location"}</small></div>
+        <div className="zoho-details-meta-block"><span>{ar ? "التصنيفات" : "Labels"}</span><strong>{details?.tags?.length ? details.tags.map((tag) => tag.name).join(", ") : (ar ? "إضافة تصنيفات" : "Add labels")}</strong></div>
         <div className="zoho-details-meta-block"><span>{ar ? "النوع" : "Type"}</span><strong>{extension === "—" ? mimeType : extension}</strong></div>
-        <div className="zoho-details-meta-block"><span>{label("preview.metadata.size")}</span><strong>{formatBytes(details?.size ?? size)}</strong></div>
-        <div className="zoho-details-meta-block"><span>{ar ? "آخر تعديل" : "Modified"}</span><strong>{details?.updatedAt ? formatDateTime(details.updatedAt) : updatedAt ? formatDateTime(updatedAt) : "—"}</strong></div>
+        <div className="zoho-details-meta-block"><span>{ar ? "وقت الإنشاء" : "Time Created"}</span><strong>{details?.createdAt ? formatDateTime(details.createdAt) : "—"}</strong></div>
+        <div className="zoho-details-meta-block"><span>{ar ? "تم التعديل بواسطة" : "Modified by"}</span><strong>{details?.updatedAt ? `${details.owner?.name || details.owner?.email || "—"} · ${formatDateTime(details.updatedAt)}` : updatedAt ? formatDateTime(updatedAt) : "—"}</strong></div>
+        <div className="zoho-details-meta-block"><span>{ar ? "المساحة المستخدمة" : "Storage Used"}</span><strong>{formatBytes(details?.size ?? size)}</strong><small>{ar ? "المساحة المستخدمة لهذا الملف." : "Storage used by this file."}</small></div>
         <button type="button" className="zoho-details-versions" onClick={onViewVersions}>◷ {ar ? "عرض كل الإصدارات" : "View all versions"}{versionNumber ? ` · v${versionNumber}` : ""}</button>
       </section>
     </aside>
