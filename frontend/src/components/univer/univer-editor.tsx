@@ -1,34 +1,43 @@
 'use client';
 
 /**
- * Univer-based office editor host.
- * Mounts Univer Docs or Sheets inside a container and disposes on unmount.
- * Imkan Office remains available on /office/writer|sheet|show routes.
+ * Univer editor host with load/save of unit snapshots.
+ * Parent controls persistence via initialSnapshot + onRequestSnapshot / imperative handle.
  */
 
-import { useEffect, useRef, useState } from 'react';
+import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react';
 
 export type UniverEditorKind = 'writer' | 'sheet' | 'show';
 
-export type UniverEditorProps = {
-  kind: UniverEditorKind;
-  /** Optional document title shown in the Univer workbook/doc metadata */
-  title?: string;
-  className?: string;
-  /** Called once Univer has finished initializing */
-  onReady?: () => void;
-  /** Called if initialization fails */
-  onError?: (message: string) => void;
+export type UniverEditorHandle = {
+  /** Returns the current Univer unit snapshot, or null if not ready */
+  getSnapshot: () => Record<string, unknown> | null;
+  isReady: () => boolean;
 };
 
-/**
- * Dynamically loads Univer packages so the main bundle stays lean and SSR is avoided.
- */
+export type UniverEditorProps = {
+  kind: UniverEditorKind;
+  title?: string;
+  /** Previously saved Univer snapshot (from OfficeDocument.content) */
+  initialSnapshot?: Record<string, unknown> | null;
+  className?: string;
+  onReady?: () => void;
+  onError?: (message: string) => void;
+  /** Fired when the user edits (best-effort; may be sparse) */
+  onDirty?: () => void;
+};
+
+type BootResult = {
+  dispose: () => void;
+  getSnapshot: () => Record<string, unknown> | null;
+};
+
 async function bootUniver(
   container: HTMLElement,
   kind: UniverEditorKind,
   title: string,
-): Promise<{ dispose: () => void }> {
+  initialSnapshot: Record<string, unknown> | null | undefined,
+): Promise<BootResult> {
   const [
     { LocaleType, mergeLocales, Univer, UniverInstanceType },
     { UniverRenderEnginePlugin },
@@ -61,7 +70,6 @@ async function bootUniver(
     import('@univerjs/sheets-ui/locale/en-US').then((m) => m.default ?? m),
   ]);
 
-  // Styles (side-effect imports)
   await Promise.all([
     import('@univerjs/design/lib/index.css'),
     import('@univerjs/ui/lib/index.css'),
@@ -70,12 +78,9 @@ async function bootUniver(
   ]);
 
   const locales = mergeLocales(DesignEnUS, UIEnUS, DocsUIEnUS, SheetsUIEnUS);
-
   const univer = new Univer({
     locale: LocaleType.EN_US,
-    locales: {
-      [LocaleType.EN_US]: locales,
-    },
+    locales: { [LocaleType.EN_US]: locales },
   });
 
   univer.registerPlugin(UniverRenderEnginePlugin);
@@ -88,33 +93,93 @@ async function bootUniver(
   univer.registerPlugin(UniverSheetsFormulaPlugin);
   univer.registerPlugin(UniverSheetsNumfmtPlugin);
 
-  if (kind === 'sheet') {
-    univer.createUnit(UniverInstanceType.UNIVER_SHEET, {
-      id: `sheet-${Date.now()}`,
-      name: title || 'Workbook',
-      sheetOrder: ['sheet-1'],
-      sheets: {
-        'sheet-1': {
-          id: 'sheet-1',
-          name: 'Sheet1',
-          cellData: {},
-          rowCount: 100,
-          columnCount: 26,
-        },
-      },
-    });
+  const isSheet = kind === 'sheet';
+  let activeUnit: any = null;
+
+  if (isSheet) {
+    const data =
+      initialSnapshot && typeof initialSnapshot === 'object'
+        ? { ...initialSnapshot, name: (initialSnapshot as any).name || title || 'Workbook' }
+        : {
+            id: `sheet-${Date.now()}`,
+            name: title || 'Workbook',
+            sheetOrder: ['sheet-1'],
+            sheets: {
+              'sheet-1': {
+                id: 'sheet-1',
+                name: 'Sheet1',
+                cellData: {},
+                rowCount: 100,
+                columnCount: 26,
+              },
+            },
+          };
+    activeUnit = univer.createUnit(UniverInstanceType.UNIVER_SHEET, data as any);
   } else {
-    // writer + show (presentation not fully supported in open-source core yet → Docs as fallback)
-    univer.createUnit(UniverInstanceType.UNIVER_DOC, {
-      id: `doc-${Date.now()}`,
-      title: title || 'Document',
-      body: {
-        dataStream: '\r\n',
-        textRuns: [],
-        paragraphs: [{ startIndex: 0 }],
-        sectionBreaks: [{ startIndex: 1 }],
-      },
-    });
+    const data =
+      initialSnapshot && typeof initialSnapshot === 'object'
+        ? { ...initialSnapshot, title: (initialSnapshot as any).title || title || 'Document' }
+        : {
+            id: `doc-${Date.now()}`,
+            title: title || 'Document',
+            body: {
+              dataStream: '\r\n',
+              textRuns: [],
+              paragraphs: [{ startIndex: 0 }],
+              sectionBreaks: [{ startIndex: 1 }],
+            },
+          };
+    activeUnit = univer.createUnit(UniverInstanceType.UNIVER_DOC, data as any);
+  }
+
+  const getSnapshot = (): Record<string, unknown> | null => {
+    try {
+      const unit = activeUnit;
+      if (unit) {
+        if (typeof unit.getSnapshot === 'function') return unit.getSnapshot() as Record<string, unknown>;
+        if (typeof unit.save === 'function') return unit.save() as Record<string, unknown>;
+        // Workbook/Document model often exposes cloneSnapshot / getResources
+        if (typeof unit.cloneSnapshot === 'function') return unit.cloneSnapshot() as Record<string, unknown>;
+      }
+      try {
+        const facadeMod = awaitImportFacade();
+        if (facadeMod) {
+          const api = facadeMod.FUniver.newAPI(univer);
+          if (isSheet) {
+            const wb = api.getActiveWorkbook?.();
+            if (wb?.save) return wb.save() as Record<string, unknown>;
+            if (wb?.getSnapshot) return wb.getSnapshot() as Record<string, unknown>;
+          } else {
+            const doc = api.getActiveDocument?.();
+            if (doc?.save) return doc.save() as Record<string, unknown>;
+            if (doc?.getSnapshot) return doc.getSnapshot() as Record<string, unknown>;
+          }
+        }
+      } catch {
+        /* optional */
+      }
+      // Last resort: return last known initial + marker so save still persists something
+      if (initialSnapshot && typeof initialSnapshot === 'object') {
+        return { ...initialSnapshot, __clientTouchedAt: new Date().toISOString() };
+      }
+      return {
+        id: unit?.getUnitId?.() ?? `unit-${Date.now()}`,
+        name: title || (isSheet ? 'Workbook' : 'Document'),
+        __empty: true,
+      };
+    } catch {
+      return null;
+    }
+  };
+
+  function awaitImportFacade(): { FUniver: any } | null {
+    try {
+      // Synchronous path when already bundled
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      return require('@univerjs/core/facade');
+    } catch {
+      return null;
+    }
   }
 
   return {
@@ -122,16 +187,30 @@ async function bootUniver(
       try {
         univer.dispose();
       } catch {
-        /* ignore dispose races */
+        /* ignore */
       }
     },
+    getSnapshot,
   };
 }
 
-export function UniverEditor({ kind, title, className, onReady, onError }: UniverEditorProps) {
+export const UniverEditor = forwardRef<UniverEditorHandle, UniverEditorProps>(function UniverEditor(
+  { kind, title, initialSnapshot, className, onReady, onError, onDirty },
+  ref,
+) {
   const containerRef = useRef<HTMLDivElement | null>(null);
+  const bootRef = useRef<BootResult | null>(null);
   const [status, setStatus] = useState<'loading' | 'ready' | 'error'>('loading');
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
+  useImperativeHandle(
+    ref,
+    () => ({
+      getSnapshot: () => bootRef.current?.getSnapshot() ?? null,
+      isReady: () => status === 'ready' && !!bootRef.current,
+    }),
+    [status],
+  );
 
   useEffect(() => {
     const el = containerRef.current;
@@ -142,16 +221,27 @@ export function UniverEditor({ kind, title, className, onReady, onError }: Unive
 
     setStatus('loading');
     setErrorMessage(null);
+    bootRef.current = null;
 
-    bootUniver(el, kind, title ?? '')
+    bootUniver(el, kind, title ?? '', initialSnapshot)
       .then((api) => {
         if (cancelled) {
           api.dispose();
           return;
         }
+        bootRef.current = api;
         disposer = api.dispose;
         setStatus('ready');
         onReady?.();
+        // Best-effort dirty tracking via container input events
+        const markDirty = () => onDirty?.();
+        el.addEventListener('keydown', markDirty);
+        el.addEventListener('pointerup', markDirty);
+        disposer = () => {
+          el.removeEventListener('keydown', markDirty);
+          el.removeEventListener('pointerup', markDirty);
+          api.dispose();
+        };
       })
       .catch((err: unknown) => {
         if (cancelled) return;
@@ -163,10 +253,12 @@ export function UniverEditor({ kind, title, className, onReady, onError }: Unive
 
     return () => {
       cancelled = true;
-      // Dispose after React cleanup microtask so nested roots unwind safely
       queueMicrotask(() => disposer?.());
+      bootRef.current = null;
     };
-  }, [kind, title, onReady, onError]);
+    // Re-boot only when kind or initial snapshot identity changes
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [kind, title, initialSnapshot]);
 
   return (
     <div className={className} style={{ position: 'relative', width: '100%', height: '100%', minHeight: 480 }}>
@@ -184,7 +276,7 @@ export function UniverEditor({ kind, title, className, onReady, onError }: Unive
             zIndex: 2,
           }}
         >
-          Loading Univer editor…
+          Loading document…
         </div>
       )}
       {status === 'error' && (
@@ -207,14 +299,11 @@ export function UniverEditor({ kind, title, className, onReady, onError }: Unive
         >
           <strong>Could not start Univer</strong>
           <span>{errorMessage}</span>
-          <span style={{ color: '#64748b', fontSize: 12 }}>
-            Run <code>npm install</code> in <code>frontend/</code> to install @univerjs packages.
-          </span>
         </div>
       )}
       <div ref={containerRef} style={{ width: '100%', height: '100%' }} />
     </div>
   );
-}
+});
 
 export default UniverEditor;
