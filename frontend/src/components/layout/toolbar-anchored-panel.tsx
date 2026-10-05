@@ -49,9 +49,12 @@ export function ToolbarAnchoredPanel({ open, onClose, anchorId, align = "end", w
   useEffect(() => {
     if (!open) return;
     const onDown = (event: MouseEvent) => {
-      const target = event.target as Node;
+      const target = event.target instanceof Element ? event.target : null;
+      if (!target) return;
       if (ref.current?.contains(target)) return;
       if (anchorRef.current?.contains(target)) return;
+      // Nested portaled pickers/menus opened from inside the panel
+      if (target.closest('[role="menu"], .wd-menu, [data-toolbar-panel], .imkan-option-picker-menu, [data-imkan-picker]')) return;
       onClose();
     };
     const onKey = (event: KeyboardEvent) => {
@@ -80,6 +83,8 @@ export function ToolbarAnchoredPanel({ open, onClose, anchorId, align = "end", w
   return createPortal(
     <div
       ref={ref}
+      data-toolbar-panel=""
+      role="menu"
       style={style}
       className={`z-[120] rounded-[var(--wd-menu-radius)] border border-slate-200/80 bg-white shadow-[var(--wd-menu-shadow)] ${className}`.trim()}
     >

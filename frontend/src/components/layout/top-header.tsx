@@ -7,7 +7,7 @@ import { useLocale } from "../locale-provider";
 import { ThemeToggle } from "../theme-toggle";
 import { listNotifications, type NotificationRecord } from "../../lib/api/notifications";
 import { getTeamFolder, listTeamFolderMembers, type TeamFolderRecord } from "../../lib/api/team-folders";
-import { readScope, type ScopeDetail } from "./shell-context";
+import { readScope, useShell, type ScopeDetail } from "./shell-context";
 import { Icons } from "./icons";
 import { AccountMenu } from "./account-menu";
 import { NotificationPanel } from "./notification-panel";
@@ -17,6 +17,7 @@ export function TopHeader({ adminMode = false }: { adminMode?: boolean }) {
   const { label, locale, setLocale } = useLocale();
   const router = useRouter();
   const pathname = usePathname();
+  const { mobileNavOpen, setMobileNavOpen } = useShell();
   const [name, setName] = useState("");
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
   const [org, setOrg] = useState("");
@@ -153,7 +154,6 @@ export function TopHeader({ adminMode = false }: { adminMode?: boolean }) {
         <div className="team-context-actions">
           <OrgSwitcher organizationName={org || "IMKAN"} userRole={role} />
           <button type="button" className="wd-icon-btn" aria-label={label("search.placeholder")} onClick={() => setSearchOpen(true)}><Icons.search size={17} /></button>
-          <button type="button" className="wd-icon-btn" aria-label="Announcements"><Icons.horn size={17} /></button>
           <button type="button" className="wd-icon-btn relative" aria-label={label("nav.notifications")} onClick={() => setNotifOpen((v) => !v)}>
             <Icons.bell size={17} />
             {unread > 0 ? <span className="absolute end-1 top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-[#DC2626] px-1 text-[10px] font-bold text-white">{unread > 9 ? "9+" : unread}</span> : null}
@@ -203,7 +203,6 @@ export function TopHeader({ adminMode = false }: { adminMode?: boolean }) {
           <div className="team-context-actions">
             <OrgSwitcher organizationName={org || "IMKAN"} userRole={role} />
             <button type="button" className="wd-icon-btn" aria-label={label('search.placeholder')} onClick={() => setSearchOpen(true)}><Icons.search size={17} /></button>
-            <button type="button" className="wd-icon-btn" aria-label="Announcements"><Icons.horn size={17} /></button>
             <button type="button" className="wd-icon-btn relative" aria-label={label('nav.notifications')} onClick={() => setNotifOpen((v) => !v)}><Icons.bell size={17} />{unread > 0 ? <span className="absolute end-1 top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-[#DC2626] px-1 text-[10px] font-bold text-white">{unread > 9 ? '9+' : unread}</span> : null}</button>
             {notifOpen ? <NotificationPanel open={notifOpen} onClose={() => setNotifOpen(false)} /> : null}
             <ThemeToggle />
@@ -233,7 +232,18 @@ export function TopHeader({ adminMode = false }: { adminMode?: boolean }) {
   return (
     <header className="wd-default-topbar flex h-12 shrink-0 items-center gap-2 border-b border-[#EDEDED] bg-white px-4">
       <div className="flex min-w-0 items-center gap-2">
-        <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[8px] bg-[#F0F4FF] text-[var(--wd-primary)]"><Icons.folder size={18} /></span>
+        <button
+          type="button"
+          className="wd-icon-btn md:hidden"
+          aria-label={locale === "ar" ? "فتح القائمة الجانبية" : "Open sidebar"}
+          aria-expanded={mobileNavOpen}
+          onClick={() => setMobileNavOpen(!mobileNavOpen)}
+        >
+          <Icons.menu size={18} />
+        </button>
+        <span className="hidden h-8 w-8 shrink-0 items-center justify-center rounded-[8px] bg-[#F0F4FF] text-[var(--wd-primary)] md:flex" aria-hidden="true">
+          <Icons.folder size={18} />
+        </span>
         <span className="max-w-[42vw] truncate text-[15px] font-semibold text-[#212121]">{resolveTopHeaderTitle({ pathname, scopeFolderName: scope.folderName, adminMode, locale, label })}</span>
         {showMyFoldersManage ? (
           <div ref={manageRef} className="relative ms-1">
@@ -262,7 +272,6 @@ export function TopHeader({ adminMode = false }: { adminMode?: boolean }) {
       <div className="ms-auto flex min-w-0 shrink-0 items-center gap-1.5">
         <OrgSwitcher organizationName={org || "IMKAN"} userRole={role} />
         <button type="button" className="wd-icon-btn" aria-label={label("search.placeholder")} onClick={() => setSearchOpen(true)}><Icons.search size={17} /></button>
-        <button type="button" className="wd-icon-btn" aria-label="Announcements"><Icons.horn size={17} /></button>
         <button type="button" className="wd-icon-btn relative" aria-label={label("nav.notifications")} onClick={() => setNotifOpen((v) => !v)}><Icons.bell size={17} />{unread > 0 ? <span className="absolute end-1 top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-[#DC2626] px-1 text-[10px] font-bold text-white">{unread > 9 ? "9+" : unread}</span> : null}</button>
         {notifOpen ? <NotificationPanel open={notifOpen} onClose={() => setNotifOpen(false)} /> : null}
         <ThemeToggle /><button type="button" className="rounded-md px-2 py-1.5 text-[12px] font-semibold text-slate-500 hover:bg-slate-100" onClick={() => setLocale(locale === "en" ? "ar" : "en")}>{locale === "en" ? "ع" : "En"}</button><AccountMenu name={name} avatarUrl={avatarUrl} adminMode={adminMode} />
