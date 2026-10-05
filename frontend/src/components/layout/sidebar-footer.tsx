@@ -21,9 +21,17 @@ export function SidebarFooter({ quota, role, onNav }: { quota: QuotaOverview | n
           <span className="inline-flex items-center gap-1.5"><Icons.spark size={16} /> {label("nav.getStarted")}</span> <Icons.chevR size={16} />
         </Link>
         {admin ? (
-          <Link href="/admin" onClick={onNav} className="mb-2 flex h-[42px] w-full items-center justify-between rounded-[16px] bg-[#3E3E3E] px-3 text-[13px] font-bold text-white hover:bg-[#4A4A4A]">
-            <span className="min-w-0 truncate">{label("nav.adminConsole")}</span> <Icons.chevR size={16} />
-          </Link>
+          /* Native <a target=_blank> is more reliable than window.open(..., "noopener")
+             which can leave the new tab on about:blank in some browsers. */
+          <a
+            href="/admin"
+            target="_blank"
+            rel="noopener noreferrer"
+            onClick={onNav}
+            className="mb-2 flex h-[42px] w-full items-center justify-between rounded-[16px] bg-[#3E3E3E] px-3 text-[13px] font-bold text-white hover:bg-[#4A4A4A]"
+          >
+            <span className="min-w-0 truncate">{label("nav.adminConsole")}</span> <Icons.ext size={16} />
+          </a>
         ) : (
           <Link href="/settings" onClick={onNav} className="mb-2 flex h-[42px] items-center justify-between rounded-[16px] bg-[#3E3E3E] px-3 text-[13px] font-bold text-white hover:bg-[#4A4A4A]">
             <span className="min-w-0 truncate">{label("nav.settings")}</span> <Icons.chevR size={16} />
