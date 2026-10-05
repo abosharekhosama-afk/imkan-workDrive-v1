@@ -5118,3 +5118,86 @@ html[data-theme="dark"] .wd-index-rail-btn:hover{
 .share-zoho-modal.is-invite{max-width:700px!important}.share-zoho-modal.is-invite .share-zoho-content{padding-bottom:22px}
 @media (max-width:700px){.share-zoho-setting-label{font-size:14px}.share-zoho-inline-password,.share-zoho-inline-date{width:190px}.share-zoho-access-field{width:145px}.share-zoho-link-name-row{min-height:46px}.share-zoho-modal>div:first-child{padding-left:20px!important;padding-right:20px!important}}
 .share-zoho-link-settings{display:flex;flex-direction:column;gap:22px;padding-top:7px}.share-zoho-link-settings>label{font-size:15px;color:#363b41}.share-zoho-link-settings>.share-zoho-option-wrap{border:1px solid #d8dce1;border-radius:18px;min-height:46px;padding:0 14px;display:flex;align-items:center}.share-zoho-link-settings>.share-zoho-option-wrap .share-zoho-option-trigger{font-size:16px;color:#4c5056}.share-zoho-link-setting-url{display:flex;height:44px;border:1px solid #d8dce1;border-radius:18px;overflow:hidden}.share-zoho-link-setting-url input{flex:1;min-width:0;border:0;outline:0;padding:0 14px;font-size:12px;color:#454a51}.share-zoho-link-setting-url button{width:74px;border:0;border-left:1px solid #d8dce1;background:#fff;color:#2d67ca;font-weight:600}.share-zoho-link-settings-footer{display:flex;justify-content:flex-end;gap:10px}.share-zoho-modal.is-link-settings{max-width:560px!important}
+
+
+/* Share Zoho tooltips (speech-bubble under info icon) */
+.share-zoho-info-tip{
+  position:relative;
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  cursor:help;
+}
+.share-zoho-info-tip .share-zoho-tooltip{
+  position:absolute;
+  top:calc(100% + 8px);
+  left:50%;
+  transform:translateX(-50%);
+  min-width:180px;
+  max-width:260px;
+  padding:8px 10px;
+  border-radius:8px;
+  background:#1f2937;
+  color:#fff;
+  font-size:11px;
+  line-height:1.45;
+  font-weight:500;
+  box-shadow:0 8px 24px rgba(0,0,0,.18);
+  opacity:0;
+  visibility:hidden;
+  pointer-events:none;
+  transition:opacity .12s ease, visibility .12s ease;
+  z-index:600;
+  text-align:start;
+  white-space:normal;
+}
+.share-zoho-info-tip .share-zoho-tooltip::before{
+  content:"";
+  position:absolute;
+  bottom:100%;
+  left:50%;
+  transform:translateX(-50%);
+  border:6px solid transparent;
+  border-bottom-color:#1f2937;
+}
+.share-zoho-info-tip:hover .share-zoho-tooltip,
+.share-zoho-info-tip:focus-within .share-zoho-tooltip{
+  opacity:1;
+  visibility:visible;
+}
+[dir="rtl"] .share-zoho-info-tip .share-zoho-tooltip{text-align:right}
+
+/* Share modals inherit theme tokens */
+.share-zoho-modal,
+.share-zoho-modal *{
+  font-family:var(--user-font-family),Arial,system-ui,sans-serif;
+}
+.share-zoho-modal{
+  background:var(--wd-bg,#fff)!important;
+  color:var(--wd-text,#212121);
+}
+.share-zoho-primary-btn{
+  background:var(--wd-primary,#2c66dd)!important;
+}
+.share-zoho-primary-btn:hover{background:var(--wd-primary-dark,#184091)!important}
+html[data-theme="dark"] .share-zoho-modal{
+  background:var(--wd-bg)!important;
+  color:var(--wd-text);
+}
+
+/* Org switcher: icon-only on phones */
+@media (max-width:767.98px){
+  .zoho-team-switch{
+    gap:0!important;
+    padding-inline:6px!important;
+    min-width:40px;
+  }
+  .zoho-team-switch .zoho-team-meta,
+  .zoho-team-switch .chevron{display:none!important}
+}
+
+/* Shared links table edge padding */
+.shared-links-page,
+.files-shared-links{
+  padding-inline:12px;
+}
