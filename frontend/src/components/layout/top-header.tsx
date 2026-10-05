@@ -78,16 +78,17 @@ export function TopHeader({ adminMode = false }: { adminMode?: boolean }) {
     window.addEventListener("workdrive:focus-search", onFocusSearch);
     return () => window.removeEventListener("workdrive:focus-search", onFocusSearch);
   }, []);
-  useEffect(() => {
+    useEffect(() => {
     if (!manageOpen) return;
-    const onDown = (event: MouseEvent) => {
-      const target = event.target instanceof Element ? event.target : null;
-      if (!target || !manageRef.current?.contains(target)) setManageOpen(false);
+    const onDown = (e: MouseEvent) => {
+      const target = e.target instanceof Element ? e.target : null;
+      if (!target) return;
+      if (target.closest("#team-context-manage, #my-folders-manage, .team-context-menu, .wd-manage-menu, [data-manage-root]")) return;
+      if (manageRef.current?.contains(target)) return;
+      setManageOpen(false);
     };
-    const onKey = (event: KeyboardEvent) => { if (event.key === "Escape") setManageOpen(false); };
     document.addEventListener("mousedown", onDown);
-    document.addEventListener("keydown", onKey);
-    return () => { document.removeEventListener("mousedown", onDown); document.removeEventListener("keydown", onKey); };
+    return () => document.removeEventListener("mousedown", onDown);
   }, [manageOpen]);
   const isTeamManageRoute = /^\/(?:files|admin)\/team-folders\/[^/]+\/manage/.test(pathname);
   const isTeamFoldersDirectory = pathname === "/files/team-folders" || pathname === "/admin/team-folders";
@@ -150,7 +151,7 @@ export function TopHeader({ adminMode = false }: { adminMode?: boolean }) {
   if (isTeamFoldersDirectory) {
     return (
       <header className="team-context-header">
-        <div className="team-context-title"><span className="team-context-folder"><Icons.folder size={23} /></span><span className="team-context-name">Team Folders</span></div>
+        <div className="team-context-title"><span className="team-context-name">Team Folders</span></div>
         <div className="team-context-actions">
           <OrgSwitcher organizationName={org || "IMKAN"} userRole={role} />
           <button type="button" className="wd-icon-btn" aria-label={label("search.placeholder")} onClick={() => setSearchOpen(true)}><Icons.search size={17} /></button>
@@ -162,7 +163,7 @@ export function TopHeader({ adminMode = false }: { adminMode?: boolean }) {
           <ThemeToggle />
           <button type="button" className="rounded-md px-2 py-1.5 text-[12px] font-semibold text-slate-500 hover:bg-slate-100" aria-label={locale === "en" ? "العربية" : "English"} onClick={() => setLocale(locale === "en" ? "ar" : "en")}>{locale === "en" ? "ع" : "En"}</button>
           <AccountMenu name={name} avatarUrl={avatarUrl} adminMode={adminMode} />
-          <button type="button" className="wd-icon-btn" aria-label={label("nav.appSwitcher")}><Icons.grid size={17} /></button>
+          
         </div>
         {searchOpen ? <HeaderSearchOverlay onClose={() => setSearchOpen(false)} inputRef={searchInputRef} /> : null}
       </header>
@@ -174,12 +175,12 @@ export function TopHeader({ adminMode = false }: { adminMode?: boolean }) {
     return (
       <header className={`team-context-header ${isTeamManageRoute ? 'team-context-header--manage' : ''}`}>
         <div className="team-context-title">
-          <span className="team-context-folder"><Icons.folder size={23} /></span>
+          
           <span className="team-context-name" title={teamFolder.name}>{teamFolder.name}</span>
           <span className="team-context-lock" aria-hidden="true"><Icons.shield size={13} /></span>
           <span className="team-context-role">{roleLabel}</span>
           <span className="team-context-members"><Icons.users size={14} /> {teamMemberCount}</span>
-          <div className="relative">
+          <div className="relative" ref={manageRef}>
             <button id="team-context-manage" type="button" onClick={() => setManageOpen((v) => !v)} aria-expanded={manageOpen} aria-haspopup="menu" className="team-context-manage">
               <Icons.gear size={14} /> Manage <Icons.chevD size={12} />
             </button>
@@ -197,7 +198,7 @@ export function TopHeader({ adminMode = false }: { adminMode?: boolean }) {
               </div>
             ) : null}
           </div>
-          {!isTeamManageRoute ? <button type="button" className="wd-icon-btn" title="Pin" aria-label="Pin"><Icons.pin size={16} /></button> : null}
+          {null}
         </div>
         {!isTeamManageRoute ? (
           <div className="team-context-actions">
@@ -208,7 +209,7 @@ export function TopHeader({ adminMode = false }: { adminMode?: boolean }) {
             <ThemeToggle />
             <button type="button" className="rounded-md px-2 py-1.5 text-[12px] font-semibold text-slate-500 hover:bg-slate-100" aria-label={locale === "en" ? "العربية" : "English"} onClick={() => setLocale(locale === "en" ? "ar" : "en")}>{locale === "en" ? "ع" : "En"}</button>
             <AccountMenu name={name} avatarUrl={avatarUrl} adminMode={adminMode} />
-            <button type="button" className="wd-icon-btn" aria-label={label('nav.appSwitcher')}><Icons.grid size={17} /></button>
+            
           </div>
         ) : null}
         {isTeamManageRoute ? (
@@ -234,7 +235,7 @@ export function TopHeader({ adminMode = false }: { adminMode?: boolean }) {
       <div className="flex min-w-0 items-center gap-2">
         <button
           type="button"
-          className="wd-icon-btn flex shrink-0 md:!hidden"
+          className="wd-icon-btn flex shrink-0 md:hidden"
           aria-label={locale === "ar" ? (mobileNavOpen ? "إغلاق القائمة الجانبية" : "فتح القائمة الجانبية") : (mobileNavOpen ? "Close sidebar" : "Open sidebar")}
           aria-expanded={mobileNavOpen}
           onClick={() => setMobileNavOpen(!mobileNavOpen)}
