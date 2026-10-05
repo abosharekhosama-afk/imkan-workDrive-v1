@@ -25,6 +25,11 @@ export class SharesController {
   @Delete('shares/:id')
   revokeShare(@CurrentUser() user: AccessTokenPayload, @Param('id') id: string) { return this.shares.revokeShare(user, id); }
 
+  @Patch('shares/:id/status')
+  setStatus(@CurrentUser() user: AccessTokenPayload, @Param('id') id: string, @Body() body: { status?: string }) {
+    return this.shares.setShareStatus(user, id, body?.status === 'ACTIVE' ? 'ACTIVE' : 'REVOKED');
+  }
+
   @Post('shares')
   create(@CurrentUser() user: AccessTokenPayload, @Body() body: unknown) {
     return this.shares.createShare(user, parseCreateShare(body));

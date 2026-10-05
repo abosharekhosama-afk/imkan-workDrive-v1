@@ -676,4 +676,27 @@ export class SharesService {
         }
       : null;
   }
+
+  async setShareStatus(user: AccessTokenPayload, shareId: string, status: 'ACTIVE' | 'REVOKED') {
+    const fileShare = await this.prisma.fileShare.findFirst({ where: { id: shareId, orgId: user.org_id, createdById: user.sub } });
+    if (fileShare) {
+      await this.prisma.fileShare.update({
+        where: { id: shareId },
+        data: status === 'ACTIVE'
+          ? { status: ShareStatus.ACTIVE, revokedAt: null }
+          : { status: ShareStatus.REVOKED, revokedAt: new Date() },
+      });
+      return { id: shareId, status };
+    }
+    const folderShare = await this.prisma.folderShare.findFirst({ where: { id: shareId, orgId: user.org_id, createdById: user.sub } });
+    if (!folderShare) throw new NotFoundException('Share not found');
+    await this.prisma.folderShare.update({
+      where: { id: shareId },
+      data: status === 'ACTIVE'
+        ? { status: ShareStatus.ACTIVE, revokedAt: null }
+        : { status: ShareStatus.REVOKED, revokedAt: new Date() },
+    });
+    return { id: shareId, status };
+  }
+
 }
