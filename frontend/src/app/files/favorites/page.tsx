@@ -88,8 +88,8 @@ export default function FavoritesPage() {
   };
 
   return (
-    <div className="wd-page">
-      <header className="wd-page-head">
+    <div className="wd-page favorites-page flex h-full min-h-0 flex-1 flex-col overflow-hidden !p-0">
+      <header className="wd-page-head shrink-0 px-4 pt-4 md:px-6">
         <div className="wd-page-head-titles">
           <h1>
             ☆ {label("nav.favorites")}
@@ -104,6 +104,7 @@ export default function FavoritesPage() {
         </div>
       </header>
 
+      <div className="favorites-scroll min-h-0 flex-1 overflow-y-auto overflow-x-auto px-4 pb-6 md:px-6">
       {error ? <div className="wd-alert" role="alert">{error}</div> : null}
 
       {loading ? (
@@ -126,7 +127,7 @@ export default function FavoritesPage() {
           </div>
         </div>
       ) : (
-        <div className="wd-card workflow-like-list w-full max-w-full overflow-x-auto">
+        <div className="wd-card workflow-like-list w-full max-w-full">
           <table className="wd-table workflow-like-table borderless min-w-[36rem]">
             <thead>
               <tr>
@@ -259,6 +260,7 @@ export default function FavoritesPage() {
           }}
         />
       ) : null}
+    </div>
     </div>
   );
 }
