@@ -4826,15 +4826,21 @@ html[data-theme="dark"] .wd-manage-filter-menu{background:var(--wd-bg);border-co
 
 /* ── Mobile: force-hide primary/secondary sidebars & improve details ── */
 @media (max-width: 767.98px) {
+  /* Hide desktop sidebar rail only — never the mobile drawer copy of .primary-sidebar */
   .zoho-sidebar,
-  .primary-sidebar,
+  .workdrive-frame > aside[data-overlay-bound="sidebar"],
+  .workdrive-frame > aside[aria-label="primary"],
   aside[data-overlay-bound="sidebar"].secondary-sidebar,
   .secondary-sidebar {
     display: none !important;
   }
-  .workdrive-frame > aside.hidden,
-  .workdrive-frame > aside[aria-label="primary"] {
-    display: none !important;
+  /* Mobile nav drawer must keep full primary sidebar content visible */
+  [role="dialog"][aria-label="Navigation"] .primary-sidebar,
+  .wd-mobile-nav-drawer .primary-sidebar {
+    display: flex !important;
+    height: 100% !important;
+    min-height: 100% !important;
+    width: 100% !important;
   }
   .imkan-file-details-page {
     min-height: 100dvh;
@@ -4950,4 +4956,87 @@ html[data-theme="dark"] .wd-manage-filter-menu{background:var(--wd-bg);border-co
 }
 @media (max-width:680px){
   .wd-file-browser-body.is-index-view::after{display:none}
+}
+
+/* Zoho-style Index view letter groups + side rail */
+.imkan-file-table-root.is-index-mode{
+  display:flex;
+  flex-direction:row;
+  align-items:stretch;
+  gap:0;
+}
+.imkan-file-table-root.is-index-mode .imkan-table-scroll{
+  flex:1;
+  min-width:0;
+}
+.wd-index-rail{
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  gap:1px;
+  padding:8px 4px;
+  min-width:22px;
+  background:var(--wd-bg,#fff);
+  border-inline-start:1px solid var(--wd-line,#ededed);
+  position:sticky;
+  top:0;
+  max-height:calc(100vh - 160px);
+  overflow-y:auto;
+  flex-shrink:0;
+  z-index:5;
+}
+.wd-index-rail-btn{
+  border:0;
+  background:transparent;
+  color:var(--wd-primary,#2c66dd);
+  font-size:10px;
+  font-weight:700;
+  line-height:1.35;
+  padding:1px 2px;
+  cursor:pointer;
+  border-radius:3px;
+}
+.wd-index-rail-btn:hover{background:var(--wd-primary-light,#eff6ff)}
+.wd-index-letter-row td.wd-index-letter-cell,
+.wd-index-letter-cell{
+  background:var(--wd-hover,#f3f5f7) !important;
+  color:var(--wd-text,#212121) !important;
+  font-size:12px !important;
+  font-weight:700 !important;
+  letter-spacing:.04em;
+  padding:8px 16px !important;
+  border-bottom:1px solid var(--wd-line,#ededed) !important;
+  position:sticky;
+  top:0;
+  z-index:2;
+}
+html[data-theme="dark"] .wd-index-letter-cell{
+  background:var(--wd-hover) !important;
+  color:var(--wd-text) !important;
+}
+
+/* Theme inheritance: force user font + accent across admin and surfaces that hardcode colors */
+.admin-console-shell,
+.admin-console-shell button,
+.admin-console-shell input,
+.admin-console-shell select,
+.admin-console-shell textarea,
+.admin-console-shell a,
+.workdrive-frame,
+.workdrive-frame button,
+.workdrive-frame input,
+.workdrive-frame select,
+.workdrive-frame textarea,
+.auth-page,
+.auth-card{
+  font-family:var(--user-font-family),Arial,system-ui,sans-serif !important;
+}
+.admin-console-shell{
+  background:var(--wd-canvas) !important;
+  color:var(--wd-text) !important;
+}
+.admin-console-shell .bg-\[\#f7f7f7\],
+.admin-console-shell .bg-\[\#fff\],
+.admin-console-shell .bg-white{
+  background-color:var(--wd-bg,#fff) !important;
 }
