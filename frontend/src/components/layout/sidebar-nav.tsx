@@ -25,8 +25,9 @@ function Row({ item, collapsed, onNav, active }: { item: Item; collapsed: boolea
 }
 export function SidebarNav() {
   const pathname = usePathname();
-  const { sidebarCollapsed, setMobileNavOpen } = useShell();
-  const c = sidebarCollapsed;
+  const { sidebarCollapsed, mobileNavOpen, setMobileNavOpen } = useShell();
+  // Drawer must show full labels; collapsed rail is desktop-only.
+  const c = mobileNavOpen ? false : sidebarCollapsed;
   const close = () => setMobileNavOpen(false);
   const items: Item[] = buildWorkdriveSidebarItems(pathname);
   return (
