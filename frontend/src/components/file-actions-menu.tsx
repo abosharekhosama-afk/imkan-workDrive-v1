@@ -119,22 +119,24 @@ export function buildUnifiedFileActionItems(opts: {
 
   if (handlers.onInspect) push({ label: label("menu.properties"), icon: FileMenuIcons.properties, onSelect: handlers.onInspect, dividerBefore: controlItems.length === 0 && items.length > 0 });
 
-  // —— Share ——
+  // —— Share (Zoho WorkDrive parity) ——
   if (handlers.onShare) {
     push({
-      label: label("menu.shareMenu"),
+      label: `${label("menu.shareMenu")}...`,
       icon: FileMenuIcons.shareMenu,
-      onSelect: handlers.onShare,
+      onSelect: () => handlers.onShare?.("invite"),
       dividerBefore: items.length > 0,
       submenu: [
-        { label: label("menu.shareMenu"), icon: FileMenuIcons.shareMenu, onSelect: () => handlers.onShare?.() },
-        ...(handlers.onCopyLink || onCopyLink
-          ? [{ label: label("menu.copyPermalink"), icon: FileMenuIcons.copyPermalink, onSelect: (handlers.onCopyLink ?? onCopyLink)! }]
-          : []),
+        { label: label("menu.addMembers"), icon: FileMenuIcons.addMembers, onSelect: () => handlers.onShare?.("invite") },
+        { label: label("menu.externalShareLink"), icon: FileMenuIcons.externalShareLink, onSelect: () => handlers.onShare?.("link") },
+        { label: label("menu.downloadLink"), icon: FileMenuIcons.download, onSelect: () => handlers.onShare?.("downloadLink") },
+        { label: label("menu.embedCode"), icon: FileMenuIcons.embedCode, onSelect: () => handlers.onShare?.("embed") },
+        { label: label("menu.shareToSupport"), icon: FileMenuIcons.shareMenu, onSelect: () => handlers.onShare?.("invite") },
       ],
     });
-  } else if (handlers.onCopyLink || onCopyLink) {
-    push({ label: label("menu.copyPermalink"), icon: FileMenuIcons.copyPermalink, onSelect: handlers.onCopyLink ?? onCopyLink!, dividerBefore: items.length > 0 });
+  }
+  if (handlers.onCopyLink || onCopyLink) {
+    push({ label: label("menu.copyPermalink"), icon: FileMenuIcons.copyPermalink, onSelect: handlers.onCopyLink ?? onCopyLink!, dividerBefore: true });
   }
 
   // —— Move / Copy / Workflow / Organize (submenu) ——

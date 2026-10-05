@@ -861,5 +861,7 @@
   "menu.convertToOffice": "تحويل إلى محرر إمكان",
   "menu.labels": "التسميات",
   "menu.createShortcut": "إنشاء اختصار",
-  "view.index": "فهرس"
+  "view.index": "فهرس",
+  "share.titleExternalLink": "رابط مشاركة خارجية جديد",
+  "share.requestUserData": "يرجى إدخال البيانات المطلوبة للوصول إلى هذا الملف."
 }

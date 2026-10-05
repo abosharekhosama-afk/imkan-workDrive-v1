@@ -7,6 +7,8 @@ export type CreateShareBody = {
   recipient_user_ids?: string[];
   permission?: "VIEW" | "COMMENT" | "EDIT" | "ORGANIZE" | "FULL_ACCESS";
   email_recipients?: string[];
+  download_limit?: number;
+  request_user_data?: string[];
 };
 
 export function buildCreateShareBody(input: {
@@ -18,6 +20,8 @@ export function buildCreateShareBody(input: {
   recipientUserIds?: string[];
   permission?: "VIEW" | "COMMENT" | "EDIT" | "ORGANIZE" | "FULL_ACCESS";
   emailRecipients?: string[];
+  downloadLimit?: number;
+  requestUserData?: string[];
 }): CreateShareBody {
   const body: CreateShareBody = {
     resource_type: input.resourceType,
@@ -26,6 +30,8 @@ export function buildCreateShareBody(input: {
     ...(input.recipientUserIds?.length ? { recipient_user_ids: input.recipientUserIds } : {}),
     ...(input.permission ? { permission: input.permission } : {}),
     ...(input.emailRecipients?.length ? { email_recipients: input.emailRecipients } : {}),
+    ...(input.downloadLimit ? { download_limit: input.downloadLimit } : {}),
+    ...(input.requestUserData?.length ? { request_user_data: input.requestUserData } : {}),
   };
   if (input.expiresAt) {
     body.expires_at = input.expiresAt;

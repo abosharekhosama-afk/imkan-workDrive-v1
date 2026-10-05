@@ -1313,6 +1313,9 @@ model FileShare {
   passwordHash String?         @map("password_hash")
   expiresAt    DateTime?       @map("expires_at")
   canDownload  Boolean         @default(true) @map("can_download")
+  downloadLimit Int?           @map("download_limit")
+  downloadCount Int             @default(0) @map("download_count")
+  requestUserData Json?        @map("request_user_data")
   createdAt    DateTime        @default(now()) @map("created_at")
   revokedAt    DateTime?       @map("revoked_at")
 
@@ -1355,6 +1358,9 @@ model FolderShare {
   passwordHash String?         @map("password_hash")
   expiresAt    DateTime?       @map("expires_at")
   canDownload  Boolean         @default(true) @map("can_download")
+  downloadLimit Int?           @map("download_limit")
+  downloadCount Int             @default(0) @map("download_count")
+  requestUserData Json?        @map("request_user_data")
   createdAt    DateTime        @default(now()) @map("created_at")
   revokedAt    DateTime?       @map("revoked_at")
 

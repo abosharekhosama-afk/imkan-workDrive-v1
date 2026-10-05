@@ -17,6 +17,8 @@ export type CreateShareInput = {
   recipientUserIds: string[];
   permission: SharePermissionInput;
   emailRecipients?: string[];
+  downloadLimit?: number;
+  requestUserData?: string[];
 };
 
 const UUID_RE =
@@ -83,6 +85,14 @@ export function parseCreateShare(body: unknown): CreateShareInput {
   if (!Array.isArray(emailRecipients) || emailRecipients.length > 50 || emailRecipients.some((v) => typeof v !== 'string' || !/^\S+@\S+\.\S+$/.test(v.trim()))) throw new BadRequestException('Invalid email_recipients');
   const canDownload =
     record.can_download === undefined ? true : record.can_download === true;
+  let downloadLimit: number | undefined;
+  if (record.download_limit !== undefined && record.download_limit !== null && record.download_limit !== '') {
+    if (typeof record.download_limit !== 'number' || !Number.isInteger(record.download_limit) || record.download_limit < 0 || record.download_limit > 1_000_000) throw new BadRequestException('Invalid download_limit');
+    downloadLimit = record.download_limit || undefined;
+  }
+  const requestUserData = record.request_user_data === undefined ? [] : record.request_user_data;
+  const allowedRequestData = ['name', 'email', 'company', 'phone'];
+  if (!Array.isArray(requestUserData) || requestUserData.length > 4 || requestUserData.some((v) => typeof v !== 'string' || !allowedRequestData.includes(v))) throw new BadRequestException('Invalid request_user_data');
   if (
     record.can_download !== undefined &&
     typeof record.can_download !== 'boolean'
@@ -98,5 +108,7 @@ export function parseCreateShare(body: unknown): CreateShareInput {
     recipientUserIds: recipientUserIds as string[],
     permission: permission as SharePermissionInput,
     emailRecipients: [...new Set((emailRecipients as string[]).map((v) => v.trim().toLowerCase()))],
+    downloadLimit,
+    requestUserData: [...new Set(requestUserData as string[])],
   };
 }

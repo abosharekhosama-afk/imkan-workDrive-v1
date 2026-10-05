@@ -380,10 +380,17 @@ export function FilePreviewModal({ target, onClose, onPrevFile, onNextFile, init
               onSelect={(key) => {
                 if (key === "addMembers") setShareLaunch("invite");
                 else if (key === "externalShareLink") setShareLaunch("link");
+                else if (key === "downloadLink") setShareLaunch("downloadLink");
+                else if (key === "embedCode") setShareLaunch("embed");
+                else if (key === "shareToSupport") setShareLaunch("invite");
               }}
               items={[
                 { key: "addMembers", labelKey: "menu.addMembers", icon: FileMenuIcons.addMembers },
                 { key: "externalShareLink", labelKey: "menu.externalShareLink", icon: FileMenuIcons.externalShareLink },
+                { key: "downloadLink", labelKey: "menu.downloadLink", icon: FileMenuIcons.download },
+                { key: "embedCode", labelKey: "menu.embedCode", icon: FileMenuIcons.embedCode },
+                "sep",
+                { key: "shareToSupport", labelKey: "menu.shareToSupport", icon: FileMenuIcons.shareMenu },
               ]}
             />
           </div>

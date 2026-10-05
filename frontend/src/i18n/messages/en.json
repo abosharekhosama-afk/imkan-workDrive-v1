@@ -861,5 +861,7 @@
   "menu.convertToOffice": "Convert to IMKAN Office",
   "menu.labels": "Labels",
   "menu.createShortcut": "Create shortcut",
-  "view.index": "Index"
+  "view.index": "Index",
+  "share.titleExternalLink": "New external share link",
+  "share.requestUserData": "Please provide the requested information to access this file."
 }

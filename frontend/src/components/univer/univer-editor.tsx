@@ -6,6 +6,7 @@
  */
 
 import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react';
+import { emptyUniverPresentation, ensureUniverDocSnapshot, ensureUniverSlideSnapshot } from '@/lib/imkan-to-univer';
 
 export type UniverEditorKind = 'writer' | 'sheet' | 'show';
 
@@ -60,50 +61,43 @@ function defaultDocData(title: string) {
     title: title || 'Document',
     body: {
       dataStream: 'Start typing here.\r\n',
-      textRuns: [],
+      textRuns: [{ st: 0, ed: 18, ts: { fs: 14, ff: 'Arial', cl: { rgb: 'rgb(17,24,39)' } } }],
       paragraphs: [{ startIndex: 18 }],
       sectionBreaks: [{ startIndex: 19 }],
     },
     documentStyle: {
-      pageSize: { width: 595, height: 842 },
+      pageSize: { width: 793.7, height: 1122.5 },
       marginTop: 72,
       marginBottom: 72,
       marginLeft: 72,
       marginRight: 72,
+      documentFlavor: 1,
+      textStyle: { fs: 14, ff: 'Arial', cl: { rgb: 'rgb(17,24,39)' } },
     },
   };
 }
 
-/** Minimal ISlideData-compatible presentation snapshot */
 function defaultSlideData(title: string) {
-  const slideId = 'slide-1';
-  const pageId = 'page-1';
-  return {
-    id: `presentation-${Date.now()}`,
-    title: title || 'Presentation',
-    name: title || 'Presentation',
-    slideOrder: [slideId],
-    slides: {
-      [slideId]: {
-        id: slideId,
-        pageElements: {
-          [pageId]: {
-            id: pageId,
-            type: 0, // text-ish element — structure varies by version; empty page is valid
-            left: 80,
-            top: 120,
-            width: 800,
-            height: 120,
-          },
-        },
-        pageType: 0,
-      },
-    },
-    defaultPageSize: {
-      width: 960,
-      height: 540,
-    },
+  return emptyUniverPresentation(title || 'Presentation');
+}
+
+function kickEditorLayout(container: HTMLElement) {
+  const parent = container.parentElement;
+  const height = Math.max(560, parent?.clientHeight || 0);
+  container.style.width = '100%';
+  container.style.height = `${height}px`;
+  container.style.minHeight = `${height}px`;
+  const fire = () => {
+    try {
+      window.dispatchEvent(new Event('resize'));
+    } catch {
+      /* ignore */
+    }
   };
+  fire();
+  requestAnimationFrame(fire);
+  window.setTimeout(fire, 80);
+  window.setTimeout(fire, 280);
 }
 
 async function bootUniver(
@@ -179,10 +173,8 @@ async function bootUniver(
     import('@univerjs/sheets-ui/lib/index.css'),
   ]);
 
-  container.style.width = '100%';
-  container.style.height = '100%';
-  container.style.minHeight = '560px';
   container.style.position = 'relative';
+  kickEditorLayout(container);
 
   // @univerjs/slides@0.25.1 does not expose the core slides locale at
   // @univerjs/slides/locale/en-US. Keep the Slides UI locale (when available)
@@ -229,29 +221,24 @@ async function bootUniver(
       (UniverInstanceType as any).UNIVER_SLIDE ??
       (UniverInstanceType as any).SLIDE ??
       'slide';
-    const data = hasSnapshot
+    const merged = hasSnapshot
       ? {
-          ...defaultSlideData(title),
           ...initialSnapshot,
           title: (initialSnapshot as any).title || (initialSnapshot as any).name || title || 'Presentation',
           name: (initialSnapshot as any).name || (initialSnapshot as any).title || title || 'Presentation',
         }
       : defaultSlideData(title);
+    const data = ensureUniverSlideSnapshot(merged as Record<string, unknown>, title || 'Presentation');
     activeUnit = univer.createUnit(slideType, data as any);
   } else {
-    const data = hasSnapshot
+    const merged = hasSnapshot
       ? { ...defaultDocData(title), ...initialSnapshot, title: (initialSnapshot as any).title || title || 'Document' }
       : defaultDocData(title);
+    const data = ensureUniverDocSnapshot(merged as Record<string, unknown>);
     activeUnit = univer.createUnit(UniverInstanceType.UNIVER_DOC, data as any);
   }
 
-  requestAnimationFrame(() => {
-    try {
-      window.dispatchEvent(new Event('resize'));
-    } catch {
-      /* ignore */
-    }
-  });
+  kickEditorLayout(container);
 
   const getSnapshot = (): Record<string, unknown> | null => {
     try {

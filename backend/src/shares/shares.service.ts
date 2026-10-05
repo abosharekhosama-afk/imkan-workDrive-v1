@@ -117,10 +117,10 @@ export class SharesService {
 
     await this.prisma.$transaction(async (tx) => {
       if (input.resourceType === ResourceType.FILE) {
-        await tx.fileShare.create({ data: { orgId: user.org_id, fileId: input.resourceId, createdById: user.sub, permission: input.permission as SharePermission, status: ShareStatus.ACTIVE, linkToken, passwordHash, expiresAt: input.expiresAt ?? null, canDownload: input.canDownload, recipients: recipients.length ? { create: recipients.map(r => ({ orgId: user.org_id, userId: r.userId, permission: input.permission as SharePermission })) } : undefined } });
+        await tx.fileShare.create({ data: { orgId: user.org_id, fileId: input.resourceId, createdById: user.sub, permission: input.permission as SharePermission, status: ShareStatus.ACTIVE, linkToken, passwordHash, expiresAt: input.expiresAt ?? null, canDownload: input.canDownload, downloadLimit: input.downloadLimit ?? null, requestUserData: input.requestUserData?.length ? input.requestUserData : undefined, recipients: recipients.length ? { create: recipients.map(r => ({ orgId: user.org_id, userId: r.userId, permission: input.permission as SharePermission })) } : undefined } });
         await tx.fileActivity.create({ data: { orgId: user.org_id, fileId: input.resourceId, userId: user.sub, action: AuditAction.SHARE, metadata: { recipientCount: recipients.length, permission: input.permission, publicLink: recipients.length === 0 } } });
       } else {
-        await tx.folderShare.create({ data: { orgId: user.org_id, folderId: input.resourceId, createdById: user.sub, permission: input.permission as SharePermission, status: ShareStatus.ACTIVE, linkToken, passwordHash, expiresAt: input.expiresAt ?? null, canDownload: input.canDownload, recipients: recipients.length ? { create: recipients.map(r => ({ orgId: user.org_id, userId: r.userId, permission: input.permission as SharePermission })) } : undefined } });
+        await tx.folderShare.create({ data: { orgId: user.org_id, folderId: input.resourceId, createdById: user.sub, permission: input.permission as SharePermission, status: ShareStatus.ACTIVE, linkToken, passwordHash, expiresAt: input.expiresAt ?? null, canDownload: input.canDownload, downloadLimit: input.downloadLimit ?? null, requestUserData: input.requestUserData?.length ? input.requestUserData : undefined, recipients: recipients.length ? { create: recipients.map(r => ({ orgId: user.org_id, userId: r.userId, permission: input.permission as SharePermission })) } : undefined } });
       }
       await tx.auditLog.create({ data: { orgId: user.org_id, actorId: user.sub, action: 'SHARE_CREATED', resourceType: input.resourceType, resourceId: input.resourceId } });
       await tx.accessEvent.create({ data: { orgId: user.org_id, userId: user.sub, resourceType: input.resourceType, resourceId: input.resourceId, action: 'SHARE' } });
@@ -448,21 +448,35 @@ export class SharesService {
     return { id: shareId, revoked: true };
   }
 
-  async verifyPublicShare(token: string, password?: string): Promise<VerifyShareResponse & { items?: Array<Record<string, unknown>> }> {
+  async verifyPublicShare(token: string, password?: string, userData?: Record<string, string>): Promise<VerifyShareResponse & { items?: Array<Record<string, unknown>>; request_user_data?: string[]; download_limit?: number | null }> {
     const fileShare = await this.prisma.fileShare.findFirst({ where: { linkToken: token } });
     const folderShare = fileShare ? null : await this.prisma.folderShare.findFirst({ where: { linkToken: token } });
     const share: any = fileShare ?? folderShare;
     if (!share || share.status !== ShareStatus.ACTIVE) throw new NotFoundException('Share not found');
     if (this.isInactive(share.expiresAt)) { if (fileShare) await this.prisma.fileShare.updateMany({ where: { id: share.id, status: ShareStatus.ACTIVE }, data: { status: ShareStatus.EXPIRED } }); else await this.prisma.folderShare.updateMany({ where: { id: share.id, status: ShareStatus.ACTIVE }, data: { status: ShareStatus.EXPIRED } }); throw new NotFoundException('Share not found'); }
     if (share.passwordHash && (!password || !(await verifySecret(password, share.passwordHash)))) throw new UnauthorizedException('Invalid share password');
-    if (fileShare) {
-      await this.prisma.auditLog.create({ data: { orgId: share.orgId, actorId: null, action: 'PUBLIC_SHARE_ACCESSED', resourceType: ResourceType.FILE, resourceId: share.fileId, metadata: { shareId: share.id } } });
-      const blocked = await this.dlp.isOrgActionBlocked(share.orgId, share.fileId, 'DOWNLOAD');
-      return { resource_type: ResourceType.FILE, resource_id: share.fileId, can_download: share.canDownload && !blocked, expires_at: share.expiresAt?.toISOString() ?? null, download_url: blocked ? null : await this.publicDownloadUrl(share) };
+    const requested = Array.isArray(share.requestUserData) ? share.requestUserData.filter((v: unknown): v is string => typeof v === 'string') : [];
+    const missingRequestedData = requested.filter((key) => !userData?.[key]?.trim());
+    if (missingRequestedData.length) {
+      return { resource_type: fileShare ? ResourceType.FILE : ResourceType.FOLDER, resource_id: fileShare ? share.fileId : share.folderId, can_download: false, expires_at: share.expiresAt?.toISOString() ?? null, download_url: null, request_user_data: requested, download_limit: share.downloadLimit ?? null };
     }
-    await this.prisma.auditLog.create({ data: { orgId: share.orgId, actorId: null, action: 'PUBLIC_SHARE_ACCESSED', resourceType: ResourceType.FOLDER, resourceId: share.folderId, metadata: { shareId: share.id } } });
+    const metadata = { shareId: share.id, ...(userData ? { userData } : {}) };
+    if (fileShare) {
+      if (share.downloadLimit && Number(share.downloadCount ?? 0) >= Number(share.downloadLimit)) {
+        return { resource_type: ResourceType.FILE, resource_id: share.fileId, can_download: false, expires_at: share.expiresAt?.toISOString() ?? null, download_url: null, request_user_data: requested, download_limit: share.downloadLimit };
+      }
+      if (share.downloadLimit) await this.prisma.fileShare.update({ where: { id: share.id }, data: { downloadCount: { increment: 1 } } });
+      await this.prisma.auditLog.create({ data: { orgId: share.orgId, actorId: null, action: 'PUBLIC_SHARE_ACCESSED', resourceType: ResourceType.FILE, resourceId: share.fileId, metadata } });
+      const blocked = await this.dlp.isOrgActionBlocked(share.orgId, share.fileId, 'DOWNLOAD');
+      return { resource_type: ResourceType.FILE, resource_id: share.fileId, can_download: share.canDownload && !blocked, expires_at: share.expiresAt?.toISOString() ?? null, download_url: blocked ? null : await this.publicDownloadUrl(share), request_user_data: requested, download_limit: share.downloadLimit ?? null };
+    }
+    if (share.downloadLimit && Number(share.downloadCount ?? 0) >= Number(share.downloadLimit)) {
+      return { resource_type: ResourceType.FOLDER, resource_id: share.folderId, can_download: false, expires_at: share.expiresAt?.toISOString() ?? null, download_url: null, items: [], request_user_data: requested, download_limit: share.downloadLimit };
+    }
+    if (share.downloadLimit) await this.prisma.folderShare.update({ where: { id: share.id }, data: { downloadCount: { increment: 1 } } });
+    await this.prisma.auditLog.create({ data: { orgId: share.orgId, actorId: null, action: 'PUBLIC_SHARE_ACCESSED', resourceType: ResourceType.FOLDER, resourceId: share.folderId, metadata } });
     const items = await this.publicFolderItems(share);
-    return { resource_type: ResourceType.FOLDER, resource_id: share.folderId, can_download: share.canDownload, expires_at: share.expiresAt?.toISOString() ?? null, download_url: null, items };
+    return { resource_type: ResourceType.FOLDER, resource_id: share.folderId, can_download: share.canDownload, expires_at: share.expiresAt?.toISOString() ?? null, download_url: null, items, request_user_data: requested, download_limit: share.downloadLimit ?? null };
   }
 
   private async publicFolderItems(share: { orgId: string; folderId: string; canDownload: boolean }) {
@@ -568,6 +582,8 @@ export class SharesService {
       permission: input.permission as SharePermission,
       expiresAt: input.expiresAt ?? null,
       canDownload: input.canDownload,
+      downloadLimit: input.downloadLimit ?? null,
+      requestUserData: input.requestUserData?.length ? input.requestUserData : null,
       ...(passwordHash ? { passwordHash } : {}),
     };
     const existingRecipientIds = new Set(existing.recipients.map((row) => row.userId));

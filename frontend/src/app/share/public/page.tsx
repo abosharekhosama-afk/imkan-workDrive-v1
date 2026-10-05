@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useState, type FormEvent } from "react";
+import { Suspense, useEffect, useState, type FormEvent } from "react";
 import { useSearchParams } from "next/navigation";
 import { useLocale } from "../../../components/locale-provider";
 import { verifyPublicShare, type PublicShareResult } from "../../../lib/api/public-share";
@@ -12,12 +12,22 @@ function PublicShareForm() {
   const [password, setPassword] = useState("");
   const [result, setResult] = useState<PublicShareResult | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [requestedData, setRequestedData] = useState<string[]>([]);
+  const [userData, setUserData] = useState<Record<string, string>>({});
+
+  useEffect(() => {
+    if (!token) return;
+    void verifyPublicShare(token, password || undefined).then((value) => {
+      setRequestedData(value.request_user_data ?? []);
+      if (!value.request_user_data?.length) setResult(value);
+    }).catch(() => undefined);
+  }, [token]);
 
   async function onSubmit(event: FormEvent) {
     event.preventDefault();
     setError(null);
     try {
-      setResult(await verifyPublicShare(token, password || undefined));
+      setResult(await verifyPublicShare(token, password || undefined, userData));
     } catch {
       setError(label("error.generic"));
     }
@@ -46,6 +56,17 @@ function PublicShareForm() {
             className="imkan-input"
           />
         </label>
+        {requestedData.length ? (
+          <div className="rounded-xl border border-slate-200 bg-white p-3">
+            <div className="mb-2 text-sm font-medium">{label("share.requestUserData")}</div>
+            {requestedData.map((key) => (
+              <label key={key} className="mb-2 flex flex-col gap-1 text-[length:var(--imkan-font-size-secondary)]">
+                {key === "name" ? "Name" : key === "email" ? "Email" : key === "company" ? "Company" : "Phone"}
+                <input className="imkan-input" value={userData[key] ?? ""} onChange={(event) => setUserData((current) => ({ ...current, [key]: event.target.value }))} required />
+              </label>
+            ))}
+          </div>
+        ) : null}
         <button type="submit" className="imkan-button">{label("share.verify")}</button>
       </form>
       {error ? <p className="mt-3">{error}</p> : null}

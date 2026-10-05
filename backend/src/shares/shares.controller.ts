@@ -34,6 +34,6 @@ export class SharesController {
   @Post('share/public')
   verify(@Body() body: unknown) {
     const input = parseVerifyShare(body);
-    return this.shares.verifyPublicShare(input.token, input.password);
+    return this.shares.verifyPublicShare(input.token, input.password, input.userData);
   }
 }

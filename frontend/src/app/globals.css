@@ -5070,3 +5070,51 @@ html[data-theme="dark"] .wd-index-rail-btn:hover{
 .admin-console-shell .bg-white{
   background-color:var(--wd-bg,#fff) !important;
 }
+
+/* Zoho WorkDrive share flows — scoped to ShareModal only. */
+.share-zoho-modal{width:100%;max-width:592px!important;border-radius:17px!important;background:#fff;box-shadow:0 24px 70px rgba(15,23,42,.24)!important;overflow:hidden!important}
+.share-zoho-modal>div:first-child{border-bottom:0!important;padding:23px 28px 9px!important;gap:14px}
+.share-zoho-modal>div:first-child h2{display:flex;align-items:center;gap:11px;font-size:21px!important;line-height:28px!important;letter-spacing:-.35px;color:#1d2025}
+.share-zoho-modal>div:first-child h2 button{margin-left:auto}
+.share-zoho-modal .share-zoho-title-resource{display:inline-flex;align-items:center;gap:7px;font-size:14px;font-weight:500;color:#4a4f57;min-width:0}
+.share-zoho-modal .share-zoho-file-icon{display:inline-flex;color:#dc3c24}
+.share-zoho-modal .share-zoho-content{padding:3px 2px 20px}
+.share-zoho-link-name-row{display:flex;align-items:stretch;border:1px solid #d7dbe0;border-radius:18px;min-height:48px;overflow:visible;background:#fff}
+.share-zoho-link-name-row>input{min-width:0;flex:1;border:0;outline:0;padding:0 16px;font-size:14px;color:#30343a;background:transparent}
+.share-zoho-link-name-row>input::placeholder{color:#8b9198}
+.share-zoho-access-field,.share-zoho-invite-access{width:166px;border-left:1px solid #e6e8eb;padding:5px 10px 4px 12px;display:flex;flex-direction:column;justify-content:center;gap:0}
+.share-zoho-access-field>span,.share-zoho-invite-access>span{font-size:12px;color:#4f5359;line-height:16px}
+.share-zoho-option-wrap{position:relative;min-width:0}
+.share-zoho-option-trigger{display:flex;align-items:center;justify-content:space-between;gap:8px;width:100%;border:0;background:transparent;padding:0;color:#2362c7;font-size:14px;line-height:19px;text-align:left;cursor:pointer}
+.share-zoho-chevron{font-size:13px;color:#2362c7;transform:translateY(-1px)}
+.share-zoho-option-menu{position:absolute;top:calc(100% + 8px);min-width:190px;z-index:500;border:1px solid #e0e3e7;border-radius:10px;background:#fff;padding:6px;box-shadow:0 12px 30px rgba(15,23,42,.16)}
+.share-zoho-option{display:flex;align-items:center;gap:8px;width:100%;border:0;background:transparent;border-radius:7px;padding:9px 10px;text-align:left;color:#2e3339;cursor:pointer;font-size:13px}
+.share-zoho-option:hover,.share-zoho-option.selected{background:#f0f4ff;color:#1f5ec3}
+.share-zoho-option-check{width:16px;text-align:center;font-weight:700}
+.share-zoho-option small{display:block;margin-top:2px;color:#8a9098;font-size:11px}
+.share-zoho-setting-row{display:flex;align-items:center;gap:10px;min-height:66px;border-bottom:1px solid #eceef0;padding:8px 4px 8px 10px}
+.share-zoho-setting-label{flex:1;min-width:0;font-size:16px;line-height:22px;color:#363a40}
+.share-zoho-info{display:inline-grid;place-items:center;width:16px;height:16px;border:1px solid #62676e;border-radius:50%;font-size:10px;font-weight:700;color:#62676e;flex:none}
+.share-zoho-toggle{width:40px;height:24px;border:0;border-radius:999px;background:#cfd3d8;padding:3px;display:flex;align-items:center;justify-content:flex-start;cursor:pointer;flex:none;transition:.15s ease}
+.share-zoho-toggle span{display:block;width:18px;height:18px;border-radius:50%;background:#fff;box-shadow:0 1px 3px rgba(0,0,0,.2);transition:.15s ease}
+.share-zoho-toggle.is-on{background:#2f6de6;justify-content:flex-end}
+.share-zoho-inline-password,.share-zoho-inline-date{display:flex;align-items:center;width:240px;height:38px;border:1px solid #d7dbe0;border-radius:19px;overflow:hidden;background:#fff;flex:none}
+.share-zoho-inline-password input,.share-zoho-inline-date input{border:0;outline:0;min-width:0;flex:1;height:100%;padding:0 13px;font-size:14px;color:#30343a;background:transparent}
+.share-zoho-inline-password button{border:0;background:transparent;color:#5e636b;width:38px;height:100%;display:grid;place-items:center;cursor:pointer}
+.share-zoho-inline-date{width:215px;position:relative}
+.share-zoho-inline-date input{padding-right:34px}
+.share-zoho-inline-date svg{position:absolute;right:12px;pointer-events:none;color:#747981}
+.share-zoho-inline-input{width:118px;height:38px;border:1px solid #d7dbe0;border-radius:19px;padding:0 13px;outline:0;font-size:14px;color:#30343a}
+.share-zoho-note{margin-top:19px;border-radius:16px;background:#e6efff;padding:13px 15px;color:#303b4a;font-size:13px;line-height:20px}
+.share-zoho-note p{margin:0}.share-zoho-note p+p{margin-top:5px}
+.share-zoho-footer-actions{display:flex;justify-content:flex-end;gap:10px;margin-top:25px}
+.share-zoho-primary-btn,.share-zoho-cancel-btn{height:36px;border-radius:19px;padding:0 18px;font-size:14px;font-weight:600;cursor:pointer}
+.share-zoho-primary-btn{border:1px solid #2e6be6;background:#2e6be6;color:#fff;box-shadow:0 2px 4px rgba(47,109,230,.2)}
+.share-zoho-primary-btn:disabled{opacity:.5;cursor:not-allowed}
+.share-zoho-cancel-btn{border:1px solid #d3d7dc;background:#fff;color:#33383f;font-weight:500}
+.share-zoho-created-link{display:flex;gap:8px;align-items:center;margin-top:13px;border:1px solid #e2e5e9;border-radius:9px;padding:7px 8px;font-size:11px;color:#4d545d}.share-zoho-created-link span{min-width:0;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.share-zoho-created-link button{border:0;background:#eef4ff;color:#2765c9;border-radius:7px;padding:5px 8px;cursor:pointer}
+.share-zoho-error{margin-top:10px;color:#c83232;font-size:12px}
+.share-zoho-invite-row{display:flex;align-items:stretch;gap:9px}.share-zoho-invite-input-wrap{display:flex;align-items:stretch;flex:1;border:1px solid #d7dbe0;border-radius:17px;overflow:visible;min-height:47px}.share-zoho-invite-input-wrap>input{flex:1;min-width:0;border:0;outline:0;padding:0 14px;font-size:13px}.share-zoho-invite-access{width:112px}.share-zoho-members-popover{margin-top:6px;border:1px solid #e0e3e7;border-radius:10px;padding:5px;background:#fff;box-shadow:0 10px 25px rgba(15,23,42,.12)}.share-zoho-members-popover button{display:flex;align-items:center;gap:9px;width:100%;border:0;background:#fff;border-radius:7px;padding:8px;text-align:left}.share-zoho-members-popover button:hover,.share-zoho-members-popover button.selected{background:#f0f4ff}.share-zoho-members-popover button>span:nth-child(2){display:flex;flex-direction:column;flex:1}.share-zoho-members-popover small{font-size:10px;color:#8b9199;margin-top:2px}.share-zoho-avatar{width:28px;height:28px;border-radius:50%;display:grid;place-items:center;background:#e7efff;color:#2e66c6;font-size:10px;font-weight:700}.share-zoho-divider{height:1px;background:#eceef0;margin:23px 0 20px}.share-zoho-access-heading{display:flex;align-items:center;justify-content:space-between;gap:12px;font-size:15px;color:#30343a}.share-zoho-link-button{border:0;background:transparent;color:#2d67c9;font-size:13px;cursor:pointer}.share-zoho-link-button span{display:inline-grid;place-items:center;border:1px solid #7b8189;width:15px;height:15px;border-radius:50%;font-size:9px;margin-left:3px}.share-zoho-permalink-row{display:flex;align-items:center;gap:12px;margin-top:22px}.share-zoho-round-icon{width:34px;height:34px;border-radius:50%;display:grid;place-items:center;background:#f0f1f3;color:#4f555d}.share-zoho-permalink-row b{font-size:14px;font-weight:500;color:#343941}.share-zoho-change-visibility{border:0;background:transparent;color:#2c66c7;font-size:13px;cursor:pointer}.share-zoho-recipient-list{margin-top:14px}.share-zoho-recipient-row{display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid #eef0f2;font-size:12px}.share-zoho-recipient-row>span{flex:1}.share-zoho-recipient-row>button{border:0;background:transparent;color:#c53232;cursor:pointer}.share-zoho-embed-panel{margin-top:14px;border:1px solid #e1e4e8;border-radius:10px;padding:10px}.share-zoho-embed-panel textarea{width:100%;border:1px solid #e0e3e7;border-radius:8px;padding:8px;font-family:ui-monospace;font-size:10px}.share-zoho-embed-panel button{margin-top:8px;border:1px solid #d4d8de;background:#fff;border-radius:8px;padding:6px 9px}
+.share-zoho-modal.is-invite{max-width:700px!important}.share-zoho-modal.is-invite .share-zoho-content{padding-bottom:22px}
+@media (max-width:700px){.share-zoho-setting-label{font-size:14px}.share-zoho-inline-password,.share-zoho-inline-date{width:190px}.share-zoho-access-field{width:145px}.share-zoho-link-name-row{min-height:46px}.share-zoho-modal>div:first-child{padding-left:20px!important;padding-right:20px!important}}
+.share-zoho-link-settings{display:flex;flex-direction:column;gap:22px;padding-top:7px}.share-zoho-link-settings>label{font-size:15px;color:#363b41}.share-zoho-link-settings>.share-zoho-option-wrap{border:1px solid #d8dce1;border-radius:18px;min-height:46px;padding:0 14px;display:flex;align-items:center}.share-zoho-link-settings>.share-zoho-option-wrap .share-zoho-option-trigger{font-size:16px;color:#4c5056}.share-zoho-link-setting-url{display:flex;height:44px;border:1px solid #d8dce1;border-radius:18px;overflow:hidden}.share-zoho-link-setting-url input{flex:1;min-width:0;border:0;outline:0;padding:0 14px;font-size:12px;color:#454a51}.share-zoho-link-setting-url button{width:74px;border:0;border-left:1px solid #d8dce1;background:#fff;color:#2d67ca;font-weight:600}.share-zoho-link-settings-footer{display:flex;justify-content:flex-end;gap:10px}.share-zoho-modal.is-link-settings{max-width:560px!important}

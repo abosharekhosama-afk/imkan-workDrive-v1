@@ -3,6 +3,7 @@ import { BadRequestException } from '@nestjs/common';
 export type VerifyShareInput = {
   token: string;
   password?: string;
+  userData?: Record<string, string>;
 };
 
 export function parseVerifyShare(body: unknown): VerifyShareInput {
@@ -24,5 +25,11 @@ export function parseVerifyShare(body: unknown): VerifyShareInput {
     }
     password = record.password;
   }
-  return { token: record.token, password };
+  const rawUserData = record.user_data;
+  let userData: Record<string, string> | undefined;
+  if (rawUserData !== undefined) {
+    if (!rawUserData || typeof rawUserData !== 'object' || Array.isArray(rawUserData)) throw new BadRequestException('Invalid user_data');
+    userData = Object.fromEntries(Object.entries(rawUserData as Record<string, unknown>).filter(([, value]) => typeof value === 'string').map(([key, value]) => [key, String(value)]));
+  }
+  return { token: record.token, password, userData };
 }
