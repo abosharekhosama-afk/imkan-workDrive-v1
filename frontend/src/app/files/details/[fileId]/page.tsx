@@ -236,7 +236,7 @@ export default function FileDetailsPage() {
         </button>
       </header>
 
-      <nav className="zoho-fd-tabs" role="tablist">
+      <nav className="zoho-fd-tabs zoho-fd-tabs-center" role="tablist">
         {tabs.map((item) => {
           const Icon = Icons[item.icon] || Icons.info;
           return (
@@ -268,6 +268,7 @@ export default function FileDetailsPage() {
               <div className="zoho-fd-info-row"><span>{ar ? "النوع" : "Type"}</span><strong>{file?.fileType || file?.mimeType || (isFile ? "File" : "Folder")}</strong></div>
               <div className="zoho-fd-info-row"><span>{ar ? "أنشأه" : "Created by"}</span><strong>{file?.owner?.name || folder?.ownerName || "—"}{file?.createdAt ? ` ${ar ? "في" : "on"} ${dateTime(file.createdAt, locale)}` : ""}</strong></div>
               <div className="zoho-fd-info-row"><span>{ar ? "عدّله" : "Modified by"}</span><strong>{file?.owner?.name || folder?.ownerName || "—"}{file?.updatedAt ? ` ${ar ? "في" : "on"} ${dateTime(file.updatedAt, locale)}` : ""}</strong></div>
+              <div className="zoho-fd-info-row"><span>{ar ? "الحجم" : "Size"}</span><strong>{formatBytes(file?.size ?? storageUsed ?? 0)}</strong></div>
               <div className="zoho-fd-info-row"><span>{ar ? "المساحة المستخدمة" : "Storage Used"}</span><strong>{storageUsed > 0 ? formatBytes(storageUsed) : (ar ? "التخزين مجاني لملفات التنسيق الأصلي." : "Storage is free for files in native format.")}</strong></div>
               <div className="zoho-fd-info-row">
                 <span>{ar ? "الرابط الدائم" : "Permalink"}</span>
@@ -383,13 +384,19 @@ export default function FileDetailsPage() {
                           {openVersionMenu === version.id ? (
                             <div className="zoho-fd-menu">
                               <button type="button" disabled={versionBusy === version.id} onClick={() => void previewVersion(version)}>
-                                {ar ? "تنزيل / معاينة" : "Download / Preview"}
+                                {ar ? "معاينة" : "Preview"}
+                              </button>
+                              <button type="button" disabled={versionBusy === version.id} onClick={() => void previewVersion(version)}>
+                                {ar ? "تنزيل" : "Download"}
                               </button>
                               {!version.isCurrent ? (
                                 <button type="button" disabled={versionBusy === version.id} onClick={() => void restoreVersion(version)}>
                                   {ar ? "استعادة كإصدار حالي" : "Restore as current"}
                                 </button>
                               ) : null}
+                              <button type="button" onClick={() => setOpenVersionMenu(null)}>
+                                {ar ? "حفظ كملف جديد" : "Save as new file"}
+                              </button>
                             </div>
                           ) : null}
                         </div>
