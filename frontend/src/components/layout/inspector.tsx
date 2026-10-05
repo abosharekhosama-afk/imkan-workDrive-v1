@@ -151,83 +151,108 @@ export function InspectorPanel({ onVersionHistory }: { onVersionHistory?: (fileI
   };
   const inner = (
     <>
-      <div className="flex items-center border-b border-[#EDEDED]">
-        {([primarySlot, "activity"] as const).map((t) => (
-          <button key={t} type="button" onClick={() => setInspectorTab(t)} aria-selected={inspectorTab === t} role="tab"
-            className={`flex-1 px-3 py-2.5 text-[13px] font-medium transition-colors duration-150 ease-in-out ${inspectorTab === t ? "border-b-2 border-[var(--wd-primary)] text-[var(--wd-primary)]" : "text-[#4F4F4F] hover:text-[#212121]"}`}>
-            {label(t === "details" ? "inspector.details" : t === "dataTemplates" ? "inspector.dataTemplates" : "inspector.activity")}
-          </button>
-        ))}
+      <div className="wd-zoho-details-titlebar">
+        <h2>{label(inspectorTab === "dataTemplates" ? "inspector.dataTemplates" : inspectorTab === "activity" ? "inspector.activity" : "inspector.details")}</h2>
         <button type="button" onClick={closeAll} className="wd-icon-btn" aria-label={label("nav.closePanel")}>
           <Icons.x size={15} />
         </button>
       </div>
-      <div className="min-h-0 flex-1 overflow-y-auto p-3">
+      <div className="min-h-0 flex-1 overflow-y-auto px-4 py-3">
         {selected === null || name === null ? (
           <p className="text-[13px] text-[#4F4F4F]">{label("inspector.empty")}</p>
         ) : inspectorTab === "details" ? (
-          <div className="zoho-inspector-details">
-            <div className="zoho-inspector-title-row">
-              <div className="zoho-inspector-file-icon"><FileTypeIcon kind={kind} size={34} /></div>
-              <div className="min-w-0 flex-1">
-                <div className="truncate text-[13px] font-semibold" title={name}>{name}</div>
-                {editingDesc ? (
-                  <input value={desc} onChange={(e) => setDesc(e.target.value)} onBlur={saveDesc}
-                    onKeyDown={(e) => { if (e.key === "Enter") saveDesc(); if (e.key === "Escape") setEditingDesc(false); }}
-                    className="zoho-inspector-desc-input" autoFocus aria-label={label("inspector.addDescription")} />
-                ) : (
-                  <button type="button" onClick={() => setEditingDesc(true)} className="zoho-details-description">{desc || label("inspector.addDescription")}</button>
-                )}
+          <div className="wd-zoho-details">
+            <div className="wd-zoho-details-head">
+              <FileTypeIcon kind={kind} size={18} />
+              <span className="wd-zoho-details-name" title={name}>{name}</span>
+              <button type="button" className="wd-zoho-details-rename" aria-label={locale === "ar" ? "إعادة تسمية" : "Rename"} onClick={() => setEditingDesc(true)}><Icons.pencil size={14} /></button>
+            </div>
+            {editingDesc ? (
+              <input value={desc} onChange={(e) => setDesc(e.target.value)} onBlur={saveDesc}
+                onKeyDown={(e) => { if (e.key === "Enter") saveDesc(); if (e.key === "Escape") setEditingDesc(false); }}
+                className="wd-zoho-details-desc-input" autoFocus aria-label={label("inspector.addDescription")} placeholder={label("inspector.addDescription")} />
+            ) : (
+              <button type="button" onClick={() => setEditingDesc(true)} className="wd-zoho-details-desc">{desc || (locale === "ar" ? "إضافة وصف" : "Add description")}</button>
+            )}
+
+            <div className="wd-zoho-details-preview" aria-hidden="true">
+              <FileTypeIcon kind={kind} size={42} />
+            </div>
+
+            <div className="wd-zoho-details-owner">
+              <span className="wd-zoho-details-avatar">{(fact?.ownerName || ownerName || "?").slice(0, 1).toUpperCase()}</span>
+              <div>
+                <span>{locale === "ar" ? "أنشأه" : "Created by"}</span>
+                <strong>{fact?.ownerName || ownerName || "—"}</strong>
+              </div>
+            </div>
+
+            <div className="wd-zoho-details-share">
+              <div className="wd-zoho-details-kicker">{locale === "ar" ? "مشارك مع" : "Shared with"}</div>
+              <div className="wd-zoho-details-share-line">
+                <Icons.shield size={14} />
+                <span>{shareSummary}</span>
+                <button type="button" className="wd-zoho-details-link" onClick={() => {
+                  if (!resourceId || !resourceType) return;
+                  window.dispatchEvent(new CustomEvent("workdrive:open-share", { detail: { type: resourceType, id: resourceId, name } }));
+                }}>{locale === "ar" ? "مشاركة" : "Share"}</button>
               </div>
             </div>
 
             {selected.kind === "FILE" ? (
-              <div className="zoho-inspector-owner">
-                <span className="zoho-details-avatar">{(fact?.ownerName || ownerName || "?").slice(0,1).toUpperCase()}</span>
-                <div><span>{locale === "ar" ? "أنشأه" : "Created by"}</span><strong>{fact?.ownerName || ownerName || "—"}</strong></div>
+              <div className="wd-zoho-details-stats">
+                <div className="wd-zoho-details-stats-row">
+                  <span><Icons.eye size={14} /> {fileActivities.filter((r) => r.action === "VIEW" || r.action === "PREVIEW").length} {locale === "ar" ? "مشاهدات" : "Views"}</span>
+                  <span><Icons.download size={14} /> {fileActivities.filter((r) => r.action === "DOWNLOAD").length} {locale === "ar" ? "تنزيلات" : "Downloads"}</span>
+                </div>
+                <div className="wd-zoho-details-stats-row">
+                  <span><Icons.act size={14} /> {fileActivities.filter((r) => r.action === "COMMENT").length} {locale === "ar" ? "تعليقات" : "Comments"}</span>
+                </div>
               </div>
             ) : null}
 
-            <div className="zoho-inspector-share">
-              <div><span>{locale === "ar" ? "تمت المشاركة مع" : "Shared with"}</span><button type="button" onClick={openShare}>{label("menu.shareMenu")}</button></div>
-              <p>⌕ {shareSummary}</p>
-              {selected.kind === "FILE" ? (
-                <div className="zoho-inspector-stats">
-                  <span>◉ {fileActivities.filter((r) => r.action === "PREVIEW").length} {locale === "ar" ? "مشاهدة" : "Views"}</span>
-                  <span>⇩ {fileActivities.filter((r) => r.action === "DOWNLOAD").length} {locale === "ar" ? "تنزيل" : "Downloads"}</span>
-                  <span>▢ {fileActivities.filter((r) => r.action === "COMMENT").length} {locale === "ar" ? "تعليقات" : "Comments"}</span>
-                </div>
-              ) : null}
+            <div className="wd-zoho-details-block">
+              <div className="wd-zoho-details-kicker">{locale === "ar" ? "الرابط الدائم" : "Permalink"}</div>
+              <div className="wd-zoho-details-permalink">
+                <Link href={permalinkPath || "#"} className="truncate">{permalink || "—"}</Link>
+                <button type="button" onClick={() => void copyPermalink()} className="wd-zoho-details-copy" aria-label={locale === "ar" ? "نسخ" : "Copy"}><Icons.copy size={14} /></button>
+              </div>
             </div>
 
-            <div className="zoho-inspector-meta">
-              <div><span>{locale === "ar" ? "الرابط الدائم" : "Permalink"}</span><div className="flex min-w-0 items-center gap-1"><Link href={permalinkPath || "#"} className="truncate">{permalink || "—"}</Link><button type="button" onClick={() => void copyPermalink()} className="wd-icon-btn !h-6 !w-6 shrink-0"><Icons.copy size={13}/></button></div></div>
-              <div><span>{locale === "ar" ? "الموقع" : "Location"}</span><strong>{locationName}</strong></div>
-              {fact?.labels?.length ? <div><span>{locale === "ar" ? "التصنيفات" : "Labels"}</span><strong>{fact.labels.join(", ")}</strong></div> : null}
-              <div><span>{locale === "ar" ? "النوع" : "Type"}</span><strong>{selected.kind === "FILE" ? (fact?.mimeType || selected.file.mimeType || selected.file.fileType || "File") : "Folder"}</strong></div>
-              {selected.kind === "FILE" ? <div><span>{locale === "ar" ? "وقت الإنشاء" : "Time Created"}</span><strong>{formatDateLocalized(createdAt, locale)}</strong></div> : null}
-              <div><span>{locale === "ar" ? "آخر تعديل" : "Modified"}</span><strong>{modifiedBy}</strong></div>
-              {selected.kind === "FILE" ? <div><span>{locale === "ar" ? "المساحة المستخدمة" : "Storage Used"}</span><strong>{formatBytes(fact?.size ?? selected.file.size ?? 0)}</strong></div> : null}
+            <div className="wd-zoho-details-block">
+              <div className="wd-zoho-details-kicker">{locale === "ar" ? "الموقع" : "Location"}</div>
+              <div className="wd-zoho-details-location"><Icons.folder size={14} /> <span>{locationName || (locale === "ar" ? "مجلداتي" : "My Folders")}</span></div>
+            </div>
+
+            <div className="wd-zoho-details-block">
+              <div className="wd-zoho-details-kicker">{locale === "ar" ? "التصنيفات" : "Labels"}</div>
+              {fact?.labels?.length ? (
+                <div className="wd-zoho-details-labels">
+                  {fact.labels.map((lb) => <span key={lb} className="wd-zoho-details-label"><i />{lb}</span>)}
+                </div>
+              ) : null}
+              <button type="button" className="wd-zoho-details-add-labels" onClick={() => {
+                if (!resourceId) return;
+                window.dispatchEvent(new CustomEvent("workdrive:open-labels", { detail: { type: resourceType, id: resourceId, name } }));
+              }}>{fact?.labels?.length ? (locale === "ar" ? "إضافة أو إزالة التصنيفات" : "Add or remove labels") : (locale === "ar" ? "إضافة تصنيفات" : "Add labels")}</button>
             </div>
 
             {selected.kind === "FILE" ? (
               <button type="button" onClick={() => {
                 const fileId = selected.file.id;
-                if (onVersionHistory) {
-                  onVersionHistory(fileId);
-                  return;
-                }
+                if (onVersionHistory) { onVersionHistory(fileId); return; }
                 setInspectorOpen(false);
                 setMobileInspectorOpen(false);
                 router.push(`/files/details/${encodeURIComponent(fileId)}?tab=versions`);
-              }} className="zoho-details-versions"><Icons.history size={15}/> <span>{locale === "ar" ? "عرض كل الإصدارات" : "View all versions"}</span><Icons.chevR size={13}/></button>
+              }} className="wd-zoho-details-versions"><Icons.history size={15} /> <span>{locale === "ar" ? "عرض كل الإصدارات" : "View all versions"}</span></button>
             ) : null}
-            <button type="button" onClick={() => {
-              if (!resourceId) return;
-              setInspectorOpen(false);
-              setMobileInspectorOpen(false);
-              router.push(`/files/details/${encodeURIComponent(resourceId)}?tab=general`);
-            }} className="zoho-inspector-open-details">{locale === "ar" ? "عرض كافة التفاصيل" : "View all details"}</button>
+
+            <div className="wd-zoho-details-meta">
+              <div><span>{locale === "ar" ? "النوع" : "Type"}</span><strong>{selected.kind === "FILE" ? (selected.file.fileType || fact?.mimeType || selected.file.mimeType || "File") : (locale === "ar" ? "مجلد" : "Folder")}</strong></div>
+              {selected.kind === "FILE" ? <div><span>{locale === "ar" ? "وقت الإنشاء" : "Time Created"}</span><strong>{formatDateLocalized(createdAt, locale)}</strong></div> : null}
+              <div><span>{locale === "ar" ? "عدّله" : "Modified by"}</span><strong>{modifiedBy}</strong></div>
+              {selected.kind === "FILE" ? <div><span>{locale === "ar" ? "المساحة المستخدمة" : "Storage Used"}</span><strong>{(fact?.size ?? selected.file.size ?? 0) > 0 ? formatBytes(fact?.size ?? selected.file.size ?? 0) : (locale === "ar" ? "التخزين مجاني لملفات التنسيق الأصلي." : "Storage is free for files in native format.")}</strong></div> : null}
+            </div>
           </div>
         ) : inspectorTab === "dataTemplates" ? (
           <div className="flex flex-col gap-4">
