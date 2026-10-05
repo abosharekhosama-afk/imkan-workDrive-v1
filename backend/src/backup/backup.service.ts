@@ -950,14 +950,21 @@ export class BackupService {
     const mime = obj.mimeType || 'application/octet-stream';
     const size = BigInt(obj.size || 0);
 
-    await this.storage.copyStoredObject(obj.backupStorageKey, {
-      fileId,
-      versionId,
-      ownerOrgId: orgId,
-      contentType: mime,
-      storageKey: objectKey,
-      checksum: sha,
-    });
+    try {
+      await this.storage.copyStoredObject(obj.backupStorageKey, {
+        fileId,
+        versionId,
+        ownerOrgId: orgId,
+        contentType: mime,
+        storageKey: objectKey,
+        checksum: sha,
+      });
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      throw new Error(
+        `Failed to restore file "${finalName}" from backup storage key "${obj.backupStorageKey.slice(0, 120)}": ${msg}`,
+      );
+    }
 
     await this.prisma.$transaction(async (tx) => {
       await tx.file.create({
@@ -1063,7 +1070,7 @@ export class BackupService {
 
     const fileId = randomUUID();
     const versionId = randomUUID();
-    const objectKey = this.crypto.buildBackupObjectKey(orgId, jobId, 'archive', 'zip');
+    const objectKey = this.crypto.buildBackupObjectKey(orgId, jobId, randomUUID(), 'zip');
     await this.storage.storeObject(
       {
         fileId,
