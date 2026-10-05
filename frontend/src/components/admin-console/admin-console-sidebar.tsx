@@ -28,6 +28,7 @@ const items: AdminItem[] = [
   { href: "/admin/data-templates", en: "Data Templates", ar: "قوالب البيانات", icon: "layout", section: "Data & Policy" },
   { href: "/admin/dlp", en: "Data Loss Prevention", ar: "منع فقدان البيانات", icon: "shield" },
   { href: "/admin/settings", en: "Settings", ar: "الإعدادات", icon: "gear", section: "Security & Control" },
+  { href: "/admin/backup", en: "Backup & Recovery", ar: "النسخ الاحتياطي والاستعادة", icon: "cloudUp" },
   { href: "/admin/audit", en: "Audit Logs & Reports", ar: "سجلات التدقيق والتقارير", icon: "history" },
   { href: "/admin/data-administration", en: "Data Administration", ar: "إدارة البيانات", icon: "columns" },
   { href: "/admin/devices", en: "Manage Devices", ar: "إدارة الأجهزة", icon: "columns" },
