@@ -1,6 +1,6 @@
-import { Icons } from "@/components/layout/icons";
 "use client";
 
+import { Icons } from "@/components/layout/icons";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useLocale } from "../../../components/locale-provider";
