@@ -10,6 +10,7 @@ import { ConfigService } from '@nestjs/config';
 import {
   AuditAction,
   MembershipStatus,
+  Prisma,
   ResourceType,
   SharePermission,
   ShareStatus,
@@ -455,7 +456,7 @@ export class SharesService {
     if (!share || share.status !== ShareStatus.ACTIVE) throw new NotFoundException('Share not found');
     if (this.isInactive(share.expiresAt)) { if (fileShare) await this.prisma.fileShare.updateMany({ where: { id: share.id, status: ShareStatus.ACTIVE }, data: { status: ShareStatus.EXPIRED } }); else await this.prisma.folderShare.updateMany({ where: { id: share.id, status: ShareStatus.ACTIVE }, data: { status: ShareStatus.EXPIRED } }); throw new NotFoundException('Share not found'); }
     if (share.passwordHash && (!password || !(await verifySecret(password, share.passwordHash)))) throw new UnauthorizedException('Invalid share password');
-    const requested = Array.isArray(share.requestUserData) ? share.requestUserData.filter((v: unknown): v is string => typeof v === 'string') : [];
+    const requested: string[] = Array.isArray(share.requestUserData) ? share.requestUserData.filter((v: unknown): v is string => typeof v === 'string') : [];
     const missingRequestedData = requested.filter((key) => !userData?.[key]?.trim());
     if (missingRequestedData.length) {
       return { resource_type: fileShare ? ResourceType.FILE : ResourceType.FOLDER, resource_id: fileShare ? share.fileId : share.folderId, can_download: false, expires_at: share.expiresAt?.toISOString() ?? null, download_url: null, request_user_data: requested, download_limit: share.downloadLimit ?? null };
@@ -583,7 +584,7 @@ export class SharesService {
       expiresAt: input.expiresAt ?? null,
       canDownload: input.canDownload,
       downloadLimit: input.downloadLimit ?? null,
-      requestUserData: input.requestUserData?.length ? input.requestUserData : null,
+      requestUserData: input.requestUserData?.length ? input.requestUserData : Prisma.JsonNull,
       ...(passwordHash ? { passwordHash } : {}),
     };
     const existingRecipientIds = new Set(existing.recipients.map((row) => row.userId));
