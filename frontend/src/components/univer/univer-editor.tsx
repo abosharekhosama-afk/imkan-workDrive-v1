@@ -61,8 +61,15 @@ function defaultDocData(title: string) {
     body: {
       dataStream: 'Start typing here.\r\n',
       textRuns: [],
-      paragraphs: [{ startIndex: 0 }, { startIndex: 18 }],
+      paragraphs: [{ startIndex: 18 }],
       sectionBreaks: [{ startIndex: 19 }],
+    },
+    documentStyle: {
+      pageSize: { width: 595, height: 842 },
+      marginTop: 72,
+      marginBottom: 72,
+      marginLeft: 72,
+      marginRight: 72,
     },
   };
 }

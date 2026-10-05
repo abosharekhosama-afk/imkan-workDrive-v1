@@ -29,6 +29,51 @@ function writerRunsToText(runs: unknown): string {
     .join("");
 }
 
+function tableLines(block: any): string[] {
+  const rows = Array.isArray(block?.rows)
+    ? block.rows
+    : Array.isArray(block?.table?.rows)
+      ? block.table.rows
+      : [];
+  return rows.map((row: any) => {
+    const cells = Array.isArray(row) ? row : Array.isArray(row?.cells) ? row.cells : [];
+    return cells
+      .map((cell: any) => (typeof cell === "string" ? cell : writerRunsToText(cell?.runs) || String(cell?.text ?? "")))
+      .join("\t");
+  });
+}
+
+/** Univer paints a paragraph only when startIndex points at its `\r` break. */
+function univerDocBody(lines: string[]) {
+  const paragraphs: Array<{ startIndex: number }> = [];
+  const parts: string[] = [];
+  let index = 0;
+  const source = lines.length > 0 ? lines : [""];
+  for (const line of source) {
+    const text = String(line).replace(/[\r\n]/g, " ");
+    parts.push(text + "\r");
+    paragraphs.push({ startIndex: index + text.length });
+    index += text.length + 1;
+  }
+  const dataStream = parts.join("") + "\n";
+  return {
+    dataStream,
+    textRuns: [],
+    paragraphs,
+    sectionBreaks: [{ startIndex: dataStream.length - 1 }],
+  };
+}
+
+function univerDocumentStyle() {
+  return {
+    pageSize: { width: 595, height: 842 },
+    marginTop: 72,
+    marginBottom: 72,
+    marginLeft: 72,
+    marginRight: 72,
+  };
+}
+
 /**
  * IMKAN writer → Univer Docs body snapshot
  * IMKAN: { type:'WRITER', title, blocks:[{ type, runs:[{text}] }] }
@@ -37,57 +82,26 @@ export function imkanWriterToUniverDoc(content: any, titleFallback = "Document")
   const title = typeof content?.title === "string" ? content.title : titleFallback;
   const blocks = Array.isArray(content?.blocks) ? content.blocks : [];
 
-  const paragraphs: Array<{ startIndex: number }> = [];
-  const parts: string[] = [];
-  let index = 0;
-
-  if (blocks.length === 0) {
-    parts.push("\r");
-    paragraphs.push({ startIndex: 0 });
-  } else {
-    for (const block of blocks) {
-      const type = String(block?.type || "paragraph");
-      if (type === "page-break") {
-        // treat as empty paragraph
-        parts.push("\r");
-        paragraphs.push({ startIndex: index });
-        index += 1;
-        continue;
-      }
-      if (type === "table") {
-        // Flatten table cells to lines
-        const rows = Array.isArray(block?.rows) ? block.rows : [];
-        for (const row of rows) {
-          const cells = Array.isArray(row) ? row : Array.isArray(row?.cells) ? row.cells : [];
-          const line = cells
-            .map((c: any) => (typeof c === "string" ? c : writerRunsToText(c?.runs) || String(c?.text ?? "")))
-            .join("\t");
-          parts.push(line + "\r");
-          paragraphs.push({ startIndex: index });
-          index += line.length + 1;
-        }
-        continue;
-      }
-      const text = writerRunsToText(block?.runs);
-      parts.push(text + "\r");
-      paragraphs.push({ startIndex: index });
-      index += text.length + 1;
+  const lines: string[] = [];
+  for (const block of blocks) {
+    const type = String(block?.type || "paragraph");
+    if (type === "page-break") {
+      lines.push("");
+      continue;
     }
+    if (type === "table") {
+      const rows = tableLines(block);
+      lines.push(...(rows.length ? rows : [""]));
+      continue;
+    }
+    lines.push(writerRunsToText(block?.runs));
   }
-
-  // Univer docs dataStream must end with \n (section break sentinel)
-  const dataStream = parts.join("") + "\n";
-  const sectionBreaks = [{ startIndex: dataStream.length - 1 }];
 
   return {
     id: `doc-${Date.now()}`,
     title,
-    body: {
-      dataStream,
-      textRuns: [],
-      paragraphs,
-      sectionBreaks,
-    },
+    body: univerDocBody(lines),
+    documentStyle: univerDocumentStyle(),
   };
 }
 
@@ -111,6 +125,7 @@ export function imkanSheetToUniverSheet(content: any, titleFallback = "Workbook"
 
     const cellData: Record<number, Record<number, unknown>> = {};
     const cells = src.cells && typeof src.cells === "object" ? src.cells : {};
+    let maxCol = 0;
 
     for (const [ref, cell] of Object.entries(cells as Record<string, any>)) {
       // Support A1 keys and "r,c" keys
@@ -146,13 +161,15 @@ export function imkanSheetToUniverSheet(content: any, titleFallback = "Workbook"
 
       if (!cellData[rowCol.row]) cellData[rowCol.row] = {};
       cellData[rowCol.row][rowCol.col] = entry;
+      maxCol = Math.max(maxCol, rowCol.col);
     }
 
+    const usedRows = Object.keys(cellData).map((row) => Number(row));
     sheets[id] = {
       id,
       name,
-      rowCount: Math.max(100, ...Object.keys(cellData).map((r) => Number(r) + 10), 100),
-      columnCount: 26,
+      rowCount: Math.max(100, ...usedRows.map((row) => row + 10), 100),
+      columnCount: Math.max(26, maxCol + 5),
       zoomRatio: 1,
       cellData,
       mergeData: [],
@@ -194,14 +211,23 @@ export function imkanShowToUniverSlide(content: any, titleFallback = "Presentati
     elements.forEach((el: any, ei: number) => {
       const eid = String(el?.id || `el-${ei + 1}`);
       const text = typeof el?.text === "string" ? el.text : "";
+      const visible = text.slice(0, 500);
       pageElements[eid] = {
         id: eid,
-        type: 0,
+        zIndex: ei + 1,
         left: Number(el?.x) || 80,
         top: Number(el?.y) || 80 + ei * 40,
         width: Number(el?.width) || 800,
         height: Number(el?.height) || 80,
-        title: text.slice(0, 500),
+        title: visible,
+        richText: {
+          text: visible,
+          rich: {
+            id: `${eid}-doc`,
+            body: univerDocBody([visible]),
+            documentStyle: univerDocumentStyle(),
+          },
+        },
       };
     });
 
