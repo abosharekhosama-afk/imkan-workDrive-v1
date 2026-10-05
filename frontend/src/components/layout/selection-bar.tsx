@@ -87,11 +87,15 @@ export function SelectionBar({
           onSelect={(k) => {
             if (k === "addMembers") onShare("invite");
             else if (k === "externalShareLink") onShare("link");
+            else if (k === "downloadLink") onShare("downloadLink");
+            else if (k === "embedCode") onShare("embed");
             else if (k === "copy") onCopyLink();
           }}
           items={[
             { key: "addMembers", labelKey: "menu.addMembers", icon: FileMenuIcons.addMembers },
             { key: "externalShareLink", labelKey: "menu.externalShareLink", icon: FileMenuIcons.externalShareLink },
+            { key: "downloadLink", labelKey: "menu.downloadLink", icon: FileMenuIcons.download },
+            { key: "embedCode", labelKey: "menu.embedCode", icon: FileMenuIcons.embedCode },
           ]} />
         <button type="button" onClick={onCopyLink} title={label("menu.copyLink")} aria-label={label("menu.copyLink")}
           className="flex h-7 w-7 items-center justify-center rounded-full text-[color:var(--wd-primary-ink)] hover:bg-[var(--wd-active)]"><Icons.link size={14} /></button>
