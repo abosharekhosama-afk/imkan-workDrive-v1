@@ -459,7 +459,7 @@ export default function TemplatesPage() {
   return (
     <div className="flex min-h-0 flex-1">
       <SecondarySidebar section="templates" />
-      <main className="min-w-0 flex-1 overflow-y-auto bg-white">
+      <main className="min-w-0 flex-1 overflow-y-auto overflow-x-hidden bg-[var(--wd-surface,#fff)] text-[var(--wd-text,#212121)]" style={{ fontFamily: "var(--user-font-family), Arial, system-ui, sans-serif" }}>
         <div className="border-b border-[color:var(--imkan-color-border)] px-5 py-4">
           <div className="flex flex-wrap items-start justify-between gap-4">
             <div>
@@ -556,7 +556,7 @@ export default function TemplatesPage() {
             )}
             <div className={layout === "grid" ? "grid grid-cols-[repeat(auto-fill,minmax(245px,1fr))] gap-4 p-5" : "space-y-2 p-5"}>
             {templates.map((template) => (
-              <article key={template.id} className={layout === "grid" ? `relative overflow-visible rounded-xl border border-slate-200 bg-white shadow-sm transition hover:border-slate-300 hover:shadow-md ${menuTemplateId === template.id ? "z-[70]" : "z-0"}` : `relative flex items-center gap-4 rounded-xl border border-slate-200 bg-white p-3 shadow-sm transition hover:border-slate-300 ${menuTemplateId === template.id ? "z-[70]" : "z-0"}`}>
+              <article key={template.id} className={layout === "grid" ? `relative overflow-visible rounded-xl border border-[color:var(--wd-line,#e5e7eb)] bg-[var(--wd-surface,#fff)] shadow-sm transition hover:border-slate-300 hover:shadow-md ${menuTemplateId === template.id ? "z-[70]" : "z-0"}` : `relative flex items-center gap-4 rounded-xl border border-slate-200 bg-white p-3 shadow-sm transition hover:border-slate-300 ${menuTemplateId === template.id ? "z-[70]" : "z-0"}`}>
                 <button type="button" onClick={() => void previewTemplate(template)} className={layout === "grid" ? "group relative flex h-36 w-full items-center justify-center overflow-hidden bg-[#f6f8fb] text-[var(--wd-primary)]" : "group flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-[#f6f8fb] text-[var(--wd-primary)]"}>
                   {layout === "grid" ? (
                     <img
@@ -574,7 +574,7 @@ export default function TemplatesPage() {
                       <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] text-slate-500">{text(ar, typeLabels[template.type][0], typeLabels[template.type][1])}</span>
                       <button type="button" aria-label={text(ar, "More actions", "إجراءات إضافية")} onClick={() => setMenuTemplateId(menuTemplateId === template.id ? null : template.id)} className="rounded-md px-1.5 py-0.5 text-slate-500 hover:bg-slate-100">⋯</button>
                       {menuTemplateId === template.id && (
-                        <div className={`absolute ${ar ? "left-0" : "right-0"} top-7 z-[100] w-48 rounded-xl border border-slate-200 bg-white p-1.5 shadow-xl`}>
+                        <div className={`wd-floating-action-menu absolute ${ar ? "left-0" : "right-0"} top-7 z-[200] w-48 rounded-xl border border-[color:var(--wd-line,#e5e7eb)] bg-[var(--wd-surface,#fff)] p-1.5 shadow-xl`}>
                           {template.permissions.canUse && <button type="button" onClick={() => { setUseTarget(template); setNewName(template.name); setMenuTemplateId(null); }} className="block w-full rounded-lg px-3 py-2 text-left text-[11.5px] text-slate-700 hover:bg-slate-50">{text(ar, "Use template", "استخدام القالب")}</button>}
                           {template.permissions.canEdit && <button type="button" onClick={() => openContentEditor(template)} className="block w-full rounded-lg px-3 py-2 text-left text-[11.5px] font-medium text-[var(--wd-primary)] hover:bg-slate-50">{text(ar, "Edit content", "تحرير المحتوى")}</button>}
                           {template.permissions.canEdit && <button type="button" onClick={() => { setMenuTemplateId(null); router.push(`/files/templates/studio/${template.id}`); }} className="block w-full rounded-lg px-3 py-2 text-left text-[11.5px] font-medium text-[var(--wd-primary)] hover:bg-slate-50">{text(ar, "Template Studio", "استوديو القوالب")}</button>}
