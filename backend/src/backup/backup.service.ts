@@ -562,8 +562,10 @@ export class BackupService {
           });
         } catch (copyErr) {
           this.logger.warn(
-            `copy failed for file ${file.id}: ${copyErr instanceof Error ? copyErr.message : copyErr}; indexing metadata only`,
+            `copy failed for file ${file.id}: ${copyErr instanceof Error ? copyErr.message : copyErr}; skipping object (no restore without bytes)`,
           );
+          filesSkipped += 1;
+          continue;
         }
 
         const path = buildPath(file.folderId, file.name).slice(0, 2000);
