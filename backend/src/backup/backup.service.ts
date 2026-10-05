@@ -9,6 +9,7 @@ import {
 import { BackupPurgeStatus, BackupRestoreMode, BackupRestoreStatus, BackupRunKind, BackupRunStatus, BackupScope, BackupScheduleKind, FileStatus, Prisma, UploadStatus, VersionStatus } from '@prisma/client';
 import { createHash, randomUUID } from 'node:crypto';
 import type { AccessTokenPayload } from '../auth/jwt.types';
+import { getTenantStore, runWithTenant } from '../auth/tenant-context';
 import { PrismaService } from '../prisma/prisma.service';
 import { STORAGE_SERVICE, type StorageService } from '../storage/storage.types';
 import { BackupCryptoService } from './backup-crypto.service';
@@ -418,6 +419,10 @@ export class BackupService {
   }
 
   async executeRun(runId: string, orgId: string) {
+    const store = getTenantStore();
+    if (!store?.orgId || store.orgId !== orgId) {
+      return runWithTenant({ orgId, userId: store?.userId || 'backup-worker' }, () => this.executeRun(runId, orgId));
+    }
     if (this.running.has(runId)) return;
     this.running.add(runId);
     try {
@@ -772,6 +777,10 @@ export class BackupService {
   }
 
   async executeRestore(jobId: string, user: AccessTokenPayload) {
+    const store = getTenantStore();
+    if (!store?.orgId || store.orgId !== user.org_id) {
+      return runWithTenant({ orgId: user.org_id, userId: user.sub }, () => this.executeRestore(jobId, user));
+    }
     const orgId = user.org_id;
     const job = await this.prisma.backupRestoreJob.findFirst({ where: { id: jobId, orgId } });
     if (!job || job.status === BackupRestoreStatus.CANCELLED) return;
