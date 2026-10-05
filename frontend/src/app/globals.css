@@ -5511,3 +5511,33 @@ html[data-theme="dark"] .zoho-fd-tab.is-active{color:var(--wd-primary);border-bo
 html[data-theme="dark"] .zoho-fd-btn-primary{background:var(--wd-primary)}
 html[data-theme="dark"] .zoho-fd-preview-box,
 html[data-theme="dark"] .zoho-fd-panel{background:#1e293b;border-color:var(--wd-line)}
+
+/* Details empty state (inspector) */
+.wd-zoho-empty{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;padding:48px 18px;text-align:center;min-height:280px}
+.wd-zoho-empty p{margin:0;max-width:240px;font-size:13px;line-height:1.5;color:#6b7280}
+.wd-zoho-empty-illu{position:relative;width:120px;height:90px;margin-bottom:8px}
+.wd-zoho-empty-card{position:absolute;left:50%;border-radius:10px;border:1.5px solid #c7d2fe;background:#eef2ff}
+.wd-zoho-empty-card-a{width:72px;height:28px;top:12px;transform:translateX(-60%);background:#fff7ed;border-color:#fdba74}
+.wd-zoho-empty-card-b{width:88px;height:34px;top:36px;transform:translateX(-40%);background:#e0e7ff;border-style:dashed}
+.wd-zoho-empty-hand{position:absolute;right:8px;bottom:4px;font-size:22px}
+
+/* Description box Zoho style */
+.wd-zoho-desc-box{margin:8px 0 14px;border:1px solid #c7d2fe;border-radius:10px;padding:10px;background:#fff}
+.wd-zoho-desc-textarea{width:100%;border:0;outline:0;resize:vertical;min-height:72px;font-size:13px;font-family:inherit;color:#1f2937;background:transparent}
+.wd-zoho-desc-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:8px}
+.wd-zoho-desc-cancel{border:0;background:transparent;color:#6b7280;font-size:13px;cursor:pointer;padding:6px 10px}
+.wd-zoho-desc-save{border:0;border-radius:8px;background:#1a73e8;color:#fff;font-size:13px;font-weight:600;cursor:pointer;padding:6px 14px}
+
+/* File details tabs centered */
+.zoho-fd-tabs-center{justify-content:center}
+.zoho-fd-tab{min-width:110px;padding:14px 18px 12px}
+
+/* Mobile general info: stack, shrink preview */
+@media (max-width:760px){
+  .zoho-fd-general{grid-template-columns:1fr !important;gap:16px}
+  .zoho-fd-preview-box{height:140px;max-width:100%}
+  .zoho-fd-info-row{grid-template-columns:1fr !important;gap:4px;padding:8px 0}
+  .zoho-fd-tabs{justify-content:flex-start}
+  .wd-zoho-details-preview{height:120px}
+}
+
