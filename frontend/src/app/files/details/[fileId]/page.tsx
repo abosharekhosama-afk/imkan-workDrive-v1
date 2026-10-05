@@ -222,7 +222,7 @@ export default function FileDetailsPage() {
   ];
 
   return (
-    <div className="zoho-file-details" dir={ar ? "rtl" : "ltr"} style={{ fontFamily: "var(--user-font-family), Arial, system-ui, sans-serif" }}>
+    <div className="zoho-file-details theme-aware-page" dir={ar ? "rtl" : "ltr"} style={{ fontFamily: "var(--user-font-family), Arial, system-ui, sans-serif", color: "var(--wd-text, #212121)", background: "var(--wd-canvas, #ffffff)" }}>
       <header className="zoho-fd-header">
         <div className="zoho-fd-title-block">
           <FileTypeIcon kind={kind} size={22} />
