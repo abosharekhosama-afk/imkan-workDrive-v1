@@ -60,8 +60,9 @@ export function InspectorPanel({ onVersionHistory }: { onVersionHistory?: (fileI
   const [templateBusy, setTemplateBusy] = useState(false);
   const [editingDesc, setEditingDesc] = useState(false);
   const [desc, setDesc] = useState("");
+  const [descDraft, setDescDraft] = useState("");
   const [resourceShares, setResourceShares] = useState<Awaited<ReturnType<typeof listSharedByMe>>>([]);
-  const [facts, setFacts] = useState<{ id: string; location: string | null; labels: string[]; createdAt: string | null; updatedAt: string | null; size: number | null; mimeType: string | null; ownerName: string | null } | null>(null);
+  const [facts, setFacts] = useState<{ id: string; location: string | null; labels: string[]; createdAt: string | null; updatedAt: string | null; size: number | null; mimeType: string | null; ownerName: string | null; containsFolders?: number | null; containsFiles?: number | null; description?: string | null } | null>(null);
   const [fileActivities, setFileActivities] = useState<FileActivityRecord[]>([]);
   const [primarySlot, setPrimarySlot] = useState<"details" | "dataTemplates">(inspectorTab === "dataTemplates" ? "dataTemplates" : "details");
   const resourceId = selected ? (selected.kind === "FILE" ? selected.file.id : selected.folder.id) : null;
@@ -106,7 +107,7 @@ export function InspectorPanel({ onVersionHistory }: { onVersionHistory?: (fileI
         listFolderDataTemplateBindings(id).catch(() => [] as DataTemplateBinding[]),
       ]).then(([location, rows]) => {
         if (cancel) return;
-        setFacts({ id, location, labels: rows.map((row) => row.template?.name).filter((name): name is string => Boolean(name)), createdAt: folder.updatedAt ?? null, updatedAt: folder.updatedAt ?? null, size: null, mimeType: null, ownerName: folder.ownerName ?? null });
+        setFacts({ id, location, labels: rows.map((row) => row.template?.name).filter((name): name is string => Boolean(name)), createdAt: (folder as { createdAt?: string }).createdAt ?? folder.updatedAt ?? null, updatedAt: folder.updatedAt ?? null, size: (folder as { size?: number }).size ?? null, mimeType: null, ownerName: folder.ownerName ?? null, containsFolders: (folder as { folderCount?: number }).folderCount ?? null, containsFiles: (folder as { fileCount?: number }).fileCount ?? folder.itemCount ?? null });
         setFileActivities([]);
       });
     }
@@ -114,7 +115,7 @@ export function InspectorPanel({ onVersionHistory }: { onVersionHistory?: (fileI
   }, [resourceId, selected]);
   useEffect(() => {
     if (!resourceId) { setDesc(""); setEditingDesc(false); return; }
-    try { setDesc(localStorage.getItem(descKey(resourceId)) ?? ""); } catch { setDesc(""); }
+    try { const v = localStorage.getItem(descKey(resourceId)) ?? ""; setDesc(v); setDescDraft(v); } catch { setDesc(""); setDescDraft(""); }
     setEditingDesc(false);
   }, [resourceId]);
   const shareSummary = useMemo(
@@ -159,25 +160,67 @@ export function InspectorPanel({ onVersionHistory }: { onVersionHistory?: (fileI
       </div>
       <div className="min-h-0 flex-1 overflow-y-auto px-4 py-3">
         {selected === null || name === null ? (
-          <p className="text-[13px] text-[#4F4F4F]">{label("inspector.empty")}</p>
+          <div className="wd-zoho-empty">
+            {inspectorTab === "dataTemplates" ? (
+              <>
+                <div className="wd-zoho-empty-illu" aria-hidden="true">
+                  <span className="wd-zoho-empty-card wd-zoho-empty-card-a" />
+                  <span className="wd-zoho-empty-card wd-zoho-empty-card-b" />
+                  <span className="wd-zoho-empty-hand">👆</span>
+                </div>
+                <p>{locale === "ar" ? "يرجى تحديد ملف أو مجلد لعرض قوالب البيانات والحقول المخصصة المرتبطة به." : "Please select a file/folder to view associated data templates and custom fields."}</p>
+              </>
+            ) : (
+              <>
+                <div className="wd-zoho-empty-illu" aria-hidden="true">
+                  <span className="wd-zoho-empty-card wd-zoho-empty-card-a" />
+                  <span className="wd-zoho-empty-card wd-zoho-empty-card-b" />
+                  <span className="wd-zoho-empty-hand">👆</span>
+                </div>
+                <p>{locale === "ar" ? "يرجى تحديد ملف أو مجلد لعرض التفاصيل." : "Please select a file or folder to view details."}</p>
+              </>
+            )}
+          </div>
         ) : inspectorTab === "details" ? (
           <div className="wd-zoho-details">
             <div className="wd-zoho-details-head">
               <FileTypeIcon kind={kind} size={18} />
               <span className="wd-zoho-details-name" title={name}>{name}</span>
-              <button type="button" className="wd-zoho-details-rename" aria-label={locale === "ar" ? "إعادة تسمية" : "Rename"} onClick={() => setEditingDesc(true)}><Icons.pencil size={14} /></button>
+              <button type="button" className="wd-zoho-details-rename" aria-label={locale === "ar" ? "إعادة تسمية" : "Rename"} onClick={() => { setDescDraft(desc); setEditingDesc(true); }}><Icons.pencil size={14} /></button>
             </div>
+
             {editingDesc ? (
-              <input value={desc} onChange={(e) => setDesc(e.target.value)} onBlur={saveDesc}
-                onKeyDown={(e) => { if (e.key === "Enter") saveDesc(); if (e.key === "Escape") setEditingDesc(false); }}
-                className="wd-zoho-details-desc-input" autoFocus aria-label={label("inspector.addDescription")} placeholder={label("inspector.addDescription")} />
+              <div className="wd-zoho-desc-box">
+                <textarea
+                  value={descDraft}
+                  maxLength={2000}
+                  onChange={(e) => setDescDraft(e.target.value.slice(0, 2000))}
+                  className="wd-zoho-desc-textarea"
+                  autoFocus
+                  placeholder={locale === "ar" ? "إضافة وصف (بحد أقصى 2000 حرف)" : "Add description (Max. 2000 characters)"}
+                  rows={4}
+                />
+                <div className="wd-zoho-desc-actions">
+                  <button type="button" className="wd-zoho-desc-cancel" onClick={() => { setEditingDesc(false); setDescDraft(desc); }}>{locale === "ar" ? "إلغاء" : "Cancel"}</button>
+                  <button type="button" className="wd-zoho-desc-save" onClick={() => {
+                    const next = descDraft.slice(0, 2000);
+                    setDesc(next);
+                    if (resourceId) { try { localStorage.setItem(descKey(resourceId), next); } catch { /* ignore */ } }
+                    setEditingDesc(false);
+                  }}>{locale === "ar" ? "حفظ" : "Save"}</button>
+                </div>
+              </div>
             ) : (
-              <button type="button" onClick={() => setEditingDesc(true)} className="wd-zoho-details-desc">{desc || (locale === "ar" ? "إضافة وصف" : "Add description")}</button>
+              <button type="button" onClick={() => { setDescDraft(desc); setEditingDesc(true); }} className="wd-zoho-details-desc">
+                {desc || (locale === "ar" ? "إضافة وصف" : "Add description")}
+              </button>
             )}
 
-            <div className="wd-zoho-details-preview" aria-hidden="true">
-              <FileTypeIcon kind={kind} size={42} />
-            </div>
+            {selected.kind === "FILE" ? (
+              <div className="wd-zoho-details-preview" aria-hidden="true">
+                <FileTypeIcon kind={kind} size={42} />
+              </div>
+            ) : null}
 
             <div className="wd-zoho-details-owner">
               <span className="wd-zoho-details-avatar">{(fact?.ownerName || ownerName || "?").slice(0, 1).toUpperCase()}</span>
@@ -232,7 +275,7 @@ export function InspectorPanel({ onVersionHistory }: { onVersionHistory?: (fileI
                 </div>
               ) : null}
               <button type="button" className="wd-zoho-details-add-labels" onClick={() => {
-                if (!resourceId) return;
+                if (!resourceId || !resourceType) return;
                 window.dispatchEvent(new CustomEvent("workdrive:open-labels", { detail: { type: resourceType, id: resourceId, name } }));
               }}>{fact?.labels?.length ? (locale === "ar" ? "إضافة أو إزالة التصنيفات" : "Add or remove labels") : (locale === "ar" ? "إضافة تصنيفات" : "Add labels")}</button>
             </div>
@@ -249,9 +292,27 @@ export function InspectorPanel({ onVersionHistory }: { onVersionHistory?: (fileI
 
             <div className="wd-zoho-details-meta">
               <div><span>{locale === "ar" ? "النوع" : "Type"}</span><strong>{selected.kind === "FILE" ? (selected.file.fileType || fact?.mimeType || selected.file.mimeType || "File") : (locale === "ar" ? "مجلد" : "Folder")}</strong></div>
-              {selected.kind === "FILE" ? <div><span>{locale === "ar" ? "وقت الإنشاء" : "Time Created"}</span><strong>{formatDateLocalized(createdAt, locale)}</strong></div> : null}
+              <div><span>{locale === "ar" ? "وقت الإنشاء" : "Time Created"}</span><strong>{formatDateLocalized(createdAt, locale)}</strong></div>
               <div><span>{locale === "ar" ? "عدّله" : "Modified by"}</span><strong>{modifiedBy}</strong></div>
-              {selected.kind === "FILE" ? <div><span>{locale === "ar" ? "المساحة المستخدمة" : "Storage Used"}</span><strong>{(fact?.size ?? selected.file.size ?? 0) > 0 ? formatBytes(fact?.size ?? selected.file.size ?? 0) : (locale === "ar" ? "التخزين مجاني لملفات التنسيق الأصلي." : "Storage is free for files in native format.")}</strong></div> : null}
+              {selected.kind === "FOLDER" ? (
+                <div><span>{locale === "ar" ? "يحتوي" : "Contains"}</span><strong>{
+                  (() => {
+                    const folders = fact?.containsFolders;
+                    const files = fact?.containsFiles;
+                    if (folders == null && files == null) return "—";
+                    const parts = [];
+                    if (folders != null) parts.push(`${folders} ${locale === "ar" ? "مجلدات" : "folders"}`);
+                    if (files != null) parts.push(`${files} ${locale === "ar" ? "ملفات" : "files"}`);
+                    return parts.join(locale === "ar" ? " ، " : ", ");
+                  })()
+                }</strong></div>
+              ) : null}
+              <div><span>{locale === "ar" ? "الحجم" : "Size"}</span><strong>{selected.kind === "FILE" ? formatBytes(fact?.size ?? selected.file.size ?? 0) : (fact?.size != null ? formatBytes(fact.size) : "—")}</strong></div>
+              <div><span>{locale === "ar" ? "المساحة المستخدمة" : "Storage Used"}</span><strong>{
+                selected.kind === "FILE"
+                  ? ((fact?.size ?? selected.file.size ?? 0) > 0 ? formatBytes(fact?.size ?? selected.file.size ?? 0) : (locale === "ar" ? "التخزين مجاني لملفات التنسيق الأصلي." : "Storage is free for files in native format."))
+                  : (fact?.size != null ? formatBytes(fact.size) : "—")
+              }</strong></div>
             </div>
           </div>
         ) : inspectorTab === "dataTemplates" ? (
