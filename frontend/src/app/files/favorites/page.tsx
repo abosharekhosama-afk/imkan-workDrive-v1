@@ -88,7 +88,7 @@ export default function FavoritesPage() {
   };
 
   return (
-    <div className="wd-page favorites-page flex h-full min-h-0 flex-1 flex-col overflow-hidden !p-0">
+    <div className="wd-page favorites-page flex h-full min-h-0 flex-1 flex-col overflow-hidden !p-0 wd-list-page">
       <header className="wd-page-head shrink-0 px-4 pt-4 md:px-6">
         <div className="wd-page-head-titles">
           <h1>
