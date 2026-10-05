@@ -10,6 +10,7 @@ const VIEW_OPTIONS = [
   ["list", "view.list", Icons.list] as const,
   ["compact", "view.compact", Icons.compact] as const,
   ["grid", "view.grid", Icons.grid] as const,
+  ["index", "view.index", Icons.columns] as const,
 ];
 
 export function ViewModePicker({
@@ -38,7 +39,7 @@ export function ViewModePicker({
   }
 
   const activeIcon =
-    view === "grid" ? <Icons.grid size={15} /> : view === "compact" ? <Icons.compact size={15} /> : <Icons.list size={15} />;
+    view === "grid" ? <Icons.grid size={15} /> : view === "compact" ? <Icons.compact size={15} /> : view === "index" ? <Icons.columns size={15} /> : <Icons.list size={15} />;
 
   return (
     <div className={className}>

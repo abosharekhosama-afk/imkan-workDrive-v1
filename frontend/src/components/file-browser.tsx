@@ -873,7 +873,7 @@ export function FileBrowser({
 
       {error ? <AlertBanner message={error} action={<button type="button" className="imkan-button-secondary" onClick={() => void load()}>{label("feedback.retry")}</button>} /> : null}
 
-      <div className="wd-file-browser-body min-h-0 flex-1 bg-white">
+      <div className={`wd-file-browser-body min-h-0 flex-1 bg-white${viewMode === "index" ? " is-index-view" : ""}`}>
       {loading ? <SkeletonLoader columns={6} /> : viewMode === "grid" ? (
         <FileGridView
           folders={filteredContents.folders}

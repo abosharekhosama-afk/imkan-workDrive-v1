@@ -16,7 +16,7 @@ export function Breadcrumbs({
 }) {
   const { label } = useLocale();
   return (
-    <nav className="mb-3 text-[length:var(--imkan-font-size-secondary)]" aria-label={label("files.breadcrumb.root")}>
+    <nav className="wd-file-path mb-3 px-4 text-[length:var(--imkan-font-size-secondary)] sm:px-5 md:px-6" aria-label={label("files.breadcrumb.root")}>
       <ol className="flex flex-wrap items-center gap-1.5">
         <li>
           <Link href="/files" className="rounded-sm text-[color:var(--imkan-color-muted)] transition-colors hover:text-[color:var(--imkan-color-foreground)] hover:underline">

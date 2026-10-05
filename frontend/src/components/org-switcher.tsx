@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, type RefObject } from "react";
+import { createPortal } from "react-dom";
 import { useLocale } from "./locale-provider";
 import type { MessageKey } from "../i18n";
 import {
@@ -66,7 +67,10 @@ export function OrgSwitcher({ organizationName, userRole }: OrgSwitcherProps) {
   useEffect(() => {
     if (!open) return;
     const onPointerDown = (event: MouseEvent) => {
-      if (!containerRef.current?.contains(event.target as Node)) setOpen(false);
+      const target = event.target as Node;
+      if (containerRef.current?.contains(target)) return;
+      if ((event.target as Element | null)?.closest?.(".zoho-org-menu")) return;
+      setOpen(false);
     };
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") setOpen(false);
@@ -121,22 +125,69 @@ export function OrgSwitcher({ organizationName, userRole }: OrgSwitcherProps) {
         </span>
         <span className={`chevron${open ? " open" : ""}`} aria-hidden="true">⌄</span>
       </button>
-      {open ? <OrgMenu memberships={memberships} switchingId={switchingId} onSwitch={onSwitch} onClose={() => setOpen(false)} /> : null}
+      {open ? <OrgMenu anchorRef={containerRef} memberships={memberships} switchingId={switchingId} onSwitch={onSwitch} onClose={() => setOpen(false)} /> : null}
     </div>
   );
 }
 
 interface OrgMenuProps {
+  anchorRef: RefObject<HTMLDivElement | null>;
   memberships: OrganizationMembershipSummary[];
   switchingId: string | null;
   onSwitch: (organizationId: string) => Promise<void>;
   onClose: () => void;
 }
 
-function OrgMenu({ memberships, switchingId, onSwitch, onClose }: OrgMenuProps) {
+function OrgMenu({ anchorRef, memberships, switchingId, onSwitch, onClose }: OrgMenuProps) {
   const { label } = useLocale();
-  return (
-    <div className="zoho-profile-menu zoho-org-menu" role="menu">
+  const menuRef = useRef<HTMLDivElement | null>(null);
+  const [pos, setPos] = useState<{ top: number; left: number; width: number } | null>(null);
+
+  useLayoutEffect(() => {
+    const place = () => {
+      const anchor = anchorRef.current?.getBoundingClientRect();
+      if (!anchor) return;
+      const width = Math.min(260, Math.max(200, window.innerWidth - 16));
+      const pad = 8;
+      // Prefer aligning to the end edge of the trigger (keeps menu on-screen near header edge)
+      let left = anchor.right - width;
+      left = Math.min(Math.max(pad, left), window.innerWidth - width - pad);
+      let top = anchor.bottom + 6;
+      const estHeight = Math.min(360, 48 + memberships.length * 44 + 56);
+      if (top + estHeight > window.innerHeight - pad) {
+        top = Math.max(pad, anchor.top - estHeight - 6);
+      }
+      setPos({ top, left, width });
+    };
+    place();
+    window.addEventListener("resize", place);
+    window.addEventListener("scroll", place, true);
+    return () => {
+      window.removeEventListener("resize", place);
+      window.removeEventListener("scroll", place, true);
+    };
+  }, [anchorRef, memberships.length]);
+
+  if (!pos) return null;
+
+  const menu = (
+    <div
+      ref={menuRef}
+      className="zoho-profile-menu zoho-org-menu"
+      role="menu"
+      style={{
+        position: "fixed",
+        top: pos.top,
+        left: pos.left,
+        width: pos.width,
+        right: "auto",
+        insetInlineStart: "auto",
+        insetInlineEnd: "auto",
+        maxHeight: "min(70vh, 420px)",
+        overflowY: "auto",
+        zIndex: 200,
+      }}
+    >
       <div className="zoho-profile-rule" />
       {memberships.length === 0 ? (
         <div className="zoho-org-empty">{label("org.noOtherOrgs")}</div>
@@ -173,4 +224,6 @@ function OrgMenu({ memberships, switchingId, onSwitch, onClose }: OrgMenuProps) 
       </button>
     </div>
   );
+  if (typeof document === "undefined") return menu;
+  return createPortal(menu, document.body);
 }
