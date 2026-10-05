@@ -5541,3 +5541,119 @@ html[data-theme="dark"] .zoho-fd-panel{background:#1e293b;border-color:var(--wd-
   .wd-zoho-details-preview{height:120px}
 }
 
+
+/* ========== Theme-aware Admin + Workspace surfaces ========== */
+.admin-theme-root,
+.admin-theme-content,
+.theme-aware-page {
+  font-family: var(--user-font-family), Arial, system-ui, sans-serif !important;
+  color: var(--wd-text, #212121);
+  background-color: var(--wd-canvas, #f7f7f7);
+}
+.admin-theme-content .bg-white,
+.theme-aware-page .bg-white,
+.admin-console-shell .bg-white {
+  background-color: var(--wd-surface, #ffffff) !important;
+}
+.admin-theme-content .text-slate-900,
+.admin-theme-content .text-slate-800,
+.admin-theme-content .text-[#111827],
+.admin-theme-content .text-[#212121],
+.theme-aware-page .text-slate-900,
+.theme-aware-page .text-slate-800 {
+  color: var(--wd-text, #212121) !important;
+}
+.admin-theme-content .text-slate-600,
+.admin-theme-content .text-slate-500,
+.admin-theme-content .text-slate-400,
+.theme-aware-page .text-slate-600,
+.theme-aware-page .text-slate-500 {
+  color: var(--wd-muted, #6b7280) !important;
+}
+.admin-theme-content .border-slate-200,
+.admin-theme-content .border-[#EDEDED],
+.theme-aware-page .border-slate-200 {
+  border-color: var(--wd-line, #e5e7eb) !important;
+}
+html[data-theme="dark"] .admin-theme-root,
+html[data-theme="dark"] .admin-theme-content,
+html[data-theme="dark"] .theme-aware-page {
+  color: var(--wd-text, #e5e7eb);
+  background-color: var(--wd-canvas, #0f1115);
+}
+html[data-theme="dark"] .admin-theme-content .bg-white,
+html[data-theme="dark"] .theme-aware-page .bg-white,
+html[data-theme="dark"] .admin-console-shell .bg-white {
+  background-color: var(--wd-surface, #171a21) !important;
+}
+
+/* Floating action menus must not be clipped by table/scroll parents */
+.wd-floating-action-menu {
+  position: absolute;
+  z-index: 400 !important;
+  max-height: min(70vh, 360px);
+  overflow-y: auto;
+  box-shadow: 0 12px 40px rgba(15, 23, 42, 0.18);
+}
+/* When near bottom of viewport, flip is handled by enough z-index + overflow visible parents */
+.wd-templates-grid,
+.wd-templates-list,
+article.relative {
+  overflow: visible !important;
+}
+
+/* Search filter popovers float above content */
+.search-filter-popover {
+  position: absolute;
+  z-index: 500 !important;
+  max-height: min(60vh, 320px);
+  overflow: auto;
+}
+.search-filter-bar {
+  overflow-x: auto;
+  overflow-y: visible;
+  -webkit-overflow-scrolling: touch;
+  flex-wrap: nowrap;
+}
+
+/* List pages mobile: fill workspace without nested empty gutters */
+.wd-list-page {
+  width: 100% !important;
+  max-width: 100% !important;
+  min-height: 0 !important;
+  height: 100% !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  box-sizing: border-box;
+}
+.wd-list-page table {
+  width: 100%;
+}
+.wd-list-page .overflow-auto,
+.wd-list-page .overflow-x-auto {
+  max-width: 100%;
+}
+@media (max-width: 767.98px) {
+  .wd-list-page {
+    border-radius: 0 !important;
+  }
+  .imkan-workspace-content,
+  .imkan-workspace-layout {
+    width: 100% !important;
+    max-width: 100% !important;
+    min-width: 0 !important;
+  }
+  /* Kill nested "screen in screen" from fixed heights on list routes */
+  .wd-list-page .h-screen,
+  .wd-list-page .min-h-screen {
+    height: auto !important;
+    min-height: 0 !important;
+  }
+}
+
+/* Team manage menu above header */
+.team-context-menu,
+.wd-manage-menu {
+  z-index: 80 !important;
+  position: absolute;
+}
