@@ -5201,3 +5201,68 @@ html[data-theme="dark"] .share-zoho-modal{
 .files-shared-links{
   padding-inline:12px;
 }
+
+
+/* Shared list pages: fill height, scroll rows properly */
+.shared-with-me-page,
+.favorites-page,
+.notifications-page {
+  min-height: 0 !important;
+  height: 100%;
+}
+.shared-with-me-scroll,
+.favorites-scroll {
+  -webkit-overflow-scrolling: touch;
+}
+.shared-with-me-page .wd-table,
+.favorites-page .wd-table {
+  width: 100%;
+}
+.shared-with-me-page .wd-card,
+.favorites-page .wd-card {
+  margin-bottom: 0;
+}
+
+/* Workflow shell tabs theme */
+.workflow-shell-tab {
+  color: var(--wd-sidebar-muted, #64748b) !important;
+  border-bottom-color: transparent !important;
+  font-family: var(--user-font-family), Arial, system-ui, sans-serif !important;
+}
+.workflow-shell-tab.is-active {
+  color: var(--wd-primary, #2c66dd) !important;
+  border-bottom-color: var(--wd-primary, #2c66dd) !important;
+  font-weight: 700 !important;
+}
+.workflow-shell-header,
+.workflow-shell-header h1,
+.workflow-shell-header p,
+.workflow-ui,
+.workflow-ui .text-slate-900,
+.workflow-ui .text-slate-800,
+.workflow-table-head,
+.workflow-table-row {
+  font-family: var(--user-font-family), Arial, system-ui, sans-serif !important;
+}
+.workflow-info-banner {
+  border-color: var(--wd-line) !important;
+  background: var(--wd-primary-light, #eff6ff) !important;
+}
+.workflow-table-shell {
+  border-color: var(--wd-line) !important;
+  background: var(--wd-bg, #fff) !important;
+}
+html[data-theme="dark"] .workflow-shell-header,
+html[data-theme="dark"] .workflow-ui {
+  background: var(--wd-bg) !important;
+  color: var(--wd-text) !important;
+}
+
+/* Admin sidebar collapsed links centered */
+.admin-console-sidebar.w-16 a {
+  justify-content: center;
+  padding-inline: 0 !important;
+}
+.admin-console-sidebar.w-16 a span.min-w-0 {
+  display: none;
+}
