@@ -22,7 +22,8 @@ import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { Inject } from '@nestjs/common';
 import { createHash } from 'crypto';
 import { getTenantStore } from '../auth/tenant-context';
-import { buildTenantObjectKey, parseTenantObjectKey, buildPublicTemplateObjectKey, encodeS3CopySource, isPublicTemplateObjectKey } from './object-key';
+import { buildTenantObjectKey, parseTenantObjectKey, buildPublicTemplateObjectKey, encodeS3CopySource, isPublicTemplateObjectKey, isBackupObjectKey, assertAllowedObjectKey } from './object-key';
+// backup key helpers imported below if needed
 import { contentDispositionInline } from '../common/content-disposition';
 import {
   S3_CLIENT,
@@ -113,9 +114,15 @@ export class S3CompatibleStorageAdapter implements StorageService {
   /** Server-side ingestion for direct multipart uploads (version upload). */
   async copyStoredObject(sourceStorageKey: string, destination: StorageObjectRequest): Promise<void> {
     const orgId = this.authorize(destination);
-    const source = isPublicTemplateObjectKey(sourceStorageKey) ? null : parseTenantObjectKey(sourceStorageKey);
-    if (source && source.orgId !== orgId) throw new ForbiddenException('Resource does not belong to this organization');
+    assertAllowedObjectKey(sourceStorageKey);
+    if (isPublicTemplateObjectKey(sourceStorageKey) || isBackupObjectKey(sourceStorageKey)) {
+      // public templates + backup namespace keys are allowed; org isolation is enforced by BackupService/DB scope
+    } else {
+      const source = parseTenantObjectKey(sourceStorageKey);
+      if (source.orgId !== orgId) throw new ForbiddenException('Resource does not belong to this organization');
+    }
     const destinationKey = destination.storageKey ?? buildTenantObjectKey(orgId, destination.fileId, destination.versionId);
+    assertAllowedObjectKey(destinationKey);
     await this.client.send(new CopyObjectCommand({
       Bucket: this.bucket(),
       CopySource: encodeS3CopySource(this.bucket(), sourceStorageKey),
@@ -126,8 +133,13 @@ export class S3CompatibleStorageAdapter implements StorageService {
   }
 
   async readStoredObject(storageKey: string): Promise<Buffer> {
-    const source = isPublicTemplateObjectKey(storageKey) ? null : parseTenantObjectKey(storageKey);
-    if (source && source.orgId !== this.requireOrgId()) throw new ForbiddenException('Resource does not belong to this organization');
+    assertAllowedObjectKey(storageKey);
+    if (isPublicTemplateObjectKey(storageKey) || isBackupObjectKey(storageKey)) {
+      // allowed namespaces
+    } else {
+      const source = parseTenantObjectKey(storageKey);
+      if (source.orgId !== this.requireOrgId()) throw new ForbiddenException('Resource does not belong to this organization');
+    }
     try {
       const result = await this.client.send(new GetObjectCommand({ Bucket: this.bucket(), Key: storageKey }));
       const body: any = result.Body;

@@ -50,3 +50,26 @@ export function encodeS3CopySource(bucket: string, objectKey: string): string {
   const encodedKey = objectKey.split('/').map((part) => encodeURIComponent(part)).join('%2F');
   return `${encodeURIComponent(bucket)}/${encodedKey}`;
 }
+
+/** Backup namespace keys: backups/{orgHmac32}/{runId}/{fileId}/{hint-nonce} */
+const BACKUP_OBJECT_KEY_RE =
+  /^backups\/([a-f0-9]{32})\/([0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12})\/([0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12})\/([A-Za-z0-9._-]+)$/i;
+
+export function isBackupObjectKey(objectKey: string): boolean {
+  return BACKUP_OBJECT_KEY_RE.test(objectKey);
+}
+
+/**
+ * Validates that a physical key is one of the allowed namespaces
+ * (tenant live files, public templates, or backup snapshots).
+ * Rejects path traversal and arbitrary keys.
+ */
+export function assertAllowedObjectKey(objectKey: string): void {
+  if (!objectKey || objectKey.includes('..') || objectKey.includes('\\') || objectKey.startsWith('/')) {
+    throw new Error('Invalid object key');
+  }
+  if (OBJECT_KEY_RE.test(objectKey) || isPublicTemplateObjectKey(objectKey) || isBackupObjectKey(objectKey)) {
+    return;
+  }
+  throw new Error('Invalid object key');
+}

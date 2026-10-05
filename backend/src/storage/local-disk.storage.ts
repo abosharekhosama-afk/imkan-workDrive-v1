@@ -16,7 +16,7 @@ import {
   verifyObjectAccess,
   type ObjectAccessMethod,
 } from './object-access-token';
-import { buildTenantObjectKey, parseTenantObjectKey, buildPublicTemplateObjectKey, parsePublicTemplateObjectKey, isPublicTemplateObjectKey } from './object-key';
+import { buildTenantObjectKey, parseTenantObjectKey, buildPublicTemplateObjectKey, parsePublicTemplateObjectKey, isPublicTemplateObjectKey, isBackupObjectKey, assertAllowedObjectKey } from './object-key';
 import type {
   SignedUrlResult,
   StorageObjectRequest,
@@ -183,10 +183,10 @@ export class LocalDiskStorageAdapter implements StorageService {
    */
   async assertStoredObjectExists(storageKey: string): Promise<void> {
     try {
-      if (!isPublicTemplateObjectKey(storageKey)) {
-        const parsed = parseTenantObjectKey(storageKey);
-        if (parsed.orgId !== this.requireOrgId()) throw new ForbiddenException('Resource does not belong to this organization');
-      }
+      if (!isPublicTemplateObjectKey(storageKey) && !isBackupObjectKey(storageKey)) {
+      const parsed = parseTenantObjectKey(storageKey);
+      if (parsed.orgId !== this.requireOrgId()) throw new ForbiddenException('Resource does not belong to this organization');
+    }
       await access(this.resolveObjectPath(storageKey));
     } catch (error) {
       if (error instanceof ForbiddenException) throw error;
@@ -222,9 +222,15 @@ export class LocalDiskStorageAdapter implements StorageService {
   /** Server-side ingestion for direct multipart uploads (version upload). */
   async copyStoredObject(sourceStorageKey: string, destination: StorageObjectRequest): Promise<void> {
     const orgId = this.authorize(destination);
-    const source = isPublicTemplateObjectKey(sourceStorageKey) ? null : parseTenantObjectKey(sourceStorageKey);
-    if (source && source.orgId !== orgId) throw new ForbiddenException('Resource does not belong to this organization');
+    assertAllowedObjectKey(sourceStorageKey);
+    if (isPublicTemplateObjectKey(sourceStorageKey) || isBackupObjectKey(sourceStorageKey)) {
+      // public templates + backup namespace keys are allowed; org isolation is enforced by BackupService/DB scope
+    } else {
+      const source = parseTenantObjectKey(sourceStorageKey);
+      if (source.orgId !== orgId) throw new ForbiddenException('Resource does not belong to this organization');
+    }
     const destinationKey = destination.storageKey ?? buildTenantObjectKey(orgId, destination.fileId, destination.versionId);
+    assertAllowedObjectKey(destinationKey);
     const sourcePath = this.resolveObjectPath(sourceStorageKey);
     const destinationPath = this.resolveObjectPath(destinationKey);
     await mkdir(dirname(destinationPath), { recursive: true });
@@ -232,7 +238,8 @@ export class LocalDiskStorageAdapter implements StorageService {
   }
 
   async readStoredObject(storageKey: string): Promise<Buffer> {
-    if (!isPublicTemplateObjectKey(storageKey)) {
+    assertAllowedObjectKey(storageKey);
+    if (!isPublicTemplateObjectKey(storageKey) && !isBackupObjectKey(storageKey)) {
       const parsed = parseTenantObjectKey(storageKey);
       if (parsed.orgId !== this.requireOrgId()) throw new ForbiddenException('Resource does not belong to this organization');
     }
