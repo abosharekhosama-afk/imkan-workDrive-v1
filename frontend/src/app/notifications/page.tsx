@@ -48,8 +48,8 @@ export default function NotificationsPage() {
   const unread = items.filter((n) => !n.readAt).length;
 
   return (
-    <main className="h-full min-h-0 overflow-y-auto bg-white p-4 sm:p-6" dir={ar ? "rtl" : "ltr"}>
-      <div className="mx-auto w-full max-w-[1040px]">
+    <main className="notifications-page flex h-full min-h-0 flex-1 flex-col overflow-hidden bg-white" dir={ar ? "rtl" : "ltr"}>
+      <div className="mx-auto min-h-0 w-full max-w-[1040px] flex-1 overflow-y-auto p-4 sm:p-6">
         <div className="mb-5 flex flex-wrap items-end justify-between gap-3">
           <div>
             <p className="text-[9px] font-semibold uppercase tracking-[.16em] text-[#1B66EA]">IMKAN WorkDrive</p>
