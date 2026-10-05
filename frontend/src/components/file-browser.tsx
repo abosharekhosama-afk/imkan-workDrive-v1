@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { useSearchParams } from "next/navigation";
 import { useRouter } from "next/navigation";
 import { Breadcrumbs } from "./breadcrumbs";
@@ -421,6 +421,22 @@ export function FileBrowser({
       window.removeEventListener("workdrive:content-changed", refreshAfterCreation);
     };
   }, [searchParams, load]);
+
+  // Inspector deep-link: "Version history" inside the details pane opens the drawer.
+  // The handler is read through a ref so the listener subscribes exactly once
+  // (fixed dependency array → no re-subscribe churn on every render).
+  const onVersionHistoryRef = useRef(onVersionHistory);
+  useEffect(() => {
+    const onVersion = (event: Event) => {
+      const fileId = (event as CustomEvent<{ fileId: string }>).detail?.fileId;
+      if (!fileId) return;
+      const file = files.find((f) => f.id === fileId);
+      if (!file) return;
+      onVersionHistoryRef.current("FILE", file.id, file.name, file.mimeType ?? undefined, file.size ?? undefined);
+    };
+    window.addEventListener("workdrive:version-history", onVersion);
+    return () => window.removeEventListener("workdrive:version-history", onVersion);
+  }, [files]);
 
   // Personal view wins. Otherwise the organization default from Admin Console is applied.
   useEffect(() => {
