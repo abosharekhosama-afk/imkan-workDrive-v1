@@ -42,6 +42,8 @@ const FILES_RESERVED_SEGMENTS = new Set([
   "team-folders",
   "editor",
   "fileId",
+  "details",
+  "connections",
 ]);
 
 /** Inspector rail + panel appear only on My Files and Team Files surfaces. */
