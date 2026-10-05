@@ -27,6 +27,8 @@ export type SearchOptions = {
   dataTemplateId?: string;
   criteria?: Array<{ key: string; op: string; value: string; join: 'AND'|'OR' }>;
   sort?: "relevance" | "updated" | "created" | "name";
+  /** Limit results to this folder and its descendants (Zoho-style Search in folder). */
+  folderId?: string;
 };
 
 export function searchNames(query: string, filter: SearchFilter = "all", options: SearchOptions = {}): Promise<SearchResult> {
@@ -39,5 +41,6 @@ export function searchNames(query: string, filter: SearchFilter = "all", options
   if (options.field) url.searchParams.set('field', options.field);
   if (options.dateFrom) url.searchParams.set('dateFrom', options.dateFrom);
   if (options.dateTo) url.searchParams.set('dateTo', options.dateTo);
+  if (options.folderId) url.searchParams.set('folderId', options.folderId);
   return apiRequest<SearchResult>(`${url.pathname}${url.search}`);
 }

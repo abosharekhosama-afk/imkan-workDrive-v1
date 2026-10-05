@@ -408,6 +408,10 @@ export function FileTable({
                 onDelete: canMutate ? () => onDelete("FOLDER", folder.id) : undefined, onAssignWorkflow: onAssignWorkflow && canMutate ? () => onAssignWorkflow("FOLDER", folder.id, folder.name) : undefined,
                 onOrganize: onOrganize && canMutate ? () => onOrganize("FOLDER", folder.id) : undefined,
                 onFollowUpdates: onFollowUpdates ? () => onFollowUpdates("FOLDER", folder.id, folder.name) : undefined,
+                onSearchInFolder: () => {
+                  window.dispatchEvent(new CustomEvent("workdrive:search-in-folder", { detail: { folderId: folder.id, folderName: folder.name } }));
+                  window.dispatchEvent(new CustomEvent("workdrive:focus-search"));
+                },
                 isFollowingUpdates: followIds.has(followResourceKey("FOLDER", folder.id)), isFavorite: favoriteIds.has(folder.id),
               }}
               onCopyLink={onCopyLink ? () => onCopyLink(folder.id) : undefined}

@@ -319,8 +319,20 @@ function HeaderSearchOverlay({ onClose, inputRef }: { onClose: () => void; input
   const [fileType, setFileType] = useState<"all" | "documents" | "images" | "pdf">("all");
   const [dateRange, setDateRange] = useState<"all" | "today" | "week" | "month">("all");
   const [createdBy, setCreatedBy] = useState<"all" | "me">("all");
+  const [folderScope, setFolderScope] = useState<{ folderId: string; folderName: string } | null>(null);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [openFilter, setOpenFilter] = useState<"scope" | "fileType" | "date" | "createdBy" | null>(null);
+
+  useEffect(() => {
+    const onFolderSearch = (event: Event) => {
+      const detail = (event as CustomEvent<{ folderId?: string; folderName?: string }>).detail;
+      if (detail?.folderId) {
+        setFolderScope({ folderId: detail.folderId, folderName: detail.folderName || detail.folderId });
+      }
+    };
+    window.addEventListener("workdrive:search-in-folder", onFolderSearch);
+    return () => window.removeEventListener("workdrive:search-in-folder", onFolderSearch);
+  }, []);
   const [rows, setRows] = useState<{ folders: Array<{ id: string; name: string; ownerId?: string; teamFolderId?: string | null }>; files: Array<{ id: string; name: string; ownerId?: string; mimeType?: string | null; updatedAt?: string | null }> }>({ folders: [], files: [] });
   useEffect(() => {
     try {
@@ -347,7 +359,7 @@ function HeaderSearchOverlay({ onClose, inputRef }: { onClose: () => void; input
     }
     let live = true;
     const t = window.setTimeout(() => {
-      import("../../lib/api/search").then(({ searchNames }) => searchNames(q.trim(), scope === "folders" ? "folders" : scope === "files" ? "files" : "all").then((r) => {
+      import("../../lib/api/search").then(({ searchNames }) => searchNames(q.trim(), scope === "folders" ? "folders" : scope === "files" ? "files" : "all", { folderId: folderScope?.folderId }).then((r) => {
         if (!live) return;
         let files = (r.files ?? []);
         const now = Date.now();
@@ -374,7 +386,7 @@ function HeaderSearchOverlay({ onClose, inputRef }: { onClose: () => void; input
       }));
     }, 180);
     return () => { live = false; window.clearTimeout(t); };
-  }, [q, scope, fileType, dateRange, createdBy, currentUserId]);
+  }, [q, scope, fileType, dateRange, createdBy, currentUserId, folderScope?.folderId]);
 
   const clearFilters = () => {
     setScope("all");
@@ -455,10 +467,17 @@ function HeaderSearchOverlay({ onClose, inputRef }: { onClose: () => void; input
         </div>
 
         <div className="search-filters-row">
+          {folderScope ? (
+            <button type="button" className="search-filter-chip is-open" onClick={() => setFolderScope(null)} title="Clear folder scope">
+              <Icons.folder size={14} />
+              <span className="max-w-[140px] truncate">{folderScope.folderName}</span>
+              <span aria-hidden="true">×</span>
+            </button>
+          ) : null}
           <FilterChip kind="fileType" icon={<Icons.doc size={14} />}>{fileType === "all" ? "All File Types" : fileType === "pdf" ? "PDF" : fileType[0].toUpperCase() + fileType.slice(1)}</FilterChip>
           <FilterChip kind="date" icon={<Icons.clock size={14} />}>{dateRange === "all" ? "All Dates" : dateRange === "today" ? "Today" : dateRange === "week" ? "Last 7 days" : "Last 30 days"}</FilterChip>
           <FilterChip kind="createdBy" icon={<Icons.users size={14} />}>{createdBy === "all" ? "Created by" : "Me"}</FilterChip>
-          {hasFilters ? <button type="button" className="search-clear-filters" onClick={clearFilters}>Clear Filters</button> : null}
+          {hasFilters || folderScope ? <button type="button" className="search-clear-filters" onClick={() => { clearFilters(); setFolderScope(null); }}>Clear Filters</button> : null}
         </div>
 
         <div className="search-results">

@@ -704,8 +704,13 @@ export function FileBrowser({
         return;
       case "searchInFold": {
         const targetFolderId = single?.type === "FOLDER" ? single.id : folderId;
-        if (targetFolderId && targetFolderId !== folderId) {
-          router.push(`/files/${targetFolderId}`);
+        const targetFolderName = single?.type === "FOLDER"
+          ? single.name
+          : (folderName ?? (locale === "ar" ? "المجلد الحالي" : "Current folder"));
+        if (targetFolderId) {
+          window.dispatchEvent(new CustomEvent("workdrive:search-in-folder", {
+            detail: { folderId: targetFolderId, folderName: targetFolderName },
+          }));
         }
         window.dispatchEvent(new CustomEvent("workdrive:focus-search"));
         return;

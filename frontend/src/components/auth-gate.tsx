@@ -70,11 +70,21 @@ export function AuthGate({ children }: { children: ReactNode }) {
       hasCookie: /(?:^| )workdrive_access_token=/.test(cookie),
     }));
 
+    // Keep cookie in sync with localStorage so a new tab always inherits the session.
+    try { persistBrowserAccessToken(token); } catch { /* noop */ }
+    // Optimistic ready: show the app immediately while /auth/me confirms in background.
+    // Avoids blank screens and prevents treating network blips as logout.
+    try {
+      const cached = localStorage.getItem("workdrive_user");
+      if (cached) setReady(true);
+    } catch { /* noop */ }
+
     const validate = (attempt: number) => {
       me(token)
         .then((user) => {
           if (cancelled) return;
           localStorage.setItem("workdrive_user", JSON.stringify(user));
+          try { persistBrowserAccessToken(token); } catch { /* noop */ }
           logAuthGate("auth_state_restored", buildAuthGateDiagnostic({
             stage: "auth_state_restored",
             hasAccessToken: true,
@@ -125,7 +135,10 @@ export function AuthGate({ children }: { children: ReactNode }) {
     return () => {
       cancelled = true;
     };
-  }, [pathname, router]);
+  // Session check runs once on mount. Re-running on every pathname change caused
+  // brief ready=false flashes and could clear the session on a single flaky /auth/me.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   if (!ready) {
     return (

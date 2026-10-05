@@ -55,13 +55,24 @@ export function getApiBaseUrl(): string {
 }
 
 export async function getAccessToken(): Promise<string | null> {
-  // 1. إذا كان الكود يعمل في المتصفح (Client-side)
+  // 1. Browser: localStorage is the source of truth; cookie is a same-origin mirror for new tabs.
   if (typeof window !== "undefined") {
     const primary = window.localStorage.getItem("workdrive_access_token");
-    if (primary) return primary;
+    if (primary) {
+      // Refresh cookie expiry so multi-tab / admin console windows keep a valid cookie.
+      try {
+        const isSecure = window.location.protocol === "https:" ? "; Secure" : "";
+        document.cookie = `workdrive_access_token=${encodeURIComponent(primary)}; path=/; max-age=28800; SameSite=Lax${isSecure}`;
+      } catch { /* noop */ }
+      return primary;
+    }
 
     const match = document.cookie.match(new RegExp("(^| )workdrive_access_token=([^;]+)"));
-    if (match) return decodeURIComponent(match[2]);
+    if (match) {
+      const cookieToken = decodeURIComponent(match[2]);
+      try { window.localStorage.setItem("workdrive_access_token", cookieToken); } catch { /* noop */ }
+      return cookieToken;
+    }
 
     return window.localStorage.getItem("access_token") || window.localStorage.getItem("token");
   }

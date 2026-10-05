@@ -8,7 +8,7 @@ export type SearchFieldCriterion = { key: string; op: 'contains'|'not_contains'|
 
 export type SearchOptions = {
   type?: string; owner?: string; dateField?: 'created'|'modified'; dateFrom?: string; dateTo?: string;
-  page?: number; limit?: number; tags?: string[]; customField?: string; fieldCriteria?: SearchFieldCriterion[]; dataTemplateId?: string; sort?: 'relevance'|'updated'|'created'|'name';
+  page?: number; limit?: number; tags?: string[]; customField?: string; fieldCriteria?: SearchFieldCriterion[]; dataTemplateId?: string; sort?: 'relevance'|'updated'|'created'|'name'; folderId?: string;
 };
 
 type Hit = { score: number; matchedBy: string[] };
@@ -38,9 +38,19 @@ export class SearchService {
     const dateRange = options.dateFrom || options.dateTo ? { [dateKey]: { ...(options.dateFrom ? { gte: new Date(`${options.dateFrom}T00:00:00.000Z`) } : {}), ...(options.dateTo ? { lte: new Date(`${options.dateTo}T23:59:59.999Z`) } : {}) } } : {};
     const typeFilter = options.type && options.type !== 'all' && Object.values(FileType).includes(options.type as FileType) ? { fileType: options.type as FileType } : {};
 
+    const scopedFolderIds = options.folderId
+      ? await this.collectFolderTreeIds(user.org_id, options.folderId)
+      : null;
+    const folderScopeWhere = scopedFolderIds
+      ? { id: { in: scopedFolderIds } }
+      : {};
+    const fileFolderScopeWhere = scopedFolderIds
+      ? { folderId: { in: scopedFolderIds } }
+      : {};
+
     const [folders, files] = await Promise.all([
       this.prisma.folder.findMany({
-        where: { orgId: user.org_id, name: { search: query }, OR: [{ teamFolderId: { not: null } }, { ownerId: user.sub }] },
+        where: { orgId: user.org_id, name: { search: query }, OR: [{ teamFolderId: { not: null } }, { ownerId: user.sub }], ...folderScopeWhere },
         include: { owner: { select: { id: true, name: true, email: true, avatarUrl: true } }, dataTemplate: { select: { id: true, name: true } }, dataTemplateBindings: { include: { template: { select: { id: true, name: true } } } } },
         orderBy: { updatedAt: 'desc' }, take: candidateTake,
       }),
@@ -55,7 +65,7 @@ export class SearchService {
             { metadata: { contentText: { contains: query } } },
             { metadata: { ocrText: { contains: query } } },
           ],
-          AND: [{ OR: [{ folder: null }, { folder: { teamFolderId: { not: null } } }, { folder: { ownerId: user.sub } }] }],
+          AND: [{ OR: [{ folder: null }, { folder: { teamFolderId: { not: null } } }, { folder: { ownerId: user.sub } }] }], ...fileFolderScopeWhere,
         },
         include: {
           folder: { select: { id: true, name: true, teamFolderId: true } },
@@ -155,6 +165,27 @@ export class SearchService {
       if (op === 'lt' || op === 'below') return Number(actual) < Number(expected);
       return a === expected;
     });
+  }
+
+
+  private async collectFolderTreeIds(orgId: string, rootId: string): Promise<string[]> {
+    const ids: string[] = [rootId];
+    let frontier: string[] = [rootId];
+    while (frontier.length > 0 && ids.length < 5000) {
+      const children = await this.prisma.folder.findMany({
+        where: { orgId, parentId: { in: frontier } },
+        select: { id: true },
+        take: 2000,
+      });
+      frontier = [];
+      for (const child of children) {
+        if (!ids.includes(child.id)) {
+          ids.push(child.id);
+          frontier.push(child.id);
+        }
+      }
+    }
+    return ids;
   }
 
   private async canReadFolder(user: AccessTokenPayload, folder: { orgId: string; ownerId: string; teamFolderId?: string | null }) {
