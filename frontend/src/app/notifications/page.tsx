@@ -48,7 +48,7 @@ export default function NotificationsPage() {
   const unread = items.filter((n) => !n.readAt).length;
 
   return (
-    <main className="notifications-page flex h-full min-h-0 flex-1 flex-col overflow-hidden bg-white" dir={ar ? "rtl" : "ltr"}>
+    <main className="notifications-page flex h-full min-h-0 flex-1 flex-col overflow-hidden bg-white wd-list-page" dir={ar ? "rtl" : "ltr"}>
       <div className="mx-auto min-h-0 w-full max-w-[1040px] flex-1 overflow-y-auto p-4 sm:p-6">
         <div className="mb-5 flex flex-wrap items-end justify-between gap-3">
           <div>
