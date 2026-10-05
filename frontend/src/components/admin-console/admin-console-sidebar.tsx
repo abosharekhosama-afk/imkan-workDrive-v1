@@ -6,6 +6,7 @@ import { useEffect, useState } from "react";
 import { useLocale } from "@/components/locale-provider";
 import { getWorkspacePolicy } from "@/lib/api/organization";
 import { Icons, type IconName } from "@/components/layout/icons";
+import { useShell } from "@/components/layout/shell-context";
 
 interface AdminItem {
   href: string;
@@ -36,7 +37,11 @@ export function AdminConsoleSidebar() {
   const pathname = usePathname();
   const { locale } = useLocale();
   const ar = locale === "ar";
+  const { sidebarCollapsed, mobileNavOpen, setMobileNavOpen } = useShell();
+  const closeMobile = () => setMobileNavOpen(false);
   const [logo, setLogo] = useState<string | null>(null);
+  // Mobile drawer always shows expanded labels.
+  const collapsed = mobileNavOpen ? false : sidebarCollapsed;
   useEffect(() => {
     const load = () => { getWorkspacePolicy().then((policy) => setLogo(policy.logoDataUrl)).catch(() => undefined); };
     load();
@@ -45,12 +50,12 @@ export function AdminConsoleSidebar() {
   }, []);
 
   return (
-    <aside data-overlay-bound="sidebar" className="admin-console-sidebar flex h-full w-[255px] shrink-0 flex-col bg-[#272727] text-white" dir={ar ? "rtl" : "ltr"}>
+    <aside data-overlay-bound="sidebar" className={`admin-console-sidebar flex h-full shrink-0 flex-col bg-[#272727] text-white transition-[width] ${collapsed ? "w-16" : "w-[255px]"}`} dir={ar ? "rtl" : "ltr"}>
       <div className="flex h-[54px] shrink-0 items-center border-b border-white/10 px-4">
         <Link href="/admin" className="flex min-w-0 items-center gap-2">
           {logo ? <img src={logo} alt="" className="h-7 max-w-[120px] object-contain" /> : <span className="flex h-7 w-7 items-center justify-center rounded-md bg-[color:var(--wd-primary)] text-white"><Icons.folder size={17} /></span>}
           <span className="truncate text-[15px] font-semibold tracking-[-.01em]">IMKAN</span>
-          <span className="text-[11px] text-white/55">Admin Console</span>
+          <span className="text-[11px] text-white/55">{collapsed ? "" : "Admin Console"}</span>
         </Link>
       </div>
 
@@ -62,11 +67,11 @@ export function AdminConsoleSidebar() {
           const Icon = Icons[item.icon];
           return (
             <div key={item.href}>
-              {showSection ? <div className="px-3 pb-2 pt-4 text-[10px] font-medium text-white/45">{item.section}</div> : null}
-              <Link href={item.href} aria-current={active ? "page" : undefined}
+              {showSection && !collapsed ? <div className="px-3 pb-2 pt-4 text-[10px] font-medium text-white/45">{item.section}</div> : null}
+              <Link href={item.href} onClick={closeMobile} aria-current={active ? "page" : undefined}
                 className={`flex h-10 items-center gap-3 rounded-[10px] px-3 text-[12px] font-medium transition ${active ? "bg-[#304d82] font-semibold text-[#e6edff]" : "text-white/90 hover:bg-white/[0.07]"}`}>
                 <Icon size={18} />
-                <span className="min-w-0 flex-1 truncate">{ar ? item.ar : item.en}</span>
+                <span className="min-w-0 flex-1 truncate">{collapsed ? null : (ar ? item.ar : item.en)}</span>
               </Link>
             </div>
           );
@@ -74,9 +79,9 @@ export function AdminConsoleSidebar() {
       </nav>
 
       <div className="shrink-0 border-t border-white/10 p-2">
-        <Link href="/files" className="flex h-11 items-center gap-3 rounded-[15px] bg-white/[0.10] px-4 text-[13px] font-semibold text-white hover:bg-white/[0.15]">
+        <Link href="/files" className={`flex h-11 items-center gap-3 rounded-[15px] bg-white/[0.10] text-[13px] font-semibold text-white hover:bg-white/[0.15] ${collapsed ? "justify-center px-0" : "px-4"}`}>
           <Icons.chevR size={16} className={ar ? "rotate-180" : ""} />
-          <span>{ar ? "العودة إلى ملفات الفريق" : "Back to team files"}</span>
+          {collapsed ? null : <span>{ar ? "العودة إلى ملفات الفريق" : "Back to team files"}</span>}
         </Link>
       </div>
     </aside>
