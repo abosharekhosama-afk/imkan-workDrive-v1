@@ -6,7 +6,7 @@ import { useLocale } from "../../../../components/locale-provider";
 import { FileTypeIcon, fileIconKind } from "../../../../components/file-icon";
 import { Icons } from "../../../../components/layout/icons";
 import { getFileDetails, type FileDetailsResponse } from "../../../../lib/api/files";
-import { getFileActivities, getPreviewUrl, type FileActivityRecord } from "../../../../lib/api/preview";
+import { getFileActivities, type FileActivityRecord } from "../../../../lib/api/preview";
 import { getVersionHistory, getVersionDownloadUrlById, restoreVersionById, uploadNewVersion, type VersionRecord } from "../../../../lib/api/versions";
 import { getFolder } from "../../../../lib/api/folders";
 import { formatBytes } from "../../../../lib/api/quota";
@@ -35,208 +35,471 @@ function relative(value: string, locale: string) {
   } catch { return dateTime(value, locale); }
 }
 function activityText(action: string, locale: string) {
-  const ar: Record<string, string> = { PREVIEW: "شاهد هذا الملف", DOWNLOAD: "نزّل هذا الملف", COMMENT: "أضاف تعليقًا", SHARE: "شارك هذا الملف", UNSHARE: "ألغى المشاركة", UPLOAD_VERSION: "رفع إصدارًا جديدًا", RESTORE_VERSION: "استعاد إصدارًا", UPDATE: "حدّث هذا الملف", CREATE: "أنشأ هذا الملف", DELETE: "حذف هذا الملف" };
-  const en: Record<string, string> = { PREVIEW: "Viewed this file", DOWNLOAD: "Downloaded this file", COMMENT: "Commented on this file", SHARE: "Shared this file", UNSHARE: "Unshared this file", UPLOAD_VERSION: "Uploaded a new version", RESTORE_VERSION: "Restored a version", UPDATE: "Updated this file", CREATE: "Created this file", DELETE: "Deleted this file" };
-  return (locale === "ar" ? ar : en)[action] || action;
+  const ar: Record<string, string> = {
+    PREVIEW: "شاهد هذا الملف", VIEW: "شاهد هذا الملف", DOWNLOAD: "نزّل هذا الملف",
+    COMMENT: "أضاف تعليقًا", SHARE: "شارك هذا الملف", UNSHARE: "ألغى مشاركة هذا الملف",
+    UPLOAD: "رفع هذا الملف", RESTORE: "استعاد إصدارًا", EDIT: "عدّل هذا الملف",
+    EMBED: "أنشأ رمز تضمين لهذا الملف", DELETE_EMBED: "حذف رمز التضمين لهذا الملف",
+    ASSOCIATE: "ربط قالب بيانات بالملف",
+  };
+  const en: Record<string, string> = {
+    PREVIEW: "Viewed this file", VIEW: "Viewed this file", DOWNLOAD: "Downloaded this file",
+    COMMENT: "Added a comment", SHARE: "Shared this file", UNSHARE: "Removed sharing for this file",
+    UPLOAD: "Uploaded this file", RESTORE: "Restored a version", EDIT: "Edited this file",
+    EMBED: "Created an embed code for this file", DELETE_EMBED: "Deleted the embed code for this file",
+    ASSOCIATE: "Associated a Data Template to the file",
+  };
+  return (locale === "ar" ? ar : en)[action] ?? action;
+}
+function activityIcon(action: string) {
+  if (action === "DOWNLOAD") return "download";
+  if (action === "SHARE" || action === "EMBED") return "share";
+  if (action === "DELETE_EMBED" || action === "UNSHARE") return "x";
+  if (action === "ASSOCIATE" || action === "UPLOAD") return "plus";
+  return "eye";
 }
 
-export default function FileInformationPage() {
+export default function FileDetailsPage() {
   const { locale } = useLocale();
-  const params = useParams<{ fileId: string }>();
+  const ar = locale === "ar";
   const router = useRouter();
+  const params = useParams<{ fileId: string }>();
   const search = useSearchParams();
-  const resourceId = decodeURIComponent(params.fileId);
-  const requestedTab = search.get("tab") as Tab | null;
-  const [tab, setTab] = useState<Tab>(requestedTab === "versions" || requestedTab === "activity" || requestedTab === "access" ? requestedTab : "general");
+  const resourceId = decodeURIComponent(String(params.fileId || ""));
+  const uploadRef = useRef<HTMLInputElement | null>(null);
+  const notesRef = useRef<HTMLTextAreaElement | null>(null);
+
+  const [tab, setTab] = useState<Tab>("general");
   const [file, setFile] = useState<FileDetailsResponse | null>(null);
   const [folder, setFolder] = useState<FolderLike | null>(null);
-  const [activities, setActivities] = useState<FileActivityRecord[]>([]);
   const [versions, setVersions] = useState<VersionRecord[]>([]);
-  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [activities, setActivities] = useState<FileActivityRecord[]>([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [versionBusy, setVersionBusy] = useState<string | null>(null);
+  const [error, setError] = useState("");
   const [uploadBusy, setUploadBusy] = useState(false);
+  const [versionBusy, setVersionBusy] = useState<string | null>(null);
   const [openVersionMenu, setOpenVersionMenu] = useState<string | null>(null);
   const [accessExpanded, setAccessExpanded] = useState(true);
-  const uploadRef = useRef<HTMLInputElement | null>(null);
+  const [publicExpanded, setPublicExpanded] = useState(false);
+  const [versionFilter, setVersionFilter] = useState<"active" | "deleted">("active");
+  const [showUploadPanel, setShowUploadPanel] = useState(false);
+  const [showCheckoutPanel, setShowCheckoutPanel] = useState(false);
+  const [checkoutBusy, setCheckoutBusy] = useState(false);
+  const [checkedOut, setCheckedOut] = useState(false);
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [versionNotes, setVersionNotes] = useState("");
+  const [selectedVersionIds, setSelectedVersionIds] = useState<string[]>([]);
 
   const load = useCallback(async () => {
-    setLoading(true); setError(null);
+    if (!resourceId) return;
+    setLoading(true);
+    setError("");
     try {
-      const details = await getFileDetails(resourceId);
-      setFile(details); setFolder(null);
-      const [activityRows, versionRows] = await Promise.all([
-        getFileActivities(resourceId, 200).catch(() => []),
-        getVersionHistory(resourceId).catch(() => []),
-      ]);
-      setActivities(activityRows); setVersions(versionRows);
-      if (details.mimeType?.startsWith("image/")) {
-        getPreviewUrl(resourceId).then((r) => setPreviewUrl(r.preview_url)).catch(() => setPreviewUrl(null));
-      } else setPreviewUrl(null);
-    } catch {
-      try {
-        const row = await getFolder(resourceId);
-        setFolder(row); setFile(null); setActivities([]); setVersions([]); setPreviewUrl(null);
-      } catch {
-        setError(locale === "ar" ? "تعذر تحميل تفاصيل العنصر." : "Unable to load item details.");
+      const details = await getFileDetails(resourceId).catch(() => null);
+      if (details) {
+        setFile(details);
+        setFolder(null);
+        const [versionRows, activityRows] = await Promise.all([
+          getVersionHistory(resourceId).catch(() => [] as VersionRecord[]),
+          getFileActivities(resourceId, 100).catch(() => [] as FileActivityRecord[]),
+        ]);
+        setVersions(versionRows);
+        setActivities(activityRows);
+      } else {
+        const folderRow = await getFolder(resourceId);
+        setFolder(folderRow as FolderLike);
+        setFile(null);
+        setVersions([]);
+        setActivities([]);
       }
-    } finally { setLoading(false); }
-  }, [resourceId, locale]);
+    } catch {
+      setError(ar ? "تعذر تحميل التفاصيل." : "Unable to load details.");
+      setFile(null);
+      setFolder(null);
+    } finally {
+      setLoading(false);
+    }
+  }, [resourceId, ar]);
 
   useEffect(() => { void load(); }, [load]);
   useEffect(() => {
-    const next = search.get("tab") as Tab | null;
+    const next = (search.get("tab") || "general") as Tab;
     if (next === "versions" || next === "activity" || next === "access" || next === "general") setTab(next);
   }, [search]);
 
   const isFile = Boolean(file);
   const name = file?.name ?? folder?.name ?? "—";
   const kind = fileIconKind(isFile ? "file" : "folder", file?.mimeType ?? null, name);
-  const views = activities.filter((a) => a.action === "PREVIEW").length;
+  const views = activities.filter((a) => a.action === "PREVIEW" || a.action === "VIEW").length;
   const downloads = activities.filter((a) => a.action === "DOWNLOAD").length;
   const comments = activities.filter((a) => a.action === "COMMENT").length;
   const storageUsed = versions.reduce((total, version) => total + (Number.isFinite(version.size) ? version.size : 0), 0) || file?.size || 0;
+  const locationName = file?.location?.name || (ar ? "مجلداتي" : "My Folders");
+  const permalink = typeof window !== "undefined" ? `${window.location.origin}/files?file=${encodeURIComponent(resourceId)}` : `/files?file=${resourceId}`;
+
   const actors = useMemo(() => {
-    const map = new Map<string, { id: string; name: string; email: string; views: number; downloads: number }>();
+    const map = new Map<string, { id: string; name: string; email: string; views: number; downloads: number; lastAt: string }>();
     for (const a of activities) {
       const id = a.user_id || "unknown";
       const sameAsOwner = Boolean(file?.owner?.id && file.owner.id === a.user_id);
-      const current = map.get(id) ?? { id, name: sameAsOwner ? (file?.owner.name || file?.owner.email || "You") : (locale === "ar" ? "مستخدم" : "User"), email: sameAsOwner ? (file?.owner.email || "") : "", views: 0, downloads: 0 };
-      if (a.action === "PREVIEW") current.views += 1;
+      const current = map.get(id) ?? {
+        id,
+        name: sameAsOwner ? (file?.owner?.name || file?.owner?.email || (ar ? "أنت" : "You")) : (ar ? "مستخدم خارجي" : "External User"),
+        email: sameAsOwner ? (file?.owner?.email || "") : "",
+        views: 0,
+        downloads: 0,
+        lastAt: a.created_at || a.createdAt || "",
+      };
+      if (a.action === "PREVIEW" || a.action === "VIEW") current.views += 1;
       if (a.action === "DOWNLOAD") current.downloads += 1;
+      const at = a.created_at || a.createdAt || "";
+      if (at && (!current.lastAt || new Date(at) > new Date(current.lastAt))) current.lastAt = at;
       map.set(id, current);
     }
     return [...map.values()].sort((a, b) => (b.views + b.downloads) - (a.views + a.downloads));
-  }, [activities, file, locale]);
+  }, [activities, file, ar]);
+
+  const activeVersions = versions.filter((v) => v.status !== "DELETED");
+  const deletedVersions = versions.filter((v) => v.status === "DELETED");
+  const shownVersions = versionFilter === "active" ? activeVersions : deletedVersions;
 
   function changeTab(next: Tab) {
     setTab(next);
+    setShowUploadPanel(false);
+    setShowCheckoutPanel(false);
     router.replace(`/files/details/${encodeURIComponent(resourceId)}?tab=${next}`, { scroll: false });
   }
 
-  async function handleUploadNewVersion(selected: File | undefined) {
-    if (!selected || !isFile) return;
+  async function handleUploadNewVersion() {
+    if (!selectedFile || !isFile) return;
     setUploadBusy(true);
-    try { await uploadNewVersion(resourceId, selected); await load(); changeTab("versions"); }
-    catch { setError(locale === "ar" ? "تعذر رفع الإصدار الجديد." : "Unable to upload the new version."); }
-    finally { setUploadBusy(false); if (uploadRef.current) uploadRef.current.value = ""; }
+    try {
+      await uploadNewVersion(resourceId, selectedFile);
+      setShowUploadPanel(false);
+      setSelectedFile(null);
+      setVersionNotes("");
+      await load();
+      changeTab("versions");
+    } catch {
+      setError(ar ? "تعذر رفع الإصدار الجديد." : "Unable to upload the new version.");
+    } finally {
+      setUploadBusy(false);
+      if (uploadRef.current) uploadRef.current.value = "";
+    }
   }
 
   async function previewVersion(version: VersionRecord) {
     setVersionBusy(version.id);
-    try { const result = await getVersionDownloadUrlById(resourceId, version.id); window.open(result.download_url, "_blank", "noopener,noreferrer"); }
-    catch { /* keep the page stable if the version is no longer available */ }
+    try {
+      const result = await getVersionDownloadUrlById(resourceId, version.id);
+      window.open(result.download_url, "_blank", "noopener,noreferrer");
+    } catch { /* ignore */ }
     finally { setVersionBusy(null); setOpenVersionMenu(null); }
   }
 
   async function restoreVersion(version: VersionRecord) {
     setVersionBusy(version.id);
-    try { await restoreVersionById(resourceId, version.id); await load(); }
-    catch { setError(locale === "ar" ? "تعذر استعادة الإصدار." : "Unable to restore this version."); }
-    finally { setVersionBusy(null); setOpenVersionMenu(null); }
+    try {
+      await restoreVersionById(resourceId, version.id);
+      await load();
+    } catch {
+      setError(ar ? "تعذر استعادة الإصدار." : "Unable to restore version.");
+    } finally {
+      setVersionBusy(null);
+      setOpenVersionMenu(null);
+    }
   }
 
-  if (loading) return <main className="imkan-file-details-page"><div className="imkan-file-details-loading">{locale === "ar" ? "جارٍ تحميل التفاصيل…" : "Loading details…"}</div></main>;
-  if (error && !file && !folder) return <main className="imkan-file-details-page"><div className="imkan-file-details-error"><p>{error}</p><button type="button" onClick={() => void load()}>{locale === "ar" ? "إعادة المحاولة" : "Reload"}</button></div></main>;
+  async function copyPermalink() {
+    try { await navigator.clipboard.writeText(permalink); } catch { /* ignore */ }
+  }
 
-  const title = name;
-  const typeText = isFile ? (file?.mimeType || file?.extension || (locale === "ar" ? "ملف" : "File")) : (locale === "ar" ? "مجلد" : "Folder");
-  const owner = file?.owner.name || file?.owner.email || folder?.ownerName || folder?.ownerEmail || "—";
-  const location = file?.location?.name || (locale === "ar" ? "مجلداتي" : "My Folders");
-  const createdAt = file?.createdAt || folder?.updatedAt;
-  const modifiedAt = file?.updatedAt || folder?.updatedAt;
-  const permalink = typeof window !== "undefined" ? `${window.location.origin}/files/details/${resourceId}` : `/files/details/${resourceId}`;
-  const currentVersion = versions.find((version) => version.isCurrent);
+  const tabs: Array<{ id: Tab; label: string; icon: keyof typeof Icons }> = [
+    { id: "general", label: ar ? "معلومات عامة" : "General Info", icon: "info" },
+    { id: "versions", label: ar ? "الإصدارات" : "Versions", icon: "history" },
+    { id: "activity", label: ar ? "النشاط" : "Activity", icon: "act" },
+    { id: "access", label: ar ? "إحصائيات الوصول" : "Access Stats", icon: "share" },
+  ];
 
   return (
-    <main className="imkan-file-details-page" dir={locale === "ar" ? "rtl" : "ltr"}>
-      <header className="imkan-file-details-head">
-        <div className="imkan-file-details-title">
-          <div className="imkan-file-details-icon"><FileTypeIcon kind={kind} size={24} /></div>
-          <div className="min-w-0"><h1 title={title}>{title}</h1><button type="button" onClick={() => router.push(file?.location?.id ? `/files/${file.location.id}` : "/files")}><Icons.folder size={13} /> {location}</button></div>
+    <div className="zoho-file-details" dir={ar ? "rtl" : "ltr"} style={{ fontFamily: "var(--user-font-family), Arial, system-ui, sans-serif" }}>
+      <header className="zoho-fd-header">
+        <div className="zoho-fd-title-block">
+          <FileTypeIcon kind={kind} size={22} />
+          <div className="min-w-0">
+            <h1 className="zoho-fd-name" title={name}>{name}</h1>
+            <p className="zoho-fd-location"><Icons.folder size={13} /> {locationName}</p>
+          </div>
         </div>
-        <button type="button" className="imkan-file-details-close" onClick={() => router.back()} aria-label={locale === "ar" ? "إغلاق" : "Close"}><Icons.x size={20} /></button>
+        <button type="button" className="zoho-fd-close" onClick={() => router.back()} aria-label={ar ? "إغلاق" : "Close"}>
+          <Icons.x size={18} />
+        </button>
       </header>
 
-      <nav className="imkan-file-details-tabs" role="tablist" aria-label={locale === "ar" ? "خصائص الملف" : "File properties"}>
-        {([
-          ["general", "info", locale === "ar" ? "المعلومات العامة" : "General Info"],
-          ["versions", "history", locale === "ar" ? "الإصدارات" : "Versions"],
-          ["activity", "spark", locale === "ar" ? "النشاط" : "Activity"],
-          ["access", "link", locale === "ar" ? "إحصائيات الوصول" : "Access Stats"],
-        ] as const).map(([item, icon, text]) => {
-          const Icon = Icons[icon];
-          return <button key={item} type="button" role="tab" aria-selected={tab === item} disabled={item === "versions" && !isFile} onClick={() => changeTab(item)} className={tab === item ? "active" : ""}><Icon size={20} /><span>{text}</span></button>;
+      <nav className="zoho-fd-tabs" role="tablist">
+        {tabs.map((item) => {
+          const Icon = Icons[item.icon] || Icons.info;
+          return (
+            <button
+              key={item.id}
+              type="button"
+              role="tab"
+              aria-selected={tab === item.id}
+              className={`zoho-fd-tab ${tab === item.id ? "is-active" : ""}`}
+              onClick={() => changeTab(item.id)}
+            >
+              <Icon size={18} />
+              <span>{item.label}</span>
+            </button>
+          );
         })}
       </nav>
 
-      <section className="imkan-file-details-body">
-        {error ? <div className="imkan-file-details-inline-error">{error}</div> : null}
+      <div className="zoho-fd-body">
+        {loading ? (
+          <div className="zoho-fd-loading">{ar ? "جارٍ التحميل…" : "Loading…"}</div>
+        ) : error ? (
+          <div className="zoho-fd-error" role="alert">{error}</div>
+        ) : null}
 
-        {tab === "general" ? (
-          <div className="imkan-general-info">
-            <div className="imkan-general-info-details">
-              <InfoRow label={locale === "ar" ? "نوع الملف" : "File Format"} value={typeText} />
-              <InfoRow label={locale === "ar" ? "أنشأه" : "Created by"} value={`${owner} · ${dateTime(createdAt, locale)}`} />
-              <InfoRow label={locale === "ar" ? "تم التعديل بواسطة" : "Modified by"} value={`${owner} · ${dateTime(modifiedAt, locale)}`} />
-              {isFile ? <InfoRow label={locale === "ar" ? "الحجم" : "Size"} value={formatBytes(file?.size ?? 0)} /> : <InfoRow label={locale === "ar" ? "العناصر" : "Items"} value={String(folder?.itemCount ?? 0)} />}
-              <InfoRow label={locale === "ar" ? "المساحة المستخدمة" : "Storage Used"} value={formatBytes(storageUsed)} />
-              <InfoRow label={locale === "ar" ? "الرابط الدائم" : "Permalink"} value={permalink} link />
+        {!loading && !error && tab === "general" ? (
+          <div className="zoho-fd-general">
+            <div className="zoho-fd-general-left">
+              <div className="zoho-fd-info-row"><span>{ar ? "النوع" : "Type"}</span><strong>{file?.fileType || file?.mimeType || (isFile ? "File" : "Folder")}</strong></div>
+              <div className="zoho-fd-info-row"><span>{ar ? "أنشأه" : "Created by"}</span><strong>{file?.owner?.name || folder?.ownerName || "—"}{file?.createdAt ? ` ${ar ? "في" : "on"} ${dateTime(file.createdAt, locale)}` : ""}</strong></div>
+              <div className="zoho-fd-info-row"><span>{ar ? "عدّله" : "Modified by"}</span><strong>{file?.owner?.name || folder?.ownerName || "—"}{file?.updatedAt ? ` ${ar ? "في" : "on"} ${dateTime(file.updatedAt, locale)}` : ""}</strong></div>
+              <div className="zoho-fd-info-row"><span>{ar ? "المساحة المستخدمة" : "Storage Used"}</span><strong>{storageUsed > 0 ? formatBytes(storageUsed) : (ar ? "التخزين مجاني لملفات التنسيق الأصلي." : "Storage is free for files in native format.")}</strong></div>
+              <div className="zoho-fd-info-row">
+                <span>{ar ? "الرابط الدائم" : "Permalink"}</span>
+                <button type="button" className="zoho-fd-permalink-pill" onClick={() => void copyPermalink()}>{permalink}</button>
+              </div>
             </div>
-            <div className="imkan-general-preview">
-              {previewUrl ? <img src={previewUrl} alt="" /> : <div className="imkan-general-preview-placeholder"><FileTypeIcon kind={kind} size={48} /></div>}
-            </div>
-            <div className="imkan-general-metrics">
-              <span><Icons.inbox size={14} /> {comments} {locale === "ar" ? "تعليقات" : "Comments"}</span>
-              <span><Icons.eye size={14} /> {views} {locale === "ar" ? "مشاهدات" : "Views"}</span>
-              <span><Icons.download size={14} /> {downloads} {locale === "ar" ? "تنزيلات" : "Downloads"}</span>
+            <div className="zoho-fd-general-right">
+              <div className="zoho-fd-preview-box"><FileTypeIcon kind={kind} size={48} /></div>
+              <div className="zoho-fd-stat-line">
+                <span><Icons.act size={14} /> {comments} {ar ? "تعليقات" : "Comments"}</span>
+                <span><Icons.eye size={14} /> {views} {ar ? "مشاهدات" : "Views"}</span>
+                <span><Icons.download size={14} /> {downloads} {ar ? "تنزيلات" : "Downloads"}</span>
+              </div>
             </div>
           </div>
         ) : null}
 
-        {tab === "versions" ? (
-          <div className="imkan-details-section">
-            <div className="imkan-details-section-head">
-              <div><h2>{locale === "ar" ? "إصدارات الملف" : "File Versions"}</h2><p>{locale === "ar" ? "عرض وإدارة جميع الإصدارات المحفوظة لهذا الملف." : "View and manage every saved version of this file."}</p></div>
-              <div className="imkan-details-section-actions"><span className="imkan-current-version">{locale === "ar" ? `الإصدار الحالي ${currentVersion ? `v${currentVersion.versionNumber}` : "—"}` : `Current ${currentVersion ? `v${currentVersion.versionNumber}` : "—"}`}</span><input ref={uploadRef} type="file" hidden onChange={(event) => void handleUploadNewVersion(event.target.files?.[0])} /><button type="button" className="imkan-primary-small" disabled={uploadBusy} onClick={() => uploadRef.current?.click()}><Icons.upload size={14} /> {uploadBusy ? (locale === "ar" ? "جارٍ الرفع…" : "Uploading…") : (locale === "ar" ? "رفع إصدار جديد" : "Upload new version")}</button></div>
-            </div>
-            <div className="imkan-version-list">
-              {versions.map((version) => (
-                <div className={`imkan-version-row ${version.isCurrent ? "current" : ""}`} key={version.id}>
-                  <div className="imkan-version-badge"><Icons.history size={17} /></div>
-                  <div className="imkan-version-main"><div className="imkan-version-title"><strong>v{version.versionNumber}</strong>{version.isCurrent ? <span>{locale === "ar" ? "الإصدار الحالي" : "Current version"}</span> : null}</div><p>{version.uploadedBy?.name || version.uploadedBy?.email || owner} · {dateTime(version.createdAt, locale)}</p></div>
-                  <div className="imkan-version-size">{formatBytes(version.size)}</div>
-                  <div className="imkan-version-actions"><button type="button" className="imkan-icon-action" aria-label={locale === "ar" ? "إجراءات الإصدار" : "Version actions"} onClick={() => setOpenVersionMenu((value) => value === version.id ? null : version.id)}><Icons.dots size={18} /></button>{openVersionMenu === version.id ? <div className="imkan-version-menu"><button type="button" disabled={versionBusy === version.id} onClick={() => void previewVersion(version)}><Icons.eye size={14} /> {locale === "ar" ? "معاينة" : "Preview"}</button><button type="button" disabled={versionBusy === version.id} onClick={() => void previewVersion(version)}><Icons.download size={14} /> {locale === "ar" ? "تنزيل" : "Download"}</button>{!version.isCurrent ? <button type="button" disabled={versionBusy === version.id} onClick={() => void restoreVersion(version)}><Icons.history size={14} /> {locale === "ar" ? "استعادة كإصدار حالي" : "Restore as current"}</button> : null}</div> : null}</div>
+        {!loading && !error && tab === "versions" ? (
+          <div className="zoho-fd-versions">
+            {isFile ? (
+              <>
+                <div className="zoho-fd-version-filter">
+                  <button type="button" className={versionFilter === "active" ? "is-active" : ""} onClick={() => setVersionFilter("active")}>{ar ? "نشط" : "Active"}</button>
+                  <button type="button" className={versionFilter === "deleted" ? "is-active" : ""} onClick={() => setVersionFilter("deleted")}>{ar ? "محذوف" : "Deleted"}</button>
                 </div>
-              ))}
-              {versions.length === 0 ? <div className="imkan-details-empty"><Icons.history size={28} /><p>{locale === "ar" ? "لا توجد إصدارات محفوظة بعد." : "No saved versions yet."}</p></div> : null}
+
+                <div className="zoho-fd-banner info">
+                  <Icons.info size={16} />
+                  <p>{ar ? "وفق إعدادات الفريق/المؤسسة، يتم الاحتفاظ بجميع إصدارات الملفات." : "As per your team/organization settings, all file versions will be retained."}{" "}
+                    <button type="button" className="zoho-fd-link">{ar ? "اعرف المزيد عن إعدادات الاحتفاظ بالإصدارات" : "Learn more about file version retention settings"}</button>
+                  </p>
+                </div>
+
+                {showCheckoutPanel ? (
+                  <div className="zoho-fd-panel">
+                    <div className="zoho-fd-panel-icon"><Icons.pencil size={28} /></div>
+                    <p>{ar
+                      ? "بعد سحب الملف (Check-Out) لا يمكن للآخرين تعديله، ولن تظهر تغييراتك حتى تقوم بإعادته (Check-In)."
+                      : "Once the file is Checked-Out, it cannot be edited by the other collaborators and the changes made by you will not be visible until you Check-In."}</p>
+                    <div className="zoho-fd-panel-actions">
+                      <button type="button" className="zoho-fd-btn-primary" disabled={checkoutBusy} onClick={() => { setCheckoutBusy(true); setTimeout(() => { setCheckedOut(true); setShowCheckoutPanel(false); setCheckoutBusy(false); }, 400); }}>
+                        {ar ? "سحب الملف" : "Check Out"}
+                      </button>
+                      <button type="button" className="zoho-fd-btn-ghost" onClick={() => setShowCheckoutPanel(false)}>{ar ? "إلغاء" : "Cancel"}</button>
+                    </div>
+                  </div>
+                ) : null}
+
+                {showUploadPanel ? (
+                  <div className="zoho-fd-panel">
+                    <div className="zoho-fd-upload-row">
+                      <input ref={uploadRef} type="file" onChange={(e) => setSelectedFile(e.target.files?.[0] ?? null)} />
+                    </div>
+                    <textarea
+                      ref={notesRef}
+                      value={versionNotes}
+                      onChange={(e) => setVersionNotes(e.target.value)}
+                      placeholder={ar ? "أضف ملاحظات الإصدار" : "Add version notes"}
+                      rows={3}
+                      className="zoho-fd-notes"
+                    />
+                    <div className="zoho-fd-panel-actions">
+                      <button type="button" className="zoho-fd-btn-primary" disabled={uploadBusy || !selectedFile} onClick={() => void handleUploadNewVersion()}>
+                        {uploadBusy ? (ar ? "جارٍ الرفع…" : "Uploading…") : (ar ? "رفع إصدار جديد" : "Upload new version")}
+                      </button>
+                      <button type="button" className="zoho-fd-btn-ghost" onClick={() => { setShowUploadPanel(false); setSelectedFile(null); setVersionNotes(""); }}>{ar ? "إلغاء" : "Cancel"}</button>
+                    </div>
+                  </div>
+                ) : null}
+
+                {!showUploadPanel && !showCheckoutPanel ? (
+                  <div className="zoho-fd-version-toolbar">
+                    <div className="zoho-fd-version-actions">
+                      <button type="button" onClick={() => { setShowUploadPanel(true); setShowCheckoutPanel(false); }}>
+                        <Icons.upload size={15} /> {ar ? "رفع إصدار جديد" : "Upload new version"}
+                      </button>
+                      <span className="zoho-fd-sep">|</span>
+                      <button type="button" onClick={() => { setShowCheckoutPanel(true); setShowUploadPanel(false); }}>
+                        <Icons.pencil size={15} /> {checkedOut ? (ar ? "تم السحب" : "Checked out") : (ar ? "سحب الملف" : "Check Out")}
+                      </button>
+                    </div>
+                    <button type="button" className="zoho-fd-danger-link" disabled={!selectedVersionIds.length}>
+                      {ar ? "حذف الإصدارات المحددة" : "Bulk delete versions"}
+                    </button>
+                  </div>
+                ) : null}
+
+                <div className="zoho-fd-version-table">
+                  <div className="zoho-fd-version-head">
+                    <span>{ar ? "إصدارات الملف" : "File Versions"}</span>
+                    <span>{ar ? "ملاحظات" : "Notes"}</span>
+                    <span>{ar ? "الحجم" : "Size"}</span>
+                  </div>
+                  {shownVersions.map((version) => (
+                    <div key={version.id} className="zoho-fd-version-row">
+                      <div className="zoho-fd-version-main">
+                        <span className="zoho-fd-version-num">#{version.versionNumber}</span>
+                        <div>
+                          <div className="zoho-fd-version-date">
+                            {dateOnly(version.createdAt, locale)}, {timeOnly(version.createdAt, locale)}
+                            {version.isCurrent ? <span className="zoho-fd-top-badge">{ar ? "الإصدار الأعلى" : "Top version"}</span> : null}
+                          </div>
+                          <div className="zoho-fd-version-uploader">
+                            {ar ? "رفعه" : "Uploaded by"} {version.uploadedBy?.name || version.uploadedBy?.email || "—"}
+                          </div>
+                        </div>
+                      </div>
+                      <div className="zoho-fd-version-notes">NA</div>
+                      <div className="zoho-fd-version-size">
+                        {formatBytes(version.size)}
+                        <div className="zoho-fd-version-menu-wrap">
+                          <button type="button" className="zoho-fd-more" onClick={() => setOpenVersionMenu(openVersionMenu === version.id ? null : version.id)}>⋯</button>
+                          {openVersionMenu === version.id ? (
+                            <div className="zoho-fd-menu">
+                              <button type="button" disabled={versionBusy === version.id} onClick={() => void previewVersion(version)}>
+                                {ar ? "تنزيل / معاينة" : "Download / Preview"}
+                              </button>
+                              {!version.isCurrent ? (
+                                <button type="button" disabled={versionBusy === version.id} onClick={() => void restoreVersion(version)}>
+                                  {ar ? "استعادة كإصدار حالي" : "Restore as current"}
+                                </button>
+                              ) : null}
+                            </div>
+                          ) : null}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                  {shownVersions.length === 0 ? (
+                    <div className="zoho-fd-empty">{ar ? "لا توجد إصدارات في هذه القائمة." : "No versions in this list."}</div>
+                  ) : null}
+                </div>
+              </>
+            ) : (
+              <div className="zoho-fd-empty">{ar ? "الإصدارات متاحة للملفات فقط." : "Versions are available for files only."}</div>
+            )}
+          </div>
+        ) : null}
+
+        {!loading && !error && tab === "activity" ? (
+          <div className="zoho-fd-activity">
+            {activities.length === 0 ? (
+              <div className="zoho-fd-empty">{ar ? "لا يوجد نشاط بعد." : "No activity yet."}</div>
+            ) : (
+              <ol className="zoho-fd-timeline">
+                {activities.map((a, idx) => {
+                  const sameAsOwner = Boolean(file?.owner?.id && file.owner.id === a.user_id);
+                  const actorName = sameAsOwner
+                    ? (file?.owner?.name || file?.owner?.email || (ar ? "أنت" : "You"))
+                    : (ar ? `مستخدم خارجي (ضيف #${idx + 1})` : `External User (Guest #${idx + 1})`);
+                  const at = a.created_at || a.createdAt || "";
+                  const icon = activityIcon(a.action);
+                  return (
+                    <li key={a.id || `${a.action}-${idx}`} className="zoho-fd-timeline-item">
+                      <div className="zoho-fd-timeline-time">{relative(at, locale)}</div>
+                      <div className="zoho-fd-timeline-rail">
+                        <span className={`zoho-fd-timeline-dot is-${icon}`} />
+                      </div>
+                      <div className="zoho-fd-timeline-card">
+                        <span className="zoho-fd-timeline-avatar">{actorName.slice(0, 1).toUpperCase()}</span>
+                        <div>
+                          <strong className={sameAsOwner ? "" : "is-guest"}>{actorName}</strong>
+                          <p>{activityText(a.action, locale)}</p>
+                        </div>
+                      </div>
+                    </li>
+                  );
+                })}
+              </ol>
+            )}
+          </div>
+        ) : null}
+
+        {!loading && !error && tab === "access" ? (
+          <div className="zoho-fd-access">
+            <div className="zoho-fd-access-summary">
+              <div>
+                <strong>{ar ? "إجمالي الوصول" : "Overall Access"}</strong>
+                <p>{ar ? `${actors.length} مستخدم` : `${actors.length} user${actors.length === 1 ? "" : "s"}`}</p>
+              </div>
+              <div className="zoho-fd-access-metric"><Icons.eye size={16} /> <strong>{views}</strong> <span>{ar ? "مشاهدات" : "Views"}</span></div>
+              <div className="zoho-fd-access-metric"><Icons.download size={16} /> <strong>{downloads}</strong> <span>{ar ? "تنزيلات" : "Downloads"}</span></div>
+            </div>
+
+            <div className="zoho-fd-access-card">
+              <button type="button" className="zoho-fd-access-card-head" onClick={() => setAccessExpanded((v) => !v)}>
+                <span><Icons.link size={16} /> <strong>{ar ? "الرابط الدائم" : "Permalink"}</strong></span>
+                <span className="zoho-fd-access-totals"><Icons.eye size={14} /> {views} {ar ? "مشاهدات" : "Views"} · <Icons.download size={14} /> {downloads} {ar ? "تنزيلات" : "Downloads"}</span>
+                <span className="zoho-fd-expand">{accessExpanded ? "−" : "+"}</span>
+              </button>
+              {accessExpanded ? (
+                <div className="zoho-fd-access-body">
+                  <div className="zoho-fd-access-table-head">
+                    <span>{ar ? "تم الوصول بواسطة والوقت" : "Accessed by & time"}</span>
+                    <span>{ar ? "البريد" : "Email"}</span>
+                    <span>{ar ? "المشاهدات" : "Views"}</span>
+                    <span>{ar ? "التنزيلات" : "Downloads"}</span>
+                  </div>
+                  {actors.map((actor) => (
+                    <div className="zoho-fd-access-row" key={actor.id}>
+                      <div className="zoho-fd-access-user">
+                        <span className="zoho-fd-timeline-avatar">{actor.name.slice(0, 1).toUpperCase()}</span>
+                        <div>
+                          <strong>{actor.name}</strong>
+                          <small>{actor.lastAt ? dateTime(actor.lastAt, locale) : "—"}</small>
+                        </div>
+                      </div>
+                      <span>{actor.email || "—"}</span>
+                      <strong>{actor.views}</strong>
+                      <strong>{actor.downloads}</strong>
+                    </div>
+                  ))}
+                  {actors.length === 0 ? <div className="zoho-fd-empty">{ar ? "لا يوجد وصول مسجّل بعد." : "No access has been recorded yet."}</div> : null}
+                </div>
+              ) : null}
+            </div>
+
+            <div className="zoho-fd-access-card">
+              <button type="button" className="zoho-fd-access-card-head" onClick={() => setPublicExpanded((v) => !v)}>
+                <span><Icons.users size={16} /> <strong>{ar ? "رابط عام" : "Public link"}</strong></span>
+                <span className="zoho-fd-access-totals"><Icons.eye size={14} /> 0 {ar ? "مشاهدات" : "Views"} · <Icons.download size={14} /> 0 {ar ? "تنزيلات" : "Downloads"}</span>
+                <span className="zoho-fd-expand">{publicExpanded ? "−" : "+"}</span>
+              </button>
+              {publicExpanded ? (
+                <div className="zoho-fd-access-body">
+                  <div className="zoho-fd-empty">{ar ? "لا توجد زيارات عبر رابط عام بعد." : "No public link visits yet."}</div>
+                </div>
+              ) : null}
             </div>
           </div>
         ) : null}
-
-        {tab === "activity" ? (
-          <div className="imkan-details-section">
-            <div className="imkan-details-section-head"><div><h2>{locale === "ar" ? "النشاط" : "Activity"}</h2><p>{locale === "ar" ? "سجل جميع الأنشطة التي تمت على هذا الملف." : "A chronological record of activity on this file."}</p></div></div>
-            <ol className="imkan-activity-list">
-              {activities.map((activity) => { const sameAsOwner = Boolean(file?.owner?.id && file.owner.id === activity.user_id); const actorName = sameAsOwner ? (file?.owner.name || file?.owner.email || (locale === "ar" ? "أنت" : "You")) : (locale === "ar" ? "مستخدم" : "User"); return <li key={activity.id}><div className="imkan-activity-date"><strong>{dateOnly(activity.created_at, locale)}</strong><span>{timeOnly(activity.created_at, locale)}</span></div><div className="imkan-activity-line"><span className="imkan-activity-dot"><Icons.eye size={13} /></span></div><div className="imkan-activity-card"><div className="imkan-activity-avatar">{actorName.slice(0,1).toUpperCase()}</div><div><strong>{sameAsOwner ? (locale === "ar" ? "أنت" : "You") : actorName}</strong><p>{activityText(activity.action, locale)}</p><time>{dateTime(activity.created_at, locale)} · {relative(activity.created_at, locale)}</time></div></div></li>; })}
-              {activities.length === 0 ? <li className="imkan-details-empty"><Icons.spark size={28} /><p>{locale === "ar" ? "لا يوجد نشاط مسجل لهذا الملف بعد." : "No activity has been recorded for this file yet."}</p></li> : null}
-            </ol>
-          </div>
-        ) : null}
-
-        {tab === "access" ? (
-          <div className="imkan-details-section">
-            <div className="imkan-details-section-head"><div><h2>{locale === "ar" ? "إحصائيات الوصول" : "Access Stats"}</h2><p>{locale === "ar" ? "اعرف من وصل إلى الملف وما الإجراءات التي قام بها." : "See who accessed the file and what they did."}</p></div></div>
-            <div className="imkan-access-overall"><div><strong>{actors.length}</strong><span>{locale === "ar" ? "عضو فريق" : "Team members"}</span><small>0 {locale === "ar" ? "مستخدم خارجي" : "external users"}</small></div><div><strong><Icons.eye size={17} /> {views}</strong><span>{locale === "ar" ? "مشاهدات" : "Views"}</span></div><div><strong><Icons.download size={17} /> {downloads}</strong><span>{locale === "ar" ? "تنزيلات" : "Downloads"}</span></div></div>
-            <div className="imkan-access-card"><button type="button" className="imkan-access-card-head" onClick={() => setAccessExpanded((value) => !value)}><span><Icons.link size={17} /> <strong>Permalink</strong></span><span className="imkan-access-card-totals">{views} {locale === "ar" ? "مشاهدة" : "Views"} <i /> {downloads} {locale === "ar" ? "تنزيل" : "Downloads"}</span><Icons.chevD size={17} className={accessExpanded ? "rotate-180" : ""} /></button>{accessExpanded ? <div className="imkan-access-expanded"><div className="imkan-access-table-head"><span>{locale === "ar" ? "تم الوصول بواسطة والوقت" : "Accessed by & time"}</span><span>{locale === "ar" ? "البريد الإلكتروني" : "Email"}</span><span>{locale === "ar" ? "المشاهدات" : "Views"}</span><span>{locale === "ar" ? "التنزيلات" : "Downloads"}</span></div>{actors.map((actor) => <div className="imkan-access-row" key={actor.id}><div className="imkan-access-user"><span className="imkan-access-avatar">{actor.name.slice(0,1).toUpperCase()}</span><div><strong>{actor.name}</strong><small>{locale === "ar" ? "تم الوصول إلى الملف" : "Accessed this file"}</small></div></div><span>{actor.email || "—"}</span><strong>{actor.views}</strong><strong>{actor.downloads}</strong></div>)}{actors.length === 0 ? <div className="imkan-access-empty">{locale === "ar" ? "لم يتم تسجيل وصول إلى هذا الرابط بعد." : "No access has been recorded for this link yet."}</div> : null}</div> : null}</div>
-          </div>
-        ) : null}
-      </section>
-    </main>
+      </div>
+    </div>
   );
-}
-
-function InfoRow({ label, value, link }: { label: string; value: string; link?: boolean }) {
-  return <div className="imkan-info-row"><span>{label}</span>{link ? <a href={value} title={value}>{value}</a> : <strong title={value}>{value}</strong>}</div>;
 }
