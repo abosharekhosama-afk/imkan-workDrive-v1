@@ -211,9 +211,23 @@ export function InspectorPanel({ onVersionHistory }: { onVersionHistory?: (fileI
             </div>
 
             {selected.kind === "FILE" ? (
-              <button type="button" onClick={() => { if (onVersionHistory) onVersionHistory(selected.file.id); else router.push(`/files/details/${encodeURIComponent(selected.file.id)}?tab=versions`); }} className="zoho-details-versions"><Icons.history size={15}/> <span>{locale === "ar" ? "عرض كل الإصدارات" : "View all versions"}</span><Icons.chevR size={13}/></button>
+              <button type="button" onClick={() => {
+                const fileId = selected.file.id;
+                if (onVersionHistory) {
+                  onVersionHistory(fileId);
+                  return;
+                }
+                setInspectorOpen(false);
+                setMobileInspectorOpen(false);
+                router.push(`/files/details/${encodeURIComponent(fileId)}?tab=versions`);
+              }} className="zoho-details-versions"><Icons.history size={15}/> <span>{locale === "ar" ? "عرض كل الإصدارات" : "View all versions"}</span><Icons.chevR size={13}/></button>
             ) : null}
-            <button type="button" onClick={() => router.push(`/files/details/${encodeURIComponent(resourceId ?? "")}?tab=general`)} className="zoho-inspector-open-details">{locale === "ar" ? "عرض كافة التفاصيل" : "View all details"}</button>
+            <button type="button" onClick={() => {
+              if (!resourceId) return;
+              setInspectorOpen(false);
+              setMobileInspectorOpen(false);
+              router.push(`/files/details/${encodeURIComponent(resourceId)}?tab=general`);
+            }} className="zoho-inspector-open-details">{locale === "ar" ? "عرض كافة التفاصيل" : "View all details"}</button>
           </div>
         ) : inspectorTab === "dataTemplates" ? (
           <div className="flex flex-col gap-4">
