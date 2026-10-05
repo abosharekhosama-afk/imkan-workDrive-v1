@@ -953,6 +953,7 @@ export function FileBrowser({
           onSelectRow={handleSelectRow}
           onSelectAll={handleSelectAll}
           compact={viewMode === "compact"}
+          indexMode={viewMode === "index"}
           sortField={sortField}
           sortDir={sortDir}
           onSortField={setSortField}

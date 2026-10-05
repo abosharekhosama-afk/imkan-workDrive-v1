@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useRef, useState, type MouseEvent, type ReactNode } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState, type MouseEvent, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import type { ColumnKey, SortDir } from "./layout/action-toolbar";
 import { Icons } from "./layout/icons";
@@ -111,6 +111,8 @@ interface FileTableProps {
   workflowStatuses?: ReadonlyMap<string, WorkflowResourceStatus>;
   onWorkflowStatusClick?: (status: WorkflowResourceStatus, resourceName: string) => void;
   compact?: boolean;
+  /** Zoho-style alphabetical index view with letter groups + side rail. */
+  indexMode?: boolean;
   /** Controlled table sorting (driven by the toolbar Sort-by popover). */
   sortField?: ColumnKey;
   sortDir?: SortDir;
@@ -162,6 +164,7 @@ export function FileTable({
   workflowStatuses,
   onWorkflowStatusClick,
   compact = false,
+  indexMode = false,
   sortField, sortDir, onSortField, onSortDir, columns, onColumns, rowLabels, rowExpiry,
 }: FileTableProps) {
   const { label, locale } = useLocale();
@@ -224,6 +227,59 @@ export function FileTable({
 
   // Right-click context menu state (portal-hosted, positioned at cursor).
   const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number; node: ReactNode } | null>(null);
+
+  const indexLetter = (name: string) => {
+    const ch = (name || "").trim().charAt(0);
+    if (!ch) return "#";
+    const upper = ch.toLocaleUpperCase(locale === "ar" ? "ar" : "en");
+    // Letters (Latin/Arabic) stay as-is; everything else lands in "#".
+    if (/^[A-Z]$/.test(upper)) return upper;
+    if (/^[\u0600-\u06FF]$/.test(upper)) return upper;
+    return "#";
+  };
+
+  type IndexEntry =
+    | { kind: "letter"; letter: string }
+    | { kind: "folder"; folder: (typeof sortedFolders)[number] }
+    | { kind: "file"; file: (typeof sortedFiles)[number] };
+
+  const indexEntries = useMemo((): IndexEntry[] | null => {
+    if (!indexMode) return null;
+    const foldersByName = [...sortedFolders].sort((a, b) => a.name.localeCompare(b.name, locale === "ar" ? "ar" : "en"));
+    const filesByName = [...sortedFiles].sort((a, b) => a.name.localeCompare(b.name, locale === "ar" ? "ar" : "en"));
+    const entries: IndexEntry[] = [];
+    let last = "";
+    for (const folder of foldersByName) {
+      const letter = indexLetter(folder.name);
+      if (letter !== last) { entries.push({ kind: "letter", letter }); last = letter; }
+      entries.push({ kind: "folder", folder });
+    }
+    for (const file of filesByName) {
+      const letter = indexLetter(file.name);
+      if (letter !== last) { entries.push({ kind: "letter", letter }); last = letter; }
+      entries.push({ kind: "file", file });
+    }
+    return entries;
+  }, [indexMode, sortedFolders, sortedFiles, locale]);
+
+  const indexLetters = useMemo(() => {
+    if (!indexEntries) return [] as string[];
+    return [...new Set(indexEntries.filter((e): e is { kind: "letter"; letter: string } => e.kind === "letter").map((e) => e.letter))];
+  }, [indexEntries]);
+
+  const jumpToLetter = (letter: string) => {
+    document.getElementById(`wd-index-${encodeURIComponent(letter)}`)?.scrollIntoView({ block: "start", behavior: "smooth" });
+  };
+
+  const indexFolders = useMemo(() => {
+    if (!indexMode) return sortedFolders;
+    return [...sortedFolders].sort((a, b) => a.name.localeCompare(b.name, locale === "ar" ? "ar" : "en"));
+  }, [indexMode, sortedFolders, locale]);
+  const indexFiles = useMemo(() => {
+    if (!indexMode) return sortedFiles;
+    return [...sortedFiles].sort((a, b) => a.name.localeCompare(b.name, locale === "ar" ? "ar" : "en"));
+  }, [indexMode, sortedFiles, locale]);
+
 
   // Visible ids in render order (folders then files) → supports Shift+Click ranges.
   const visibleIds = useMemo(
@@ -299,7 +355,14 @@ export function FileTable({
   }
 
   return (
-    <div className="imkan-file-table-root relative w-full max-w-full min-h-0">
+    <div className={`imkan-file-table-root relative w-full max-w-full min-h-0${indexMode ? " is-index-mode" : ""}`}>
+      {indexMode && indexLetters.length > 0 ? (
+        <div className="wd-index-rail" aria-label="Index">
+          {indexLetters.map((letter) => (
+            <button key={letter} type="button" className="wd-index-rail-btn" onClick={() => jumpToLetter(letter)}>{letter}</button>
+          ))}
+        </div>
+      ) : null}
       <div className="imkan-table-scroll w-full max-w-full min-h-0 flex-1">
         <table className="imkan-table min-w-[56rem] w-full table-auto">
           <thead>
@@ -323,7 +386,16 @@ export function FileTable({
           </tr>
         </thead>
         <tbody>
-          {sortedFolders.map((folder) => (
+          {indexFolders.map((folder, folderIndex) => {
+            const folderLetter = indexLetter(folder.name);
+            const showFolderLetter = Boolean(indexMode) && (folderIndex === 0 || indexLetter(indexFolders[folderIndex - 1]?.name ?? "") !== folderLetter);
+            return (
+            <Fragment key={`folder-wrap-${folder.id}`}>
+            {showFolderLetter ? (
+              <tr id={`wd-index-${encodeURIComponent(folderLetter)}`} className="wd-index-letter-row">
+                <td colSpan={12} className="wd-index-letter-cell">{folderLetter}</td>
+              </tr>
+            ) : null}
             <tr key={folder.id} draggable={Boolean(canMutate)} onDoubleClick={() => onOpen?.("FOLDER", folder.id, folder.name)} onContextMenu={(e) => { e.preventDefault(); setCtxMenu({ x: e.clientX, y: e.clientY, node: (<FileContextMenu
               handlers={{
                 onOpen: onOpen ? () => onOpen("FOLDER", folder.id, folder.name) : undefined,
@@ -395,8 +467,26 @@ export function FileTable({
                 />
               </td>
             </tr>
-          ))}
-          {sortedFiles.map((file) => (
+          </Fragment>
+            );
+          })}
+          {indexFiles.map((file, fileIndex) => {
+            const fileLetter = indexLetter(file.name);
+            const prevName = fileIndex > 0
+              ? indexFiles[fileIndex - 1]?.name
+              : (sortedFolders.length > 0 ? indexFolders[indexFolders.length - 1]?.name : "");
+            const showFileLetter = Boolean(indexMode) && (
+              fileIndex === 0
+                ? (indexFolders.length === 0 || indexLetter(prevName || "") !== fileLetter)
+                : indexLetter(prevName || "") !== fileLetter
+            );
+            return (
+            <Fragment key={`file-wrap-${file.id}`}>
+            {showFileLetter ? (
+              <tr id={`wd-index-${encodeURIComponent(fileLetter)}`} className="wd-index-letter-row">
+                <td colSpan={12} className="wd-index-letter-cell">{fileLetter}</td>
+              </tr>
+            ) : null}
             <tr key={file.id} draggable={Boolean(canMutate)} onDragStart={(e) => { e.dataTransfer.effectAllowed="move"; e.dataTransfer.setData("application/x-workdrive", JSON.stringify({type:"FILE",id:file.id,name:file.name})); }} onContextMenu={(e) => { e.preventDefault(); setCtxMenu({ x: e.clientX, y: e.clientY, node: (<FileContextMenu
               control={{ status: file.status, isFinal: file.isFinal, checkedOutById: file.checkedOutById }} handlers={{ onOpen: onOpen ? () => onOpen("FILE", file.id, file.name) : undefined, onReindex: () => onFileControl?.(file.id, "reindex"), onCheckOut: () => onFileControl?.(file.id, "check-out"), onCheckIn: () => onFileControl?.(file.id, "check-in"), onMarkFinal: () => onFileControl?.(file.id, "mark-final"), onEnableEditing: () => onFileControl?.(file.id, "enable-editing"), onOpenInOffice: officeEditorPath(file.id, file.name, file.mimeType) ? () => { window.location.assign(officeEditorPath(file.id, file.name, file.mimeType)!); } : undefined, onConvertToOffice: !isNativeImkanOfficeFile(file.name, file.mimeType) && officeEditorPath(file.id, file.name, file.mimeType) ? () => { void createOfficeCopy(file.id, "CONVERT").then((result) => { window.location.assign(`/office/univer/${encodeURIComponent(result.fileId)}?kind=writer`); }).catch((error) => window.alert(error instanceof Error ? error.message : "Conversion failed.")); } : undefined, onInspect: onInspect ? () => onInspect("FILE", file.id, file.name) : undefined, onPreview: onPreview ? () => onPreview("FILE", file.id, file.name, file.mimeType ?? undefined, file.size ?? undefined) : undefined, onComment: onComment ? () => onComment("FILE", file.id, file.name, file.mimeType ?? undefined, file.size ?? undefined) : undefined, onDownload: () => onDownload(file.id), onShare: canShare ? (mode) => onShare("FILE", file.id, mode) : undefined, onRename: canMutate ? () => onRename("FILE", file.id, file.name) : undefined, onMove: onMove && canMutate ? () => onMove("FILE", file.id, file.name) : undefined,
                     onCopy: onCopy && canMutate ? () => onCopy("FILE", file.id, file.name) : undefined, onFavoriteToggle: onFavorite ? () => onFavorite("FILE", file.id) : undefined, onVersionHistory: onVersionHistory ? () => onVersionHistory("FILE", file.id, file.name, file.mimeType ?? undefined, file.size ?? undefined) : undefined, onDelete: canMutate ? () => onDelete("FILE", file.id) : undefined, onAssignWorkflow: onAssignWorkflow && canMutate ? () => onAssignWorkflow("FILE", file.id, file.name) : undefined, onOrganize: onOrganize && canMutate ? () => onOrganize("FILE", file.id) : undefined, onFollowUpdates: onFollowUpdates ? () => onFollowUpdates("FILE", file.id, file.name) : undefined, isFollowingUpdates: followIds.has(followResourceKey("FILE", file.id)), isFavorite: favoriteIds.has(file.id) }}
@@ -462,7 +552,9 @@ export function FileTable({
                 />
               </td>
             </tr>
-          ))}
+            </Fragment>
+            );
+          })}
         </tbody>
         </table>
       </div>
