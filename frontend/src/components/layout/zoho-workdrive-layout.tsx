@@ -42,9 +42,9 @@ function Frame({ children }: { children: ReactNode }) {
         <PrimarySidebar />
       </aside>
       {mobileNavOpen ? (
-        <div className="fixed inset-0 z-50 md:hidden" role="dialog" aria-modal="true">
+        <div className="fixed inset-0 z-50 md:hidden" role="dialog" aria-modal="true" aria-label="Navigation">
           <div className="absolute inset-0 bg-black/40" onClick={() => setMobileNavOpen(false)} aria-hidden="true" />
-          <div className="absolute bottom-0 start-0 top-0 w-[264px] max-w-[85vw] overflow-hidden bg-[#282828] shadow-[0_6px_24px_rgba(0,0,0,0.1)]">
+          <div className="absolute bottom-0 start-0 top-0 flex w-[min(280px,88vw)] max-w-[88vw] flex-col overflow-hidden bg-[#282828] shadow-[0_6px_24px_rgba(0,0,0,0.1)]">
             <PrimarySidebar />
           </div>
         </div>

@@ -234,16 +234,13 @@ export function TopHeader({ adminMode = false }: { adminMode?: boolean }) {
       <div className="flex min-w-0 items-center gap-2">
         <button
           type="button"
-          className="wd-icon-btn md:hidden"
-          aria-label={locale === "ar" ? "فتح القائمة الجانبية" : "Open sidebar"}
+          className="wd-icon-btn flex shrink-0 md:!hidden"
+          aria-label={locale === "ar" ? (mobileNavOpen ? "إغلاق القائمة الجانبية" : "فتح القائمة الجانبية") : (mobileNavOpen ? "Close sidebar" : "Open sidebar")}
           aria-expanded={mobileNavOpen}
           onClick={() => setMobileNavOpen(!mobileNavOpen)}
         >
-          <Icons.menu size={18} />
+          {mobileNavOpen ? <Icons.x size={18} /> : <Icons.menu size={18} />}
         </button>
-        <span className="hidden h-8 w-8 shrink-0 items-center justify-center rounded-[8px] bg-[#F0F4FF] text-[var(--wd-primary)] md:flex" aria-hidden="true">
-          <Icons.folder size={18} />
-        </span>
         <span className="max-w-[42vw] truncate text-[15px] font-semibold text-[#212121]">{resolveTopHeaderTitle({ pathname, scopeFolderName: scope.folderName, adminMode, locale, label })}</span>
         {showMyFoldersManage ? (
           <div ref={manageRef} className="relative ms-1">

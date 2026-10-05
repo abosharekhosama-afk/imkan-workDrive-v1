@@ -260,10 +260,10 @@ export function ActionToolbar({
         {context !== "teamFolder" ? <><button id="tb-view-btn" type="button" onClick={() => toggle("view")} aria-expanded={openMenu === "view"} aria-haspopup="menu"
           className={`wd-icon-btn ${openMenu === "view" ? "bg-[var(--wd-active)] text-[color:var(--wd-primary-ink)]" : ""}`}
           title={label("view.toggle")} aria-label={label("view.toggle")}>
-          {view === "grid" ? <Icons.grid size={15} /> : view === "compact" ? <Icons.compact size={15} /> : <Icons.list size={15} />}
+          {view === "grid" ? <Icons.grid size={15} /> : view === "compact" ? <Icons.compact size={15} /> : view === "index" ? <Icons.columns size={15} /> : <Icons.list size={15} />}
         </button>
         <ToolbarAnchoredPanel open={openMenu === "view"} onClose={close} anchorId="tb-view-btn" width={192} className="p-1">
-          {([["list", "view.list", <Icons.list key="i" size={15} />], ["compact", "view.compact", <Icons.compact key="i" size={15} />], ["grid", "view.grid", <Icons.grid key="i" size={15} />]] as const).map(([v, key, icon]) => (
+          {([["list", "view.list", <Icons.list key="i" size={15} />], ["compact", "view.compact", <Icons.compact key="i" size={15} />], ["grid", "view.grid", <Icons.grid key="i" size={15} />], ["index", "view.index", <Icons.columns key="i" size={15} />]] as const).map(([v, key, icon]) => (
             <button key={v} type="button" onClick={() => pick(v)}
               className={`flex w-full items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-[13px] text-start ${view === v ? "bg-[var(--wd-menu-hover)] font-medium text-[color:var(--wd-primary-ink)]" : "text-slate-600 hover:bg-slate-50"}`}>
               <span className="w-4 shrink-0 text-[color:var(--wd-primary)]">{icon}</span>

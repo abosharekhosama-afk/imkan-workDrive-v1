@@ -13,7 +13,7 @@ export function PrimarySidebar() {
   const { label } = useLocale();
   const pathname = usePathname();
   const router = useRouter();
-  const { sidebarCollapsed, setMobileNavOpen } = useShell();
+  const { sidebarCollapsed, mobileNavOpen, setMobileNavOpen } = useShell();
   const [open, setOpen] = useState(true);
   const [teams, setTeams] = useState<TeamFolderListItem[]>([]);
   const [quota, setQuota] = useState<QuotaOverview | null>(null);
@@ -54,7 +54,8 @@ export function PrimarySidebar() {
     void loadSidebarData();
     return () => { cancelled = true; };
   }, []);
-  const c = sidebarCollapsed;
+  // Mobile drawer must never render the collapsed rail — that produced an empty drawer.
+  const c = mobileNavOpen ? false : sidebarCollapsed;
   const close = () => setMobileNavOpen(false);
   const teamActive = pathname.startsWith("/files/team-folders");
   return (
