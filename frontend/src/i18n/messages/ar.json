@@ -860,5 +860,6 @@
   "menu.openInOffice": "فتح في محرر إمكان",
   "menu.convertToOffice": "تحويل إلى محرر إمكان",
   "menu.labels": "التسميات",
-  "menu.createShortcut": "إنشاء اختصار"
+  "menu.createShortcut": "إنشاء اختصار",
+  "view.index": "فهرس"
 }

@@ -860,5 +860,6 @@
   "menu.openInOffice": "Open in IMKAN Office",
   "menu.convertToOffice": "Convert to IMKAN Office",
   "menu.labels": "Labels",
-  "menu.createShortcut": "Create shortcut"
+  "menu.createShortcut": "Create shortcut",
+  "view.index": "Index"
 }
