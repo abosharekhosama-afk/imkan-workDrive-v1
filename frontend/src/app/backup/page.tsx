@@ -240,6 +240,25 @@ export default function BackupPage() {
     }
   };
 
+  const onTogglePolicy = async (policy: BackupPolicy) => {
+    setBusy(true);
+    setError("");
+    try {
+      const next = !policy.enabled;
+      await updateBackupPolicy(policy.id, { enabled: next });
+      setMessage(
+        next
+          ? t(`Policy enabled: ${policy.name}`, `تم تفعيل السياسة: ${policy.name}`)
+          : t(`Policy disabled: ${policy.name}`, `تم إيقاف السياسة: ${policy.name}`),
+      );
+      await reload();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : t("Could not update policy", "تعذر تحديث السياسة"));
+    } finally {
+      setBusy(false);
+    }
+  };
+
   return (
     <div className="mx-auto flex w-full max-w-6xl flex-1 flex-col gap-6 px-4 py-6 md:px-8" dir={ar ? "rtl" : "ltr"}>
       <header className="flex flex-wrap items-start justify-between gap-4">
@@ -355,6 +374,20 @@ export default function BackupPage() {
                     {p.scope} · {p.scheduleKind}
                     {p.retentionDays != null ? ` · ${p.retentionDays}d` : ""}
                     {p.nextRunAt ? ` · next ${new Date(p.nextRunAt).toLocaleString(ar ? "ar" : "en")}` : ""}
+                  </div>
+                  <div className="mt-2">
+                    <button
+                      type="button"
+                      disabled={busy}
+                      onClick={() => void onTogglePolicy(p)}
+                      className={`rounded-full px-3 py-1 text-[11px] font-semibold disabled:opacity-50 ${
+                        p.enabled
+                          ? "border border-rose-200 bg-rose-50 text-rose-700"
+                          : "border border-emerald-200 bg-emerald-50 text-emerald-700"
+                      }`}
+                    >
+                      {p.enabled ? t("Disable policy", "إيقاف السياسة") : t("Enable policy", "تفعيل السياسة")}
+                    </button>
                   </div>
                 </li>
               ))
