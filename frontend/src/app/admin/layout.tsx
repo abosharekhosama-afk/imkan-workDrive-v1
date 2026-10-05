@@ -5,29 +5,13 @@ import { AuthGate } from "@/components/auth-gate";
 import { AdminConsoleSidebar } from "@/components/admin-console/admin-console-sidebar";
 import { TopHeader } from "@/components/layout/top-header";
 import { ShellProvider, useShell } from "@/components/layout/shell-context";
-import { Icons } from "@/components/layout/icons";
-
-function AdminSidebarFab() {
-  const { sidebarCollapsed, setSidebarCollapsed } = useShell();
-  return (
-    <button
-      type="button"
-      onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
-      className="fixed bottom-4 start-4 z-40 hidden items-center justify-center rounded-full border border-slate-200 bg-white p-2.5 shadow-lg md:flex"
-      aria-label="Toggle admin sidebar"
-      title="Toggle admin sidebar"
-    >
-      <Icons.menu size={16} />
-    </button>
-  );
-}
 
 function AdminFrame({ children }: { children: ReactNode }) {
   const { sidebarCollapsed, mobileNavOpen, setMobileNavOpen } = useShell();
   const width = sidebarCollapsed ? "md:w-16" : "md:w-[255px]";
   return (
     <div
-      className="admin-console-shell flex h-screen min-h-0 w-full overflow-hidden bg-[var(--wd-canvas,#f7f7f7)] text-[var(--wd-text,#212121)]"
+      className="admin-console-shell admin-theme-root flex h-screen min-h-0 w-full overflow-hidden bg-[var(--wd-canvas,#f7f7f7)] text-[var(--wd-text,#212121)]"
       style={{ fontFamily: "var(--user-font-family), Arial, system-ui, sans-serif" }}
     >
       <aside className={`hidden shrink-0 md:block ${width}`} aria-label="admin">
@@ -43,11 +27,10 @@ function AdminFrame({ children }: { children: ReactNode }) {
       ) : null}
       <div className="flex min-w-0 flex-1 flex-col overflow-hidden bg-[var(--wd-canvas,#f7f7f7)]">
         <TopHeader adminMode />
-        <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-y-auto overflow-x-hidden bg-[var(--wd-canvas,#f7f7f7)]">
+        <div className="admin-theme-content flex min-h-0 min-w-0 flex-1 flex-col overflow-y-auto overflow-x-hidden bg-[var(--wd-canvas,#f7f7f7)] text-[var(--wd-text,#212121)]" style={{ fontFamily: "var(--user-font-family), Arial, system-ui, sans-serif" }}>
           {children}
         </div>
       </div>
-      <AdminSidebarFab />
     </div>
   );
 }
