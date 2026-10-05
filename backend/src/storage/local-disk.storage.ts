@@ -184,14 +184,17 @@ export class LocalDiskStorageAdapter implements StorageService {
    */
   async assertStoredObjectExists(storageKey: string): Promise<void> {
     try {
+      assertAllowedObjectKey(storageKey);
       if (!isPublicTemplateObjectKey(storageKey) && !isBackupObjectKey(storageKey)) {
-      const parsed = parseTenantObjectKey(storageKey);
-      if (parsed.orgId !== this.requireOrgId()) throw new ForbiddenException('Resource does not belong to this organization');
-    }
+        const parsed = parseTenantObjectKey(storageKey);
+        if (parsed.orgId !== this.requireOrgId()) {
+          throw new ForbiddenException('Resource does not belong to this organization');
+        }
+      }
       await access(this.resolveObjectPath(storageKey));
     } catch (error) {
       if (error instanceof ForbiddenException) throw error;
-      throw new NotFoundException('File object not found on storage');
+      throw new NotFoundException('File object not found on storage disk');
     }
   }
 
@@ -337,9 +340,16 @@ export class LocalDiskStorageAdapter implements StorageService {
       );
     }
     if (request.storageKey) {
-      const parsed = parseTenantObjectKey(request.storageKey);
-      if (parsed.orgId !== orgId) {
-        throw new ForbiddenException('Storage key does not belong to this organization');
+      // Live tenant keys must match org. Backup namespace + public templates are
+      // validated by assertAllowedObjectKey in copy/read paths (not tenant UUID shape).
+      if (
+        !isPublicTemplateObjectKey(request.storageKey) &&
+        !isBackupObjectKey(request.storageKey)
+      ) {
+        const parsed = parseTenantObjectKey(request.storageKey);
+        if (parsed.orgId !== orgId) {
+          throw new ForbiddenException('Storage key does not belong to this organization');
+        }
       }
     }
     return orgId;

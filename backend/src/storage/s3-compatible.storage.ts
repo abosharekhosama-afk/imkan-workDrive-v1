@@ -268,9 +268,12 @@ export class S3CompatibleStorageAdapter implements StorageService {
    * 404 so the restore transaction is never entered against phantom data.
    */
   async assertStoredObjectExists(storageKey: string): Promise<void> {
-    const parsed = parseTenantObjectKey(storageKey);
-    if (parsed.orgId !== this.requireOrgId()) {
-      throw new ForbiddenException('Resource does not belong to this organization');
+    assertAllowedObjectKey(storageKey);
+    if (!isPublicTemplateObjectKey(storageKey) && !isBackupObjectKey(storageKey)) {
+      const parsed = parseTenantObjectKey(storageKey);
+      if (parsed.orgId !== this.requireOrgId()) {
+        throw new ForbiddenException('Resource does not belong to this organization');
+      }
     }
     try {
       await this.client.send(
@@ -293,9 +296,16 @@ export class S3CompatibleStorageAdapter implements StorageService {
       );
     }
     if (request.storageKey) {
-      const parsed = parseTenantObjectKey(request.storageKey);
-      if (parsed.orgId !== orgId) {
-        throw new ForbiddenException('Storage key does not belong to this organization');
+      // Live tenant keys must match org. Backup namespace + public templates are
+      // validated by assertAllowedObjectKey in copy/read paths (not tenant UUID shape).
+      if (
+        !isPublicTemplateObjectKey(request.storageKey) &&
+        !isBackupObjectKey(request.storageKey)
+      ) {
+        const parsed = parseTenantObjectKey(request.storageKey);
+        if (parsed.orgId !== orgId) {
+          throw new ForbiddenException('Storage key does not belong to this organization');
+        }
       }
     }
     return orgId;
