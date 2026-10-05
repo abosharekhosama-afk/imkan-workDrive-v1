@@ -53,7 +53,7 @@ export default function SharedLinksPage() {
             {label("nav.sharedLinks")}
           </h1>
         </div>
-        <div className="min-h-0 flex-1 overflow-y-auto">
+        <div className="min-h-0 flex-1 overflow-y-auto px-3 md:px-5">
           {loading ? (
             <div className="p-6 text-center text-[13px] text-slate-400">
               {label("common.loading")}
@@ -68,7 +68,7 @@ export default function SharedLinksPage() {
               </p>
             </div>
           ) : (
-            <table className="w-full border-collapse">
+            <table className="w-full border-collapse bg-[var(--wd-bg,#fff)]" style={{ fontFamily: "var(--user-font-family), Arial, system-ui, sans-serif" }}>
               <thead>
                 <tr className="border-b border-[color:var(--imkan-color-border)]">
                   <th className="px-3 py-2 text-start text-[12px] font-medium text-slate-500">
