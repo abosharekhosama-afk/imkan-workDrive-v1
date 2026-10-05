@@ -838,12 +838,12 @@ export function FileBrowser({
             singleSelected={selectedIds.size === 1}
             canMutate={canMutate}
             canShare={canShare}
-            onShare={(tab) => {
+            onShare={(mode) => {
               const target = resolveShareTarget(selectedIds, folders, files);
               if (target) {
                 const folder = folders.find((f) => f.id === target.id);
                 const file = files.find((f) => f.id === target.id);
-                openShare({ ...target, name: folder?.name ?? file?.name ?? "" }, tab === "invite" ? "invite" : "link");
+                openShare({ ...target, name: folder?.name ?? file?.name ?? "" }, mode ?? "link");
               }
             }}
             onCopyLink={() => {

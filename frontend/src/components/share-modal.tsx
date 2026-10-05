@@ -34,8 +34,13 @@ function permissionOptionLabel(option: SharePermission): string {
   return `share.permission.${option}`;
 }
 
-function InfoIcon() {
-  return <span className="share-zoho-info" aria-hidden>i</span>;
+function InfoIcon({ tip }: { tip: string }) {
+  return (
+    <span className="share-zoho-info-tip" tabIndex={0} aria-label={tip}>
+      <span className="share-zoho-info" aria-hidden>i</span>
+      <span className="share-zoho-tooltip" role="tooltip">{tip}</span>
+    </span>
+  );
 }
 
 function EyeIcon({ off = false }: { off?: boolean }) {
@@ -321,8 +326,8 @@ export function ShareModal({
         {linkSettingsOpen ? (
           <div className="share-zoho-link-settings">
             <label>Who can access this file via permalink?</label>
-            <ShareOptionMenu value={linkVisibility} options={[{ value: "COLLABORATORS", label: "Collaborators" }, { value: "ANYONE", label: "Anyone with the link" }, { value: "PRIVATE", label: "Private" }]} onChange={setLinkVisibility} />
-            <div className="share-zoho-link-setting-url"><input readOnly value={displayLink ?? ""} /><button type="button" onClick={() => void onCopyLink()}>Copy</button></div>
+            <ShareOptionMenu value={linkVisibility} options={[{ value: "COLLABORATORS", label: label("share.visibility.collaborators") }, { value: "ANYONE", label: label("share.visibility.anyone") }, { value: "PRIVATE", label: label("share.visibility.private") }]} onChange={setLinkVisibility} />
+            <div className="share-zoho-link-setting-url"><input readOnly value={displayLink ?? ""} /><button type="button" onClick={() => void onCopyLink()}>{label("share.copy")}</button></div>
             <div className="share-zoho-link-settings-footer"><button type="button" className="share-zoho-cancel-btn" onClick={() => setLinkSettingsOpen(false)}>Close</button><button type="button" className="share-zoho-primary-btn" disabled={!displayLink} onClick={() => { setLinkSettingsOpen(false); setToast("Link settings saved"); }}>Save</button></div>
           </div>
         ) : (
@@ -332,7 +337,7 @@ export function ShareModal({
             <div className="share-zoho-invite-row">
               <div className="share-zoho-invite-input-wrap">
                 <input value={memberQuery} onChange={(event) => setMemberQuery(event.target.value)} placeholder={locale === "ar" ? "أضف أعضاء باستخدام البريد الإلكتروني أو مجموعة" : "Add members by their email address or from a group"} />
-                <div className="share-zoho-invite-access"><span>Access Level</span><ShareOptionMenu value={permission} options={permissionOptionsForPicker} onChange={(next) => setPermission(next as SharePermission)} /></div>
+                <div className="share-zoho-invite-access"><span>{label("share.accessLevel")}</span><ShareOptionMenu value={permission} options={permissionOptionsForPicker} onChange={(next) => setPermission(next as SharePermission)} /></div>
               </div>
               <button type="button" className="share-zoho-primary-btn" disabled={submitting || recipientUserIds.length === 0} onClick={() => void runSubmit(recipientUserIds)}>{submitting ? "…" : "Share"}</button>
             </div>
@@ -360,66 +365,66 @@ export function ShareModal({
           <>
             <div className="share-zoho-link-name-row">
               <input value={linkName} onChange={(event) => setLinkName(event.target.value)} placeholder={isDownloadLink ? "Enter a link name for easy reference, eg: Event Attendees" : "Enter a link name for easy reference, eg: Event Leads"} />
-              {!isDownloadLink ? <div className="share-zoho-access-field"><span>Access Level</span><ShareOptionMenu value={permission} options={permissionOptionsForPicker} onChange={(next) => setPermission(next as SharePermission)} /></div> : null}
+              {!isDownloadLink ? <div className="share-zoho-access-field"><span>{label("share.accessLevel")}</span><ShareOptionMenu value={permission} options={permissionOptionsForPicker} onChange={(next) => setPermission(next as SharePermission)} /></div> : null}
             </div>
 
             {isDownloadLink ? (
               <>
                 <div className="share-zoho-setting-row">
-                  <span className="share-zoho-setting-label">Set download limit</span>
+                  <span className="share-zoho-setting-label">{label("share.setDownloadLimit")}</span>
                   {downloadLimitEnabled ? <input className="share-zoho-inline-input" value={downloadLimit} onChange={(event) => setDownloadLimit(event.target.value.replace(/\D/g, "").slice(0, 6))} inputMode="numeric" /> : null}
-                  <InfoIcon />
-                  <ShareToggle checked={downloadLimitEnabled} onChange={setDownloadLimitEnabled} label="Set download limit" />
+                  <InfoIcon tip={label("share.tip.accessLevel")} />
+                  <ShareToggle checked={downloadLimitEnabled} onChange={setDownloadLimitEnabled} label={label("share.setDownloadLimit")} />
                 </div>
                 <div className="share-zoho-setting-row">
-                  <span className="share-zoho-setting-label">Set expiration after</span>
+                  <span className="share-zoho-setting-label">{label("share.setExpiry")}</span>
                   {expiryEnabled ? <div className="share-zoho-inline-date"><input type="datetime-local" value={customExpiryDate} onChange={(event) => { setExpiryKind("custom"); setCustomExpiryDate(event.target.value); }} /><ClockIcon /></div> : null}
-                  <InfoIcon />
-                  <ShareToggle checked={expiryEnabled} onChange={setExpiryEnabled} label="Set expiration after" />
+                  <InfoIcon tip={label("share.tip.password")} />
+                  <ShareToggle checked={expiryEnabled} onChange={setExpiryEnabled} label={label("share.setExpiry")} />
                 </div>
               </>
             ) : (
               <>
                 <div className="share-zoho-setting-row">
-                  <span className="share-zoho-setting-label">Set password</span>
-                  {passwordEnabled ? <div className="share-zoho-inline-password"><input type={showPassword ? "text" : "password"} value={password} onChange={(event) => setPassword(event.target.value)} placeholder="Password" minLength={8} /><button type="button" onClick={() => setShowPassword((value) => !value)} aria-label="Show password"><EyeIcon off={showPassword} /></button></div> : null}
-                  <InfoIcon />
-                  <ShareToggle checked={passwordEnabled} onChange={setPasswordEnabled} label="Set password" />
+                  <span className="share-zoho-setting-label">{label("share.setPassword")}</span>
+                  {passwordEnabled ? <div className="share-zoho-inline-password"><input type={showPassword ? "text" : "password"} value={password} onChange={(event) => setPassword(event.target.value)} placeholder={label("share.password")} minLength={8} /><button type="button" onClick={() => setShowPassword((value) => !value)} aria-label={label("share.showPassword")}><EyeIcon off={showPassword} /></button></div> : null}
+                  <InfoIcon tip={label("share.tip.expiry")} />
+                  <ShareToggle checked={passwordEnabled} onChange={setPasswordEnabled} label={label("share.setPassword")} />
                 </div>
                 <div className="share-zoho-setting-row">
-                  <span className="share-zoho-setting-label">Set expiration after</span>
+                  <span className="share-zoho-setting-label">{label("share.setExpiry")}</span>
                   {expiryEnabled ? <div className="share-zoho-inline-date"><input type="datetime-local" value={customExpiryDate} onChange={(event) => { setExpiryKind("custom"); setCustomExpiryDate(event.target.value); }} /><ClockIcon /></div> : null}
-                  <InfoIcon />
-                  <ShareToggle checked={expiryEnabled} onChange={setExpiryEnabled} label="Set expiration after" />
+                  <InfoIcon tip={label("share.tip.download")} />
+                  <ShareToggle checked={expiryEnabled} onChange={setExpiryEnabled} label={label("share.setExpiry")} />
                 </div>
                 <div className="share-zoho-setting-row">
-                  <span className="share-zoho-setting-label">Show download and print options</span>
-                  <InfoIcon />
-                  <ShareToggle checked={canDownload} onChange={setCanDownload} label="Show download and print options" />
+                  <span className="share-zoho-setting-label">{label("share.showDownload")}</span>
+                  <InfoIcon tip={label("share.tip.requestData")} />
+                  <ShareToggle checked={canDownload} onChange={setCanDownload} label={label("share.showDownload")} />
                 </div>
                 <div className="share-zoho-setting-row">
-                  <span className="share-zoho-setting-label">Request user data</span>
+                  <span className="share-zoho-setting-label">{label("share.requestUserData")}</span>
                   {requestUserDataEnabled ? <ShareOptionMenu value={requestUserData} options={REQUEST_DATA.map((item) => ({ value: item.value, label: locale === "ar" ? item.ar : item.en }))} onChange={(next) => setRequestUserData(next as RequestDataKind)} /> : null}
-                  <InfoIcon />
-                  <ShareToggle checked={requestUserDataEnabled} onChange={setRequestUserDataEnabled} label="Request user data" />
+                  <InfoIcon tip={label("share.tip.reshare")} />
+                  <ShareToggle checked={requestUserDataEnabled} onChange={setRequestUserDataEnabled} label={label("share.requestUserData")} />
                 </div>
               </>
             )}
 
             <div className="share-zoho-note">
-              <p>• This is a public link, i.e., anyone with the link can access the file, so be sure to only share this link with trusted contacts.</p>
-              <p>• You can set password and expiration to restrict access to users.</p>
+              <p>{label("share.publicLinkNote1")}</p>
+              <p>{label("share.publicLinkNote2")}</p>
             </div>
             {error ? <div className="share-zoho-error">{error}</div> : null}
             <div className="share-zoho-footer-actions">
-              <button type="button" className="share-zoho-cancel-btn" onClick={onClose}>Cancel</button>
-              <button type="button" className="share-zoho-primary-btn" disabled={submitting} onClick={() => void runSubmit([])}>{submitting ? "…" : "Create"}</button>
+              <button type="button" className="share-zoho-cancel-btn" onClick={onClose}>{label("common.cancel")}</button>
+              <button type="button" className="share-zoho-primary-btn" disabled={submitting} onClick={() => void runSubmit([])}>{submitting ? "…" : label("share.create")}</button>
             </div>
           </>
           )}
 
         {embedCode ? <div className="share-zoho-embed-panel"><textarea readOnly value={embedCode} rows={3} /><button type="button" onClick={() => void onCopyEmbed()}>{copiedEmbed ? label("share.copied") : label("share.copyEmbed")}</button></div> : null}
-        {displayLink && !isInvite && currentMode !== "embed" ? <div className="share-zoho-created-link"><span>{displayLink}</span><button type="button" onClick={() => void onCopyLink()}>{copied ? label("share.copied") : "Copy"}</button></div> : null}
+        {displayLink && !isInvite && currentMode !== "embed" ? <div className="share-zoho-created-link"><span>{displayLink}</span><button type="button" onClick={() => void onCopyLink()}>{copied ? label("share.copied") : label("share.copy")}</button></div> : null}
         {toast ? <Toast message={toast} onDismiss={() => setToast(null)} /> : null}
         </>
         )}

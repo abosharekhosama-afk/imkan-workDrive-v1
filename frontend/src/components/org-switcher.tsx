@@ -119,11 +119,11 @@ export function OrgSwitcher({ organizationName, userRole }: OrgSwitcherProps) {
         aria-label={`${organizationName} — ${label("nav.switchOrg")}`}
       >
         <span className="zoho-team-avatar" aria-hidden="true">{orgInitials(organizationName)}</span>
-        <span className="zoho-team-meta">
+        <span className="zoho-team-meta max-md:hidden">
           <strong>{organizationName || label("brand.workspace")}</strong>
           <small>{roleText || label("org.myWorkDrive")}</small>
         </span>
-        <span className={`chevron${open ? " open" : ""}`} aria-hidden="true">⌄</span>
+        <span className={`chevron max-md:hidden${open ? " open" : ""}`} aria-hidden="true">⌄</span>
       </button>
       {open ? <OrgMenu anchorRef={containerRef} memberships={memberships} switchingId={switchingId} onSwitch={onSwitch} onClose={() => setOpen(false)} /> : null}
     </div>
