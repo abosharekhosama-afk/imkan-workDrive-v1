@@ -75,7 +75,7 @@ export default function ManageMyFoldersPage() {
   };
 
   return (
-    <div className="wd-manage-page">
+    <div className="wd-manage-page theme-aware-page" style={{ fontFamily: "var(--user-font-family), Arial, system-ui, sans-serif", color: "var(--wd-text, #212121)", background: "var(--wd-canvas, #fff)" }}>
       <div className="wd-manage-page-head">
         <div className="wd-manage-title"><Icons.folder size={20} /><strong>{ar ? "مجلداتي" : "My Folders"}</strong></div>
         <button type="button" className="wd-manage-close" onClick={() => router.push("/files")} aria-label="Close">×</button>
