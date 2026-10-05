@@ -213,7 +213,7 @@ export default function CollectionsPage() {
     return () => document.removeEventListener("mousedown", close);
   }, [menuFor]);
 
-  return <main className="wd-page flex min-h-[calc(100dvh-56px)] flex-col" dir={ar ? "rtl" : "ltr"}>
+  return <main className="wd-page theme-aware-page flex min-h-0 flex-1 flex-col" dir={ar ? "rtl" : "ltr"} style={{ fontFamily: "var(--user-font-family), Arial, system-ui, sans-serif", color: "var(--wd-text, #212121)", background: "var(--wd-canvas, #fff)" }}>
     <header className="wd-page-head"><div className="wd-page-head-titles"><h1>{label("nav.collectFiles")}</h1><p>{text("Collect files from team members and external people into a selected WorkDrive folder.", "اجمع الملفات من أعضاء الفريق والأشخاص الخارجيين داخل مجلد محدد في WorkDrive.")}</p></div><button className="wd-primary-button" onClick={() => setShow(true)}>＋ {text("Create Collection", "إنشاء مجموعة تجميع")}</button></header>
     {error && <div className="wd-alert" role="alert">{error}</div>}
     {token && <div className="wd-alert" role="status">{text("Collection created. Save this one-time link token:", "تم إنشاء المجموعة. احتفظ برمز الرابط لمرة واحدة:")} <strong dir="ltr">{token}</strong> <button onClick={() => setToken("")}>{text("Dismiss", "إغلاق")}</button></div>}
