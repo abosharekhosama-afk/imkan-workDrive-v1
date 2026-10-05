@@ -130,7 +130,10 @@ export class SharesService {
     const resourceName = input.resourceType === ResourceType.FILE
       ? (await this.prisma.file.findUnique({ where: { id: input.resourceId }, select: { name: true } }))?.name
       : (await this.prisma.folder.findUnique({ where: { id: input.resourceId }, select: { name: true } }))?.name;
-    const emailed = await this.emailShareLink(input.emailRecipients, resourceName ?? '', linkUrl);
+    const memberEmails = uniqueRecipientIds.length
+      ? (await this.prisma.user.findMany({ where: { id: { in: uniqueRecipientIds } }, select: { email: true } })).map((u) => u.email).filter(Boolean) as string[]
+      : [];
+    const emailed = await this.emailShareLink([...(input.emailRecipients ?? []), ...memberEmails], resourceName ?? '', linkUrl);
     void this.follows.notifyResourceEvent({
       orgId: user.org_id,
       resourceType: input.resourceType,
@@ -209,7 +212,7 @@ export class SharesService {
     const rows = await this.prisma.fileShare.findMany({
       where: { orgId: user.org_id, createdById: user.sub },
       include: {
-        file: { select: { id: true, name: true } },
+        file: { select: { id: true, name: true, mimeType: true, size: true, owner: { select: { id: true, name: true, email: true } } } },
         recipients: {
           include: {
             user: { select: { id: true, name: true, email: true } },
@@ -229,6 +232,9 @@ export class SharesService {
         resourceId: row.fileId,
         linkUrl: `${this.config.get<string>('PUBLIC_APP_URL') ?? ''}/share/public?token=${encodeURIComponent(row.linkToken)}`,
         name: row.file?.name ?? null,
+        owner: row.file?.owner ?? null,
+        mimeType: (row.file as any)?.mimeType ?? null,
+        size: (row.file as any)?.size ?? null,
         status: row.status,
         permission: row.permission,
         recipients: row.recipients.map((recipient) => ({
@@ -242,10 +248,10 @@ export class SharesService {
       });
     }
 
-    const folderRows = await this.prisma.folderShare.findMany({ where: { orgId: user.org_id, createdById: user.sub }, include: { folder: { select: { id: true, name: true } }, recipients: { include: { user: { select: { id: true, name: true, email: true } } } } } });
+    const folderRows = await this.prisma.folderShare.findMany({ where: { orgId: user.org_id, createdById: user.sub }, include: { folder: { select: { id: true, name: true, owner: { select: { id: true, name: true, email: true } } } }, recipients: { include: { user: { select: { id: true, name: true, email: true } } } } } });
     for (const row of folderRows) {
       if (!row.recipients.length && !row.linkToken) continue;
-      result.push({ id: row.id, resourceType: ResourceType.FOLDER, resourceId: row.folderId, linkUrl: `${this.config.get<string>('PUBLIC_APP_URL') ?? ''}/share/public?token=${encodeURIComponent(row.linkToken)}`, name: row.folder?.name ?? null, status: row.status, permission: row.permission, recipients: row.recipients.map((r: any) => ({ userId: r.userId, permission: r.permission, user: r.user })), expiresAt: row.expiresAt, revokedAt: row.revokedAt, canDownload: row.canDownload });
+      result.push({ id: row.id, resourceType: ResourceType.FOLDER, resourceId: row.folderId, linkUrl: `${this.config.get<string>('PUBLIC_APP_URL') ?? ''}/share/public?token=${encodeURIComponent(row.linkToken)}`, name: row.folder?.name ?? null, owner: row.folder?.owner ?? null, status: row.status, permission: row.permission, recipients: row.recipients.map((r: any) => ({ userId: r.userId, permission: r.permission, user: r.user })), expiresAt: row.expiresAt, revokedAt: row.revokedAt, canDownload: row.canDownload });
     }
     return result;
   }
