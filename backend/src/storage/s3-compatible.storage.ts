@@ -58,6 +58,7 @@ export class S3CompatibleStorageAdapter implements StorageService {
   ): Promise<SignedUrlResult> {
     const orgId = this.authorize(request);
     const objectKey = request.publicAccess ? (request.storageKey ?? buildPublicTemplateObjectKey(request.fileId, request.versionId)) : (request.storageKey ?? buildTenantObjectKey(orgId, request.fileId, request.versionId));
+    assertAllowedObjectKey(objectKey);
     const expiresInSeconds = this.expiresInSeconds();
     const command = new PutObjectCommand({
       Bucket: this.bucket(),
