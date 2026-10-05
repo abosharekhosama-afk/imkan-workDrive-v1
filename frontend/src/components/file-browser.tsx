@@ -192,6 +192,15 @@ export function FileBrowser({
   const [followTargets, setFollowTargets] = useState<FollowTarget[] | null>(null);
   const [dataTemplateTargets, setDataTemplateTargets] = useState<DataTemplateTarget[] | null>(null);
   const [labelTarget, setLabelTarget] = useState<{type:"FILE"|"FOLDER";id:string;name:string}|null>(null);
+  useEffect(() => {
+    const onOpenLabels = (event: Event) => {
+      const detail = (event as CustomEvent<{ type?: "FILE" | "FOLDER"; id?: string; name?: string }>).detail;
+      if (!detail?.id || !detail?.type) return;
+      setLabelTarget({ type: detail.type, id: detail.id, name: detail.name || "" });
+    };
+    window.addEventListener("workdrive:open-labels", onOpenLabels as EventListener);
+    return () => window.removeEventListener("workdrive:open-labels", onOpenLabels as EventListener);
+  }, []);
 
   const canMutate = canMutateContent(role, readOnly);
   const canShare = canShareContent(role, readOnly);
@@ -615,6 +624,8 @@ export function FileBrowser({
         if (folder) {
           select({ kind: "FOLDER", folder }, { open: true });
           setInspectorTab("details");
+          setInspectorOpen(true);
+          setMobileInspectorOpen(true);
         }
         return;
       }
@@ -622,9 +633,11 @@ export function FileBrowser({
       if (file) {
         select({ kind: "FILE", file }, { open: true });
         setInspectorTab("details");
+        setInspectorOpen(true);
+        setMobileInspectorOpen(true);
       }
     },
-    [filteredContents.folders, filteredContents.files, select, setInspectorTab],
+    [filteredContents.folders, filteredContents.files, select, setInspectorTab, setInspectorOpen, setMobileInspectorOpen],
   );
 
   useEffect(() => {
