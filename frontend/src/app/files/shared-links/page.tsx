@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useLocale } from "@/components/locale-provider";
-import { listSharedByMe, type SharedItem } from "@/lib/api/shared";
+import { listSharedByMe, setShareStatus, type SharedItem } from "@/lib/api/shared";
 import { formatDateLocalized } from "@/lib/localized";
 import { Icons } from "@/components/layout/icons";
 import { FileIcon } from "@/components/file-icon";
@@ -45,9 +45,19 @@ export default function SharedLinksPage() {
     }
   };
 
+  const handleToggle = async (link: SharedItem) => {
+    const next = link.status === "REVOKED" ? "ACTIVE" : "REVOKED";
+    try {
+      await setShareStatus(link.id, next);
+      setLinks((rows) => rows.map((r) => (r.id === link.id ? { ...r, status: next } : r)));
+    } catch {
+      setToast(label("error.generic"));
+    }
+  };
+
   return (
     <>
-      <div className="flex min-h-0 flex-1 flex-col">
+      <div className="flex min-h-0 flex-1 flex-col" style={{ fontFamily: "var(--user-font-family), Arial, system-ui, sans-serif" }}>
         <div className="flex h-12 shrink-0 items-center border-b border-[color:var(--imkan-color-border)] bg-white px-3">
           <h1 className="text-[15px] font-semibold text-[#212121]">
             {label("nav.sharedLinks")}
@@ -119,13 +129,23 @@ export default function SharedLinksPage() {
                         : label("share.expiry.never")}
                     </td>
                     <td className="px-3 py-2.5 text-end">
-                      <button
-                        type="button"
-                        onClick={() => void handleCopy(link.linkUrl)}
-                        className="rounded-md px-2.5 py-1.5 text-[12.5px] text-[#1B66EA] hover:bg-[#EEF3FD]"
-                      >
-                        {label("share.copyLink")}
-                      </button>
+                      <div className="inline-flex items-center gap-1">
+                        <button
+                          type="button"
+                          onClick={() => void handleCopy(link.linkUrl)}
+                          className="rounded-md px-2.5 py-1.5 text-[12.5px] text-[color:var(--wd-primary,#1B66EA)] hover:bg-[var(--wd-primary-light,#EEF3FD)]"
+                        >
+                          {label("share.copyLink")}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => void handleToggle(link)}
+                          className="rounded-md px-2.5 py-1.5 text-[12.5px] text-slate-600 hover:bg-slate-100"
+                          title={link.status === "REVOKED" ? (locale === "ar" ? "تفعيل" : "Enable") : (locale === "ar" ? "تعطيل" : "Disable")}
+                        >
+                          {link.status === "REVOKED" ? (locale === "ar" ? "تفعيل" : "Enable") : (locale === "ar" ? "تعطيل" : "Disable")}
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))}
