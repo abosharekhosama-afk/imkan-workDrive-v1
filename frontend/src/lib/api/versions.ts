@@ -77,3 +77,11 @@ export function uploadNewVersion(fileId: string, file: File): Promise<UploadNewV
     body: form,
   });
 }
+
+/** Soft-delete selected non-current versions (backend marks status DELETED). */
+export function deleteVersions(fileId: string, versionIds: string[]): Promise<{ deleted: number; skipped: number }> {
+  return apiRequest<{ deleted: number; skipped: number }>(`/files/${fileId}/versions/bulk-delete`, {
+    method: "POST",
+    body: JSON.stringify({ versionIds }),
+  });
+}
