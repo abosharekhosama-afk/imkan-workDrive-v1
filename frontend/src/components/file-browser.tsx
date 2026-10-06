@@ -69,6 +69,7 @@ import { followResourceKey } from "../lib/follow-updates-logic";
 import type { ShareLaunchMode } from "../lib/share-launch-logic";
 import { DataTemplateAssociationModal, type DataTemplateTarget } from "./data-template-association-modal";
 import { LabelAssignmentModal } from "./label-assignment-modal";
+import { DlpClassifyModal } from "./dlp-classify-modal";
 
 export function FileBrowser({
   folderId,
@@ -193,6 +194,7 @@ export function FileBrowser({
   const [followTargets, setFollowTargets] = useState<FollowTarget[] | null>(null);
   const [dataTemplateTargets, setDataTemplateTargets] = useState<DataTemplateTarget[] | null>(null);
   const [labelTarget, setLabelTarget] = useState<{type:"FILE"|"FOLDER";id:string;name:string}|null>(null);
+  const [classifyTarget, setClassifyTarget] = useState<{type:"FILE"|"FOLDER";id:string;name:string}|null>(null);
   useEffect(() => {
     const onOpenLabels = (event: Event) => {
       const detail = (event as CustomEvent<{ type?: "FILE" | "FOLDER"; id?: string; name?: string }>).detail;
@@ -831,6 +833,7 @@ export function FileBrowser({
     onOpen: () => handleOpen("FOLDER", singleFolder.id, singleFolder.name),
     onInspect: () => handleInspect("FOLDER", singleFolder.id),
     onLabels: () => setLabelTarget({ type: "FOLDER", id: singleFolder.id, name: singleFolder.name }),
+    onClassify: () => setClassifyTarget({ type: "FOLDER", id: singleFolder.id, name: singleFolder.name }),
     onFavoriteToggle: () => { void handleFavorite("FOLDER", singleFolder.id); },
     onCopyLink: canShare ? () => { void copyShareLink({ type: "FOLDER", id: singleFolder.id }); } : undefined,
   } : singleFile ? {
@@ -840,6 +843,7 @@ export function FileBrowser({
     onVersionHistory: () => { void onVersionHistory("FILE", singleFile.id, singleFile.name, singleFile.mimeType ?? undefined, singleFile.size ?? undefined); },
     onInspect: () => handleInspect("FILE", singleFile.id),
     onLabels: () => setLabelTarget({ type: "FILE", id: singleFile.id, name: singleFile.name }),
+    onClassify: () => setClassifyTarget({ type: "FILE", id: singleFile.id, name: singleFile.name }),
     onFavoriteToggle: () => { void handleFavorite("FILE", singleFile.id); },
     onCopyLink: canShare ? () => { void copyShareLink({ type: "FILE", id: singleFile.id }); } : undefined,
     onReindex: () => { void runControl(singleFile.id, "reindex"); },
@@ -1262,6 +1266,7 @@ export function FileBrowser({
     />
     {followTargets?.length ? <FollowUpdatesModal targets={followTargets} onClose={() => setFollowTargets(null)} onChanged={(messageKey, name) => { refreshFollows(); if (messageKey && name) setToast(label(messageKey).replace("{name}", name)); else if (messageKey) setToast(label(messageKey).replace("{name}", followTargets[0]?.name ?? "")); }} /> : null}
     {labelTarget ? <LabelAssignmentModal target={labelTarget} onClose={()=>setLabelTarget(null)} onChanged={()=>void load()} /> : null}
+    {classifyTarget ? <DlpClassifyModal target={classifyTarget} onClose={()=>setClassifyTarget(null)} onChanged={()=>void load()} /> : null}
     {dataTemplateTargets?.length ? <DataTemplateAssociationModal targets={dataTemplateTargets} dataTemplates={dataTemplates} onClose={() => setDataTemplateTargets(null)} onChanged={() => { void load(); }} /> : null}
     {toast ? <Toast message={toast} onDismiss={() => setToast(null)} /> : null}
     {confirmModal}

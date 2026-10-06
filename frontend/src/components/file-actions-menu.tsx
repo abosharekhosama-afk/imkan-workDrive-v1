@@ -37,6 +37,8 @@ export interface FileActionHandlers {
   onAssignWorkflow?: () => void;
   /** Optional organize submenu targets (Zoho-style secondary panel). */
   onLabels?: () => void;
+  /** Assign a DLP classification label (policy enforcement). */
+  onClassify?: () => void;
   onCreateShortcut?: () => void;
   onSearchInFolder?: () => void;
   onSaveAsTemplate?: () => void;
@@ -145,10 +147,11 @@ export function buildUnifiedFileActionItems(opts: {
   if (handlers.onSaveAsTemplate) push({ label: label("menu.saveAsTemplate"), icon: FileMenuIcons.organize, onSelect: handlers.onSaveAsTemplate });
   if (handlers.onAssignWorkflow) push({ label: label("menu.assignWorkflow"), icon: FileMenuIcons.assignWorkflow, onSelect: handlers.onAssignWorkflow });
 
-  if (handlers.onOrganize || handlers.onLabels || handlers.onCreateShortcut || handlers.onInspect) {
+  if (handlers.onOrganize || handlers.onLabels || handlers.onClassify || handlers.onCreateShortcut || handlers.onInspect) {
     const organizeSub: ActionDropdownItem[] = [];
     if (handlers.onOrganize) organizeSub.push({ label: label("menu.organize"), icon: FileMenuIcons.organize, onSelect: handlers.onOrganize });
     if (handlers.onLabels) organizeSub.push({ label: label("menu.labels"), icon: FileMenuIcons.organize, onSelect: handlers.onLabels });
+    if (handlers.onClassify) organizeSub.push({ label: label("menu.classify" as never) || "Add classification", icon: FileMenuIcons.organize, onSelect: handlers.onClassify });
     if (handlers.onCreateShortcut) organizeSub.push({ label: label("menu.createShortcut"), icon: FileMenuIcons.organize, onSelect: handlers.onCreateShortcut });
     if (handlers.onInspect) organizeSub.push({ label: label("menu.properties"), icon: FileMenuIcons.properties, onSelect: handlers.onInspect });
     if (organizeSub.length === 1 && handlers.onOrganize) {

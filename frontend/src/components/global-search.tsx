@@ -51,11 +51,17 @@ export function GlobalSearch({ onNavigate }: GlobalSearchProps) {
     try {
       const result = await searchNames(query, filter);
       if (runId !== runIdRef.current) return; // stale response
-      setFolders(result.folders ?? []);
-      setFiles(result.files ?? []);
+      setFolders(Array.isArray(result.folders) ? result.folders : []);
+      setFiles(Array.isArray(result.files) ? result.files : []);
       setOpen(true);
-    } catch {
-      if (runId === runIdRef.current) setOpen(false);
+    } catch (err) {
+      // Keep panel open with empty results so the user sees "no results" instead of silent failure
+      if (runId === runIdRef.current) {
+        setFolders([]);
+        setFiles([]);
+        setOpen(true);
+        console.warn("[GlobalSearch] search failed", err);
+      }
     } finally {
       if (runId === runIdRef.current) setLoading(false);
     }

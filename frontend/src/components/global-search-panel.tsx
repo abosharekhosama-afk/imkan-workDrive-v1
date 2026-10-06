@@ -5,7 +5,6 @@ import { useLayoutEffect, useRef } from "react";
 import { useLocale } from "./locale-provider";
 import { FileIcon } from "./file-icon";
 import type { FileRecord, FolderRecord } from "../lib/api/types";
-import { clampBoxLeft, readContentLane } from "../lib/overlay-bounds-logic";
 
 export type SearchFilter = "all" | "files" | "folders";
 
@@ -35,28 +34,21 @@ export function GlobalSearchPanel({
   const showFiles = filter === "all" || filter === "files";
   const hasResults = folders.length > 0 || files.length > 0;
 
+  // Keep the results panel anchored to the search input card (no fixed repositioning that spills outside).
   useLayoutEffect(() => {
     if (!open || !containerRef.current) return;
-    const panel = containerRef.current.querySelector(".zoho-search-panel") as HTMLElement | null;
-    if (!panel) return;
-    const containerRect = containerRef.current.getBoundingClientRect();
-    const lane = readContentLane();
-    const width = Math.max(180, Math.min(430, lane.right - lane.left));
-    const rtl = document.documentElement.dir === "rtl";
-    const desired = rtl ? containerRect.right - width : containerRect.left;
-    const left = clampBoxLeft(desired, width, lane);
-    panel.style.position = "fixed";
-    panel.style.left = `${left}px`;
-    panel.style.right = "auto";
-    panel.style.insetInlineStart = "auto";
-    panel.style.marginInlineStart = "0";
-    panel.style.top = `${containerRect.bottom + 6}px`;
-    panel.style.width = `${width}px`;
-    panel.style.maxWidth = `${width}px`;
-    // Keep search result cards above the file browser / results section (Zoho parity)
-    panel.style.zIndex = "9999";
-    panel.style.visibility = "visible";
-    panel.style.pointerEvents = "auto";
+    const panelEl = containerRef.current.querySelector(".zoho-search-panel") as HTMLElement | null;
+    if (!panelEl) return;
+    // Clear any previous fixed overrides so CSS absolute + card bounds control the layout
+    panelEl.style.position = "";
+    panelEl.style.left = "";
+    panelEl.style.right = "";
+    panelEl.style.top = "";
+    panelEl.style.width = "";
+    panelEl.style.maxWidth = "";
+    panelEl.style.insetInlineStart = "";
+    panelEl.style.marginInlineStart = "";
+    panelEl.style.zIndex = "80";
   }, [open, input, filter, folders.length, files.length]);
 
   if (!open) {
