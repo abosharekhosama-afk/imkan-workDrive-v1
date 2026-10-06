@@ -483,7 +483,8 @@ html, body {
   /*--wd-green:var(--wd-primary);*/
   /*--wd-green-dark:#008f70;*/
   --wd-sidebar:#282828;
-  --wd-active:var(--wd-active);
+  --wd-active:rgba(44,102,221,.14);
+  --wd-sidebar-active-bg:rgba(255,255,255,.12);
   --wd-primary:var(--user-accent-primary,#2C66DD);
   --wd-primary-dark:var(--user-accent-dark,#184091);
   --wd-primary-ink:var(--user-accent-ink,#254993);
@@ -787,6 +788,8 @@ html[data-theme="dark"]{
   --wd-primary-ink:var(--user-accent-ink,#c5d0ff);
   --wd-primary-light:var(--user-accent-light,rgba(107,138,253,.14));
   --wd-sidebar:#141414;
+  --wd-sidebar-active-bg:rgba(255,255,255,.12);
+  --wd-active:rgba(255,255,255,.10);
   --wd-sidebar-text:#e4e4e4;
   --wd-sidebar-muted:#9a9a9a;
   --wd-sidebar-active-text:#ffffff;
@@ -6189,5 +6192,194 @@ html[data-theme="dark"] .wd-name-link {
 html[data-theme="dark"] .wd-empty,
 html[data-theme="dark"] .zoho-search-empty {
   background: transparent !important;
+  color: var(--wd-text-muted) !important;
+}
+
+
+/* ── Sidebar selection: ONLY the current page is highlighted ───────────── */
+.primary-sidebar a.wd-sidebar-item,
+.primary-sidebar a[aria-current="page"] {
+  background: transparent;
+  color: var(--wd-sidebar-text, #EEEEEE);
+  font-weight: 500;
+}
+.primary-sidebar a[aria-current="page"],
+.primary-sidebar a.wd-sidebar-item.is-active {
+  background: var(--wd-sidebar-active-bg, rgba(255,255,255,.12)) !important;
+  color: var(--wd-sidebar-active-text, #DBE3FA) !important;
+  font-weight: 700 !important;
+}
+.primary-sidebar a.wd-sidebar-item:hover:not([aria-current="page"]),
+.primary-sidebar a:hover:not([aria-current="page"]) {
+  background: rgba(255,255,255,.08) !important;
+}
+/* Prevent blanket dark rules from painting every nav link as selected */
+html[data-theme="dark"] .primary-sidebar a:not([aria-current="page"]) {
+  background: transparent !important;
+  color: var(--wd-sidebar-text) !important;
+  font-weight: 500 !important;
+}
+html[data-theme="dark"] .primary-sidebar a[aria-current="page"] {
+  background: var(--wd-sidebar-active-bg, rgba(255,255,255,.12)) !important;
+  color: var(--wd-sidebar-active-text, #ffffff) !important;
+  font-weight: 700 !important;
+}
+html[data-theme="dark"] .primary-sidebar a:not([aria-current="page"]) span {
+  color: inherit !important;
+  opacity: 0.95;
+}
+html[data-theme="dark"] .primary-sidebar a[aria-current="page"] span {
+  color: inherit !important;
+}
+
+
+/* ── Extra dark coverage: team folders, workflows, templates, admin ───── */
+html[data-theme="dark"] .team-folders-page,
+html[data-theme="dark"] .team-folders-page .bg-white,
+html[data-theme="dark"] .files-templates-page,
+html[data-theme="dark"] .files-templates-page .bg-white,
+html[data-theme="dark"] .notifications-page,
+html[data-theme="dark"] .notifications-page .bg-white,
+html[data-theme="dark"] .admin-devices-page,
+html[data-theme="dark"] .admin-data-templates-page,
+html[data-theme="dark"] .admin-custom-functions-page,
+html[data-theme="dark"] .workflow-ui,
+html[data-theme="dark"] .workflow-ui .bg-white,
+html[data-theme="dark"] .workflow-notes,
+html[data-theme="dark"] .workflow-note-card,
+html[data-theme="dark"] .wf-notes-card {
+  background: var(--wd-canvas) !important;
+  color: var(--wd-text) !important;
+  border-color: var(--wd-line) !important;
+}
+
+/* Cards inside those pages */
+html[data-theme="dark"] .team-folders-page [class*="rounded"],
+html[data-theme="dark"] .files-templates-page [class*="card"],
+html[data-theme="dark"] .workflow-ui .wf-card,
+html[data-theme="dark"] .workflow-ui .rounded-2xl,
+html[data-theme="dark"] .workflow-ui .rounded-xl,
+html[data-theme="dark"] .workflow-ui .rounded-lg,
+html[data-theme="dark"] .admin-data-templates-page .rounded-2xl,
+html[data-theme="dark"] .admin-devices-page .rounded-2xl,
+html[data-theme="dark"] .admin-custom-functions-page .rounded-2xl,
+html[data-theme="dark"] .notifications-page table,
+html[data-theme="dark"] .notifications-page thead,
+html[data-theme="dark"] .notifications-page tbody {
+  background: var(--wd-bg) !important;
+  color: var(--wd-text) !important;
+  border-color: var(--wd-line) !important;
+}
+
+/* Segmented toggles (files/folders, create workflow) */
+html[data-theme="dark"] .workflow-segment,
+html[data-theme="dark"] .wd-chip-btn,
+html[data-theme="dark"] .team-filter-trigger,
+html[data-theme="dark"] .workflow-shell-tab,
+html[data-theme="dark"] .zoho-view-btn,
+html[data-theme="dark"] .zoho-filter-chip {
+  background: var(--wd-panel-2) !important;
+  color: var(--wd-text-muted) !important;
+  border-color: var(--wd-line) !important;
+}
+html[data-theme="dark"] .workflow-segment.is-active,
+html[data-theme="dark"] .wd-chip-btn.is-active,
+html[data-theme="dark"] .team-filter-trigger.is-active,
+html[data-theme="dark"] .workflow-shell-tab.is-active,
+html[data-theme="dark"] .zoho-view-btn.active,
+html[data-theme="dark"] .zoho-filter-chip.active {
+  background: var(--wd-primary-light) !important;
+  color: var(--wd-primary-ink) !important;
+  border-color: var(--wd-primary) !important;
+}
+
+/* Admin table headers (custom functions, data templates, devices) */
+html[data-theme="dark"] .admin-console-shell thead,
+html[data-theme="dark"] .admin-console-shell th,
+html[data-theme="dark"] .admin-theme-content thead,
+html[data-theme="dark"] .admin-theme-content th,
+html[data-theme="dark"] .admin-custom-functions-page thead,
+html[data-theme="dark"] .admin-custom-functions-page th,
+html[data-theme="dark"] .admin-data-templates-page thead,
+html[data-theme="dark"] .admin-data-templates-page th,
+html[data-theme="dark"] .admin-devices-page thead,
+html[data-theme="dark"] .admin-devices-page th {
+  background: var(--wd-panel-2) !important;
+  color: var(--wd-text-muted) !important;
+  border-color: var(--wd-line) !important;
+}
+html[data-theme="dark"] .admin-console-shell tbody td,
+html[data-theme="dark"] .admin-theme-content tbody td,
+html[data-theme="dark"] .admin-custom-functions-page td,
+html[data-theme="dark"] .admin-data-templates-page td,
+html[data-theme="dark"] .admin-devices-page td {
+  background: var(--wd-bg) !important;
+  color: var(--wd-text) !important;
+  border-color: var(--wd-line) !important;
+}
+
+/* Data templates page canvas behind the manage card */
+html[data-theme="dark"] .admin-data-templates-page,
+html[data-theme="dark"] .admin-data-templates-page > div,
+html[data-theme="dark"] .admin-theme-content > .bg-slate-50,
+html[data-theme="dark"] .admin-theme-content > .bg-\[\#f7f8fa\] {
+  background: var(--wd-canvas) !important;
+}
+
+/* Notifications table */
+html[data-theme="dark"] .notifications-page thead tr,
+html[data-theme="dark"] .notifications-page th {
+  background: var(--wd-panel-2) !important;
+  color: var(--wd-text-muted) !important;
+}
+html[data-theme="dark"] .notifications-page tr:hover td {
+  background: var(--wd-hover) !important;
+}
+
+/* Templates WorkDrive list */
+html[data-theme="dark"] .files-templates-page table,
+html[data-theme="dark"] .files-templates-page thead,
+html[data-theme="dark"] .files-templates-page th,
+html[data-theme="dark"] .files-templates-page td {
+  background: var(--wd-bg) !important;
+  color: var(--wd-text) !important;
+  border-color: var(--wd-line) !important;
+}
+html[data-theme="dark"] .files-templates-page thead,
+html[data-theme="dark"] .files-templates-page th {
+  background: var(--wd-panel-2) !important;
+  color: var(--wd-text-muted) !important;
+}
+
+
+html[data-theme="dark"] .admin-data-templates-page,
+html[data-theme="dark"] main.bg-\[\#f7f8fa\],
+html[data-theme="dark"] .bg-\[\#f7f8fa\] {
+  background: var(--wd-canvas) !important;
+  color: var(--wd-text) !important;
+}
+html[data-theme="dark"] .admin-data-templates-page header,
+html[data-theme="dark"] .admin-data-templates-page aside,
+html[data-theme="dark"] .admin-data-templates-page .bg-white {
+  background: var(--wd-bg) !important;
+  color: var(--wd-text) !important;
+  border-color: var(--wd-line) !important;
+}
+html[data-theme="dark"] .admin-data-templates-page input,
+html[data-theme="dark"] .admin-data-templates-page textarea {
+  background: var(--wd-panel-2) !important;
+  color: var(--wd-text) !important;
+  border-color: var(--wd-line) !important;
+}
+html[data-theme="dark"] .admin-devices-page,
+html[data-theme="dark"] .admin-custom-functions-page {
+  background: var(--wd-canvas) !important;
+  color: var(--wd-text) !important;
+}
+html[data-theme="dark"] .admin-devices-page table thead,
+html[data-theme="dark"] .admin-devices-page th,
+html[data-theme="dark"] .admin-custom-functions-page table thead,
+html[data-theme="dark"] .admin-custom-functions-page th {
+  background: var(--wd-panel-2) !important;
   color: var(--wd-text-muted) !important;
 }
