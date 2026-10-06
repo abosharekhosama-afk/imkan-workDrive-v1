@@ -385,7 +385,7 @@ export function FileBrowser({
       setLoading(false);
       setMarksTick((tick) => tick + 1);
     }
-  }, [folderId, label, routeQuery, advancedFilter]);
+  }, [folderId, label, routeQuery, advancedFilter, filter]);
 
   useEffect(() => {
     let live = true;
@@ -907,6 +907,69 @@ export function FileBrowser({
         {teamFolderId ? null : <Breadcrumbs folderId={searchActive ? undefined : folderId} folderName={searchActive ? undefined : folderName} />}
 
       {error ? <AlertBanner message={error} action={<button type="button" className="imkan-button-secondary" onClick={() => void load()}>{label("feedback.retry")}</button>} /> : null}
+
+      {/* Active filter chips — always above the results section (not hidden underneath) */}
+      {(filter !== "all" || advancedFilter.type !== "all" || advancedFilter.status !== "all" || advancedFilter.owner || advancedFilter.dateFrom || advancedFilter.dateTo || advancedFilter.dataTemplateId || routeQuery) ? (
+        <div className="zoho-active-filters flex flex-wrap items-center gap-2 border-b border-slate-100 bg-slate-50/80 px-3 py-2" style={{ position: "relative", zIndex: 5 }}>
+          {routeQuery ? (
+            <span className="wd-chip-btn is-active inline-flex items-center gap-1 text-[12px]">
+              ⌕ {routeQuery}
+              <button type="button" className="ms-1 opacity-70 hover:opacity-100" aria-label="Clear search" onClick={() => { const params = new URLSearchParams(searchParams.toString()); params.delete("query"); router.replace(params.toString() ? `?${params}` : "/files"); }}>×</button>
+            </span>
+          ) : null}
+          {filter !== "all" ? (
+            <span className="wd-chip-btn is-active inline-flex items-center gap-1 text-[12px]">
+              {label(`filter.${filter}` as never)}
+              <button type="button" className="ms-1 opacity-70 hover:opacity-100" aria-label="Clear filter" onClick={() => setFilter("all")}>×</button>
+            </span>
+          ) : null}
+          {advancedFilter.type !== "all" ? (
+            <span className="wd-chip-btn is-active inline-flex items-center gap-1 text-[12px]">
+              type: {advancedFilter.type}
+              <button type="button" className="ms-1 opacity-70 hover:opacity-100" onClick={() => setAdvancedFilter({ ...advancedFilter, type: "all" })}>×</button>
+            </span>
+          ) : null}
+          {advancedFilter.status !== "all" ? (
+            <span className="wd-chip-btn is-active inline-flex items-center gap-1 text-[12px]">
+              {advancedFilter.status}
+              <button type="button" className="ms-1 opacity-70 hover:opacity-100" onClick={() => setAdvancedFilter({ ...advancedFilter, status: "all" })}>×</button>
+            </span>
+          ) : null}
+          {advancedFilter.owner ? (
+            <span className="wd-chip-btn is-active inline-flex items-center gap-1 text-[12px]">
+              owner
+              <button type="button" className="ms-1 opacity-70 hover:opacity-100" onClick={() => setAdvancedFilter({ ...advancedFilter, owner: "" })}>×</button>
+            </span>
+          ) : null}
+          {(advancedFilter.dateFrom || advancedFilter.dateTo) ? (
+            <span className="wd-chip-btn is-active inline-flex items-center gap-1 text-[12px]">
+              {advancedFilter.dateFrom || "…"} → {advancedFilter.dateTo || "…"}
+              <button type="button" className="ms-1 opacity-70 hover:opacity-100" onClick={() => setAdvancedFilter({ ...advancedFilter, dateFrom: "", dateTo: "" })}>×</button>
+            </span>
+          ) : null}
+          {advancedFilter.dataTemplateId ? (
+            <span className="wd-chip-btn is-active inline-flex items-center gap-1 text-[12px]">
+              template
+              <button type="button" className="ms-1 opacity-70 hover:opacity-100" onClick={() => setAdvancedFilter({ ...advancedFilter, dataTemplateId: "", dataTemplateCriteria: [] })}>×</button>
+            </span>
+          ) : null}
+          <button
+            type="button"
+            className="text-[12px] text-slate-500 underline-offset-2 hover:underline"
+            onClick={() => {
+              setFilter("all");
+              setAdvancedFilter({ type: "all", status: "all", dateField: "modified", dateFrom: "", dateTo: "", owner: "", dataTemplateId: "", dataTemplateCriteria: [] });
+              if (routeQuery) {
+                const params = new URLSearchParams(searchParams.toString());
+                params.delete("query");
+                router.replace(params.toString() ? `?${params}` : "/files");
+              }
+            }}
+          >
+            {label("share.cancel") || "Clear all"}
+          </button>
+        </div>
+      ) : null}
 
       <div className={`wd-file-browser-body min-h-0 flex-1 bg-white${viewMode === "index" ? " is-index-view" : ""}`}>
       {loading ? <SkeletonLoader columns={6} /> : viewMode === "grid" ? (

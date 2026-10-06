@@ -53,6 +53,10 @@ export function GlobalSearchPanel({
     panel.style.top = `${containerRect.bottom + 6}px`;
     panel.style.width = `${width}px`;
     panel.style.maxWidth = `${width}px`;
+    // Keep search result cards above the file browser / results section (Zoho parity)
+    panel.style.zIndex = "9999";
+    panel.style.visibility = "visible";
+    panel.style.pointerEvents = "auto";
   }, [open, input, filter, folders.length, files.length]);
 
   if (!open) {

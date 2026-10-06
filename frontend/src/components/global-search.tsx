@@ -65,6 +65,14 @@ export function GlobalSearch({ onNavigate }: GlobalSearchProps) {
 
   useEffect(() => () => debouncedSearch.cancel(), [debouncedSearch]);
 
+  // Re-run search when filter chips change so results actually respect the active filter
+  useEffect(() => {
+    const q = input.trim();
+    if (!q) return;
+    void runSearch(q);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- only re-fire when filter changes
+  }, [filter]);
+
   useEffect(() => {
     if (!open) return;
     const onPointerDown = (event: MouseEvent) => {
