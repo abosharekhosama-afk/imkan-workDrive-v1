@@ -82,7 +82,7 @@ export default function DataTemplatesAdminPage() {
     });
   }
 
-  return <main className="h-full overflow-hidden bg-[#f7f8fa]" dir={ar ? "rtl" : "ltr"}>{confirmModal}
+  return <main className="admin-data-templates-page h-full overflow-hidden bg-[#f7f8fa]" dir={ar ? "rtl" : "ltr"}>{confirmModal}
     <header className="border-b border-slate-200 bg-white px-7 py-5">
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div>
