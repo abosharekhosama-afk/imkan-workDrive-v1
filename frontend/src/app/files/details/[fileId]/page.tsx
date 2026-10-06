@@ -7,7 +7,8 @@ import { FileTypeIcon, fileIconKind } from "../../../../components/file-icon";
 import { Icons } from "../../../../components/layout/icons";
 import { getFileDetails, type FileDetailsResponse } from "../../../../lib/api/files";
 import { getFileActivities, type FileActivityRecord } from "../../../../lib/api/preview";
-import { getVersionHistory, getVersionDownloadUrlById, restoreVersionById, uploadNewVersion, type VersionRecord } from "../../../../lib/api/versions";
+import { getVersionHistory, getVersionDownloadUrlById, restoreVersionById, uploadNewVersion, deleteVersions, type VersionRecord } from "../../../../lib/api/versions";
+import { runFileControl } from "../../../../lib/api/files";
 import { getFolder } from "../../../../lib/api/folders";
 import { formatBytes } from "../../../../lib/api/quota";
 
@@ -104,6 +105,7 @@ export default function FileDetailsPage() {
           getFileActivities(resourceId, 100).catch(() => [] as FileActivityRecord[]),
         ]);
         setVersions(versionRows);
+        setCheckedOut(Boolean((details as { checkedOutById?: string | null }).checkedOutById));
         setActivities(activityRows);
       } else {
         const folderRow = await getFolder(resourceId);
@@ -309,8 +311,24 @@ export default function FileDetailsPage() {
                       ? "بعد سحب الملف (Check-Out) لا يمكن للآخرين تعديله، ولن تظهر تغييراتك حتى تقوم بإعادته (Check-In)."
                       : "Once the file is Checked-Out, it cannot be edited by the other collaborators and the changes made by you will not be visible until you Check-In."}</p>
                     <div className="zoho-fd-panel-actions">
-                      <button type="button" className="zoho-fd-btn-primary" disabled={checkoutBusy} onClick={() => { setCheckoutBusy(true); setTimeout(() => { setCheckedOut(true); setShowCheckoutPanel(false); setCheckoutBusy(false); }, 400); }}>
-                        {ar ? "سحب الملف" : "Check Out"}
+                      <button type="button" className="zoho-fd-btn-primary" disabled={checkoutBusy} onClick={() => { void (async () => {
+                        setCheckoutBusy(true);
+                        try {
+                          if (checkedOut) {
+                            await runFileControl(resourceId, "check-in");
+                            setCheckedOut(false);
+                          } else {
+                            await runFileControl(resourceId, "check-out");
+                            setCheckedOut(true);
+                          }
+                          setShowCheckoutPanel(false);
+                        } catch {
+                          setError(ar ? "تعذر تنفيذ عملية السحب/الإيداع." : "Unable to check out / check in the file.");
+                        } finally {
+                          setCheckoutBusy(false);
+                        }
+                      })(); }}>
+                        {checkedOut ? (ar ? "إيداع الملف" : "Check In") : (ar ? "سحب الملف" : "Check Out")}
                       </button>
                       <button type="button" className="zoho-fd-btn-ghost" onClick={() => setShowCheckoutPanel(false)}>{ar ? "إلغاء" : "Cancel"}</button>
                     </div>
@@ -347,11 +365,24 @@ export default function FileDetailsPage() {
                       </button>
                       <span className="zoho-fd-sep">|</span>
                       <button type="button" onClick={() => { setShowCheckoutPanel(true); setShowUploadPanel(false); }}>
-                        <Icons.pencil size={15} /> {checkedOut ? (ar ? "تم السحب" : "Checked out") : (ar ? "سحب الملف" : "Check Out")}
+                        <Icons.pencil size={15} /> {checkedOut ? (ar ? "إيداع الملف" : "Check In") : (ar ? "سحب الملف" : "Check Out")}
                       </button>
                     </div>
-                    <button type="button" className="zoho-fd-danger-link" disabled={!selectedVersionIds.length}>
-                      {ar ? "حذف الإصدارات المحددة" : "Bulk delete versions"}
+                    <button type="button" className="zoho-fd-danger-link" disabled={!selectedVersionIds.length || versionBusy === "bulk-delete"} onClick={() => void (async () => {
+                      if (!selectedVersionIds.length) return;
+                      setVersionBusy("bulk-delete");
+                      try {
+                        await deleteVersions(resourceId, selectedVersionIds);
+                        setSelectedVersionIds([]);
+                        const versionRows = await getVersionHistory(resourceId).catch(() => [] as VersionRecord[]);
+                        setVersions(versionRows);
+                      } catch {
+                        setError(ar ? "تعذر حذف الإصدارات المحددة." : "Unable to delete selected versions.");
+                      } finally {
+                        setVersionBusy(null);
+                      }
+                    })()}>
+                      {versionBusy === "bulk-delete" ? (ar ? "جارٍ الحذف…" : "Deleting…") : (ar ? "حذف الإصدارات المحددة" : "Bulk delete versions")}
                     </button>
                   </div>
                 ) : null}
@@ -365,6 +396,21 @@ export default function FileDetailsPage() {
                   {shownVersions.map((version) => (
                     <div key={version.id} className="zoho-fd-version-row">
                       <div className="zoho-fd-version-main">
+                        <label className="zoho-fd-version-check" style={{ display: "inline-flex", alignItems: "center", marginInlineEnd: 8 }}>
+                          <input
+                            type="checkbox"
+                            disabled={version.isCurrent || version.status === "DELETED"}
+                            checked={selectedVersionIds.includes(version.id)}
+                            onChange={(e) => {
+                              setSelectedVersionIds((prev) =>
+                                e.target.checked
+                                  ? [...prev, version.id]
+                                  : prev.filter((id) => id !== version.id),
+                              );
+                            }}
+                            aria-label={ar ? `تحديد الإصدار ${version.versionNumber}` : `Select version ${version.versionNumber}`}
+                          />
+                        </label>
                         <span className="zoho-fd-version-num">#{version.versionNumber}</span>
                         <div>
                           <div className="zoho-fd-version-date">
