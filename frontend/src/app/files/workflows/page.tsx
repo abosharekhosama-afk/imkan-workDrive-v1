@@ -159,7 +159,7 @@ export default function WorkflowsPage() {
     subtitle={ar ? "أنشئ عمليات تلقائية ويدوية مرتبطة فعلياً بالملفات والمجلدات." : "Create automatic and manual processes connected to files and folders."}
   >
   {confirmModal}
-    <main className="h-full overflow-y-auto bg-white px-5 py-4 sm:px-6" dir={ar ? "rtl" : "ltr"}>
+    <main className="workflow-ui h-full overflow-y-auto bg-white px-5 py-4 sm:px-6" dir={ar ? "rtl" : "ltr"}>
       <div className="mx-auto max-w-[1400px]">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex min-w-0 items-center gap-2">
