@@ -51,12 +51,11 @@ export function AdminConsoleSidebar() {
   }, []);
 
   return (
-    <aside data-overlay-bound="sidebar" className={`admin-console-sidebar flex h-full shrink-0 flex-col bg-[#272727] text-white transition-[width] ${collapsed ? "w-16" : "w-[255px]"}`} dir={ar ? "rtl" : "ltr"}>
-      <div className="flex h-[54px] shrink-0 items-center border-b border-white/10 px-4">
-        <Link href="/admin" className="flex min-w-0 items-center gap-2">
-          {logo ? <img src={logo} alt="" className="h-7 max-w-[120px] object-contain" /> : <span className="flex h-7 w-7 items-center justify-center rounded-md bg-[color:var(--wd-primary)] text-white"><Icons.folder size={17} /></span>}
-          <span className="truncate text-[15px] font-semibold tracking-[-.01em]">IMKAN</span>
-          <span className="text-[11px] text-white/55">{collapsed ? "" : "Admin Console"}</span>
+    <aside data-overlay-bound="sidebar" className={`admin-console-sidebar flex h-full shrink-0 flex-col bg-[#282828] text-[#EEEEEE] transition-[width] ${collapsed ? "w-16" : "w-[255px]"}`} dir={ar ? "rtl" : "ltr"}>
+      <div className="flex h-12 shrink-0 items-center gap-2 px-4 shadow-[0_1px_2px_rgba(0,0,0,0.3)]">
+        <Link href="/admin" className="flex min-w-0 items-center gap-2 text-[#EEEEEE]">
+          {logo ? <img src={logo} alt="" className="h-7 max-w-[120px] object-contain" /> : <span className="flex h-6 w-6 shrink-0 items-center justify-center text-[#EEEEEE]"><Icons.folder size={20} /></span>}
+          {collapsed ? null : <span className="truncate text-[17px] font-medium leading-5 text-[#EEEEEE]">IMKAN</span>}
         </Link>
       </div>
 
@@ -68,11 +67,11 @@ export function AdminConsoleSidebar() {
           const Icon = Icons[item.icon];
           return (
             <div key={item.href}>
-              {showSection && !collapsed ? <div className="px-3 pb-2 pt-4 text-[10px] font-medium text-white/45">{item.section}</div> : null}
+              {showSection && !collapsed ? <div className="px-[15px] pb-1 pt-4 text-[11px] font-medium text-[#9CA3AF]">{item.section}</div> : null}
               <Link href={item.href} onClick={closeMobile} aria-current={active ? "page" : undefined}
-                className={`flex h-10 items-center gap-3 rounded-[10px] px-3 text-[12px] font-medium transition ${active ? "bg-[#304d82] font-semibold text-[#e6edff]" : "text-white/90 hover:bg-white/[0.07]"}`}>
-                <Icon size={18} />
-                <span className="min-w-0 flex-1 truncate">{collapsed ? null : (ar ? item.ar : item.en)}</span>
+                className={`flex h-10 items-center gap-4 rounded-[16px] px-[15px] text-[14px] leading-[22px] transition-colors duration-150 ease-in-out ${active ? "bg-[var(--wd-active)] font-bold text-[#DBE3FA]" : "font-medium text-[#EEEEEE] hover:bg-white/[0.08]"} ${collapsed ? "justify-center px-0" : ""}`}>
+                <span className={active ? "text-[#DBE3FA]" : "text-[#EEEEEE]"}><Icon size={20} /></span>
+                {collapsed ? null : <span className="min-w-0 flex-1 truncate">{ar ? item.ar : item.en}</span>}
               </Link>
             </div>
           );
@@ -80,9 +79,9 @@ export function AdminConsoleSidebar() {
       </nav>
 
       <div className="shrink-0 border-t border-white/10 p-2">
-        <Link href="/files" className={`flex h-11 items-center gap-3 rounded-[15px] bg-white/[0.10] text-[13px] font-semibold text-white hover:bg-white/[0.15] ${collapsed ? "justify-center px-0" : "px-4"}`}>
-          <Icons.chevR size={16} className={ar ? "rotate-180" : ""} />
-          {collapsed ? null : <span>{ar ? "العودة إلى ملفات الفريق" : "Back to team files"}</span>}
+        <Link href="/files" className={`flex h-10 items-center gap-4 rounded-[16px] text-[14px] font-medium text-[#EEEEEE] hover:bg-white/[0.08] ${collapsed ? "justify-center px-0" : "px-[15px]"}`}>
+          <Icons.chevR size={18} className={ar ? "rotate-180" : ""} />
+          {collapsed ? null : <span className="min-w-0 flex-1 truncate">{ar ? "العودة إلى ملفات الفريق" : "Back to team files"}</span>}
         </Link>
       </div>
     </aside>

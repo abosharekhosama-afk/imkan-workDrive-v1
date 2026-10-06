@@ -17,7 +17,7 @@ export function TopHeader({ adminMode = false }: { adminMode?: boolean }) {
   const { label, locale, setLocale } = useLocale();
   const router = useRouter();
   const pathname = usePathname();
-  const { mobileNavOpen, setMobileNavOpen, sidebarCollapsed, setSidebarCollapsed } = useShell();
+  const { mobileNavOpen, setMobileNavOpen } = useShell();
   const [name, setName] = useState("");
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
   const [org, setOrg] = useState("");
@@ -254,23 +254,13 @@ export function TopHeader({ adminMode = false }: { adminMode?: boolean }) {
       <div className="flex min-w-0 items-center gap-2">
         <button
           type="button"
-          className="wd-icon-btn flex shrink-0 md:hidden"
+          className="wd-icon-btn mobile-sidebar-toggle shrink-0"
           aria-label={locale === "ar" ? (mobileNavOpen ? "إغلاق القائمة الجانبية" : "فتح القائمة الجانبية") : (mobileNavOpen ? "Close sidebar" : "Open sidebar")}
           aria-expanded={mobileNavOpen}
           onClick={() => setMobileNavOpen(!mobileNavOpen)}
         >
           {mobileNavOpen ? <Icons.x size={18} /> : <Icons.menu size={18} />}
         </button>
-        {adminMode ? (
-          <button
-            type="button"
-            className="wd-icon-btn hidden shrink-0 md:inline-flex"
-            aria-label={locale === "ar" ? "طي/فتح الشريط الجانبي" : "Toggle admin sidebar"}
-            onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
-          >
-            <Icons.menu size={18} />
-          </button>
-        ) : null}
         <span className="max-w-[42vw] truncate text-[15px] font-semibold text-[#212121]">{resolveTopHeaderTitle({ pathname, scopeFolderName: scope.folderName, adminMode, locale, label })}</span>
         {showMyFoldersManage ? (
           <div ref={manageRef} className="relative ms-1">

@@ -544,11 +544,10 @@ body{background:var(--wd-canvas)!important;color:var(--wd-text)!important;font-f
 [dir="rtl"] .zoho-top-actions{margin-inline-start:0;margin-inline-end:auto;order:0;justify-content:flex-start;flex-direction:row}
 [dir="rtl"] .zoho-topbar-start .zoho-global-search,
 [dir="ltr"] .zoho-topbar-start .zoho-global-search{flex:1 1 auto;min-width:0;width:100%;max-width:560px}
-/* Sidebar drawer toggle: hidden on desktop, visible on tablets & phones only.
-   Explicit min-width guard guarantees it can never appear on large screens. */
+/* Sidebar drawer toggle: only while the desktop sidebar is hidden. */
 .mobile-sidebar-toggle{display:none}
-@media (min-width:1024px){.mobile-sidebar-toggle{display:none!important}}
-@media (max-width:1023.98px){.mobile-sidebar-toggle{display:grid}}
+@media (min-width:768px){.wd-icon-btn.mobile-sidebar-toggle,.mobile-sidebar-toggle{display:none!important}}
+@media (max-width:767.98px){.wd-icon-btn.mobile-sidebar-toggle,.mobile-sidebar-toggle{display:inline-flex}}
 .mobile-sidebar-toggle:hover{background:color-mix(in srgb,var(--wd-primary) 12%,transparent);color:var(--wd-primary-dark)}
 html[data-theme="dark"] .mobile-sidebar-toggle:hover{background:var(--wd-hover);color:#dbeafe}
 .zoho-logo{display:flex;align-items:center;gap:8px;color:#252a31;text-decoration:none;font-weight:700;font-size:14px;min-width:118px}
@@ -5701,9 +5700,8 @@ article.relative {
   color:var(--wd-text,#212121) !important;
   background:var(--wd-canvas,#f7f7f7) !important;
 }
-.admin-console-shell .bg-white,
-.admin-console-shell [class*="bg-white"],
-.admin-theme-content .bg-white{
+.admin-theme-content .bg-white,
+.admin-theme-content [class*="bg-white"]{
   background-color:var(--wd-surface,#ffffff) !important;
 }
 .admin-console-shell .text-slate-900,
@@ -5729,9 +5727,24 @@ html[data-theme="dark"] .admin-theme-content{
   color:var(--wd-text,#e8eaed) !important;
   background:var(--wd-canvas,#0f1115) !important;
 }
-html[data-theme="dark"] .admin-console-shell .bg-white,
-html[data-theme="dark"] .admin-console-shell [class*="bg-white"]{
+html[data-theme="dark"] .admin-theme-content .bg-white,
+html[data-theme="dark"] .admin-theme-content [class*="bg-white"]{
   background-color:var(--wd-surface,#171a21) !important;
+}
+.admin-console-sidebar,
+.wd-mobile-nav-drawer .admin-console-sidebar{
+  background:#282828 !important;
+  color:#EEEEEE !important;
+}
+.admin-console-sidebar a{
+  color:#EEEEEE;
+}
+.admin-console-sidebar a[aria-current="page"]{
+  background:var(--wd-active) !important;
+  color:#DBE3FA !important;
+}
+.admin-console-sidebar a[aria-current="page"] span{
+  color:#DBE3FA !important;
 }
 html[data-theme="dark"] .search-filter-popover,
 html[data-theme="dark"] .search-overlay-panel,
