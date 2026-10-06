@@ -500,6 +500,7 @@ model TeamFolder {
   isPublicToOrg        Boolean   @default(false) @map("is_public_to_org")
   allowExternalSharing Boolean   @default(true) @map("allow_external_sharing")
   allowViewerDownloads Boolean   @default(true) @map("allow_viewer_downloads")
+  allowEmailUploads    Boolean   @default(false) @map("allow_email_uploads")
   archivedAt           DateTime? @map("archived_at")
   mandateDataTemplateId String? @map("mandate_data_template_id") @db.Char(36)
   mandateDataTemplateTarget String @default("BOTH") @map("mandate_data_template_target") @db.VarChar(10)
