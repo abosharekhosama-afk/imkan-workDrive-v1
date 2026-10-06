@@ -14,7 +14,7 @@ import { ShareModal } from "./share-modal";
 import { useLocale } from "./locale-provider";
 import { bulkTrashFolders, createFolder, deleteFolder, getFolder, listRootContents, renameFolder, moveFolder, copyFolder } from "../lib/api/folders";
 import { bulkTrashFiles, renameFile, requestDownload, trashFile, moveFile, copyFile, getFileDetails, runFileControl, type FileControlAction } from "../lib/api/files";
-import { triggerDownload } from "../lib/api/download";
+import { triggerDownload, triggerDownloads } from "../lib/api/download";
 import { addFavorite, listFavorites, removeFavorite } from "../lib/api/favorites";
 import { ApiError } from "../lib/api/client";
 import type { FileRecord, FolderRecord } from "../lib/api/types";
@@ -512,6 +512,12 @@ export function FileBrowser({
     triggerDownload(result.download_url);
   }
 
+  async function onDownloadMany(fileIds: string[]) {
+    if (fileIds.length === 1) { await onDownload(fileIds[0]).catch(() => setToast(locale === "ar" ? "تعذر تنزيل الملف" : "Could not download the file")); return; }
+    const { failed } = await triggerDownloads(fileIds.map((id) => async () => (await requestDownload(id)).download_url));
+    if (failed > 0) setToast(locale === "ar" ? `تعذر تنزيل ${failed} من ${fileIds.length} ملفات` : `Could not download ${failed} of ${fileIds.length} files`);
+  }
+
   async function onPreview(type: "FILE" | "FOLDER", id: string, name: string, mimeType?: string, size?: number, panel?: "details" | "comments", commentId?: string | null) {
     if (type !== "FILE") return;
     // Dynamic MIME detection (P0): fall back to extension sniffing so files
@@ -734,7 +740,7 @@ export function FileBrowser({
           setToast(label("sel.noFilesSelected"));
           return;
         }
-        for (const id of fileIds) void onDownload(id);
+        void onDownloadMany(fileIds);
         return;
       case "rename":
         if (!canMutate || !single) return;
@@ -888,7 +894,7 @@ export function FileBrowser({
                 setToast(label("sel.noFilesSelected"));
                 return;
               }
-              for (const id of fileIds) void onDownload(id);
+              void onDownloadMany(fileIds);
             }}
             onAction={handleSelectionAction}
             extraHandlers={singleExtra}

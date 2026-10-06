@@ -49,8 +49,8 @@ type ImkanOptionPickerProps<T extends string> = {
   menuClassName?: string;
   /** Stretch trigger to container width (filters, form fields). */
   fullWidth?: boolean;
-  /** Wider menu panel for long role descriptions (360px). */
-  menuWidth?: "default" | "wide";
+  /** Wider menu panel for long role descriptions (360px). `trigger` opens directly under the trigger with its width, for pickers inside side panels. */
+  menuWidth?: "default" | "wide" | "trigger";
   /** Allow clearing selection via an empty option row. */
   allowEmpty?: boolean;
   emptyLabel?: string;
@@ -85,12 +85,17 @@ type MenuPosition = {
   maxHeight: number;
 };
 
-function computeMenuPosition(trigger: HTMLElement, menuWidth: "default" | "wide", rtl: boolean): MenuPosition {
+function computeMenuPosition(trigger: HTMLElement, menuWidth: "default" | "wide" | "trigger", rtl: boolean): MenuPosition {
   const rect = trigger.getBoundingClientRect();
-  const width = menuWidth === "wide" ? 360 : 280;
   const viewportPadding = 12;
   const gap = 6;
   const maxHeight = Math.max(160, window.innerHeight - rect.bottom - gap - viewportPadding);
+  if (menuWidth === "trigger") {
+    const width = Math.max(160, rect.width);
+    const left = Math.min(Math.max(viewportPadding, rect.left), Math.max(viewportPadding, window.innerWidth - width - viewportPadding));
+    return { top: rect.bottom + gap, left, width, maxHeight };
+  }
+  const width = menuWidth === "wide" ? 360 : 280;
   const desired = rtl ? rect.right - width : rect.left;
   const left = clampBoxLeft(desired, width, readContentLane(viewportPadding));
   return {
@@ -193,6 +198,7 @@ export function ImkanOptionPicker<T extends string>({
             top: menuPosition.top,
             left: menuPosition.left,
             width: menuPosition.width,
+            ...(menuWidth === "trigger" ? { maxWidth: menuPosition.width } : {}),
             maxHeight: menuPosition.maxHeight,
             overflowY: "auto",
             zIndex: 10050,

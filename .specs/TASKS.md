@@ -183,6 +183,7 @@
 | — | Univer documents paint their text on open, and presentations use the slide page model so text, shapes, and pictures are visible | ✅ Implemented |
 | — | Admin, My Files manage, file details, and team-folder manage follow the user accent, theme, and font; manage and details tabs use the team-folder tab bar | ✅ Implemented |
 | — | Members and Backup & Recovery follow the user accent, theme, and font; confirmation actions use the in-app card | ✅ Implemented |
+| — | Share recipients get an in-app notification; the inspector shows assigned workspace labels and opens the Versions tab; the data-template picker opens under its button; multi-select download downloads every file | ✅ Implemented |
 
 ---
 

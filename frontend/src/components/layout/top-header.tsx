@@ -56,11 +56,15 @@ export function TopHeader({ adminMode = false }: { adminMode?: boolean }) {
       setNotes((prev) => [notification, ...prev.filter((n) => n.id !== notification.id)].slice(0, 100));
     });
     // Fallback poll in case SSE is blocked by proxy / multi-instance deploy
-    const poll = window.setInterval(() => {
+    const refreshNotes = () => {
       listNotifications()
         .then((rows) => { if (!cancelled) setNotes(rows); })
         .catch(() => undefined);
-    }, 20000);
+    };
+    const poll = window.setInterval(refreshNotes, 20000);
+    const onVisible = () => { if (document.visibilityState === "visible") refreshNotes(); };
+    window.addEventListener("focus", refreshNotes);
+    document.addEventListener("visibilitychange", onVisible);
 
     setScope(readScope());
     const onScope = (e: Event) => setScope((e as CustomEvent<ScopeDetail>).detail ?? { folderId: null, folderName: null });
@@ -78,6 +82,8 @@ export function TopHeader({ adminMode = false }: { adminMode?: boolean }) {
       cancelled = true;
       unsubscribe();
       window.clearInterval(poll);
+      window.removeEventListener("focus", refreshNotes);
+      document.removeEventListener("visibilitychange", onVisible);
       window.removeEventListener("workdrive:scope", onScope);
       window.removeEventListener("workdrive:profile", onProfile);
     };

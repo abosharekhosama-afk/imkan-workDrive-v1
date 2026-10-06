@@ -16,13 +16,13 @@ import { getFileDetails, getFileDlp } from "../../lib/api/files";
 import { getFileActivities, type FileActivityRecord } from "../../lib/api/preview";
 import { formatBytes } from "../../lib/api/quota";
 import { getFolder } from "../../lib/api/folders";
+import { LABELS_CHANGED_EVENT, listLabelsForResource, type WorkspaceLabel } from "../../lib/api/workspace-labels";
 import { ImkanOptionPicker, toImkanPickerOptions } from "../imkan-option-picker";
 
 function descKey(id: string) { return `wd.desc.${id}`; }
 
 export function InspectorDock() {
   const { label } = useLocale();
-  const router = useRouter();
   const { inspectorOpen, setInspectorOpen, inspectorTab, setInspectorTab, setMobileInspectorOpen } = useShell();
   const items: Array<{ tab: InspectorTab; icon: keyof typeof Icons; tipKey: "nav.openDetails" | "nav.dataTemplates" | "nav.zia"; textKey: "inspector.details" | "inspector.dataTemplates" | "inspector.zia" }> = [
     { tab: "details", icon: "info", tipKey: "nav.openDetails", textKey: "inspector.details" },
@@ -49,8 +49,9 @@ export function InspectorDock() {
     </div>
   );
 }
-export function InspectorPanel({ onVersionHistory }: { onVersionHistory?: (fileId: string) => void }) {
+export function InspectorPanel() {
   const { label, locale } = useLocale();
+  const router = useRouter();
   const { inspectorOpen, setInspectorOpen, inspectorTab, setInspectorTab, selected, mobileInspectorOpen, setMobileInspectorOpen } = useShell();
   const [logs, setLogs] = useState<AuditRecord[]>([]);
   const [dataTemplates, setDataTemplates] = useState<DataTemplate[]>([]);
@@ -62,7 +63,8 @@ export function InspectorPanel({ onVersionHistory }: { onVersionHistory?: (fileI
   const [desc, setDesc] = useState("");
   const [descDraft, setDescDraft] = useState("");
   const [resourceShares, setResourceShares] = useState<Awaited<ReturnType<typeof listSharedByMe>>>([]);
-  const [facts, setFacts] = useState<{ id: string; location: string | null; labels: string[]; createdAt: string | null; updatedAt: string | null; size: number | null; mimeType: string | null; ownerName: string | null; containsFolders?: number | null; containsFiles?: number | null; description?: string | null } | null>(null);
+  const [labelsVersion, setLabelsVersion] = useState(0);
+  const [facts, setFacts] = useState<{ id: string; location: string | null; labels: Array<{ name: string; color?: string }>; createdAt: string | null; updatedAt: string | null; size: number | null; mimeType: string | null; ownerName: string | null; containsFolders?: number | null; containsFiles?: number | null; description?: string | null } | null>(null);
   const [fileActivities, setFileActivities] = useState<FileActivityRecord[]>([]);
   const [primarySlot, setPrimarySlot] = useState<"details" | "dataTemplates">(inspectorTab === "dataTemplates" ? "dataTemplates" : "details");
   const resourceId = selected ? (selected.kind === "FILE" ? selected.file.id : selected.folder.id) : null;
@@ -91,12 +93,20 @@ export function InspectorPanel({ onVersionHistory }: { onVersionHistory?: (fileI
     if (!selected || !resourceId) { setFacts(null); return; }
     let cancel = false;
     const id = resourceId;
+    const mergeLabels = (rows: Array<{ name?: string | null; color?: string | null }>) => {
+      const seen = new Map<string, { name: string; color?: string }>();
+      for (const row of rows) {
+        const labelName = row.name?.trim();
+        if (labelName && !seen.has(labelName)) seen.set(labelName, { name: labelName, color: row.color ?? undefined });
+      }
+      return [...seen.values()];
+    };
     if (selected.kind === "FILE") {
       const file = selected.file;
-      Promise.all([getFileDetails(id).catch(() => null), getFileDlp(id).catch(() => null)]).then(([details, dlp]) => {
+      Promise.all([getFileDetails(id).catch(() => null), getFileDlp(id).catch(() => null), listLabelsForResource("FILE", id).catch(() => [] as WorkspaceLabel[])]).then(([details, dlp, workspaceLabels]) => {
         if (cancel) return;
-        const names = [...(details?.tags ?? []).map((tag) => tag.name), ...(dlp?.labels ?? []).map((item) => item.name)].filter(Boolean);
-        setFacts({ id, location: details?.location?.name ?? null, labels: [...new Set(names)], createdAt: details?.createdAt ?? file.createdAt ?? null, updatedAt: details?.updatedAt ?? file.updatedAt ?? null, size: details?.size ?? file.size ?? null, mimeType: details?.mimeType ?? file.mimeType ?? null, ownerName: details?.owner?.name ?? file.ownerName ?? null });
+        const labels = mergeLabels([...workspaceLabels, ...(details?.tags ?? []), ...(dlp?.labels ?? [])]);
+        setFacts({ id, location: details?.location?.name ?? null, labels, createdAt: details?.createdAt ?? file.createdAt ?? null, updatedAt: details?.updatedAt ?? file.updatedAt ?? null, size: details?.size ?? file.size ?? null, mimeType: details?.mimeType ?? file.mimeType ?? null, ownerName: details?.owner?.name ?? file.ownerName ?? null });
         getFileActivities(id, 100).then(setFileActivities).catch(() => setFileActivities([]));
       });
     } else {
@@ -104,15 +114,20 @@ export function InspectorPanel({ onVersionHistory }: { onVersionHistory?: (fileI
       const parentId = folder.parentId ?? null;
       Promise.all([
         parentId ? getFolder(parentId).then((row) => row.name).catch(() => null) : Promise.resolve(null),
-        listFolderDataTemplateBindings(id).catch(() => [] as DataTemplateBinding[]),
-      ]).then(([location, rows]) => {
+        listLabelsForResource("FOLDER", id).catch(() => [] as WorkspaceLabel[]),
+      ]).then(([location, workspaceLabels]) => {
         if (cancel) return;
-        setFacts({ id, location, labels: rows.map((row) => row.template?.name).filter((name): name is string => Boolean(name)), createdAt: (folder as { createdAt?: string }).createdAt ?? folder.updatedAt ?? null, updatedAt: folder.updatedAt ?? null, size: (folder as { size?: number }).size ?? null, mimeType: null, ownerName: folder.ownerName ?? null, containsFolders: (folder as { folderCount?: number }).folderCount ?? null, containsFiles: (folder as { fileCount?: number }).fileCount ?? folder.itemCount ?? null });
+        setFacts({ id, location, labels: mergeLabels(workspaceLabels), createdAt: (folder as { createdAt?: string }).createdAt ?? folder.updatedAt ?? null, updatedAt: folder.updatedAt ?? null, size: (folder as { size?: number }).size ?? null, mimeType: null, ownerName: folder.ownerName ?? null, containsFolders: (folder as { folderCount?: number }).folderCount ?? null, containsFiles: (folder as { fileCount?: number }).fileCount ?? folder.itemCount ?? null });
         setFileActivities([]);
       });
     }
     return () => { cancel = true; };
-  }, [resourceId, selected]);
+  }, [resourceId, selected, labelsVersion]);
+  useEffect(() => {
+    const onLabelsChanged = () => setLabelsVersion((value) => value + 1);
+    window.addEventListener(LABELS_CHANGED_EVENT, onLabelsChanged);
+    return () => window.removeEventListener(LABELS_CHANGED_EVENT, onLabelsChanged);
+  }, []);
   useEffect(() => {
     if (!resourceId) { setDesc(""); setEditingDesc(false); return; }
     try { const v = localStorage.getItem(descKey(resourceId)) ?? ""; setDesc(v); setDescDraft(v); } catch { setDesc(""); setDescDraft(""); }
@@ -133,7 +148,7 @@ export function InspectorPanel({ onVersionHistory }: { onVersionHistory?: (fileI
   const createdAt = fact?.createdAt ?? (selected?.kind === "FILE" ? selected.file.createdAt ?? selected.file.updatedAt : selected?.folder.updatedAt);
   const updatedAt = fact?.updatedAt ?? (selected?.kind === "FILE" ? selected.file.updatedAt : selected?.folder.updatedAt);
   const locationName = fact ? (fact.location || label("files.rootFolder")) : label("files.rootFolder");
-  const labelText = fact && fact.labels.length > 0 ? fact.labels.join(", ") : label("inspector.addLabels");
+  const labelText = fact && fact.labels.length > 0 ? fact.labels.map((item) => item.name).join(", ") : label("inspector.addLabels");
   const modifiedBy = ownerName
     ? label("files.modifiedByLine").replace("{date}", formatDateLocalized(updatedAt, locale)).replace("{name}", ownerName)
     : formatDateLocalized(updatedAt, locale);
@@ -271,7 +286,7 @@ export function InspectorPanel({ onVersionHistory }: { onVersionHistory?: (fileI
               <div className="wd-zoho-details-kicker">{locale === "ar" ? "التصنيفات" : "Labels"}</div>
               {fact?.labels?.length ? (
                 <div className="wd-zoho-details-labels">
-                  {fact.labels.map((lb) => <span key={lb} className="wd-zoho-details-label"><i />{lb}</span>)}
+                  {fact.labels.map((lb) => <span key={lb.name} className="wd-zoho-details-label"><i style={lb.color ? { background: lb.color } : undefined} />{lb.name}</span>)}
                 </div>
               ) : null}
               <button type="button" className="wd-zoho-details-add-labels" onClick={() => {
@@ -283,7 +298,6 @@ export function InspectorPanel({ onVersionHistory }: { onVersionHistory?: (fileI
             {selected.kind === "FILE" ? (
               <button type="button" onClick={() => {
                 const fileId = selected.file.id;
-                if (onVersionHistory) { onVersionHistory(fileId); return; }
                 setInspectorOpen(false);
                 setMobileInspectorOpen(false);
                 router.push(`/files/details/${encodeURIComponent(fileId)}?tab=versions`);
@@ -319,7 +333,7 @@ export function InspectorPanel({ onVersionHistory }: { onVersionHistory?: (fileI
           <div className="flex flex-col gap-4">
             <div className="rounded-[12px] border border-[#EDEDED] bg-[#F8FAFC] p-3"><div className="text-[12px] font-semibold">{label("inspector.dataTemplates")}</div><div className="mt-1 text-[10px] text-[#666]">{locale === "ar" ? "اربط خصائص مخصصة بهذا العنصر لتصنيفه والعثور عليه في البحث." : "Associate custom properties with this item for classification and search."}</div></div>
             {bindings.map((binding) => <div key={binding.id} className="rounded-[12px] border border-[#EDEDED] p-3"><div className="flex items-center justify-between gap-2"><div className="min-w-0"><b className="block truncate text-[12px]">{binding.template.name}</b><span className="text-[10px] text-[#777]">{Object.keys(binding.customFields || {}).length} {locale === "ar" ? "قيم" : "values"}</span></div><div className="flex items-center gap-2"><button disabled={templateBusy} onClick={() => { setTemplateId(binding.templateId); setFieldValues({ ...(binding.customFields || {}) }); }} className="text-[10px] text-[var(--wd-primary)]">{locale === "ar" ? "تعديل" : "Edit"}</button><button disabled={templateBusy} onClick={async () => { setTemplateBusy(true); try { if (selected.kind === "FILE") await disassociateFileDataTemplate(selected.file.id, binding.templateId); else await disassociateFolderDataTemplate(selected.folder.id, binding.templateId); setBindings((x) => x.filter((b) => b.id !== binding.id)); } finally { setTemplateBusy(false); } }} className="text-[10px] text-red-600">{locale === "ar" ? "إزالة" : "Remove"}</button></div></div><div className="mt-2 grid gap-1">{(binding.template.fields || binding.template.schema || []).map((field) => <div key={field.key} className="flex justify-between gap-2 text-[10px]"><span className="text-[#666]">{field.label}</span><span className="truncate">{String((binding.customFields || {})[field.key] ?? "—")}</span></div>)}</div></div>)}
-            <div className="rounded-[12px] border border-[#EDEDED] p-3"><div className="mb-2 text-[11px] font-semibold">{locale === "ar" ? "إضافة قالب بيانات" : "Associate Data Template"}</div><ImkanOptionPicker value={templateId} onChange={(next) => { setTemplateId(next); setFieldValues({}); }} options={dataTemplates.filter((t) => !bindings.some((b) => b.templateId === t.id) || t.id === templateId).map((t) => ({ value: t.id, label: t.name }))} ariaLabel={locale === "ar" ? "اختر قالبًا" : "Select a template"} appearance="audit" fullWidth allowEmpty emptyLabel={locale === "ar" ? "اختر قالبًا" : "Select a template"} placeholder={locale === "ar" ? "اختر قالبًا" : "Select a template"} />{templateId ? <div className="mt-3 space-y-2">{(dataTemplates.find((t) => t.id === templateId)?.fields || dataTemplates.find((t) => t.id === templateId)?.schema || []).map((field) => <label key={field.key} className="block"><span className="mb-1 block text-[10px] text-[#666]">{field.label}{field.required ? " *" : ""}</span>{field.type === "boolean" ? <input type="checkbox" checked={Boolean(fieldValues[field.key])} onChange={(e) => setFieldValues((v) => ({ ...v, [field.key]: e.target.checked }))} /> : field.type === "select" || field.type === "radio" ? <ImkanOptionPicker value={String(fieldValues[field.key] ?? "")} onChange={(next) => setFieldValues((v) => ({ ...v, [field.key]: next }))} options={toImkanPickerOptions(field.options || [])} ariaLabel={field.label} fullWidth allowEmpty emptyLabel="—" /> : <input type={field.type === "number" ? "number" : field.type === "email" ? "email" : field.type === "date" ? "date" : field.type === "datetime" ? "datetime-local" : "text"} value={String(fieldValues[field.key] ?? "")} onChange={(e) => setFieldValues((v) => ({ ...v, [field.key]: field.type === "number" ? Number(e.target.value) : e.target.value }))} className="h-8 w-full rounded-md border border-slate-200 px-2 text-[10px]" />}</label>)}<button disabled={templateBusy} onClick={async () => { if (!templateId || !selected) return; setTemplateBusy(true); try { const row = selected.kind === "FILE" ? await associateFileDataTemplate(selected.file.id, templateId, fieldValues) : await associateFolderDataTemplate(selected.folder.id, templateId, fieldValues); setBindings((x) => x.some((b) => b.id === row.id) ? x.map((b) => b.id === row.id ? row : b) : [...x, row]); setTemplateId(""); setFieldValues({}); } finally { setTemplateBusy(false); } }} className="mt-2 h-9 w-full rounded-lg bg-[var(--wd-primary)] text-[11px] font-semibold text-white disabled:opacity-50">{locale === "ar" ? "ربط القالب" : "Associate"}</button></div> : null}</div>
+            <div className="rounded-[12px] border border-[#EDEDED] p-3"><div className="mb-2 text-[11px] font-semibold">{locale === "ar" ? "إضافة قالب بيانات" : "Associate Data Template"}</div><ImkanOptionPicker value={templateId} onChange={(next) => { setTemplateId(next); setFieldValues({}); }} options={dataTemplates.filter((t) => !bindings.some((b) => b.templateId === t.id) || t.id === templateId).map((t) => ({ value: t.id, label: t.name }))} ariaLabel={locale === "ar" ? "اختر قالبًا" : "Select a template"} appearance="audit" fullWidth menuWidth="trigger" allowEmpty emptyLabel={locale === "ar" ? "اختر قالبًا" : "Select a template"} placeholder={locale === "ar" ? "اختر قالبًا" : "Select a template"} />{templateId ? <div className="mt-3 space-y-2">{(dataTemplates.find((t) => t.id === templateId)?.fields || dataTemplates.find((t) => t.id === templateId)?.schema || []).map((field) => <label key={field.key} className="block"><span className="mb-1 block text-[10px] text-[#666]">{field.label}{field.required ? " *" : ""}</span>{field.type === "boolean" ? <input type="checkbox" checked={Boolean(fieldValues[field.key])} onChange={(e) => setFieldValues((v) => ({ ...v, [field.key]: e.target.checked }))} /> : field.type === "select" || field.type === "radio" ? <ImkanOptionPicker value={String(fieldValues[field.key] ?? "")} onChange={(next) => setFieldValues((v) => ({ ...v, [field.key]: next }))} options={toImkanPickerOptions(field.options || [])} ariaLabel={field.label} fullWidth menuWidth="trigger" allowEmpty emptyLabel="—" /> : <input type={field.type === "number" ? "number" : field.type === "email" ? "email" : field.type === "date" ? "date" : field.type === "datetime" ? "datetime-local" : "text"} value={String(fieldValues[field.key] ?? "")} onChange={(e) => setFieldValues((v) => ({ ...v, [field.key]: field.type === "number" ? Number(e.target.value) : e.target.value }))} className="h-8 w-full rounded-md border border-slate-200 px-2 text-[10px]" />}</label>)}<button disabled={templateBusy} onClick={async () => { if (!templateId || !selected) return; setTemplateBusy(true); try { const row = selected.kind === "FILE" ? await associateFileDataTemplate(selected.file.id, templateId, fieldValues) : await associateFolderDataTemplate(selected.folder.id, templateId, fieldValues); setBindings((x) => x.some((b) => b.id === row.id) ? x.map((b) => b.id === row.id ? row : b) : [...x, row]); setTemplateId(""); setFieldValues({}); } finally { setTemplateBusy(false); } }} className="mt-2 h-9 w-full rounded-lg bg-[var(--wd-primary)] text-[11px] font-semibold text-white disabled:opacity-50">{locale === "ar" ? "ربط القالب" : "Associate"}</button></div> : null}</div>
           </div>
         ) : (
           <ol className="flex flex-col gap-2">

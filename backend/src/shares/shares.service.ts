@@ -10,6 +10,7 @@ import { ConfigService } from '@nestjs/config';
 import {
   AuditAction,
   MembershipStatus,
+  NotificationType,
   Prisma,
   ResourceType,
   SharePermission,
@@ -31,6 +32,7 @@ import { shareNoticeEmail } from '../mail/email-templates';
 import { MailService } from '../mail/mail.service';
 import { DlpService } from '../dlp/dlp.service';
 import { FollowsService } from '../follows/follows.service';
+import { NotificationsService } from '../notifications/notifications.service';
 
 export type CreateShareResponse = {
   link_url: string;
@@ -63,6 +65,7 @@ export class SharesService {
     private readonly mail: MailService,
     private readonly dlp: DlpService,
     private readonly follows: FollowsService,
+    private readonly notifications: NotificationsService,
   ) {}
 
   async createShare(user: AccessTokenPayload, input: CreateShareInput): Promise<CreateShareResponse> {
@@ -134,6 +137,7 @@ export class SharesService {
       ? (await this.prisma.user.findMany({ where: { id: { in: uniqueRecipientIds } }, select: { email: true } })).map((u) => u.email).filter(Boolean) as string[]
       : [];
     const emailed = await this.emailShareLink([...(input.emailRecipients ?? []), ...memberEmails], resourceName ?? '', linkUrl);
+    void this.notifyShareRecipients(user, input.resourceType, input.resourceId, resourceName ?? '', uniqueRecipientIds);
     void this.follows.notifyResourceEvent({
       orgId: user.org_id,
       resourceType: input.resourceType,
@@ -628,7 +632,31 @@ export class SharesService {
 
     const linkUrl = this.shareLink(existing.linkToken);
     const emailed = await this.emailShareLink(input.emailRecipients, '', linkUrl);
+    if (newRecipients.length) {
+      const resourceName = input.resourceType === ResourceType.FILE
+        ? (await this.prisma.file.findUnique({ where: { id: input.resourceId }, select: { name: true } }))?.name
+        : (await this.prisma.folder.findUnique({ where: { id: input.resourceId }, select: { name: true } }))?.name;
+      void this.notifyShareRecipients(user, input.resourceType, input.resourceId, resourceName ?? '', newRecipients.map((row) => row.userId));
+    }
     return { link_url: linkUrl, emailed };
+  }
+
+  private async notifyShareRecipients(user: AccessTokenPayload, resourceType: ResourceType, resourceId: string, resourceName: string, recipientIds: string[]) {
+    const targets = [...new Set(recipientIds)].filter((id) => id && id !== user.sub);
+    if (!targets.length) return;
+    const actor = await this.prisma.user.findUnique({ where: { id: user.sub }, select: { name: true, email: true } }).catch(() => null);
+    const who = actor?.name || actor?.email || 'A teammate';
+    const isFolder = resourceType === ResourceType.FOLDER;
+    const name = resourceName.trim() || (isFolder ? 'a folder' : 'a file');
+    await Promise.all(targets.map((userId) => this.notifications.createUserNotification({
+      orgId: user.org_id,
+      userId,
+      type: NotificationType.SHARE,
+      title: isFolder ? 'Folder shared with you' : 'File shared with you',
+      body: `${who} shared ${name} with you.`,
+      resourceType,
+      resourceId,
+    }).catch(() => undefined)));
   }
 
   private shareLink(token: string) {

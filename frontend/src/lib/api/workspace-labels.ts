@@ -8,3 +8,11 @@ export const deleteWorkspaceLabel = (id: string) => apiRequest(`/workspace-label
 export const listWorkspaceLabelResources = (id: string) => apiRequest<WorkspaceLabelResource[]>(`/workspace-labels/${id}/resources`);
 export const attachWorkspaceLabel = (id:string,type:'FILE'|'FOLDER',resourceId:string) => apiRequest(`/workspace-labels/${id}/resources/${type}/${resourceId}`,{method:'POST'});
 export const detachWorkspaceLabel = (id:string,type:'FILE'|'FOLDER',resourceId:string) => apiRequest(`/workspace-labels/${id}/resources/${type}/${resourceId}`,{method:'DELETE'});
+export async function listLabelsForResource(type: 'FILE'|'FOLDER', resourceId: string): Promise<WorkspaceLabel[]> {
+  const labels = (await listWorkspaceLabels()).filter((label) => label.resourceCount > 0);
+  const matches = await Promise.all(labels.map((label) => listWorkspaceLabelResources(label.id)
+    .then((rows) => rows.some((row) => row.resourceType === type && row.resourceId === resourceId))
+    .catch(() => false)));
+  return labels.filter((_, index) => matches[index]);
+}
+export const LABELS_CHANGED_EVENT = 'workdrive:labels-changed';

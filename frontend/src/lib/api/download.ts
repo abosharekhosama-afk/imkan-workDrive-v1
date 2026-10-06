@@ -18,3 +18,29 @@ export function triggerDownload(url: string, fallbackName?: string): void {
   link.click();
   link.remove();
 }
+
+/**
+ * Starts one download per URL. Consecutive anchor clicks are page navigations
+ * and cancel each other, so every file gets its own hidden iframe and the
+ * downloads are spaced out to stay within the browser's multi-download limits.
+ */
+export async function triggerDownloads(resolveUrls: Array<() => Promise<string>>, spacingMs = 450): Promise<{ started: number; failed: number }> {
+  let started = 0;
+  let failed = 0;
+  for (const resolveUrl of resolveUrls) {
+    try {
+      const url = await resolveUrl();
+      const frame = document.createElement("iframe");
+      frame.style.display = "none";
+      frame.setAttribute("aria-hidden", "true");
+      frame.src = url;
+      document.body.appendChild(frame);
+      window.setTimeout(() => frame.remove(), 120000);
+      started += 1;
+    } catch {
+      failed += 1;
+    }
+    if (resolveUrls.length > 1) await new Promise((resolve) => window.setTimeout(resolve, spacingMs));
+  }
+  return { started, failed };
+}
