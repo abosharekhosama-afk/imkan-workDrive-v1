@@ -104,6 +104,7 @@ interface FileTableProps {
   onAssignWorkflow?: (resourceType: "FILE" | "FOLDER", resourceId: string, resourceName: string) => void;
   onOrganize?: (resourceType: "FILE" | "FOLDER", resourceId: string) => void;
   onLabelAs?: (resourceType: "FILE" | "FOLDER", resourceId: string, resourceName: string) => void;
+  onClassifyAs?: (resourceType: "FILE" | "FOLDER", resourceId: string, resourceName: string) => void;
   onDataTemplateBadgeClick?: (resourceType: "FILE" | "FOLDER", resourceId: string) => void;
   onFollowUpdates?: (resourceType: "FILE" | "FOLDER", resourceId: string, resourceName: string) => void;
   onFileControl?: (fileId: string, action: FileControlAction) => void;
@@ -158,6 +159,7 @@ export function FileTable({
   onAssignWorkflow,
   onOrganize,
   onLabelAs,
+  onClassifyAs,
   onFollowUpdates,
   onFileControl,
   followIds = new Set(),
@@ -466,6 +468,7 @@ export function FileTable({
                     onFollowUpdates: onFollowUpdates ? () => onFollowUpdates("FOLDER", folder.id, folder.name) : undefined,
                     onCopyLink: onCopyLink ? () => onCopyLink(folder.id) : undefined,
                     onLabels: onLabelAs ? () => onLabelAs("FOLDER", folder.id, folder.name) : undefined,
+                    onClassify: onClassifyAs ? () => onClassifyAs("FOLDER", folder.id, folder.name) : undefined,
                     isFollowingUpdates: followIds.has(followResourceKey("FOLDER", folder.id)), isFavorite: favoriteIds.has(folder.id),
                   }}
                 />
@@ -551,6 +554,7 @@ export function FileTable({
                     onFollowUpdates: onFollowUpdates ? () => onFollowUpdates("FILE", file.id, file.name) : undefined,
                     onCopyLink: onCopyLink ? () => onCopyLink(file.id) : undefined,
                     onLabels: onLabelAs ? () => onLabelAs("FILE", file.id, file.name) : undefined,
+                    onClassify: onClassifyAs ? () => onClassifyAs("FILE", file.id, file.name) : undefined,
                     isFollowingUpdates: followIds.has(followResourceKey("FILE", file.id)),
                   }}
                 />

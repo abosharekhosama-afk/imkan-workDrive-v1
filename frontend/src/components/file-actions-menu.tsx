@@ -151,7 +151,7 @@ export function buildUnifiedFileActionItems(opts: {
     const organizeSub: ActionDropdownItem[] = [];
     if (handlers.onOrganize) organizeSub.push({ label: label("menu.organize"), icon: FileMenuIcons.organize, onSelect: handlers.onOrganize });
     if (handlers.onLabels) organizeSub.push({ label: label("menu.labels"), icon: FileMenuIcons.organize, onSelect: handlers.onLabels });
-    if (handlers.onClassify) organizeSub.push({ label: label("menu.classify" as never) || "Add classification", icon: FileMenuIcons.organize, onSelect: handlers.onClassify });
+    if (handlers.onClassify) organizeSub.push({ label: "Add DLP classification / إضافة تصنيف DLP", icon: FileMenuIcons.organize, onSelect: handlers.onClassify });
     if (handlers.onCreateShortcut) organizeSub.push({ label: label("menu.createShortcut"), icon: FileMenuIcons.organize, onSelect: handlers.onCreateShortcut });
     if (handlers.onInspect) organizeSub.push({ label: label("menu.properties"), icon: FileMenuIcons.properties, onSelect: handlers.onInspect });
     if (organizeSub.length === 1 && handlers.onOrganize) {
@@ -167,7 +167,8 @@ export function buildUnifiedFileActionItems(opts: {
   }
 
   // —— Download / Rename / Follow / Versions ——
-  if (handlers.onDownload) push({ label: label("menu.download"), icon: FileMenuIcons.download, onSelect: handlers.onDownload, dividerBefore: true });
+  if (handlers.onClassify) push({ label: "Add DLP classification / إضافة تصنيف DLP", icon: FileMenuIcons.organize, onSelect: handlers.onClassify, dividerBefore: true });
+  if (handlers.onDownload) push({ label: label("menu.download"), icon: FileMenuIcons.download, onSelect: handlers.onDownload, dividerBefore: !handlers.onClassify });
   if (handlers.onRename) push({ label: label("menu.rename"), icon: FileMenuIcons.rename, onSelect: handlers.onRename });
   if (handlers.onFollowUpdates) {
     push({
