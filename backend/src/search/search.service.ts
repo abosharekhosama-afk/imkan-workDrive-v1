@@ -14,12 +14,49 @@ export type SearchOptions = {
 type Hit = { score: number; matchedBy: string[] };
 
 function scoreText(query: string, values: Array<[string, string | null | undefined, number]>): Hit {
-  const q = query.toLocaleLowerCase(); const tokens = q.split(/\s+/).filter(Boolean); let score = 0; const matchedBy: string[] = [];
+  const q = query.toLocaleLowerCase().trim();
+  const tokens = q.split(/\s+/).filter((t) => t.length > 0);
+  let score = 0;
+  const matchedBy: string[] = [];
   for (const [label, value, weight] of values) {
-    const text = (value ?? '').toLocaleLowerCase(); if (!text) continue;
-    if (text === q) { score += weight * 2; matchedBy.push(label); continue; }
-    if (text.includes(q)) { score += weight; matchedBy.push(label); }
-    for (const token of tokens) if (token.length > 1 && text.includes(token)) score += weight * 0.2;
+    const text = (value ?? '').toLocaleLowerCase();
+    if (!text) continue;
+    // Exact match (Zoho-style top rank)
+    if (text === q) {
+      score += weight * 3;
+      matchedBy.push(label);
+      continue;
+    }
+    // Starts-with (filename prefix)
+    if (text.startsWith(q)) {
+      score += weight * 2.2;
+      matchedBy.push(label);
+      continue;
+    }
+    // Full phrase contained
+    if (text.includes(q)) {
+      score += weight * 1.5;
+      matchedBy.push(label);
+      continue;
+    }
+    // Multi-token AND: all tokens present boosts more than OR
+    if (tokens.length > 1) {
+      const hits = tokens.filter((token) => token.length > 1 && text.includes(token));
+      if (hits.length === tokens.length) {
+        score += weight * 1.2;
+        matchedBy.push(label);
+      } else if (hits.length > 0) {
+        score += weight * (0.25 * hits.length);
+        if (!matchedBy.includes(label)) matchedBy.push(label);
+      }
+    } else {
+      for (const token of tokens) {
+        if (token.length > 1 && text.includes(token)) {
+          score += weight * 0.35;
+          if (!matchedBy.includes(label)) matchedBy.push(label);
+        }
+      }
+    }
   }
   return { score, matchedBy };
 }
@@ -50,7 +87,20 @@ export class SearchService {
 
     const [folders, files] = await Promise.all([
       this.prisma.folder.findMany({
-        where: { orgId: user.org_id, name: { search: query }, OR: [{ teamFolderId: { not: null } }, { ownerId: user.sub }], ...folderScopeWhere },
+        where: {
+          orgId: user.org_id,
+          AND: [
+            {
+              OR: [
+                { name: { search: query } },
+                { name: { contains: query, mode: 'insensitive' as const } },
+                ...query.split(/\s+/).filter((t) => t.length > 1).slice(0, 5).map((t) => ({ name: { contains: t, mode: 'insensitive' as const } })),
+              ],
+            },
+            { OR: [{ teamFolderId: { not: null } }, { ownerId: user.sub }] },
+          ],
+          ...folderScopeWhere,
+        },
         include: { owner: { select: { id: true, name: true, email: true, avatarUrl: true } }, dataTemplate: { select: { id: true, name: true } }, dataTemplateBindings: { include: { template: { select: { id: true, name: true } } } } },
         orderBy: { updatedAt: 'desc' }, take: candidateTake,
       }),
@@ -60,10 +110,16 @@ export class SearchService {
           OR: [
             { name: { search: query } },
             { originalName: { search: query } },
-            { metadata: { title: { contains: query } } },
-            { metadata: { description: { contains: query } } },
-            { metadata: { contentText: { contains: query } } },
-            { metadata: { ocrText: { contains: query } } },
+            { name: { contains: query, mode: 'insensitive' as const } },
+            { originalName: { contains: query, mode: 'insensitive' as const } },
+            { metadata: { title: { contains: query, mode: 'insensitive' as const } } },
+            { metadata: { description: { contains: query, mode: 'insensitive' as const } } },
+            { metadata: { contentText: { contains: query, mode: 'insensitive' as const } } },
+            { metadata: { ocrText: { contains: query, mode: 'insensitive' as const } } },
+            ...query.split(/\s+/).filter((t) => t.length > 1).slice(0, 5).flatMap((t) => [
+              { name: { contains: t, mode: 'insensitive' as const } },
+              { originalName: { contains: t, mode: 'insensitive' as const } },
+            ]),
           ],
           AND: [{ OR: [{ folder: null }, { folder: { teamFolderId: { not: null } } }, { folder: { ownerId: user.sub } }] }], ...fileFolderScopeWhere,
         },
