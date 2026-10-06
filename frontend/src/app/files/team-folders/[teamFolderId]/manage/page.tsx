@@ -349,7 +349,7 @@ export default function TeamFolderManagePage() {
     });
   };
 
-  const updateSettings = async (patch: { isPublicToOrg?: boolean; allowExternalSharing?: boolean; allowViewerDownloads?: boolean }) => {
+  const updateSettings = async (patch: { isPublicToOrg?: boolean; allowExternalSharing?: boolean; allowViewerDownloads?: boolean; allowEmailUploads?: boolean }) => {
     if (!canRename || settingsBusy) return;
     setSettingsBusy(true);
     setError("");
@@ -495,7 +495,7 @@ export default function TeamFolderManagePage() {
               </div>
               <p className="mt-3 text-[13px] leading-6 text-[#666]">{locale === "ar" ? "خاص: يقتصر الوصول على الأعضاء المضافين. عام: يمكن لأعضاء المؤسسة الانضمام." : "Private limits access to added members. Public lets team members join the Team Folder."}</p>
               <div className="mt-7 divide-y divide-[#ededed] border-y border-[#ededed]">
-                <SettingRow title={locale === "ar" ? "السماح برفع الملفات عبر البريد الإلكتروني" : "Allow file uploads via email"} description={locale === "ar" ? "هذه الخاصية غير ممثلة في نموذج البيانات الحالي." : "This project does not currently persist an email-upload policy for Team Folders."} disabled />
+                <SettingRow title={locale === "ar" ? "السماح برفع الملفات عبر البريد الإلكتروني" : "Allow file uploads via email"} description={locale === "ar" ? "عند التفعيل يمكن قبول الملفات الواردة عبر عنوان البريد المرتبط بمجلد الفريق (حسب إعدادات المجموعة)." : "When enabled, this Team Folder can accept files submitted via its associated email address."} checked={Boolean((folder as { allowEmailUploads?: boolean } | null)?.allowEmailUploads)} disabled={!canRename || settingsBusy} onChange={(checked) => void updateSettings({ allowEmailUploads: checked })} />
                 <SettingRow title={locale === "ar" ? "السماح لأعضاء مجلد الفريق بالمشاركة خارج الفريق" : "Allow Team Folder members to share outside your team"} description={locale === "ar" ? "يتحكم هذا الإعداد في المشاركة الخارجية لهذا المجلد." : "Controls whether this Team Folder permits external sharing."} checked={folder?.allowExternalSharing ?? true} disabled={role !== "ORG_ADMIN" && role !== "ADMIN" || settingsBusy} onChange={(checked) => void updateSettings({ allowExternalSharing: checked })} />
                 <SettingRow title={locale === "ar" ? "إظهار خيارات التنزيل والطباعة" : "Show download and print options"} description={locale === "ar" ? "يتحكم هذا الإعداد في تنزيل وطباعة المستخدمين ذوي صلاحية العرض." : "Controls download and print access for viewers in this Team Folder."} checked={folder?.allowViewerDownloads ?? true} disabled={role !== "ORG_ADMIN" && role !== "ADMIN" || settingsBusy} onChange={(checked) => void updateSettings({ allowViewerDownloads: checked })} />
               </div>
@@ -504,8 +504,49 @@ export default function TeamFolderManagePage() {
 
           {tab === "activity" ? (
             <section className="mx-auto w-full max-w-[930px]">
-              <div className="mb-5 flex items-center justify-center gap-3"><ImkanOptionPicker appearance="audit" value="ALL" onChange={() => {}} ariaLabel="Activity filter" options={[{ value: "ALL", label: "All Activities" }]} /><button type="button" className="inline-flex h-[42px] items-center rounded-[9px] border border-[#d7d9dc] bg-white px-3 text-[14px] text-[#202124] transition hover:border-[#b8bdc5]">Export Activity Report</button></div>
-              {panelLoading ? <div className="py-12 text-center text-[13px] text-slate-500">Loading…</div> : activityRows.length === 0 ? <div className="py-16 text-center text-[14px] text-slate-500">{locale === "ar" ? "لا يوجد نشاط بعد" : "No activity yet"}</div> : <div className="relative mx-auto max-w-[610px] border-s border-[#d9dce0] ps-8">{activityRows.map((row) => <div key={row.id} className="relative mb-8"><span className="absolute -start-[9px] top-0 h-[18px] w-[18px] rounded-full border-4 border-white bg-[#e6e7e9]" /><div className="-ms-16 mb-1 w-12 text-end text-[12px] leading-4 text-[#555]">{formatDateLocalized(row.createdAt, locale)}</div><div className="flex items-start gap-3"><span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-slate-100 text-[10px] font-semibold text-slate-600">{(row.actor?.name || row.actor?.email || "You").slice(0,2).toUpperCase()}</span><div><strong className="block text-[13px] text-[#2457B8]">{row.actor?.name || row.actor?.email || "You"}</strong><div className="text-[13px] text-[#333]">{row.action.replaceAll("_", " ")}</div>{row.metadata && typeof row.metadata === "object" && "name" in row.metadata ? <div className="mt-1 text-[13px] text-[#555]">{String(row.metadata.name)}</div> : null}</div></div></div>)}</div>}
+              <div className="mb-5 flex flex-wrap items-center justify-center gap-3">
+                <ImkanOptionPicker
+                  appearance="audit"
+                  value={activityFilter}
+                  onChange={(value) => setActivityFilter(value || "ALL")}
+                  ariaLabel="Activity filter"
+                  options={[
+                    { value: "ALL", label: locale === "ar" ? "كل الأنشطة" : "All Activities" },
+                    { value: "UPLOAD", label: locale === "ar" ? "رفع" : "Uploads" },
+                    { value: "SHARE", label: locale === "ar" ? "مشاركة" : "Sharing" },
+                    { value: "DELETE", label: locale === "ar" ? "حذف" : "Deletes" },
+                    { value: "UPDATE", label: locale === "ar" ? "تحديث" : "Updates" },
+                  ]}
+                />
+                <button
+                  type="button"
+                  className="inline-flex h-[42px] items-center rounded-[9px] border border-[#d7d9dc] bg-white px-3 text-[14px] text-[#202124] transition hover:border-[#b8bdc5] hover:bg-slate-50"
+                  onClick={() => {
+                    const rows = activityFilter === "ALL"
+                      ? activityRows
+                      : activityRows.filter((row) => String(row.action || "").toUpperCase().includes(activityFilter));
+                    const header = ["time", "actor", "action", "name"];
+                    const lines = [header.join(",")].concat(
+                      rows.map((row) => {
+                        const actor = row.actor?.name || row.actor?.email || "";
+                        const name = row.metadata && typeof row.metadata === "object" && "name" in row.metadata ? String((row.metadata as { name?: string }).name || "") : "";
+                        const cells = [row.createdAt || "", actor, row.action || "", name].map((c) => `"${String(c).replace(/"/g, '""')}"`);
+                        return cells.join(",");
+                      }),
+                    );
+                    const blob = new Blob([lines.join("\n")], { type: "text/csv;charset=utf-8" });
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement("a");
+                    a.href = url;
+                    a.download = `team-folder-activity-${id || "export"}.csv`;
+                    a.click();
+                    URL.revokeObjectURL(url);
+                  }}
+                >
+                  {locale === "ar" ? "تصدير تقرير النشاط" : "Export Activity Report"}
+                </button>
+              </div>
+              {panelLoading ? <div className="py-12 text-center text-[13px] text-slate-500">Loading…</div> : activityRows.length === 0 ? <div className="py-16 text-center text-[14px] text-slate-500">{locale === "ar" ? "لا يوجد نشاط بعد" : "No activity yet"}</div> : <div className="relative mx-auto max-w-[610px] border-s border-[#d9dce0] ps-8">{(activityFilter === "ALL" ? activityRows : activityRows.filter((row) => String(row.action || "").toUpperCase().includes(activityFilter))).map((row) => <div key={row.id} className="relative mb-8"><span className="absolute -start-[9px] top-0 h-[18px] w-[18px] rounded-full border-4 border-white bg-[#e6e7e9]" /><div className="-ms-16 mb-1 w-12 text-end text-[12px] leading-4 text-[#555]">{formatDateLocalized(row.createdAt, locale)}</div><div className="flex items-start gap-3"><span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-slate-100 text-[10px] font-semibold text-slate-600">{(row.actor?.name || row.actor?.email || "You").slice(0,2).toUpperCase()}</span><div><strong className="block text-[13px] text-[#2457B8]">{row.actor?.name || row.actor?.email || "You"}</strong><div className="text-[13px] text-[#333]">{row.action.replaceAll("_", " ")}</div>{row.metadata && typeof row.metadata === "object" && "name" in row.metadata ? <div className="mt-1 text-[13px] text-[#555]">{String(row.metadata.name)}</div> : null}</div></div></div>)}</div>}
             </section>
           ) : null}
 
