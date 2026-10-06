@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useLocale } from "@/components/locale-provider";
+import { useConfirmAction } from "@/components/confirm-action-modal";
 import {
   createBackupPolicy,
   getBackupOverview,
@@ -52,6 +53,7 @@ export default function BackupPage() {
   const { locale } = useLocale();
   const ar = locale === "ar";
   const t = (en: string, arText: string) => (ar ? arText : en);
+  const { requestConfirm, confirmModal } = useConfirmAction();
 
   const [overview, setOverview] = useState<BackupOverview | null>(null);
   const [policies, setPolicies] = useState<BackupPolicy[]>([]);
@@ -260,7 +262,8 @@ export default function BackupPage() {
   };
 
   return (
-    <div className="mx-auto flex w-full max-w-6xl flex-1 flex-col gap-6 px-4 py-6 md:px-8" dir={ar ? "rtl" : "ltr"}>
+    <div className="backup-page theme-aware-page mx-auto flex w-full max-w-6xl flex-1 flex-col gap-6 px-4 py-6 md:px-8" dir={ar ? "rtl" : "ltr"} style={{ fontFamily: "var(--user-font-family), Arial, system-ui, sans-serif", color: "var(--wd-text, #111827)", background: "var(--wd-canvas, transparent)" }}>
+      {confirmModal}
       <header className="flex flex-wrap items-start justify-between gap-4">
         <div>
           <p className="text-[11px] font-semibold uppercase tracking-wide text-[#6b7280]">
@@ -562,18 +565,18 @@ export default function BackupPage() {
             type="button"
             disabled={busy || !selectedRun}
             onClick={() => {
-              void (async () => {
-                if (!selectedRun) return;
-                const reason = window.prompt(
-                  t("Reason for purge request (min 8 characters):", "سبب طلب الحذف (8 أحرف على الأقل):"),
-                );
-                if (!reason || reason.trim().length < 8) {
-                  setError(t("Reason too short", "السبب قصير جداً"));
-                  return;
-                }
+              if (!selectedRun) return;
+              const runId = selectedRun;
+              requestConfirm({
+                title: t("Request purge", "طلب الحذف"),
+                description: t("Completed backups stay locked until two administrators approve a purge.", "تبقى النسخ المكتملة مقفلة حتى يوافق مسؤولان على الحذف."),
+                confirmLabel: t("Request purge", "طلب الحذف"),
+                reasonLabel: t("Reason for purge request (min 8 characters):", "سبب طلب الحذف (8 أحرف على الأقل):"),
+                minReasonLength: 8,
+                run: async (reason) => {
                 setBusy(true);
                 try {
-                  await requestPurge(selectedRun, reason.trim());
+                  await requestPurge(runId, reason || "");
                   setMessage(t("Purge requested — awaiting second admin", "تم طلب الحذف — بانتظار مسؤول ثانٍ"));
                   await reload();
                 } catch (e) {
@@ -581,7 +584,8 @@ export default function BackupPage() {
                 } finally {
                   setBusy(false);
                 }
-              })();
+                },
+              });
             }}
             className="rounded-full border border-rose-300 bg-rose-50 px-4 py-2 text-[12px] font-semibold text-rose-700 disabled:opacity-50"
           >
@@ -607,7 +611,7 @@ export default function BackupPage() {
                     </>
                   ) : null}
                   {pr.status === "APPROVED" ? (
-                    <button type="button" disabled={busy} className="rounded-full bg-rose-600 px-3 py-1 text-[11px] font-semibold text-white disabled:opacity-50" onClick={() => { void (async () => { if (!window.confirm(t("Permanently delete backup objects?", "حذف كائنات النسخة نهائياً؟"))) return; setBusy(true); try { const r = await executePurge(pr.id); setMessage(t(`Purged ${r.objectsDeleted} objects`, `تم حذف ${r.objectsDeleted} كائناً`)); await reload(); } catch (e) { setError(e instanceof Error ? e.message : "Execute failed"); } finally { setBusy(false); } })(); }}>{t("Execute purge", "تنفيذ الحذف")}</button>
+                    <button type="button" disabled={busy} className="rounded-full bg-rose-600 px-3 py-1 text-[11px] font-semibold text-white disabled:opacity-50" onClick={() => { const purgeId = pr.id; requestConfirm({ title: t("Execute purge", "تنفيذ الحذف"), description: t("Permanently delete backup objects?", "حذف كائنات النسخة نهائياً؟"), confirmLabel: t("Execute purge", "تنفيذ الحذف"), run: async () => { setBusy(true); try { const r = await executePurge(purgeId); setMessage(t(`Purged ${r.objectsDeleted} objects`, `تم حذف ${r.objectsDeleted} كائناً`)); await reload(); } catch (e) { setError(e instanceof Error ? e.message : "Execute failed"); } finally { setBusy(false); } } }); }}>{t("Execute purge", "تنفيذ الحذف")}</button>
                   ) : null}
                 </div>
               </li>

@@ -182,6 +182,7 @@
 | — | Admin Console renders again because its header now has the shell provider the files area already uses | ✅ Implemented |
 | — | Univer documents paint their text on open, and presentations use the slide page model so text, shapes, and pictures are visible | ✅ Implemented |
 | — | Admin, My Files manage, file details, and team-folder manage follow the user accent, theme, and font; manage and details tabs use the team-folder tab bar | ✅ Implemented |
+| — | Members and Backup & Recovery follow the user accent, theme, and font; confirmation actions use the in-app card | ✅ Implemented |
 
 ---
 

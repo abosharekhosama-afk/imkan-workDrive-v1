@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { useLocale } from "@/components/locale-provider";
+import { useConfirmAction } from "@/components/confirm-action-modal";
 import { Icons } from "@/components/layout/icons";
 import { ImkanOptionPicker } from "@/components/imkan-option-picker";
 import { listFolderTree, type FolderTreeItem } from "@/lib/api/folders";
@@ -43,6 +44,7 @@ export default function AdminDlpPage() {
   const { locale } = useLocale();
   const ar = locale === "ar";
   const t = (en: string, arabic: string) => (ar ? arabic : en);
+  const { requestConfirm, confirmModal } = useConfirmAction();
   const [tab, setTab] = useState<"policies" | "labels">("policies");
   const [labels, setLabels] = useState<DlpLabel[]>([]);
   const [policies, setPolicies] = useState<DlpPolicy[]>([]);
@@ -82,6 +84,7 @@ export default function AdminDlpPage() {
 
   return (
     <main className="min-h-full bg-white" dir={ar ? "rtl" : "ltr"} onClick={() => setMenu(null)}>
+      {confirmModal}
       <header className="flex items-start justify-between gap-4 border-b border-[#ededed] px-7 pb-0 pt-5">
         <div>
           <h1 className="text-[20px] font-semibold text-[#202124]">{t("Data Loss Prevention", "منع فقدان البيانات")}</h1>
@@ -109,7 +112,7 @@ export default function AdminDlpPage() {
                   <td className="px-2 py-3"><button type="button" role="switch" aria-checked={policy.enabled} aria-label={policy.enabled ? t("Disable", "تعطيل") : t("Enable", "تفعيل")} className={`relative h-5 w-9 rounded-full ${policy.enabled ? "bg-[#2c66dd]" : "bg-[#dadce0]"}`} onClick={(event) => { event.stopPropagation(); void updateDlpPolicy(policy.id, { enabled: !policy.enabled }).then(load).catch((e) => setError(e instanceof Error ? e.message : t("Unable to update the policy", "تعذر تحديث السياسة"))); }}><span className={`absolute top-0.5 h-4 w-4 rounded-full bg-white ${policy.enabled ? "end-0.5" : "start-0.5"}`} /></button></td>
                   <td className="relative px-2 py-3 text-end"><MenuButton open={menu === policy.id} onOpen={() => setMenu(policy.id)} items={[
                     [t("Edit", "تعديل"), () => setPolicyOpen(policy)],
-                    [t("Delete", "حذف"), () => { if (confirm(t("Delete this DLP policy?", "حذف سياسة منع فقدان البيانات؟"))) void deleteDlpPolicy(policy.id).then(load); }],
+                    [t("Delete", "حذف"), () => { requestConfirm({ title: t("Delete policy", "حذف السياسة"), description: t("Delete this DLP policy?", "حذف سياسة منع فقدان البيانات؟"), confirmLabel: t("Delete", "حذف"), run: async () => { await deleteDlpPolicy(policy.id); await load(); } }); }],
                   ]} /></td>
                 </tr>
               ))}</tbody>
@@ -131,7 +134,7 @@ export default function AdminDlpPage() {
                 <td className="relative px-2 py-3 text-end"><MenuButton open={menu === label.id} onOpen={() => setMenu(label.id)} items={[
                   [t("View associated files", "عرض الملفات المرتبطة"), () => { setFilesLabel(label); void getDlpLabelFiles(label.id).then(setFiles).catch((e) => setError(e instanceof Error ? e.message : "Unable to load files")); }],
                   [t("Edit", "تعديل"), () => setLabelOpen(label)],
-                  [t("Delete", "حذف"), () => { if (confirm(t("Delete this classification label?", "حذف هذا التصنيف؟"))) void deleteDlpLabel(label.id).then(load).catch((e) => setError(e instanceof Error ? e.message : "Unable to delete")); }],
+                  [t("Delete", "حذف"), () => { requestConfirm({ title: t("Delete label", "حذف التصنيف"), description: t("Delete this classification label?", "حذف هذا التصنيف؟"), confirmLabel: t("Delete", "حذف"), run: async () => { try { await deleteDlpLabel(label.id); await load(); } catch (e) { setError(e instanceof Error ? e.message : "Unable to delete"); } } }); }],
                 ]} /></td>
               </tr>
             ))}</tbody>

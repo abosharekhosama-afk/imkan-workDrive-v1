@@ -2862,24 +2862,24 @@ html[data-theme="dark"] .workflow-ui .wd-card {
 
 
 /* Members administration — deliberately light, table-first styling matching the WorkDrive admin reference. */
-.members-page,.member-detail-page{font-size:13px}
+.members-page,.member-detail-page{font-size:13px;font-family:var(--user-font-family),Arial,system-ui,sans-serif;background:var(--wd-canvas,#fff);color:var(--wd-text,#202124)}
 .members-toolbar{display:flex;align-items:center;gap:8px;margin-bottom:16px}
 .member-filter-button,.member-search{height:36px;border:1px solid #d9dce1;background:#fff;display:flex;align-items:center;color:#202124}
 .member-filter-button{padding:0 12px;border-radius:18px;gap:7px;font-weight:600}
 .member-search{width:min(405px,100%);border-radius:18px;padding:0 12px;gap:8px;color:#8a8f98}
 .member-search input{border:0;outline:0;width:100%;font-size:13px;color:#202124;background:transparent}
 .member-primary-button,.member-soft-button,.member-outline-button,.member-danger-button{height:36px;border-radius:18px;display:inline-flex;align-items:center;justify-content:center;gap:7px;padding:0 15px;font-size:13px;font-weight:600;white-space:nowrap}
-.member-primary-button{background:#2f6fec;color:#fff;border:1px solid #2f6fec}
-.member-primary-button:hover{background:#2764d6}
+.member-primary-button{background:var(--wd-primary,#2f6fec);color:#fff;border:1px solid var(--wd-primary,#2f6fec)}
+.member-primary-button:hover{background:var(--wd-primary-dark,#2764d6)}
 .member-primary-button.compact{height:30px;border-radius:15px;padding:0 12px;font-size:12px}
 .member-soft-button{background:#f0f0f1;color:#202124;border:1px solid #e4e4e5}
-.member-outline-button{background:#fff;color:#2758aa;border:1px solid #8db0f4}
+.member-outline-button{background:var(--wd-bg,#fff);color:var(--wd-primary,#2758aa);border:1px solid color-mix(in srgb,var(--wd-primary,#2758aa) 45%,#fff)}
 .member-danger-button{background:#fff;color:#d71920;border:1px solid #ef5350}
 .member-circle-button{height:36px;width:36px;border-radius:50%;border:1px solid #d9dce1;background:#fff;display:inline-flex;align-items:center;justify-content:center;color:#333}
 .member-circle-button:hover,.member-soft-button:hover{background:#f6f7f8}
 .member-popover{position:absolute;z-index:40;top:42px;background:#fff;border:1px solid #e6e7e9;border-radius:16px;padding:6px;box-shadow:0 8px 28px rgba(20,25,35,.12)}
 .member-popover button,.member-popover a{display:flex;width:100%;align-items:center;gap:9px;border-radius:10px;padding:9px 11px;text-align:start;color:#24262a;font-size:13px}
-.member-popover button:hover,.member-popover a:hover,.member-popover button.is-active{background:#eef4ff;color:#2758aa}
+.member-popover button:hover,.member-popover a:hover,.member-popover button.is-active{background:var(--wd-primary-light,#eef4ff);color:var(--wd-primary,#2758aa)}
 .member-popover .danger{color:#c62828}
 .member-selection-bar{position:relative;display:flex;align-items:center;justify-content:space-between;min-height:54px;margin-bottom:8px;padding:0 12px 0 15px;border-radius:12px;background:#fafafa;box-shadow:0 2px 10px rgba(0,0,0,.07)}
 .member-escape{display:flex;align-items:center;gap:10px;border:0;background:transparent;color:#666;padding:8px;font-size:12px}
@@ -2889,7 +2889,7 @@ html[data-theme="dark"] .workflow-ui .wd-card {
 .members-table-head{min-height:46px;color:#222;font-size:13px}
 .members-table-row:hover,.members-table-row.is-selected{background:#f8f8f8}
 .member-check{display:flex;align-items:center;justify-content:center}
-.member-check input{width:16px;height:16px;accent-color:#2f6fec}
+.member-check input{width:16px;height:16px;accent-color:var(--wd-primary,#2f6fec)}
 .member-name-cell{display:flex;align-items:center;gap:12px;min-width:0;color:inherit;text-decoration:none}
 .member-avatar{width:38px;height:38px;border-radius:50%;display:flex;align-items:center;justify-content:center;flex:none;background:#b92742;color:#fff;font-weight:700;overflow:hidden}
 .member-avatar img,.member-profile-avatar img{width:100%;height:100%;object-fit:cover}
@@ -2905,7 +2905,7 @@ html[data-theme="dark"] .workflow-ui .wd-card {
 .members-license-panel h2{font-size:15px;font-weight:500;color:#444;margin:0 0 22px}
 .license-info{display:flex;gap:9px;background:#e5efff;border-radius:15px;padding:13px 12px;color:#355b99;line-height:20px}
 .license-info p{margin:0;font-size:12px}
-.license-link{border:0;background:none;color:#1769d2;padding:14px 0 18px;font-size:13px;font-weight:500}
+.license-link{border:0;background:none;color:var(--wd-primary,#1769d2);padding:14px 0 18px;font-size:13px;font-weight:500}
 .license-list>div{display:flex;align-items:center;gap:12px;padding:9px 0}
 .license-list b{width:20px;height:20px;border-radius:50%;background:#808080;color:#fff;display:inline-flex;align-items:center;justify-content:center;font-size:11px}
 .license-list span{font-size:13px}
@@ -2925,7 +2925,7 @@ html[data-theme="dark"] .workflow-ui .wd-card {
 .member-detail-card{margin:0 30px 28px;border:1px solid #e6e6e6;border-radius:16px;overflow:visible;box-shadow:0 2px 8px rgba(0,0,0,.05);min-height:580px}
 .member-tabs{height:60px;border-bottom:1px solid #e7e7e7;display:flex;align-items:center;gap:7px;padding:0 12px}
 .member-tabs button{height:38px;border:0;border-radius:19px;background:transparent;display:flex;align-items:center;gap:8px;padding:0 16px;color:#222;font-size:13px}
-.member-tabs button.is-active{background:#eaf1ff;color:#2256a5;font-weight:600}
+.member-tabs button.is-active{background:var(--wd-primary-light,#eaf1ff);color:var(--wd-primary,#2256a5);font-weight:600}
 .member-settings-panel{padding:25px 27px}
 .member-setting-row{display:grid;grid-template-columns:225px minmax(0,1fr);align-items:center;min-height:54px}
 .member-setting-label{font-size:13px}
@@ -2989,7 +2989,7 @@ html[data-theme="dark"] .workflow-ui .wd-card {
 .team-folder-option-list{display:flex;flex-direction:column;gap:10px}
 .team-folder-option{border:1px solid #e3e5e8;border-radius:13px;overflow:hidden;background:#fff}
 .team-folder-option-head{display:flex;align-items:center;gap:10px;padding:12px}
-.team-folder-icon{width:34px;height:34px;border-radius:9px;background:#eef4ff;color:#2f6fec;display:flex;align-items:center;justify-content:center}
+.team-folder-icon{width:34px;height:34px;border-radius:9px;background:var(--wd-primary-light,#eef4ff);color:var(--wd-primary,#2f6fec);display:flex;align-items:center;justify-content:center}
 .team-folder-option-head>div{min-width:0;flex:1}
 .team-folder-option-head b,.team-folder-option-head small{display:block}
 .team-folder-option-head b{font-size:13px}
@@ -4722,6 +4722,8 @@ html[data-theme="dark"] .wd-list-row[data-control="final"]:hover{background:#243
 .zoho-confirm-card:has(.zoho-confirm-primary.is-danger) .zoho-confirm-icon{color:#d92d20;background:#fff1f0}
 .zoho-confirm-title{margin:0;font-size:17px;font-weight:600;line-height:24px}
 .zoho-confirm-description{margin:8px auto 0;max-width:340px;color:#666b73;font-size:13px;line-height:20px}
+.zoho-confirm-reason{display:grid;gap:6px;margin:14px 0 0;text-align:start;font-size:12px;color:var(--wd-text,#333)}
+.zoho-confirm-reason textarea{width:100%;resize:vertical;min-height:72px;border:1px solid var(--wd-line,#d7dbe0);border-radius:8px;padding:8px 10px;background:var(--wd-bg,#fff);color:var(--wd-text,#212121);font:inherit}
 .zoho-confirm-error{margin:13px 0 0;border:1px solid #f0c6c2;border-radius:9px;background:#fff5f4;color:#b42318;padding:9px 11px;font-size:12px;text-align:start}
 .zoho-confirm-actions{display:flex;justify-content:center;gap:9px;margin-top:24px}
 .zoho-confirm-cancel,.zoho-confirm-primary{height:38px;min-width:92px;padding:0 17px;border-radius:8px;font-size:13px;font-weight:500;transition:background .14s ease,box-shadow .14s ease,opacity .14s ease}
@@ -5849,3 +5851,34 @@ html[data-theme="dark"] .theme-aware-page :is(.border-slate-200,.border-slate-10
 html[data-theme="dark"] .zoho-file-details :is(.border-slate-200,.border-slate-100){
   border-color:var(--wd-line)!important;
 }
+.members-page,
+.member-detail-page{
+  background:var(--wd-canvas,#fff)!important;
+  color:var(--wd-text,#202124)!important;
+  font-family:var(--user-font-family),Arial,system-ui,sans-serif!important;
+}
+.members-page .text-\[\#202124\],
+.member-detail-page .text-\[\#202124\]{color:var(--wd-text)!important}
+.members-page .text-\[\#315da8\],
+.member-detail-page .text-\[\#315da8\]{color:var(--wd-primary)!important}
+html[data-theme="dark"] :is(.members-page,.member-detail-page) :is(.member-filter-button,.member-search,.member-soft-button,.member-outline-button,.member-circle-button,.member-row-manage,.member-popover,.member-modal,.member-profile-card,.member-detail-card,.member-selection-bar,.member-role-menu,.imkan-option-picker-menu){
+  background:var(--wd-bg);
+  color:var(--wd-text);
+  border-color:var(--wd-line);
+}
+html[data-theme="dark"] .members-table-row:hover,
+html[data-theme="dark"] .members-table-row.is-selected,
+html[data-theme="dark"] .member-data-row:hover{background:var(--wd-hover)}
+html[data-theme="dark"] .member-search input,
+html[data-theme="dark"] .member-email,
+html[data-theme="dark"] .members-table-head,
+html[data-theme="dark"] .member-storage{color:var(--wd-text)}
+.backup-page{font-family:var(--user-font-family),Arial,system-ui,sans-serif;color:var(--wd-text);background:var(--wd-canvas)}
+.backup-page :is(.text-\[\#111827\],.text-\[\#374151\]){color:var(--wd-text)!important}
+.backup-page :is(.text-\[\#6b7280\],.text-\[\#4b5563\],.text-\[\#9ca3af\]){color:var(--wd-text-muted)!important}
+.backup-page :is(.bg-white,.hover\:bg-\[\#f9fafb\]:hover,.hover\:bg-\[\#fafafa\]:hover){background-color:var(--wd-bg)!important}
+.backup-page :is(.border-\[\#e5e7eb\],.border-\[\#d1d5db\],.border-\[\#eef0f3\]){border-color:var(--wd-line)!important}
+.backup-page :is(.text-\[\#0b63e5\],.border-\[\#0b63e5\]){color:var(--wd-primary)!important;border-color:var(--wd-primary)!important}
+.backup-page .bg-\[\#0b63e5\]{background-color:var(--wd-primary)!important;color:#fff!important}
+.backup-page .bg-\[\#f5f9ff\],
+.backup-page .border-\[\#0b63e5\].bg-\[\#f5f9ff\]{background-color:var(--wd-primary-light)!important}

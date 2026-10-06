@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useParams, usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useLocale } from "../../../../../components/locale-provider";
+import { useConfirmAction } from "../../../../../components/confirm-action-modal";
 import { ImkanOptionPicker, toImkanPickerOptions } from "../../../../../components/imkan-option-picker";
 import { ApiError } from "../../../../../lib/api/client";
 import {
@@ -84,6 +85,7 @@ export default function TeamFolderManagePage() {
   const searchParams = useSearchParams();
   const pathname = usePathname();
   const { locale } = useLocale();
+  const { requestConfirm, confirmModal } = useConfirmAction();
   const id = params.teamFolderId;
   const adminBase = pathname.startsWith("/admin/team-folders") ? "/admin/team-folders" : "/files/team-folders";
   const manageBase = `${adminBase}/${encodeURIComponent(id)}/manage`;
@@ -257,13 +259,19 @@ export default function TeamFolderManagePage() {
     finally { setBusy(false); }
   };
 
-  const removeGroup = async (groupId: string) => {
+  const removeGroup = (groupId: string) => {
     if (!canManage || busy) return;
-    if (!window.confirm(locale === "ar" ? "هل تريد إزالة المجموعة من مجلد الفريق؟" : "Remove this group from the Team Folder?")) return;
-    setBusy(true); setError("");
-    try { await removeTeamFolderGroup(id, groupId); await load(); }
-    catch (cause) { setError(cause instanceof ApiError ? cause.message : (locale === "ar" ? "تعذر إزالة المجموعة." : "Unable to remove the group.")); }
-    finally { setBusy(false); }
+    requestConfirm({
+      title: locale === "ar" ? "إزالة المجموعة" : "Remove group",
+      description: locale === "ar" ? "هل تريد إزالة المجموعة من مجلد الفريق؟" : "Remove this group from the Team Folder?",
+      confirmLabel: locale === "ar" ? "إزالة" : "Remove",
+      run: async () => {
+        setBusy(true); setError("");
+        try { await removeTeamFolderGroup(id, groupId); await load(); }
+        catch (cause) { setError(cause instanceof ApiError ? cause.message : (locale === "ar" ? "تعذر إزالة المجموعة." : "Unable to remove the group.")); }
+        finally { setBusy(false); }
+      },
+    });
   };
 
   const changeRole = async (userId: string, next: TeamFolderRole) => {
@@ -280,20 +288,25 @@ export default function TeamFolderManagePage() {
     }
   };
 
-  const removeMember = async (userId: string) => {
+  const removeMember = (userId: string) => {
     if (!canManage || busy) return;
-    const ok = window.confirm(locale === "ar" ? "هل تريد إزالة هذا العضو من مجلد الفريق؟" : "Remove this member from the Team Folder?");
-    if (!ok) return;
-    setBusy(true);
-    setError("");
-    try {
-      await removeTeamFolderMember(id, userId);
-      await load();
-    } catch (cause) {
-      setError(cause instanceof ApiError ? cause.message : (locale === "ar" ? "تعذر إزالة العضو." : "Unable to remove the member."));
-    } finally {
-      setBusy(false);
-    }
+    requestConfirm({
+      title: locale === "ar" ? "إزالة العضو" : "Remove member",
+      description: locale === "ar" ? "هل تريد إزالة هذا العضو من مجلد الفريق؟" : "Remove this member from the Team Folder?",
+      confirmLabel: locale === "ar" ? "إزالة" : "Remove",
+      run: async () => {
+        setBusy(true);
+        setError("");
+        try {
+          await removeTeamFolderMember(id, userId);
+          await load();
+        } catch (cause) {
+          setError(cause instanceof ApiError ? cause.message : (locale === "ar" ? "تعذر إزالة العضو." : "Unable to remove the member."));
+        } finally {
+          setBusy(false);
+        }
+      },
+    });
   };
 
   const leave = async () => {
@@ -314,20 +327,26 @@ export default function TeamFolderManagePage() {
     }
   };
 
-  const deleteFolder = async () => {
+  const deleteFolder = () => {
     if (!canRename || busy) return;
-    const ok = window.confirm(locale === "ar" ? `هل تريد حذف «${folder?.name ?? ""}»؟` : `Delete “${folder?.name ?? ""}”?`);
-    if (!ok) return;
-    setBusy(true);
-    try {
-      await deleteTeamFolder(id);
-      window.dispatchEvent(new Event("workdrive:team-folders-changed"));
-      router.push(adminBase);
-    } catch (cause) {
-      setError(cause instanceof ApiError ? cause.message : (locale === "ar" ? "تعذر حذف مجلد الفريق." : "Unable to delete the Team Folder."));
-    } finally {
-      setBusy(false);
-    }
+    const name = folder?.name ?? "";
+    requestConfirm({
+      title: locale === "ar" ? "حذف مجلد الفريق" : "Delete Team Folder",
+      description: locale === "ar" ? `هل تريد حذف «${name}»؟` : `Delete “${name}”?`,
+      confirmLabel: locale === "ar" ? "حذف" : "Delete",
+      run: async () => {
+        setBusy(true);
+        try {
+          await deleteTeamFolder(id);
+          window.dispatchEvent(new Event("workdrive:team-folders-changed"));
+          router.push(adminBase);
+        } catch (cause) {
+          setError(cause instanceof ApiError ? cause.message : (locale === "ar" ? "تعذر حذف مجلد الفريق." : "Unable to delete the Team Folder."));
+        } finally {
+          setBusy(false);
+        }
+      },
+    });
   };
 
   const updateSettings = async (patch: { isPublicToOrg?: boolean; allowExternalSharing?: boolean; allowViewerDownloads?: boolean }) => {
@@ -352,6 +371,7 @@ export default function TeamFolderManagePage() {
 
   return (
     <section className="theme-aware-page min-w-0" style={{ fontFamily: "var(--user-font-family), Arial, system-ui, sans-serif", color: "var(--wd-text, #212121)", background: "var(--wd-canvas, #fff)" }}>
+      {confirmModal}
       <nav className="team-manage-nav">
         {tabs.map((item) => (
           <button key={item.key} type="button" onClick={() => selectTab(item.key)} className={`team-manage-tab ${tab === item.key ? "is-active" : ""}`}>

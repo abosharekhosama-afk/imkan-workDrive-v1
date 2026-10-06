@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useLocale } from "../../components/locale-provider";
+import { useConfirmAction } from "../../components/confirm-action-modal";
 import { ImkanOptionPicker } from "../../components/imkan-option-picker";
 import { getCurrentUserId } from "../../lib/api/jwt";
 import {
@@ -40,6 +41,7 @@ type InvitationState = "pending" | "accepted" | "revoked" | "expired";
 
 export default function OrganizationPage() {
   const { label } = useLocale();
+  const { requestConfirm, confirmModal } = useConfirmAction();
   const currentUserId = getCurrentUserId();
   const [org, setOrg] = useState<Organization | null>(null);
   const [members, setMembers] = useState<OrgMember[]>([]);
@@ -205,6 +207,7 @@ export default function OrganizationPage() {
 
   return (
     <div className="wd-page organization-page">
+      {confirmModal}
       <header className="wd-page-head">
         <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
           <span className="wd-avatar wd-avatar-lg" aria-hidden="true">
@@ -430,14 +433,20 @@ export default function OrganizationPage() {
                       type="button"
                       className="wd-btn wd-btn-danger wd-btn-sm"
                       disabled={m.userId === currentUserId}
-                      onClick={async () => {
-                        if (!window.confirm(label("org.removeConfirm"))) return;
-                        try {
-                          await removeOrganizationMember(m.id);
-                          await load();
-                        } catch (err) {
-                          setError(err instanceof Error ? err.message : "Unable to remove member");
-                        }
+                      onClick={() => {
+                        requestConfirm({
+                          title: label("org.remove"),
+                          description: label("org.removeConfirm"),
+                          confirmLabel: label("org.remove"),
+                          run: async () => {
+                            try {
+                              await removeOrganizationMember(m.id);
+                              await load();
+                            } catch (err) {
+                              setError(err instanceof Error ? err.message : "Unable to remove member");
+                            }
+                          },
+                        });
                       }}
                     >
                       ✕ {label("org.remove")}

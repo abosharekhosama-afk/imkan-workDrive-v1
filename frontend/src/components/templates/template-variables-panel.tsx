@@ -10,10 +10,12 @@ import {
   type TemplateVariableType,
 } from "@/lib/api/templates";
 import { ImkanOptionPicker, toImkanPickerOptions } from "@/components/imkan-option-picker";
+import { useConfirmAction } from "@/components/confirm-action-modal";
 
 const TYPES: TemplateVariableType[] = ["TEXT","NUMBER","DATE","BOOLEAN","EMAIL","URL","CURRENCY","IMAGE","USER","FILE","CHOICE"];
 
 export function TemplateVariablesPanel({ templateId, ar, canManage, onClose }: { templateId: string; ar: boolean; canManage: boolean; onClose: () => void }) {
+  const {requestConfirm,confirmModal}=useConfirmAction();
   const [items,setItems]=useState<TemplateVariable[]>([]);
   const [busy,setBusy]=useState(false);
   const [error,setError]=useState("");
@@ -31,9 +33,9 @@ export function TemplateVariablesPanel({ templateId, ar, canManage, onClose }: {
     const payload={name:name.trim(),label:label.trim(),type,defaultValue:defaultValue||null,required,description:description.trim()||null,options:type==="CHOICE"?options.split(",").map(x=>x.trim()).filter(Boolean):undefined,format:null,position:editing?.position??items.length};
     try{if(editing)await updateTemplateVariable(templateId,editing.id,payload);else await createTemplateVariable(templateId,payload);reset();await load();}catch(e){setError(e instanceof Error?e.message:"Unable to save variable.");}finally{setBusy(false);}
   };
-  const remove=async(v:TemplateVariable)=>{if(!window.confirm(ar?`حذف المتغير «${v.label}»؟`:`Delete variable “${v.label}”?`))return;setBusy(true);try{await deleteTemplateVariable(templateId,v.id);await load();}catch(e){setError(e instanceof Error?e.message:"Unable to delete variable.");}finally{setBusy(false);}};
+  const remove=(v:TemplateVariable)=>{requestConfirm({title:ar?"حذف المتغير":"Delete variable",description:ar?`حذف المتغير «${v.label}»؟`:`Delete variable “${v.label}”?`,confirmLabel:ar?"حذف":"Delete",run:async()=>{setBusy(true);try{await deleteTemplateVariable(templateId,v.id);await load();}catch(e){setError(e instanceof Error?e.message:"Unable to delete variable.");}finally{setBusy(false);}}})};
 
-  return <div className="fixed inset-0 z-[220] flex items-center justify-center p-4" dir={ar?"rtl":"ltr"}>
+  return <div className="fixed inset-0 z-[220] flex items-center justify-center p-4" dir={ar?"rtl":"ltr"}>{confirmModal}
     <div className="absolute inset-0 bg-black/35" onClick={()=>!busy&&onClose()}/>
     <div className="relative w-[min(900px,96vw)] max-h-[90vh] overflow-hidden rounded-2xl bg-white shadow-2xl">
       <div className="flex items-center justify-between border-b border-slate-100 px-5 py-4"><div><h2 className="text-[16px] font-semibold text-slate-900">{ar?"متغيرات القالب":"Template Variables"}</h2><p className="mt-1 text-[11px] text-slate-500">{ar?"حقول قابلة لإعادة الاستخدام داخل Writer وSheet وShow.":"Reusable fields for Writer, Sheet and Show."}</p></div><button onClick={onClose} className="rounded-lg px-2 py-1 hover:bg-slate-100">✕</button></div>

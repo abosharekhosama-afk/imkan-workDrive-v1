@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useLocale } from "@/components/locale-provider";
+import { useConfirmAction } from "@/components/confirm-action-modal";
 import { Icons } from "@/components/layout/icons";
 import { listGroups, listOrganizationMembers, type GroupOption, type OrgMember } from "@/lib/api/organization";
 import { createDataTemplate, deleteDataTemplate, listDataTemplates, updateDataTemplate, type DataTemplate } from "@/lib/api/metadata";
@@ -12,6 +13,7 @@ export default function DataTemplatesAdminPage() {
   const router = useRouter();
   const { locale } = useLocale();
   const ar = locale === "ar";
+  const { requestConfirm, confirmModal } = useConfirmAction();
   const [templates, setTemplates] = useState<DataTemplate[]>([]);
   const [members, setMembers] = useState<OrgMember[]>([]);
   const [groups, setGroups] = useState<GroupOption[]>([]);
@@ -70,12 +72,17 @@ export default function DataTemplatesAdminPage() {
   }
 
   async function remove(t: DataTemplate) {
-    if (!window.confirm(ar ? `حذف «${t.name}» نهائيًا؟` : `Permanently delete “${t.name}”?`)) return;
-    try { await deleteDataTemplate(t.id); await load(); }
-    catch (e: any) { setError(e?.message || "Unable to delete template."); }
+    const templateName = t.name;
+    requestConfirm({
+      title: ar ? "حذف القالب" : "Delete template",
+      description: ar ? `حذف «${templateName}» نهائيًا؟` : `Permanently delete “${templateName}”?`,
+      confirmLabel: ar ? "حذف" : "Delete",
+      run: async () => { try { await deleteDataTemplate(t.id); await load(); }
+    catch (e: any) { setError(e?.message || "Unable to delete template."); } },
+    });
   }
 
-  return <main className="h-full overflow-hidden bg-[#f7f8fa]" dir={ar ? "rtl" : "ltr"}>
+  return <main className="h-full overflow-hidden bg-[#f7f8fa]" dir={ar ? "rtl" : "ltr"}>{confirmModal}
     <header className="border-b border-slate-200 bg-white px-7 py-5">
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div>

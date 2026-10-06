@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { SecondarySidebar } from "@/components/layout/secondary-sidebar";
 import { Icons } from "@/components/layout/icons";
 import { useLocale } from "@/components/locale-provider";
+import { useConfirmAction } from "@/components/confirm-action-modal";
 import { ImkanOptionPicker } from "@/components/imkan-option-picker";
 import { TemplatePreview } from "@/components/templates/template-preview";
 import { TemplateVariablesPanel } from "@/components/templates/template-variables-panel";
@@ -51,6 +52,7 @@ function text(ar: boolean, en: string, value: string) { return ar ? value : en; 
 
 export default function TemplatesPage() {
   const { locale } = useLocale();
+  const { requestConfirm, confirmModal } = useConfirmAction();
   const ar = locale === "ar";
   const router = useRouter();
   const params = useSearchParams();
@@ -402,7 +404,11 @@ export default function TemplatesPage() {
 
   const doDelete = async (template: TemplateRecord) => {
     if (!template.permissions.canDelete) return;
-    if (!window.confirm(text(ar, `Move “${template.name}” to template trash?`, `نقل «${template.name}» إلى سلة القوالب؟`))) return;
+    requestConfirm({
+      title: text(ar, "Move to trash", "نقل إلى السلة"),
+      description: text(ar, `Move “${template.name}” to template trash?`, `نقل «${template.name}» إلى سلة القوالب؟`),
+      confirmLabel: text(ar, "Move", "نقل"),
+      run: async () => {
     setBusy(true); setError("");
     try {
       await deleteTemplate(template.id);
@@ -410,6 +416,8 @@ export default function TemplatesPage() {
       invalidateTemplateCaches(); await load(true);
     } catch (e) { setError(e instanceof Error ? e.message : text(ar, "Unable to delete template.", "تعذر حذف القالب.")); }
     finally { setBusy(false); }
+      },
+    });
   };
 
   const openTrash = async () => {
@@ -427,11 +435,17 @@ export default function TemplatesPage() {
   };
 
   const purgeFromTrash = async (id: string) => {
-    if (!window.confirm(text(ar, "Permanently delete this template and all its versions?", "حذف هذا القالب وجميع إصداراته نهائيًا؟"))) return;
+    requestConfirm({
+      title: text(ar, "Delete permanently", "حذف نهائي"),
+      description: text(ar, "Permanently delete this template and all its versions?", "حذف هذا القالب وجميع إصداراته نهائيًا؟"),
+      confirmLabel: text(ar, "Delete", "حذف"),
+      run: async () => {
     setBusy(true); setError("");
     try { await permanentlyDeleteTemplate(id); setTrash((items) => items.filter((item) => item.id !== id)); setMessage(text(ar, "Template permanently deleted.", "تم حذف القالب نهائيًا.")); }
     catch (e) { setError(e instanceof Error ? e.message : text(ar, "Unable to permanently delete template.", "تعذر الحذف النهائي للقالب.")); }
     finally { setBusy(false); }
+      },
+    });
   };
 
   const createFromVersion = async () => {
@@ -458,6 +472,7 @@ export default function TemplatesPage() {
 
   return (
     <div className="flex min-h-0 flex-1">
+      {confirmModal}
       <SecondarySidebar section="templates" />
       <main className="min-w-0 flex-1 overflow-y-auto overflow-x-hidden bg-[var(--wd-surface,#fff)] text-[var(--wd-text,#212121)]" style={{ fontFamily: "var(--user-font-family), Arial, system-ui, sans-serif" }}>
         <div className="border-b border-[color:var(--imkan-color-border)] px-5 py-4">

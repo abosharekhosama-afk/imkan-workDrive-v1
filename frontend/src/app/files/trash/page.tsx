@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useLocale } from "../../../components/locale-provider";
+import { useConfirmAction } from "../../../components/confirm-action-modal";
 import { ApiError } from "../../../lib/api/client";
 import { emptyTrash, permanentDeleteFile } from "../../../lib/api/files";
 import { listTrash, restoreFile } from "../../../lib/api/trash";
@@ -17,6 +18,7 @@ function formatDate(value?: string | null): string {
 
 export default function TrashPage() {
   const { label, locale } = useLocale();
+  const { requestConfirm, confirmModal } = useConfirmAction();
   const [files, setFiles] = useState<FileRecord[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -66,33 +68,46 @@ export default function TrashPage() {
     }
   }
 
-  async function handleDeleteForever(fileId: string) {
-    if (!window.confirm(label("trash.confirmPermanent"))) return;
-    setBusyId(fileId);
-    setError(null);
-    try {
-      await permanentDeleteFile(fileId);
-      await load();
-    } catch {
-      setError(label("error.generic"));
-    } finally {
-      setBusyId(null);
-    }
+  function handleDeleteForever(fileId: string) {
+    requestConfirm({
+      title: label("trash.confirmPermanent"),
+      description: label("trash.confirmPermanent"),
+      confirmLabel: label("trash.deleteForever"),
+      run: async () => {
+        setBusyId(fileId);
+        setError(null);
+        try {
+          await permanentDeleteFile(fileId);
+          await load();
+        } catch {
+          setError(label("error.generic"));
+        } finally {
+          setBusyId(null);
+        }
+      },
+    });
   }
 
-  async function handleEmptyTrash() {
-    if (!window.confirm(label("trash.confirmEmpty"))) return;
-    setError(null);
-    try {
-      await emptyTrash();
-      await load();
-    } catch {
-      setError(label("error.generic"));
-    }
+  function handleEmptyTrash() {
+    requestConfirm({
+      title: label("trash.emptyTrash"),
+      description: label("trash.confirmEmpty"),
+      confirmLabel: label("trash.emptyTrash"),
+      run: async () => {
+        setError(null);
+        try {
+          await emptyTrash();
+          await load();
+        } catch {
+          setError(label("error.generic"));
+        }
+      },
+    });
   }
 
   return (
     <div className="wd-page">
+      {confirmModal}
       <header className="zoho-trash-head">
         <div><h1>⌫ {label("files.trash")}</h1><p>{files.length} {locale === "ar" ? "عنصر" : "items"} · {formatBytes(totalSize)}</p></div>
         <div className="zoho-trash-actions"><button type="button" className="wd-btn wd-btn-ghost" onClick={() => void load()} disabled={loading}>⟳ {label("recent.refresh")}</button>{files.length > 0 ? <button type="button" className="wd-btn wd-btn-danger" onClick={() => void handleEmptyTrash()}>⌫ {label("trash.emptyTrash")}</button> : null}</div>

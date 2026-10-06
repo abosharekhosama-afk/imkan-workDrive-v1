@@ -508,9 +508,17 @@ export class AuthService {
   }
 
   googleStart(): { url: string } {
-    const clientId = this.config.get<string>('GOOGLE_ID');
-    const callback = this.config.get<string>('GOOGLE_CALLBACK_URL');
-    if (!clientId || !callback) throw new UnauthorizedException('Google sign-in is not configured');
+    const clientId = this.config.get<string>('GOOGLE_ID')?.trim();
+    const clientSecret = this.config.get<string>('GOOGLE_SECRET')?.trim();
+    const callback = this.config.get<string>('GOOGLE_CALLBACK_URL')?.trim();
+    if (!clientId || !clientSecret || !callback) {
+      const missing = [
+        !clientId ? 'GOOGLE_ID' : '',
+        !clientSecret ? 'GOOGLE_SECRET' : '',
+        !callback ? 'GOOGLE_CALLBACK_URL' : '',
+      ].filter(Boolean);
+      throw new UnauthorizedException(`Google sign-in is not configured. Set ${missing.join(', ')} on the API server. GOOGLE_CALLBACK_URL must be the backend address ending in /auth/google/callback and the same address must be registered as an authorized redirect URI in Google Cloud.`);
+    }
     const state = jwt.sign({ purpose: 'google_oauth', nonce: randomBytes(16).toString('hex') }, this.oauthStateSecret(), { expiresIn: '10m' });
     const params = new URLSearchParams({ client_id: clientId, redirect_uri: callback, response_type: 'code', scope: 'openid email profile', state, access_type: 'offline', prompt: 'select_account' });
     return { url: `https://accounts.google.com/o/oauth2/v2/auth?${params}` };

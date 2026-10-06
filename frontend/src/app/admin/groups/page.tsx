@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useLocale } from "@/components/locale-provider";
+import { useConfirmAction } from "@/components/confirm-action-modal";
 import { Icons } from "@/components/layout/icons";
 import { ImkanOptionPicker } from "@/components/imkan-option-picker";
 import { listOrganizationMembers, listGroups, createGroup, getGroup, updateGroup, deleteGroup, addGroupMember, removeGroupMember, updateGroupMemberRole, type GroupSummary, type GroupDetails, type GroupMember, type OrgMember } from "@/lib/api/organization";
@@ -11,6 +12,7 @@ function initials(name?: string | null, email?: string | null) { return (name ||
 export default function GroupsPage() {
   const { locale } = useLocale();
   const ar = locale === "ar";
+  const { requestConfirm, confirmModal } = useConfirmAction();
   const [groups, setGroups] = useState<GroupSummary[]>([]);
   const [selected, setSelected] = useState<GroupDetails | null>(null);
   const [members, setMembers] = useState<OrgMember[]>([]);
@@ -55,11 +57,18 @@ export default function GroupsPage() {
   }
   async function removeSelected() {
     if (!selected) return;
-    if (!window.confirm(ar ? `حذف المجموعة «${selected.name}»؟ سيتم إزالة صلاحياتها وعضويتها.` : `Delete “${selected.name}”? Its memberships and group permissions will be removed.`)) return;
+    const name = selected.name;
+    requestConfirm({
+      title: ar ? "حذف المجموعة" : "Delete group",
+      description: ar ? `حذف المجموعة «${name}»؟ سيتم إزالة صلاحياتها وعضويتها.` : `Delete “${name}”? Its memberships and group permissions will be removed.`,
+      confirmLabel: ar ? "حذف" : "Delete",
+      run: async () => {
     setSaving(true);
     try { await deleteGroup(selected.id); setSelected(null); await loadGroups(); }
     catch (e: any) { setToast(e?.message || (ar ? "تعذر حذف المجموعة." : "Unable to delete group.")); }
     finally { setSaving(false); }
+      },
+    });
   }
   async function addMember(userId: string) {
     if (!selected) return; setSaving(true);
@@ -75,14 +84,21 @@ export default function GroupsPage() {
   }
   async function removeMember(member: GroupMember) {
     if (!selected) return;
-    if (!window.confirm(ar ? `إزالة ${member.user.name || member.user.email} من المجموعة؟` : `Remove ${member.user.name || member.user.email} from this group?`)) return;
+    const memberName = member.user.name || member.user.email;
+    requestConfirm({
+      title: ar ? "إزالة العضو" : "Remove member",
+      description: ar ? `إزالة ${memberName} من المجموعة؟` : `Remove ${memberName} from this group?`,
+      confirmLabel: ar ? "إزالة" : "Remove",
+      run: async () => {
     setSaving(true);
     try { await removeGroupMember(selected.id, member.userId); setSelected(await getGroup(selected.id)); }
     catch (e: any) { setToast(e?.message || (ar ? "تعذر إزالة العضو." : "Unable to remove member.")); }
     finally { setSaving(false); }
+      },
+    });
   }
 
-  return <main className="h-full overflow-hidden bg-[#f7f7f7]" dir={ar ? "rtl" : "ltr"}>
+  return <main className="h-full overflow-hidden bg-[#f7f7f7]" dir={ar ? "rtl" : "ltr"}>{confirmModal}
     <div className="border-b border-slate-200 bg-white px-7 py-4"><div className="flex items-center justify-between gap-4"><div><div className="text-[10px] font-semibold uppercase tracking-[.16em] text-[#2c66dd]">{ar ? "المؤسسة" : "Organization"}</div><h1 className="mt-1 text-[22px] font-semibold text-slate-950">{ar ? "المجموعات" : "Groups"}</h1><p className="mt-1 text-[11px] text-slate-500">{ar ? "إدارة المجموعات والأعضاء والوصول الجماعي إلى الملفات." : "Manage groups, membership, and shared file access."}</p></div><button onClick={openCreate} className="flex h-9 items-center gap-2 rounded-lg bg-[#2c66dd] px-4 text-[11px] font-semibold text-white"><Icons.plus size={15}/>{ar ? "إنشاء مجموعة" : "Create Group"}</button></div></div>
     <div className="grid h-[calc(100%-86px)] grid-cols-1 overflow-hidden lg:grid-cols-[360px_minmax(0,1fr)]">
       <aside className="overflow-y-auto border-e border-slate-200 bg-white"><div className="sticky top-0 z-10 border-b border-slate-100 bg-white p-4"><div className="flex h-9 items-center gap-2 rounded-lg border border-slate-200 px-3"><Icons.search size={15}/><input value={query} onChange={(e)=>setQuery(e.target.value)} className="min-w-0 flex-1 text-[11px] outline-none" placeholder={ar ? "البحث عن مجموعة" : "Search groups"}/></div></div>{loading ? <div className="p-6 text-center text-[11px] text-slate-400">{ar ? "جارٍ التحميل..." : "Loading..."}</div> : filtered.length ? <div className="p-2">{filtered.map(g => <button key={g.id} onClick={()=>void getGroup(g.id).then(setSelected)} className={`w-full rounded-xl p-4 text-start transition ${selected?.id===g.id ? "bg-[#edf3ff]" : "hover:bg-slate-50"}`}><div className="flex items-center gap-3"><span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#e9eefb] text-[#315da8]"><Icons.users size={17}/></span><span className="min-w-0 flex-1"><b className="block truncate text-[12px] text-slate-900">{g.name}</b><small className="mt-1 block truncate text-[10px] text-slate-500">{g.memberCount} {ar ? "عضو" : "members"}</small></span></div><p className="mt-3 truncate text-[10px] text-slate-500">{g.description || (ar ? "بدون وصف" : "No description")}</p></button>)}</div> : <div className="p-8 text-center text-[11px] text-slate-400">{ar ? "لا توجد مجموعات." : "No groups found."}</div>}</aside>

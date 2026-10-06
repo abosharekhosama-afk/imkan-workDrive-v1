@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState, useId } from "react";
 import { usePathname } from "next/navigation";
 import { useLocale } from "../../../components/locale-provider";
+import { useConfirmAction } from "../../../components/confirm-action-modal";
 import { ApiError } from "../../../lib/api/client";
 import { deleteTeamFolder, joinTeamFolder, listTeamFolders, renameTeamFolder, type TeamFolderListItem } from "../../../lib/api/team-folders";
 import { formatBytes } from "../../../lib/api/quota";
@@ -43,6 +44,7 @@ function MoreIcon() {
 
 export default function TeamFoldersPage() {
   const { label, locale } = useLocale();
+  const { requestConfirm, confirmModal } = useConfirmAction();
   const pathname = usePathname();
   const isAdminConsole = pathname.startsWith("/admin/team-folders");
   const adminTeamFoldersBase = "/admin/team-folders";
@@ -139,8 +141,11 @@ export default function TeamFoldersPage() {
   const remove = (tf: TeamFolderListItem) => {
     setMenuId(null);
     setMenuAnchor(null);
-    void (async () => {
-      if (!window.confirm(locale === "ar" ? `هل تريد حذف مجلد الفريق «${tf.name}»؟` : `Delete team folder “${tf.name}”?`)) return;
+    requestConfirm({
+      title: locale === "ar" ? "حذف مجلد الفريق" : "Delete team folder",
+      description: locale === "ar" ? `هل تريد حذف مجلد الفريق «${tf.name}»؟` : `Delete team folder “${tf.name}”?`,
+      confirmLabel: locale === "ar" ? "حذف" : "Delete",
+      run: async () => {
       setActionBusy(true);
       setError(null);
       try {
@@ -152,7 +157,8 @@ export default function TeamFoldersPage() {
       } finally {
         setActionBusy(false);
       }
-    })();
+      },
+    });
   };
 
   const join = async (tf: TeamFolderListItem) => {
@@ -210,6 +216,7 @@ export default function TeamFoldersPage() {
 
   return (
     <section className="team-folders-page flex min-h-[calc(100dvh-56px)] w-full min-w-0 flex-1 flex-col bg-white">
+      {confirmModal}
       <div className="team-folders-toolbar flex shrink-0 items-center border-b border-slate-100 px-5" data-team-folders-toolbar>
         <div className="relative shrink-0" data-team-folder-filter>
           <button id={filterButtonId} type="button" onClick={() => setFilterOpen((v) => !v)} className={`team-filter-trigger ${scopeFilter !== "joined" ? "is-active" : ""}`} aria-expanded={filterOpen} aria-haspopup="menu">

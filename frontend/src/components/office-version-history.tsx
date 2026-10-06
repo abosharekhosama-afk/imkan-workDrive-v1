@@ -1,22 +1,32 @@
 'use client';
 import { useEffect, useState } from 'react';
 import { listOfficeDocumentVersions, restoreOfficeDocumentVersion, type OfficeDocumentVersion } from '@/lib/api/office';
+import { useConfirmAction } from '@/components/confirm-action-modal';
 
 export function OfficeVersionHistory({ fileId, revision, ar = false, onRestored }: { fileId: string; revision: number; ar?: boolean; onRestored?: () => void }) {
   const [open, setOpen] = useState(false);
   const [items, setItems] = useState<OfficeDocumentVersion[]>([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+  const { requestConfirm, confirmModal } = useConfirmAction();
   const load = async () => { setBusy(true); setError(''); try { setItems(await listOfficeDocumentVersions(fileId)); } catch (e: any) { setError(e?.message || (ar ? 'تعذر تحميل سجل الإصدارات' : 'Unable to load version history')); } finally { setBusy(false); } };
   useEffect(() => { if (open) void load(); }, [open, revision]);
   const restore = async (version: OfficeDocumentVersion) => {
-    if (!window.confirm(ar ? `استعادة الإصدار ${version.versionNumber}؟ سيتم إنشاء إصدار جديد.` : `Restore version ${version.versionNumber}? A new version will be created.`)) return;
+    requestConfirm({
+      title: ar ? 'استعادة الإصدار' : 'Restore version',
+      description: ar ? `استعادة الإصدار ${version.versionNumber}؟ سيتم إنشاء إصدار جديد.` : `Restore version ${version.versionNumber}? A new version will be created.`,
+      confirmLabel: ar ? 'استعادة' : 'Restore',
+      tone: 'primary',
+      run: async () => {
     setBusy(true); setError('');
     try { await restoreOfficeDocumentVersion(fileId, version.id, revision); await load(); onRestored?.(); }
     catch (e: any) { setError(e?.message || (ar ? 'فشل الاستعادة' : 'Restore failed')); }
     finally { setBusy(false); }
+      },
+    });
   };
   return <>
+    {confirmModal}
     <button className="tool" onClick={() => setOpen(true)} title={ar ? 'سجل الإصدارات' : 'Version history'}>{ar ? 'الإصدارات' : 'Versions'}</button>
     {open && <div className="fixed inset-0 z-[150] flex items-center justify-center bg-slate-950/30 p-4" dir={ar ? 'rtl' : 'ltr'} onMouseDown={e => { if (e.target === e.currentTarget) setOpen(false); }}>
       <div className="w-[min(680px,96vw)] max-h-[85vh] overflow-auto rounded-2xl border bg-white p-5 shadow-2xl">

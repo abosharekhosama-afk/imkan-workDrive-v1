@@ -210,12 +210,80 @@ export function InspectorPanel({ onVersionHistory }: { onVersionHistory?: (fileI
                   }}>{locale === "ar" ? "حفظ" : "Save"}</button>
                 </div>
               </div>
-            ) : desc ? (
-              <p className="wd-zoho-details-desc">{desc}</p>
+            ) : (
+              <button type="button" onClick={() => { setDescDraft(desc); setEditingDesc(true); }} className="wd-zoho-details-desc">
+                {desc || (locale === "ar" ? "إضافة وصف" : "Add description")}
+              </button>
+            )}
+
+            {selected.kind === "FILE" ? (
+              <div className="wd-zoho-details-preview" aria-hidden="true">
+                <FileTypeIcon kind={kind} size={42} />
+              </div>
             ) : null}
+
+            <div className="wd-zoho-details-owner">
+              <span className="wd-zoho-details-avatar">{(fact?.ownerName || ownerName || "?").slice(0, 1).toUpperCase()}</span>
+              <div>
+                <span>{locale === "ar" ? "أنشأه" : "Created by"}</span>
+                <strong>{fact?.ownerName || ownerName || "—"}</strong>
+              </div>
+            </div>
+
+            <div className="wd-zoho-details-share">
+              <div className="wd-zoho-details-kicker">{locale === "ar" ? "مشارك مع" : "Shared with"}</div>
+              <div className="wd-zoho-details-share-line">
+                <Icons.shield size={14} />
+                <span>{shareSummary}</span>
+                <button type="button" className="wd-zoho-details-link" onClick={() => {
+                  if (!resourceId || !resourceType) return;
+                  window.dispatchEvent(new CustomEvent("workdrive:open-share", { detail: { type: resourceType, id: resourceId, name } }));
+                }}>{locale === "ar" ? "مشاركة" : "Share"}</button>
+              </div>
+            </div>
+
+            {selected.kind === "FILE" ? (
+              <div className="wd-zoho-details-stats">
+                <div className="wd-zoho-details-stats-row">
+                  <span><Icons.eye size={14} /> {fileActivities.filter((r) => r.action === "VIEW" || r.action === "PREVIEW").length} {locale === "ar" ? "مشاهدات" : "Views"}</span>
+                  <span><Icons.download size={14} /> {fileActivities.filter((r) => r.action === "DOWNLOAD").length} {locale === "ar" ? "تنزيلات" : "Downloads"}</span>
+                </div>
+                <div className="wd-zoho-details-stats-row">
+                  <span><Icons.act size={14} /> {fileActivities.filter((r) => r.action === "COMMENT").length} {locale === "ar" ? "تعليقات" : "Comments"}</span>
+                </div>
+              </div>
+            ) : null}
+
+            <div className="wd-zoho-details-block">
+              <div className="wd-zoho-details-kicker">{locale === "ar" ? "الرابط الدائم" : "Permalink"}</div>
+              <div className="wd-zoho-details-permalink">
+                <Link href={permalinkPath || "#"} className="truncate">{permalink || "—"}</Link>
+                <button type="button" onClick={() => void copyPermalink()} className="wd-zoho-details-copy" aria-label={locale === "ar" ? "نسخ" : "Copy"}><Icons.copy size={14} /></button>
+              </div>
+            </div>
+
+            <div className="wd-zoho-details-block">
+              <div className="wd-zoho-details-kicker">{locale === "ar" ? "الموقع" : "Location"}</div>
+              <div className="wd-zoho-details-location"><Icons.folder size={14} /> <span>{locationName || (locale === "ar" ? "مجلداتي" : "My Folders")}</span></div>
+            </div>
+
+            <div className="wd-zoho-details-block">
+              <div className="wd-zoho-details-kicker">{locale === "ar" ? "التصنيفات" : "Labels"}</div>
+              {fact?.labels?.length ? (
+                <div className="wd-zoho-details-labels">
+                  {fact.labels.map((lb) => <span key={lb} className="wd-zoho-details-label"><i />{lb}</span>)}
+                </div>
+              ) : null}
+              <button type="button" className="wd-zoho-details-add-labels" onClick={() => {
+                if (!resourceId || !resourceType) return;
+                window.dispatchEvent(new CustomEvent("workdrive:open-labels", { detail: { type: resourceType, id: resourceId, name } }));
+              }}>{fact?.labels?.length ? (locale === "ar" ? "إضافة أو إزالة التصنيفات" : "Add or remove labels") : (locale === "ar" ? "إضافة تصنيفات" : "Add labels")}</button>
+            </div>
+
             {selected.kind === "FILE" ? (
               <button type="button" onClick={() => {
                 const fileId = selected.file.id;
+                if (onVersionHistory) { onVersionHistory(fileId); return; }
                 setInspectorOpen(false);
                 setMobileInspectorOpen(false);
                 router.push(`/files/details/${encodeURIComponent(fileId)}?tab=versions`);

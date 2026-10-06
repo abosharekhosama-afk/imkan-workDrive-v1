@@ -20,6 +20,7 @@ import { ApiError } from "../lib/api/client";
 import type { FileRecord, FolderRecord } from "../lib/api/types";
 import { searchNames } from "../lib/api/search";
 import { DeleteModal } from "./delete-modal";
+import { useConfirmAction } from "./confirm-action-modal";
 import { RenameModal } from "./rename-modal";
 import { Modal } from "./modal";
 import { MoveModal } from "./move-modal";
@@ -789,23 +790,33 @@ export function FileBrowser({
     return () => window.removeEventListener("workdrive:file-control", onControl);
   }, []);
 
+  const { requestConfirm, confirmModal } = useConfirmAction();
   const runControl = useCallback(async (id: string, action: FileControlAction) => {
     const ar = locale === "ar";
-    if (action === "mark-final" && !window.confirm(ar ? "تعليم هذا الملف كمنتهٍ؟ سيصبح للقراءة فقط." : "Mark this file as final? It will become read-only.")) return;
-    if (action === "enable-editing" && !window.confirm(ar ? "تفعيل التعديل لهذا الملف المنتهي؟" : "Enable editing for this final file?")) return;
-    try {
-      const result = await runFileControl(id, action);
-      setFiles((rows) => rows.map((row) => row.id === id ? { ...row, isFinal: result.isFinal, checkedOutById: result.checkedOutById, checkedOutAt: result.checkedOutAt, indexedAt: result.indexedAt } : row));
-      const done = action === "check-out" ? (ar ? "تم سحب الملف" : "File checked out")
-        : action === "check-in" ? (ar ? "تم إرجاع الملف" : "File checked in")
-        : action === "mark-final" ? (ar ? "تم التعليم كمنتهٍ" : "Marked as final")
-        : action === "enable-editing" ? (ar ? "تم تفعيل التعديل" : "Editing enabled")
-        : (ar ? "تم تحديث فهرس البحث" : "Search index refreshed");
-      setToast(done);
-    } catch (error) {
-      window.alert(error instanceof Error ? error.message : (ar ? "تعذر تنفيذ الإجراء" : "Action failed"));
+    const execute = async () => {
+      try {
+        const result = await runFileControl(id, action);
+        setFiles((rows) => rows.map((row) => row.id === id ? { ...row, isFinal: result.isFinal, checkedOutById: result.checkedOutById, checkedOutAt: result.checkedOutAt, indexedAt: result.indexedAt } : row));
+        const done = action === "check-out" ? (ar ? "تم سحب الملف" : "File checked out")
+          : action === "check-in" ? (ar ? "تم إرجاع الملف" : "File checked in")
+          : action === "mark-final" ? (ar ? "تم التعليم كمنتهٍ" : "Marked as final")
+          : action === "enable-editing" ? (ar ? "تم تفعيل التعديل" : "Editing enabled")
+          : (ar ? "تم تحديث فهرس البحث" : "Search index refreshed");
+        setToast(done);
+      } catch (error) {
+        setToast(error instanceof Error ? error.message : (ar ? "تعذر تنفيذ الإجراء" : "Action failed"));
+      }
+    };
+    if (action === "mark-final") {
+      requestConfirm({ title: ar ? "تعليم كمنتهٍ" : "Mark as final", description: ar ? "تعليم هذا الملف كمنتهٍ؟ سيصبح للقراءة فقط." : "Mark this file as final? It will become read-only.", confirmLabel: ar ? "تعليم" : "Mark as final", tone: "primary", run: execute });
+      return;
     }
-  }, [locale]);
+    if (action === "enable-editing") {
+      requestConfirm({ title: ar ? "تفعيل التعديل" : "Enable editing", description: ar ? "تفعيل التعديل لهذا الملف المنتهي؟" : "Enable editing for this final file?", confirmLabel: ar ? "تفعيل" : "Enable editing", tone: "primary", run: execute });
+      return;
+    }
+    await execute();
+  }, [locale, requestConfirm]);
 
   const singleId = selectedIds.size === 1 ? [...selectedIds][0] : undefined;
   const singleFolder = singleId ? folders.find((item) => item.id === singleId) : undefined;
@@ -1184,6 +1195,7 @@ export function FileBrowser({
     {labelTarget ? <LabelAssignmentModal target={labelTarget} onClose={()=>setLabelTarget(null)} onChanged={()=>void load()} /> : null}
     {dataTemplateTargets?.length ? <DataTemplateAssociationModal targets={dataTemplateTargets} dataTemplates={dataTemplates} onClose={() => setDataTemplateTargets(null)} onChanged={() => { void load(); }} /> : null}
     {toast ? <Toast message={toast} onDismiss={() => setToast(null)} /> : null}
+    {confirmModal}
     </section>
   );
 }

@@ -49,8 +49,9 @@ function LoginForm() {
     setError("");
     try {
       window.location.href = (await googleUrl()).url;
-    } catch {
-      setError(label("auth.googleUnavailable"));
+    } catch (err) {
+      const detail = err instanceof Error ? err.message : "";
+      setError(detail && !detail.startsWith("<") ? detail : label("auth.googleUnavailable"));
       setBusy(false);
     }
   }

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useCallback, useState } from "react";
 import { useLocale } from "./locale-provider";
 
 export type ConfirmActionTone = "primary" | "danger";
@@ -13,26 +13,35 @@ export function ConfirmActionModal({
   onClose,
   onConfirm,
   tone = "primary",
+  reasonLabel,
+  minReasonLength = 0,
 }: {
   title: string;
   description: string;
   confirmLabel: string;
   cancelLabel?: string;
   onClose: () => void;
-  onConfirm: () => Promise<void>;
+  onConfirm: (reason?: string) => Promise<void>;
   tone?: ConfirmActionTone;
+  reasonLabel?: string;
+  minReasonLength?: number;
 }) {
   const { locale } = useLocale();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [reason, setReason] = useState("");
   const cancel = cancelLabel ?? (locale === "ar" ? "إلغاء" : "Cancel");
 
   const confirm = async () => {
     if (busy) return;
+    if (reasonLabel && reason.trim().length < minReasonLength) {
+      setError(locale === "ar" ? "السبب قصير جداً." : "The reason is too short.");
+      return;
+    }
     setBusy(true);
     setError(null);
     try {
-      await onConfirm();
+      await onConfirm(reasonLabel ? reason.trim() : undefined);
       onClose();
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : (locale === "ar" ? "تعذر تنفيذ العملية." : "The operation could not be completed."));
@@ -55,6 +64,7 @@ export function ConfirmActionModal({
         </div>
         <h2 id="zoho-confirm-title" className="zoho-confirm-title">{title}</h2>
         <p className="zoho-confirm-description">{description}</p>
+        {reasonLabel ? <label className="zoho-confirm-reason"><span>{reasonLabel}</span><textarea value={reason} onChange={(event) => setReason(event.target.value)} rows={3} /></label> : null}
         {error ? <div className="zoho-confirm-error" role="alert">{error}</div> : null}
         <div className="zoho-confirm-actions">
           <button type="button" className="zoho-confirm-cancel" onClick={onClose} disabled={busy}>{cancel}</button>
@@ -65,4 +75,34 @@ export function ConfirmActionModal({
       </div>
     </div>
   );
+}
+
+export type ConfirmRequest = {
+  title: string;
+  description: string;
+  confirmLabel: string;
+  cancelLabel?: string;
+  tone?: ConfirmActionTone;
+  reasonLabel?: string;
+  minReasonLength?: number;
+  run: (reason?: string) => Promise<void> | void;
+};
+
+export function useConfirmAction() {
+  const [request, setRequest] = useState<ConfirmRequest | null>(null);
+  const requestConfirm = useCallback((next: ConfirmRequest) => setRequest(next), []);
+  const confirmModal = request ? (
+    <ConfirmActionModal
+      title={request.title}
+      description={request.description}
+      confirmLabel={request.confirmLabel}
+      cancelLabel={request.cancelLabel}
+      tone={request.tone ?? "danger"}
+      reasonLabel={request.reasonLabel}
+      minReasonLength={request.minReasonLength}
+      onClose={() => setRequest(null)}
+      onConfirm={async (reason) => { await request.run(reason); }}
+    />
+  ) : null;
+  return { requestConfirm, confirmModal };
 }

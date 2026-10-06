@@ -7,6 +7,7 @@ import { WorkflowShell } from "@/components/workflow-shell";
 import { WorkflowHelp } from "@/components/workflow-help";
 import { WorkflowConceptGuide } from "@/components/workflow-concept-guide";
 import { useLocale } from "@/components/locale-provider";
+import { useConfirmAction } from "@/components/confirm-action-modal";
 import { activateWorkflow, deactivateWorkflow, deleteWorkflow, duplicateWorkflow, listWorkflows, updateWorkflow, type Workflow } from "@/lib/api/workflows";
 import { Icons } from "@/components/layout/icons";
 import { useWorkflowAccess } from "@/components/workflow-access";
@@ -17,6 +18,7 @@ type ResourceType = "FILE" | "FOLDER";
 export default function WorkflowsPage() {
   const { locale } = useLocale();
   const ar = locale === "ar";
+  const { requestConfirm, confirmModal } = useConfirmAction();
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -68,7 +70,11 @@ export default function WorkflowsPage() {
   };
 
   const remove = async (r: Workflow) => {
-    if (!window.confirm(ar ? "حذف سير العمل هذا؟" : "Delete this workflow?")) return;
+    requestConfirm({
+      title: ar ? "حذف سير العمل" : "Delete workflow",
+      description: ar ? "حذف سير العمل هذا؟" : "Delete this workflow?",
+      confirmLabel: ar ? "حذف" : "Delete",
+      run: async () => {
     setBusy(r.id);
     try {
       await deleteWorkflow(r.id);
@@ -77,6 +83,8 @@ export default function WorkflowsPage() {
       setBusy(null);
       setMenuOpen(null);
     }
+      },
+    });
   };
 
   const duplicate = async (r: Workflow) => {
@@ -150,6 +158,7 @@ export default function WorkflowsPage() {
     title={ar ? "سير العمل" : "Workflows"}
     subtitle={ar ? "أنشئ عمليات تلقائية ويدوية مرتبطة فعلياً بالملفات والمجلدات." : "Create automatic and manual processes connected to files and folders."}
   >
+  {confirmModal}
     <main className="h-full overflow-y-auto bg-white px-5 py-4 sm:px-6" dir={ar ? "rtl" : "ltr"}>
       <div className="mx-auto max-w-[1400px]">
         <div className="flex flex-wrap items-center justify-between gap-3">

@@ -4,6 +4,7 @@ import { Icons } from "@/components/layout/icons";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useLocale } from "../../../components/locale-provider";
+import { useConfirmAction } from "../../../components/confirm-action-modal";
 import { createWorkspaceLabel, deleteWorkspaceLabel, listWorkspaceLabels, listWorkspaceLabelResources, updateWorkspaceLabel, type WorkspaceLabel, type WorkspaceLabelResource } from "../../../lib/api/workspace-labels";
 import { listFollows, type FollowRecord } from "../../../lib/api/follows";
 import { apiRequest } from "../../../lib/api/client";
@@ -16,6 +17,7 @@ type Tab = "following" | string;
 
 export default function LabelsPage() {
   const { locale } = useLocale(); const ar = locale === "ar"; const router = useRouter();
+  const { requestConfirm, confirmModal } = useConfirmAction();
   const [labels, setLabels] = useState<WorkspaceLabel[]>([]); const [selected, setSelected] = useState<Tab>("following");
   const [resources, setResources] = useState<WorkspaceLabelResource[]>([]); const [follows, setFollows] = useState<FollowRecord[]>([]);
   const [manageOpen, setManageOpen] = useState(false); const [createOpen, setCreateOpen] = useState(false); const [editing, setEditing] = useState<WorkspaceLabel | null>(null);
@@ -58,9 +60,9 @@ export default function LabelsPage() {
     else { const created = await createWorkspaceLabel(name.trim(), color); setLabels(rows => [...rows, created]); setSelected(created.id); }
     setCreateOpen(false); setManageOpen(false); setToast(ar ? "تم حفظ التصنيف" : "Label saved"); await load();
   } catch (e) { setError(e instanceof Error ? e.message : (ar ? "تعذر الحفظ" : "Could not save label")); } finally { setBusy(false); } };
-  const remove = async (l: WorkspaceLabel) => { if (!window.confirm(ar ? `حذف التصنيف «${l.name}»؟` : `Delete label “${l.name}”?`)) return; try { await deleteWorkspaceLabel(l.id); setLabels(rows => rows.filter(x => x.id !== l.id)); if (selected === l.id) setSelected("following"); } catch { setError(ar ? "تعذر حذف التصنيف" : "Could not delete label"); } };
+  const remove = (l: WorkspaceLabel) => { requestConfirm({ title: ar ? "حذف التصنيف" : "Delete label", description: ar ? `حذف التصنيف «${l.name}»؟` : `Delete label “${l.name}”?`, confirmLabel: ar ? "حذف" : "Delete", run: async () => { try { await deleteWorkspaceLabel(l.id); setLabels(rows => rows.filter(x => x.id !== l.id)); if (selected === l.id) setSelected("following"); } catch { setError(ar ? "تعذر حذف التصنيف" : "Could not delete label"); } } }); };
 
-  return <main style={{ fontFamily: "var(--user-font-family), Arial, system-ui, sans-serif" }} className="workflow-ui flex h-full min-h-0 flex-col overflow-hidden bg-white" dir={ar ? "rtl" : "ltr"}>
+  return <main style={{ fontFamily: "var(--user-font-family), Arial, system-ui, sans-serif" }} className="workflow-ui flex h-full min-h-0 flex-col overflow-hidden bg-white" dir={ar ? "rtl" : "ltr"}>{confirmModal}
     <header className="flex h-[52px] shrink-0 items-center gap-3 border-b border-slate-200 px-5"><span className="text-slate-700" aria-hidden="true"><Icons.tag size={22} /></span><h1 className="text-[19px] font-semibold text-slate-900">{ar ? "التصنيفات" : "Labels"}</h1></header>
     <div className="flex min-h-[52px] shrink-0 items-center justify-between gap-3 border-b border-slate-200 px-4">
       <div className="flex min-w-0 items-center gap-0 overflow-x-auto">
