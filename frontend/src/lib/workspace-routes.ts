@@ -44,6 +44,10 @@ const FILES_RESERVED_SEGMENTS = new Set([
   "fileId",
   "details",
   "connections",
+  "labels",
+  "shared-links",
+  "shared-by-me",
+  "collections",
 ]);
 
 /** Inspector rail + panel appear only on My Files and Team Files surfaces. */
