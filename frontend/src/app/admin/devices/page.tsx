@@ -102,7 +102,7 @@ export default function AdminDevicesPage() {
 
   return (
     <main
-      className="h-full overflow-y-auto bg-[#f4f6f9] p-5 sm:p-7 lg:p-8"
+      className="admin-devices-page h-full overflow-y-auto bg-[#f4f6f9] p-5 sm:p-7 lg:p-8"
       dir={ar ? "rtl" : "ltr"}
     >
       <div className="mx-auto max-w-[1180px]">
