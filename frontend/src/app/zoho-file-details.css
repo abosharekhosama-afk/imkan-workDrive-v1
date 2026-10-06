@@ -1,8 +1,8 @@
 
 /* ── Zoho File Details full page (/files/details/[fileId]) ───────────────── */
 .zoho-file-details{
-  display:flex;flex-direction:column;min-height:100%;background:#fff;
-  color:#1f1f1f;font-family:var(--user-font-family),Arial,system-ui,sans-serif;
+  display:flex;flex-direction:column;min-height:100%;background:var(--wd-canvas,#fff);
+  color:var(--wd-text,#1f1f1f);font-family:var(--user-font-family),Arial,system-ui,sans-serif;
 }
 .zoho-fd-header{
   display:flex;align-items:flex-start;justify-content:space-between;gap:12px;
@@ -23,8 +23,8 @@
   min-width:100px;padding:12px 16px 10px;border:0;border-bottom:2px solid transparent;
   background:transparent;color:#5b6470;font-size:12px;cursor:pointer;flex-shrink:0;
 }
-.zoho-fd-tab.is-active{color:#1a73e8;border-bottom-color:#1a73e8;font-weight:600}
-.zoho-fd-tab:hover{color:#1a73e8}
+.zoho-fd-tab.is-active{color:var(--wd-primary,#1a73e8);border-bottom-color:var(--wd-primary,#1a73e8);font-weight:600}
+.zoho-fd-tab:hover{color:var(--wd-primary,#1a73e8)}
 
 .zoho-fd-body{flex:1;min-height:0;overflow:auto;padding:20px 24px 40px}
 .zoho-fd-loading,.zoho-fd-empty{padding:40px 12px;text-align:center;color:#8a9199;font-size:13px}
@@ -34,16 +34,16 @@
 .zoho-fd-general{display:grid;grid-template-columns:minmax(0,1fr) minmax(220px,340px);gap:28px;align-items:start}
 .zoho-fd-info-row{display:grid;grid-template-columns:120px minmax(0,1fr);gap:12px;padding:10px 0;font-size:13.5px}
 .zoho-fd-info-row span{color:#6b7280}
-.zoho-fd-info-row strong{font-weight:500;color:#1f1f1f;word-break:break-word}
+.zoho-fd-info-row strong{font-weight:500;color:var(--wd-text,#1f1f1f);word-break:break-word}
 .zoho-fd-permalink-pill{
   display:inline-block;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
-  border:1px solid #d7dbe0;border-radius:999px;padding:5px 12px;background:#fff;color:#1a73e8;
+  border:1px solid var(--wd-line,#d7dbe0);border-radius:999px;padding:5px 12px;background:var(--wd-bg,#fff);color:var(--wd-primary,#1a73e8);
   font-size:12.5px;cursor:pointer;text-align:start;
 }
 .zoho-fd-general-right{display:flex;flex-direction:column;gap:16px}
 .zoho-fd-preview-box{
   height:180px;border-radius:8px;border:1px solid #eceef0;background:#f7f8fa;
-  display:grid;place-items:center;color:#1a73e8;
+  display:grid;place-items:center;color:var(--wd-primary,#1a73e8);
 }
 .zoho-fd-stat-line{display:flex;flex-wrap:wrap;gap:18px;font-size:13px;color:#5b6470;justify-content:center}
 .zoho-fd-stat-line span{display:inline-flex;align-items:center;gap:5px}
@@ -51,24 +51,24 @@
 /* Versions */
 .zoho-fd-version-filter{display:inline-flex;border:1px solid #d7dbe0;border-radius:999px;overflow:hidden;margin-bottom:14px}
 .zoho-fd-version-filter button{
-  border:0;background:#fff;padding:7px 16px;font-size:13px;color:#5b6470;cursor:pointer;
+  border:0;background:var(--wd-bg,#fff);padding:7px 16px;font-size:13px;color:var(--wd-text-muted,#5b6470);cursor:pointer;font-family:inherit;
 }
-.zoho-fd-version-filter button.is-active{background:#eef4ff;color:#1a73e8;font-weight:600}
+.zoho-fd-version-filter button.is-active{background:var(--wd-primary-light,#eef4ff);color:var(--wd-primary,#1a73e8);font-weight:600}
 .zoho-fd-banner{
   display:flex;gap:10px;align-items:flex-start;padding:12px 14px;border-radius:10px;
   background:#eef6ff;color:#334155;font-size:13px;line-height:1.45;margin-bottom:16px;
 }
 .zoho-fd-banner p{margin:0}
-.zoho-fd-link{border:0;background:transparent;color:#1a73e8;padding:0;cursor:pointer;font-size:inherit;text-decoration:underline}
+.zoho-fd-link{border:0;background:transparent;color:var(--wd-primary,#1a73e8);padding:0;cursor:pointer;font-size:inherit;text-decoration:underline}
 .zoho-fd-panel{
   border-radius:12px;background:#f5f6f8;padding:20px;margin-bottom:18px;
   display:flex;flex-direction:column;align-items:center;gap:12px;text-align:center;
 }
 .zoho-fd-panel p{margin:0;max-width:520px;font-size:13.5px;line-height:1.5;color:#374151}
-.zoho-fd-panel-icon{color:#1a73e8}
+.zoho-fd-panel-icon{color:var(--wd-primary,#1a73e8)}
 .zoho-fd-panel-actions{display:flex;gap:10px;flex-wrap:wrap;justify-content:center}
 .zoho-fd-btn-primary{
-  border:0;border-radius:999px;padding:8px 18px;background:#1a73e8;color:#fff;
+  border:0;border-radius:999px;padding:8px 18px;background:var(--wd-primary,#1a73e8);color:#fff;
   font-size:13.5px;font-weight:600;cursor:pointer;
 }
 .zoho-fd-btn-primary:disabled{opacity:.5;cursor:not-allowed}
@@ -89,7 +89,7 @@
 .zoho-fd-version-actions{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
 .zoho-fd-version-actions button{
   display:inline-flex;align-items:center;gap:6px;border:0;background:transparent;
-  color:#1a73e8;cursor:pointer;font-size:13.5px;padding:0;
+  color:var(--wd-primary,#1a73e8);cursor:pointer;font-size:13.5px;padding:0;
 }
 .zoho-fd-sep{color:#c4c9d0}
 .zoho-fd-danger-link{border:0;background:transparent;color:#dc2626;cursor:pointer;font-size:13.5px;padding:0}
@@ -151,7 +151,7 @@
   width:32px;height:32px;border-radius:50%;background:#dbeafe;color:#1d4ed8;
   display:grid;place-items:center;font-size:12px;font-weight:700;flex-shrink:0;
 }
-.zoho-fd-timeline-card strong{display:block;font-size:13.5px;color:#1a73e8}
+.zoho-fd-timeline-card strong{display:block;font-size:13.5px;color:var(--wd-primary,#1a73e8)}
 .zoho-fd-timeline-card strong:not(.is-guest){color:#111827}
 .zoho-fd-timeline-card p{margin:2px 0 0;font-size:13px;color:#4b5563}
 
@@ -194,12 +194,24 @@
   .zoho-fd-body{padding:14px 12px 32px}
 }
 
-html[data-theme="dark"] .zoho-file-details{background:var(--wd-bg);color:var(--wd-text)}
+html[data-theme="dark"] .zoho-file-details{background:var(--wd-canvas);color:var(--wd-text)}
 html[data-theme="dark"] .zoho-fd-header,
-html[data-theme="dark"] .zoho-fd-tabs,
 html[data-theme="dark"] .zoho-fd-version-head,
-html[data-theme="dark"] .zoho-fd-access-card{border-color:var(--wd-line)}
-html[data-theme="dark"] .zoho-fd-tab.is-active{color:var(--wd-primary);border-bottom-color:var(--wd-primary)}
-html[data-theme="dark"] .zoho-fd-btn-primary{background:var(--wd-primary)}
+html[data-theme="dark"] .zoho-fd-access-card,
+html[data-theme="dark"] .zoho-fd-permalink-pill,
+html[data-theme="dark"] .zoho-fd-menu,
+html[data-theme="dark"] .zoho-fd-access-card,
+html[data-theme="dark"] .zoho-fd-access-card-head,
+html[data-theme="dark"] .zoho-fd-btn-ghost{background:var(--wd-bg);color:var(--wd-text);border-color:var(--wd-line)}
+html[data-theme="dark"] .zoho-fd-menu button,
+html[data-theme="dark"] .zoho-fd-timeline-card strong:not(.is-guest),
+html[data-theme="dark"] .zoho-fd-version-size{color:var(--wd-text)}
+html[data-theme="dark"] .zoho-fd-menu button:hover{background:var(--wd-hover)}
+html[data-theme="dark"] .zoho-fd-btn-primary{background:var(--wd-primary);color:#fff}
 html[data-theme="dark"] .zoho-fd-preview-box,
-html[data-theme="dark"] .zoho-fd-panel{background:#1e293b;border-color:var(--wd-line)}
+html[data-theme="dark"] .zoho-fd-panel{background:var(--wd-bg);border-color:var(--wd-line);color:var(--wd-text)}
+html[data-theme="dark"] .zoho-fd-info-row strong,
+html[data-theme="dark"] .zoho-fd-name,
+html[data-theme="dark"] .zoho-fd-panel p{color:var(--wd-text)}
+html[data-theme="dark"] .zoho-fd-location,
+html[data-theme="dark"] .zoho-fd-info-row span{color:var(--wd-text-muted)}

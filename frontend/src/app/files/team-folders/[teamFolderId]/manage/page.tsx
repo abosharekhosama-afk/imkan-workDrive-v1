@@ -345,13 +345,13 @@ export default function TeamFolderManagePage() {
   };
 
   if (!folder && !error) {
-    return <section className="flex h-full min-h-0 items-center justify-center bg-white text-sm text-slate-500">Loading…</section>;
+    return <section className="theme-aware-page flex h-full min-h-0 items-center justify-center text-sm" style={{ color: "var(--wd-text-muted, #64748b)", background: "var(--wd-canvas, #fff)", fontFamily: "var(--user-font-family), Arial, system-ui, sans-serif" }}>Loading…</section>;
   }
 
   const rootHref = folder?.rootFolderId ? `/files/${encodeURIComponent(folder.rootFolderId)}` : adminBase;
 
   return (
-    <section className="min-w-0 bg-white">
+    <section className="theme-aware-page min-w-0" style={{ fontFamily: "var(--user-font-family), Arial, system-ui, sans-serif", color: "var(--wd-text, #212121)", background: "var(--wd-canvas, #fff)" }}>
       <nav className="team-manage-nav">
         {tabs.map((item) => (
           <button key={item.key} type="button" onClick={() => selectTab(item.key)} className={`team-manage-tab ${tab === item.key ? "is-active" : ""}`}>

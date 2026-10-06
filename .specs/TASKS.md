@@ -181,6 +181,7 @@
 | — | Check out, mark as final, re-index, and follow updates change the action menu and mark the file row; preview actions open above the preview; the top bars and row hover text follow dark mode | ✅ Implemented |
 | — | Admin Console renders again because its header now has the shell provider the files area already uses | ✅ Implemented |
 | — | Univer documents paint their text on open, and presentations use the slide page model so text, shapes, and pictures are visible | ✅ Implemented |
+| — | Admin, My Files manage, file details, and team-folder manage follow the user accent, theme, and font; manage and details tabs use the team-folder tab bar | ✅ Implemented |
 
 ---
 

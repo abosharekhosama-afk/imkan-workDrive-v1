@@ -236,7 +236,7 @@ export default function FileDetailsPage() {
         </button>
       </header>
 
-      <nav className="zoho-fd-tabs zoho-fd-tabs-center" role="tablist">
+      <nav className="team-manage-nav" role="tablist">
         {tabs.map((item) => {
           const Icon = Icons[item.icon] || Icons.info;
           return (
@@ -245,10 +245,10 @@ export default function FileDetailsPage() {
               type="button"
               role="tab"
               aria-selected={tab === item.id}
-              className={`zoho-fd-tab ${tab === item.id ? "is-active" : ""}`}
+              className={`team-manage-tab ${tab === item.id ? "is-active" : ""}`}
               onClick={() => changeTab(item.id)}
             >
-              <Icon size={18} />
+              <Icon size={20} />
               <span>{item.label}</span>
             </button>
           );

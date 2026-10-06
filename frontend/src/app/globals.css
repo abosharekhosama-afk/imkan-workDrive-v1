@@ -1807,19 +1807,20 @@ html[data-theme="dark"] .zoho-workflow-status-badge{border-color:#38414d;backgro
 .team-folder-pin.is-pinned{color:#30363b}
 .team-folder-pin-label{white-space:nowrap}
 .team-manage-nav{
-  display:grid;
-  grid-template-columns:repeat(7,minmax(0,1fr));
-  border-bottom:1px solid #e2e8f0;
-  background:#fff;
+  display:flex;
+  border-bottom:1px solid var(--wd-line,#e2e8f0);
+  background:var(--wd-bg,#fff);
+  font-family:var(--user-font-family),Arial,system-ui,sans-serif;
 }
 .team-manage-tab{
   display:flex;
+  flex:1 1 0;
   min-height:90px;
   flex-direction:column;
   align-items:center;
   justify-content:center;
   gap:8px;
-  border-inline-end:1px solid #e2e8f0;
+  border-inline-end:1px solid var(--wd-line,#e2e8f0);
   border-top:2px solid transparent;
   border-radius:0 !important;
   height:auto !important;
@@ -1828,17 +1829,18 @@ html[data-theme="dark"] .zoho-workflow-status-badge{border-color:#38414d;backgro
   background:transparent;
   box-shadow:none !important;
   text-align:center;
+  font-family:inherit;
   font-size:13px;
   line-height:1.25;
-  color:#555;
+  color:var(--wd-text-muted,#555);
   transition:background-color .15s ease,color .15s ease,border-color .15s ease;
 }
 .team-manage-tab:last-child{border-inline-end:0}
-.team-manage-tab:hover{background:#f8fafc;color:#334155}
+.team-manage-tab:hover{background:var(--wd-hover,#f8fafc);color:var(--wd-text,#334155)}
 .team-manage-tab.is-active{
-  border-top-color:#2457B8;
-  background:#fff;
-  color:#2457B8;
+  border-top-color:var(--wd-primary,#2457B8);
+  background:var(--wd-bg,#fff);
+  color:var(--wd-primary,#2457B8);
   font-weight:600;
 }
 .admin-console-shell .team-folder-pin,
@@ -4751,7 +4753,7 @@ html[data-theme="dark"] .wd-list-row[data-control="final"]:hover{background:#243
 .wd-manage-menu button:hover{background:#f2f5f8}
 .wd-manage-menu button svg{color:#5b6570;flex:0 0 auto}
 
-.wd-manage-page{min-height:100%;background:#fff;color:#25292e}
+.wd-manage-page{min-height:100%;background:var(--wd-canvas,#fff);color:var(--wd-text,#25292e);font-family:var(--user-font-family),Arial,system-ui,sans-serif}
 .wd-manage-page-head{height:74px;display:flex;align-items:center;padding:0 24px;border-bottom:1px solid #ededed}
 .wd-manage-title{display:flex;align-items:center;gap:9px;font-size:16px}
 .wd-manage-title svg{color:#30363c}
@@ -4783,7 +4785,7 @@ html[data-theme="dark"] .wd-list-row[data-control="final"]:hover{background:#243
 .wd-manage-name>span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .wd-manage-row-actions{display:flex;justify-content:flex-end;gap:13px}
 .wd-manage-link,.wd-manage-link-danger{border:0;background:transparent;font-size:12px;font-weight:500}
-.wd-manage-link{color:#2c5bc8}.wd-manage-link-danger{color:#d92d20}
+.wd-manage-link{color:var(--wd-primary,#2c5bc8)}.wd-manage-link-danger{color:var(--wd-danger,#d92d20)}
 .wd-manage-recipient{display:inline-flex;max-width:180px;margin:2px 4px 2px 0;padding:5px 8px;border-radius:14px;background:#f1f3f5;color:#555c63;font-size:11px}
 .wd-manage-status{display:inline-flex;padding:4px 8px;border-radius:13px;background:#edf8f0;color:#258046;font-size:11px}
 .wd-manage-empty{min-height:330px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;color:#747b82;font-size:13px;text-align:center}
@@ -5759,4 +5761,91 @@ html[data-theme="dark"] .search-results{
 .theme-aware-page{
   font-family:var(--user-font-family),Arial,system-ui,sans-serif !important;
   color:var(--wd-text,#212121);
+  background:var(--wd-canvas,#fff);
+}
+
+/* User accent on admin, manage, and details surfaces */
+:is(.admin-theme-content,.admin-console-shell,.theme-aware-page,.wd-manage-page,.zoho-file-details) :is(
+  .text-\[\#175cd3\],
+  .text-\[\#2c66dd\],
+  .text-\[\#2f6ee5\],
+  .text-\[\#2f6fec\],
+  .text-\[\#2457B8\],
+  .text-\[\#1a73e8\],
+  .text-\[\#2c5bc8\],
+  .text-\[\#315da8\],
+  .text-\[\#2758aa\]
+){color:var(--wd-primary)!important}
+:is(.admin-theme-content,.admin-console-shell,.theme-aware-page,.wd-manage-page,.zoho-file-details) :is(
+  .border-\[\#175cd3\],
+  .border-\[\#2c66dd\],
+  .border-\[\#2f6ee5\],
+  .border-\[\#2457B8\],
+  .border-\[\#1a73e8\],
+  .border-\[\#2c5bc8\]
+){border-color:var(--wd-primary)!important}
+:is(.admin-theme-content,.admin-console-shell,.theme-aware-page) :is(
+  .bg-\[\#2c66dd\],
+  .bg-\[\#175cd3\],
+  .bg-\[\#2f6ee5\],
+  .bg-\[\#2f6fec\],
+  .bg-\[\#2c5bc8\],
+  .bg-\[\#1a73e8\],
+  .bg-\[\#8eaff5\]
+){background-color:var(--wd-primary)!important;color:#fff!important}
+:is(.admin-theme-content,.admin-console-shell,.theme-aware-page) :is(
+  .bg-\[\#edf3ff\],
+  .bg-\[\#dfe9ff\],
+  .bg-\[\#eef4ff\],
+  .bg-\[\#eef6ff\],
+  .bg-\[\#f7faff\],
+  .bg-\[\#f8fbff\],
+  .bg-\[\#f1f6ff\],
+  .bg-\[\#fbfdff\],
+  .bg-\[\#eff6ff\],
+  .bg-\[\#eef3ff\]
+){background-color:var(--wd-primary-light)!important}
+:is(.admin-theme-content,.admin-console-shell,.theme-aware-page) :is(.focus\:border-\[\#175cd3\],.focus\:border-\[\#2c66dd\]):focus,
+:is(.admin-theme-content,.admin-console-shell,.theme-aware-page) :is(.hover\:border-\[\#175cd3\],.hover\:border-\[\#2c66dd\]):hover{
+  border-color:var(--wd-primary)!important;
+}
+.admin-console-shell button.admin-underline-tab.font-semibold,
+.admin-console-shell .admin-activity-tab.is-active{
+  color:var(--wd-primary)!important;
+  border-color:var(--wd-primary)!important;
+}
+html[data-theme="dark"] :is(.admin-theme-content,.admin-console-shell,.theme-aware-page,.wd-manage-page,.zoho-file-details) :is(
+  .text-\[\#555\],
+  .text-\[\#5f6368\],
+  .text-\[\#333\],
+  .text-\[\#202124\],
+  .text-\[\#374151\],
+  .text-\[\#1f1f1f\]
+){color:var(--wd-text)!important}
+html[data-theme="dark"] :is(.admin-theme-content,.theme-aware-page) :is(.bg-slate-50,.bg-slate-100,.bg-\[\#f7f7f7\],.bg-\[\#fafafa\],.bg-\[\#fafbfc\]){
+  background-color:var(--wd-bg)!important;
+}
+html[data-theme="dark"] .wd-manage-table tr:hover td{background:var(--wd-hover)}
+html[data-theme="dark"] .wd-manage-info,
+html[data-theme="dark"] .wd-manage-recipient{
+  background:var(--wd-bg);
+  color:var(--wd-text);
+  border-color:var(--wd-line);
+}
+html[data-theme="dark"] .team-manage-tab.is-active{background:var(--wd-bg)}
+html[data-theme="dark"] .theme-aware-page .bg-white,
+html[data-theme="dark"] .zoho-file-details .bg-white{
+  background-color:var(--wd-surface,#1e293b)!important;
+}
+html[data-theme="dark"] .theme-aware-page :is(.text-slate-950,.text-slate-900,.text-slate-800,.text-slate-700),
+html[data-theme="dark"] .zoho-file-details :is(.text-slate-950,.text-slate-900,.text-slate-800,.text-slate-700){
+  color:var(--wd-text)!important;
+}
+html[data-theme="dark"] .theme-aware-page :is(.text-slate-600,.text-slate-500,.text-slate-400),
+html[data-theme="dark"] .zoho-file-details :is(.text-slate-600,.text-slate-500,.text-slate-400){
+  color:var(--wd-text-muted,#cbd5e1)!important;
+}
+html[data-theme="dark"] .theme-aware-page :is(.border-slate-200,.border-slate-100),
+html[data-theme="dark"] .zoho-file-details :is(.border-slate-200,.border-slate-100){
+  border-color:var(--wd-line)!important;
 }

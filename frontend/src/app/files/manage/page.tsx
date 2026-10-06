@@ -80,11 +80,11 @@ export default function ManageMyFoldersPage() {
         <div className="wd-manage-title"><Icons.folder size={20} /><strong>{ar ? "مجلداتي" : "My Folders"}</strong></div>
         <button type="button" className="wd-manage-close" onClick={() => router.push("/files")} aria-label="Close">×</button>
       </div>
-      <div className="wd-manage-tabs" role="tablist">
-        <button type="button" className={tab === "trash" ? "is-active" : ""} onClick={() => selectTab("trash")}><Icons.trash size={19} /><span>{ar ? "سلة المهملات" : "Trash"}</span></button>
-        <button type="button" className={tab === "shared" ? "is-active" : ""} onClick={() => selectTab("shared")}><Icons.share size={19} /><span>{ar ? "العناصر المشتركة" : "Shared Items"}</span></button>
-        <button type="button" className={tab === "large" ? "is-active" : ""} onClick={() => selectTab("large")}><Icons.doc size={19} /><span>{ar ? "الملفات الكبيرة" : "Large Files"}</span></button>
-      </div>
+      <nav className="team-manage-nav" role="tablist">
+        <button type="button" role="tab" aria-selected={tab === "trash"} className={`team-manage-tab ${tab === "trash" ? "is-active" : ""}`} onClick={() => selectTab("trash")}><Icons.trash size={20} /><span>{ar ? "سلة المهملات" : "Trash"}</span></button>
+        <button type="button" role="tab" aria-selected={tab === "shared"} className={`team-manage-tab ${tab === "shared" ? "is-active" : ""}`} onClick={() => selectTab("shared")}><Icons.share size={20} /><span>{ar ? "العناصر المشتركة" : "Shared Items"}</span></button>
+        <button type="button" role="tab" aria-selected={tab === "large"} className={`team-manage-tab ${tab === "large" ? "is-active" : ""}`} onClick={() => selectTab("large")}><Icons.doc size={20} /><span>{ar ? "الملفات الكبيرة" : "Large Files"}</span></button>
+      </nav>
 
       {tab === "trash" ? (
         <TrashPanel rows={trash} loading={loading} ar={ar} onRestore={(id) => runConfirmed({ title: ar ? "استعادة الملف" : "Restore File", description: ar ? "سيتم إعادة الملف إلى موقعه السابق." : "The file will be restored to its previous location.", confirm: ar ? "استعادة" : "Restore", run: async () => { await restoreFile(id); await load("trash"); } })} onDeleteForever={(id) => runConfirmed({ title: ar ? "حذف الملف نهائيًا" : "Delete Forever", description: ar ? "لا يمكن التراجع عن حذف الملف نهائيًا." : "This file will be permanently deleted and cannot be restored.", confirm: ar ? "حذف نهائي" : "Delete Forever", danger: true, run: async () => { await permanentDeleteFile(id); await load("trash"); } })} onEmpty={() => runConfirmed({ title: ar ? "إفراغ سلة المهملات" : "Empty Trash", description: ar ? "سيتم حذف جميع العناصر الموجودة في سلة المهملات نهائيًا." : "All items currently in Trash will be permanently deleted.", confirm: ar ? "إفراغ السلة" : "Empty Trash", danger: true, run: async () => { await emptyTrash(); await load("trash"); } })} />
