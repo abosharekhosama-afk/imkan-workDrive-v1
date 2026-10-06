@@ -130,3 +130,12 @@ export function getFileDetails(id: string) { return apiRequest<FileDetailsRespon
 
 export type FileDlpDecision={fileId:string;labels:Array<{id:string;name:string;color?:string|null;actions:string[];source:string}>;blocked:{download:boolean;copy:boolean;print:boolean;externalShare:boolean};warning:boolean;watermark:{enabled:boolean;text:string|null}};
 export const getFileDlp=(id:string)=>apiRequest<FileDlpDecision>(`/files/${id}/dlp`);
+
+/** Assign a manual DLP classification label to a file (policy enforcement). */
+export function addDlpLabel(fileId: string, labelId: string) {
+  return apiRequest<{ ok?: boolean }>(`/files/${fileId}/dlp/labels/${labelId}`, { method: "POST" });
+}
+
+export function removeDlpLabel(fileId: string, labelId: string) {
+  return apiRequest<{ ok?: boolean }>(`/files/${fileId}/dlp/labels/${labelId}`, { method: "DELETE" });
+}

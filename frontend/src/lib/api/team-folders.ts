@@ -13,6 +13,7 @@ export type TeamFolderRecord = {
   isPublicToOrg?: boolean;
   allowExternalSharing?: boolean;
   allowViewerDownloads?: boolean;
+  allowEmailUploads?: boolean;
   memberCount?: number;
   updatedAt?: string | null;
   totalSize?: number | null;
@@ -58,7 +59,7 @@ export async function renameTeamFolder(id: string, name: string): Promise<TeamFo
 
 export function updateTeamFolderSettings(
   id: string,
-  settings: { isPublicToOrg?: boolean; allowExternalSharing?: boolean; allowViewerDownloads?: boolean },
+  settings: { isPublicToOrg?: boolean; allowExternalSharing?: boolean; allowViewerDownloads?: boolean; allowEmailUploads?: boolean },
 ): Promise<TeamFolderRecord> {
   return apiRequest<TeamFolderRecord>(`/team-folders/${id}/settings`, { method: "PATCH", body: JSON.stringify(settings) }).then((result) => { emitGlobalToast({message:"Team Folder settings updated",messageAr:"تم تحديث إعدادات مجلد الفريق"}); return result; });
 }
