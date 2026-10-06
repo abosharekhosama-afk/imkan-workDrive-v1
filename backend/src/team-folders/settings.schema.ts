@@ -4,6 +4,7 @@ export type UpdateTeamFolderSettingsInput = {
   isPublicToOrg?: boolean;
   allowExternalSharing?: boolean;
   allowViewerDownloads?: boolean;
+  allowEmailUploads?: boolean;
 };
 
 export function parseUpdateTeamFolderSettings(body: unknown): UpdateTeamFolderSettingsInput {
@@ -11,7 +12,7 @@ export function parseUpdateTeamFolderSettings(body: unknown): UpdateTeamFolderSe
     throw new BadRequestException('Invalid team folder settings payload');
   }
   const record = body as Record<string, unknown>;
-  const keys = ['isPublicToOrg', 'allowExternalSharing', 'allowViewerDownloads'];
+  const keys = ['isPublicToOrg', 'allowExternalSharing', 'allowViewerDownloads', 'allowEmailUploads'];
   for (const key of Object.keys(record)) {
     if (!keys.includes(key)) throw new BadRequestException(`Unsupported setting: ${key}`);
     if (typeof record[key] !== 'boolean') throw new BadRequestException(`Invalid ${key}`);
@@ -20,5 +21,6 @@ export function parseUpdateTeamFolderSettings(body: unknown): UpdateTeamFolderSe
     ...(typeof record.isPublicToOrg === 'boolean' ? { isPublicToOrg: record.isPublicToOrg } : {}),
     ...(typeof record.allowExternalSharing === 'boolean' ? { allowExternalSharing: record.allowExternalSharing } : {}),
     ...(typeof record.allowViewerDownloads === 'boolean' ? { allowViewerDownloads: record.allowViewerDownloads } : {}),
+    ...(typeof record.allowEmailUploads === 'boolean' ? { allowEmailUploads: record.allowEmailUploads } : {}),
   };
 }

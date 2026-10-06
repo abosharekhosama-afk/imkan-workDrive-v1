@@ -812,7 +812,8 @@ export class TeamFoldersService {
       ...(await this.computeTeamFolderStats(folder.id)),
       isPublicToOrg: folder.isPublicToOrg ?? false,
       allowExternalSharing: folder.allowExternalSharing ?? true,
-      allowViewerDownloads: folder.allowViewerDownloads ?? true,
+      allowViewerDownloads: folder.allowViewerDownloads,
+        allowEmailUploads: (folder as { allowEmailUploads?: boolean }).allowEmailUploads ?? false ?? true,
       archivedAt: folder.archivedAt ?? null,
     };
   }
