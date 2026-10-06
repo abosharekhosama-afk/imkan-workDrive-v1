@@ -76,7 +76,7 @@ export function PrimarySidebar() {
         <div className="primary-sidebar-team min-h-0 px-2 pb-1">
           <div className="flex items-center">
             <Link href="/files/team-folders" onClick={close} aria-current={teamActive ? "page" : undefined}
-              className={`flex h-10 min-w-0 flex-1 items-center gap-4 rounded-[16px] px-[15px] text-[14px] font-medium ${teamActive ? "bg-[var(--wd-active)] font-bold text-[#DBE3FA]" : "text-[#EEEEEE] hover:bg-white/[0.08]"}`}>
+              className={`wd-sidebar-item flex h-10 min-w-0 flex-1 items-center gap-4 rounded-[16px] px-[15px] text-[14px] font-medium ${teamActive ? "is-active bg-[var(--wd-sidebar-active-bg)] font-bold text-[var(--wd-sidebar-active-text)]" : "text-[var(--wd-sidebar-text)] hover:bg-white/[0.08]"}`}>
               <span aria-hidden="true" className={teamActive ? "text-[#DBE3FA]" : "text-[#9CA3AF]"}><Icons.users size={17} /></span>
               <span className="min-w-0 flex-1 truncate text-start">{label("nav.teamFolders")}</span>
             </Link>
