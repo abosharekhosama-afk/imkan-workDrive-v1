@@ -418,7 +418,7 @@ export class BackupService {
     }
   }
 
-  async executeRun(runId: string, orgId: string) {
+  async executeRun(runId: string, orgId: string): Promise<void> {
     const store = getTenantStore();
     if (!store?.orgId || store.orgId !== orgId) {
       return runWithTenant({ orgId, userId: store?.userId || 'backup-worker' }, () => this.executeRun(runId, orgId));
@@ -776,7 +776,7 @@ export class BackupService {
     return `${cleaned} (restored ${stamp})`.slice(0, 255);
   }
 
-  async executeRestore(jobId: string, user: AccessTokenPayload) {
+  async executeRestore(jobId: string, user: AccessTokenPayload): Promise<void> {
     const store = getTenantStore();
     if (!store?.orgId || store.orgId !== user.org_id) {
       return runWithTenant({ orgId: user.org_id, userId: user.sub }, () => this.executeRestore(jobId, user));
