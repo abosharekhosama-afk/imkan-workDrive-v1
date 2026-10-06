@@ -109,6 +109,7 @@ export default function TeamFolderManagePage() {
   const [settingsBusy, setSettingsBusy] = useState(false);
   const [panelLoading, setPanelLoading] = useState(false);
   const [activityRows, setActivityRows] = useState<TeamFolderActivity[]>([]);
+  const [activityFilter, setActivityFilter] = useState("ALL");
   const [trashRows, setTrashRows] = useState<TeamFolderTrashItem[]>([]);
   const [sharedRows, setSharedRows] = useState<TeamFolderSharedItem[]>([]);
   const [dataTemplates, setDataTemplates] = useState<DataTemplate[]>([]);
@@ -172,7 +173,10 @@ export default function TeamFolderManagePage() {
     setPanelLoading(true);
     const loadPanel = async () => {
       try {
-        if (tab === "activity") setActivityRows(await listTeamFolderActivity(id));
+        if (tab === "activity") {
+          const rows = await listTeamFolderActivity(id);
+          setActivityRows(Array.isArray(rows) ? rows : (rows as { data?: TeamFolderActivity[] })?.data ?? []);
+        }
         if (tab === "trash") setTrashRows(await listTeamFolderTrash(id));
         if (tab === "shared") setSharedRows(await listTeamFolderShared(id));
       } catch (cause) {
@@ -496,6 +500,19 @@ export default function TeamFolderManagePage() {
               <p className="mt-3 text-[13px] leading-6 text-[#666]">{locale === "ar" ? "خاص: يقتصر الوصول على الأعضاء المضافين. عام: يمكن لأعضاء المؤسسة الانضمام." : "Private limits access to added members. Public lets team members join the Team Folder."}</p>
               <div className="mt-7 divide-y divide-[#ededed] border-y border-[#ededed]">
                 <SettingRow title={locale === "ar" ? "السماح برفع الملفات عبر البريد الإلكتروني" : "Allow file uploads via email"} description={locale === "ar" ? "عند التفعيل يمكن قبول الملفات الواردة عبر عنوان البريد المرتبط بمجلد الفريق (حسب إعدادات المجموعة)." : "When enabled, this Team Folder can accept files submitted via its associated email address."} checked={Boolean((folder as { allowEmailUploads?: boolean } | null)?.allowEmailUploads)} disabled={!canRename || settingsBusy} onChange={(checked) => void updateSettings({ allowEmailUploads: checked })} />
+                {(folder as { allowEmailUploads?: boolean } | null)?.allowEmailUploads ? (
+                  <div className="rounded-[12px] border border-[#e5e5e5] bg-[#f8fafc] px-4 py-3 text-[12px] leading-6 text-[#444]">
+                    <div className="font-semibold text-[#222]">{locale === "ar" ? "عنوان الرفع عبر البريد لهذا المجلد" : "Email upload address for this Team Folder"}</div>
+                    <code className="mt-1 block select-all break-all text-[13px] text-[#2457B8]">
+                      {`teamfolder-${id}@upload.imkan.local`}
+                    </code>
+                    <p className="mt-2 text-[11px] text-[#666]">
+                      {locale === "ar"
+                        ? "أرسل رسالة إلى هذا العنوان مع الملفات كمرفقات. عند تفعيل الخيار ووجود معالج بريد وارد (Mail inbound / webhook) تُحفظ المرفقات داخل مجلد الفريق. بدون معالج البريد يبقى الإعداد مخزّناً كسياسة فقط."
+                        : "Send an email with file attachments to this address. When this setting is on and an inbound-mail processor (webhook) is configured, attachments are saved into the Team Folder. Without that processor the setting is stored as policy only."}
+                    </p>
+                  </div>
+                ) : null}
                 <SettingRow title={locale === "ar" ? "السماح لأعضاء مجلد الفريق بالمشاركة خارج الفريق" : "Allow Team Folder members to share outside your team"} description={locale === "ar" ? "يتحكم هذا الإعداد في المشاركة الخارجية لهذا المجلد." : "Controls whether this Team Folder permits external sharing."} checked={folder?.allowExternalSharing ?? true} disabled={role !== "ORG_ADMIN" && role !== "ADMIN" || settingsBusy} onChange={(checked) => void updateSettings({ allowExternalSharing: checked })} />
                 <SettingRow title={locale === "ar" ? "إظهار خيارات التنزيل والطباعة" : "Show download and print options"} description={locale === "ar" ? "يتحكم هذا الإعداد في تنزيل وطباعة المستخدمين ذوي صلاحية العرض." : "Controls download and print access for viewers in this Team Folder."} checked={folder?.allowViewerDownloads ?? true} disabled={role !== "ORG_ADMIN" && role !== "ADMIN" || settingsBusy} onChange={(checked) => void updateSettings({ allowViewerDownloads: checked })} />
               </div>
@@ -546,7 +563,7 @@ export default function TeamFolderManagePage() {
                   {locale === "ar" ? "تصدير تقرير النشاط" : "Export Activity Report"}
                 </button>
               </div>
-              {panelLoading ? <div className="py-12 text-center text-[13px] text-slate-500">Loading…</div> : activityRows.length === 0 ? <div className="py-16 text-center text-[14px] text-slate-500">{locale === "ar" ? "لا يوجد نشاط بعد" : "No activity yet"}</div> : <div className="relative mx-auto max-w-[610px] border-s border-[#d9dce0] ps-8">{(activityFilter === "ALL" ? activityRows : activityRows.filter((row) => String(row.action || "").toUpperCase().includes(activityFilter))).map((row) => <div key={row.id} className="relative mb-8"><span className="absolute -start-[9px] top-0 h-[18px] w-[18px] rounded-full border-4 border-white bg-[#e6e7e9]" /><div className="-ms-16 mb-1 w-12 text-end text-[12px] leading-4 text-[#555]">{formatDateLocalized(row.createdAt, locale)}</div><div className="flex items-start gap-3"><span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-slate-100 text-[10px] font-semibold text-slate-600">{(row.actor?.name || row.actor?.email || "You").slice(0,2).toUpperCase()}</span><div><strong className="block text-[13px] text-[#2457B8]">{row.actor?.name || row.actor?.email || "You"}</strong><div className="text-[13px] text-[#333]">{row.action.replaceAll("_", " ")}</div>{row.metadata && typeof row.metadata === "object" && "name" in row.metadata ? <div className="mt-1 text-[13px] text-[#555]">{String(row.metadata.name)}</div> : null}</div></div></div>)}</div>}
+              {panelLoading ? <div className="py-12 text-center text-[13px] text-slate-500">Loading…</div> : activityRows.length === 0 ? <div className="py-16 text-center text-[14px] text-slate-500">{locale === "ar" ? "لا يوجد نشاط بعد" : "No activity yet"}</div> : <div className="relative mx-auto max-w-[610px] border-s border-[#d9dce0] ps-8">{(activityFilter === "ALL" ? activityRows : activityRows.filter((row) => String(row.action || "").toUpperCase().includes(activityFilter))).map((row) => <div key={row.id} className="relative mb-8"><span className="absolute -start-[9px] top-0 h-[18px] w-[18px] rounded-full border-4 border-white bg-[#e6e7e9]" /><div className="-ms-16 mb-1 w-12 text-end text-[12px] leading-4 text-[#555]">{formatDateLocalized(row.createdAt, locale)}</div><div className="flex items-start gap-3"><span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-slate-100 text-[10px] font-semibold text-slate-600">{(row.actor?.name || row.actor?.email || "You").slice(0, 2).toUpperCase()}</span><div><strong className="block text-[13px] text-[#2457B8]">{row.actor?.name || row.actor?.email || "You"}</strong><div className="text-[13px] text-[#333]">{String(row.action || "").replaceAll("_", " ") || "—"}</div>{row.metadata && typeof row.metadata === "object" && "name" in row.metadata ? <div className="mt-1 text-[13px] text-[#555]">{String(row.metadata.name)}</div> : null}</div></div></div>)}</div>}
             </section>
           ) : null}
 
