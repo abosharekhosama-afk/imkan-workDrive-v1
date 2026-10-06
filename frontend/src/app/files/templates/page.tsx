@@ -471,7 +471,7 @@ export default function TemplatesPage() {
   const thumbnailSlug = (name: string) => name.toLowerCase().normalize("NFKD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
 
   return (
-    <div className="flex min-h-0 flex-1">
+    <div className="files-templates-page flex min-h-0 flex-1">
       {confirmModal}
       <SecondarySidebar section="templates" />
       <main className="min-w-0 flex-1 overflow-y-auto overflow-x-hidden bg-[var(--wd-surface,#fff)] text-[var(--wd-text,#212121)]" style={{ fontFamily: "var(--user-font-family), Arial, system-ui, sans-serif" }}>
