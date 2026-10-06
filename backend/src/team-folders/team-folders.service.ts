@@ -813,7 +813,7 @@ export class TeamFoldersService {
       isPublicToOrg: folder.isPublicToOrg ?? false,
       allowExternalSharing: folder.allowExternalSharing ?? true,
       allowViewerDownloads: folder.allowViewerDownloads,
-        allowEmailUploads: (folder as { allowEmailUploads?: boolean }).allowEmailUploads ?? false ?? true,
+        allowEmailUploads: (folder as { allowEmailUploads?: boolean }).allowEmailUploads ?? false,
       archivedAt: folder.archivedAt ?? null,
     };
   }
