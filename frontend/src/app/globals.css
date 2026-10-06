@@ -5657,3 +5657,93 @@ article.relative {
   z-index: 80 !important;
   position: absolute;
 }
+
+
+/* ===== Search filter popovers ABOVE results (v71 fix) ===== */
+.search-overlay{z-index:400 !important}
+.search-overlay-panel{overflow:visible !important;display:flex;flex-direction:column;max-height:calc(100vh - 12px)}
+.search-mainbar{position:relative;z-index:3;flex-shrink:0}
+.search-filters-row{
+  position:relative !important;
+  z-index:5 !important;
+  overflow-x:auto !important;
+  overflow-y:visible !important;
+  flex-shrink:0;
+}
+.search-filters-row > [data-search-filter]{position:relative;z-index:6}
+.search-filter-popover{
+  position:absolute !important;
+  top:calc(100% + 4px) !important;
+  left:0 !important;
+  z-index:1000 !important;
+  min-width:190px;
+  max-height:min(50vh,280px);
+  overflow-y:auto;
+  background:#fff !important;
+  box-shadow:0 12px 32px rgba(0,0,0,.18) !important;
+}
+.search-results{
+  position:relative !important;
+  z-index:1 !important;
+  flex:1 1 auto;
+  min-height:0;
+  max-height:none !important;
+  overflow:auto;
+}
+
+/* ===== Theme + font on ALL admin console surfaces ===== */
+.admin-console-shell,
+.admin-console-shell *{
+  font-family:var(--user-font-family),Arial,system-ui,sans-serif !important;
+}
+.admin-console-shell,
+.admin-theme-content{
+  color:var(--wd-text,#212121) !important;
+  background:var(--wd-canvas,#f7f7f7) !important;
+}
+.admin-console-shell .bg-white,
+.admin-console-shell [class*="bg-white"],
+.admin-theme-content .bg-white{
+  background-color:var(--wd-surface,#ffffff) !important;
+}
+.admin-console-shell .text-slate-900,
+.admin-console-shell .text-slate-800,
+.admin-console-shell .text-[#111827],
+.admin-console-shell .text-[#212121],
+.admin-console-shell h1,.admin-console-shell h2,.admin-console-shell h3{
+  color:var(--wd-text,#212121) !important;
+}
+.admin-console-shell .text-slate-600,
+.admin-console-shell .text-slate-500,
+.admin-console-shell .text-slate-400,
+.admin-console-shell .text-[#6b7280]{
+  color:var(--wd-muted,#6b7280) !important;
+}
+.admin-console-shell .border-slate-200,
+.admin-console-shell .border-[#EDEDED],
+.admin-console-shell .border-gray-200{
+  border-color:var(--wd-line,#e5e7eb) !important;
+}
+html[data-theme="dark"] .admin-console-shell,
+html[data-theme="dark"] .admin-theme-content{
+  color:var(--wd-text,#e8eaed) !important;
+  background:var(--wd-canvas,#0f1115) !important;
+}
+html[data-theme="dark"] .admin-console-shell .bg-white,
+html[data-theme="dark"] .admin-console-shell [class*="bg-white"]{
+  background-color:var(--wd-surface,#171a21) !important;
+}
+html[data-theme="dark"] .search-filter-popover,
+html[data-theme="dark"] .search-overlay-panel,
+html[data-theme="dark"] .search-results{
+  background:var(--wd-surface,#171a21) !important;
+  color:var(--wd-text,#e8eaed) !important;
+}
+
+/* Workspace theme inheritance */
+.imkan-workspace-layout,
+.imkan-workspace-content,
+.theme-aware-page{
+  font-family:var(--user-font-family),Arial,system-ui,sans-serif !important;
+  color:var(--wd-text,#212121);
+}
