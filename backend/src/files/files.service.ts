@@ -1353,6 +1353,60 @@ export class FilesService {
     }));
   }
 
+  /**
+   * Soft-delete selected non-current versions. Current (top) version is never deleted.
+   * Marks status DELETED so the UI can show them under the Deleted filter.
+   */
+  async bulkDeleteVersions(
+    user: AccessTokenPayload,
+    fileId: string,
+    versionIds: string[],
+  ): Promise<{ deleted: number; skipped: number }> {
+    if (!versionIds.length) {
+      throw new BadRequestException('versionIds is required');
+    }
+    const file = await this.prisma.file.findFirst({
+      where: { id: fileId, deletedAt: null, orgId: user.org_id },
+      select: { id: true, orgId: true, ownerId: true, folder: { select: { teamFolderId: true } } },
+    });
+    if (!file || !(await this.canReadFile(user, file))) {
+      throw new NotFoundException('File not found');
+    }
+    if (!(await this.effective.canWrite(user, ResourceType.FILE, fileId))) {
+      throw new ForbiddenException('Not allowed to delete versions of this file');
+    }
+    const versions = await this.prisma.fileVersion.findMany({
+      where: { fileId, orgId: user.org_id, uploadStatus: UploadStatus.COMPLETE },
+      orderBy: { versionNumber: 'desc' },
+      select: { id: true, versionNumber: true, status: true },
+    });
+    const currentId = versions[0]?.id;
+    const deletable = new Set(
+      versions
+        .filter((v) => v.id !== currentId && v.status !== VersionStatus.DELETED)
+        .map((v) => v.id),
+    );
+    const toDelete = versionIds.filter((id) => deletable.has(id));
+    const skipped = versionIds.length - toDelete.length;
+    if (!toDelete.length) {
+      return { deleted: 0, skipped };
+    }
+    await this.prisma.fileVersion.updateMany({
+      where: { id: { in: toDelete }, fileId, orgId: user.org_id },
+      data: { status: VersionStatus.DELETED },
+    });
+    await this.prisma.fileActivity.create({
+      data: {
+        orgId: user.org_id,
+        fileId,
+        userId: user.sub,
+        action: 'VERSION_DELETE',
+        metadata: { versionIds: toDelete, count: toDelete.length },
+      },
+    }).catch(() => undefined);
+    return { deleted: toDelete.length, skipped };
+  }
+
   async restoreVersion(
     user: AccessTokenPayload,
     fileId: string,

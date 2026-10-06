@@ -209,6 +209,17 @@ export class FilesController {
     return this.files.restoreVersionById(user, id, versionId);
   }
 
+  /** Soft-delete one or more non-current versions (Zoho WorkDrive parity). */
+  @Post(':id/versions/bulk-delete')
+  bulkDeleteVersions(
+    @CurrentUser() user: AccessTokenPayload,
+    @Param('id', new ParseUUIDPipe({ version: '4' })) id: string,
+    @Body() body: { versionIds?: string[] },
+  ) {
+    const versionIds = Array.isArray(body?.versionIds) ? body.versionIds.filter((v) => typeof v === 'string') : [];
+    return this.files.bulkDeleteVersions(user, id, versionIds);
+  }
+
   @Get(':id/versions/:versionRef/download')
   async downloadVersion(
     @CurrentUser() user: AccessTokenPayload,
