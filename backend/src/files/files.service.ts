@@ -1400,8 +1400,8 @@ export class FilesService {
         orgId: user.org_id,
         fileId,
         userId: user.sub,
-        action: 'VERSION_DELETE',
-        metadata: { versionIds: toDelete, count: toDelete.length },
+        action: AuditAction.DELETE,
+        metadata: { versionIds: toDelete, count: toDelete.length, kind: 'VERSION_DELETE' },
       },
     }).catch(() => undefined);
     return { deleted: toDelete.length, skipped };
