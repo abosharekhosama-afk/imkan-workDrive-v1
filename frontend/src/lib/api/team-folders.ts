@@ -80,8 +80,28 @@ export type TeamFolderSharedItem = {
   recipients: Array<{ id: string; name: string | null; email: string }>;
 };
 
-export function listTeamFolderActivity(id: string): Promise<TeamFolderActivity[]> {
-  return apiRequest<TeamFolderActivity[]>(`/team-folders/${id}/activity`);
+export async function listTeamFolderActivity(id: string): Promise<TeamFolderActivity[]> {
+  const raw = await apiRequest<unknown>(`/team-folders/${id}/activity`);
+  const list = Array.isArray(raw)
+    ? raw
+    : Array.isArray((raw as { data?: unknown })?.data)
+      ? (raw as { data: unknown[] }).data
+      : [];
+  return list.map((row) => {
+    const r = (row && typeof row === "object" ? row : {}) as Record<string, unknown>;
+    const actor = (r.actor && typeof r.actor === "object" ? r.actor : null) as TeamFolderActivity["actor"];
+    const created = r.createdAt ?? r.created_at ?? "";
+    return {
+      id: String(r.id ?? `${r.resourceId ?? ""}-${created}`),
+      action: String(r.action ?? ""),
+      resourceType: String(r.resourceType ?? r.resource_type ?? ""),
+      resourceId: String(r.resourceId ?? r.resource_id ?? ""),
+      actorId: (r.actorId as string | null) ?? (r.actor_id as string | null) ?? null,
+      createdAt: typeof created === "string" ? created : created instanceof Date ? created.toISOString() : String(created),
+      actor,
+      metadata: (r.metadata && typeof r.metadata === "object" ? r.metadata : undefined) as Record<string, unknown> | undefined,
+    };
+  });
 }
 export function listTeamFolderTrash(id: string): Promise<TeamFolderTrashItem[]> {
   return apiRequest<TeamFolderTrashItem[]>(`/team-folders/${id}/trash`);
