@@ -138,7 +138,7 @@ function emptyOperation(op: string): Operation {
 
 function PortEditor({ port, ar, onChange, onRemove }: { port: Port; ar: boolean; onChange: (p: Port) => void; onRemove: () => void }) {
   return (
-    <div className="grid gap-2 rounded-xl border border-slate-200 bg-white p-3 sm:grid-cols-[1fr_1fr_120px_auto]">
+    <div className="workflow-ui admin-custom-functions-page grid gap-2 rounded-xl border border-slate-200 bg-white p-3 sm:grid-cols-[1fr_1fr_120px_auto]">
       <input className="wf-input" value={port.key} onChange={(e) => onChange({ ...port, key: e.target.value })} placeholder={ar ? "المفتاح" : "key"} />
       <input className="wf-input" value={port.label} onChange={(e) => onChange({ ...port, label: e.target.value })} placeholder={ar ? "الاسم الظاهر" : "Display name"} />
       <ImkanOptionPicker value={port.type} onChange={(v) => onChange({ ...port, type: v || "text" })} options={toImkanPickerOptions(["text", "number", "boolean", "date", "datetime", "object"])} ariaLabel={ar ? "نوع البيانات" : "Data type"} fullWidth />
