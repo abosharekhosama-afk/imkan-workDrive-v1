@@ -85,18 +85,33 @@ export class SearchService {
       ? { folderId: { in: scopedFolderIds } }
       : {};
 
+    // MySQL-safe: avoid Prisma FULLTEXT `search` (requires indexes and throws without them).
+    // Use contains + token OR matching; ranking happens in scoreText after fetch.
+    const tokens = query.split(/\s+/).filter((t) => t.length > 1).slice(0, 5);
+    const nameOr = [
+      { name: { contains: query } },
+      ...tokens.map((t) => ({ name: { contains: t } })),
+    ];
+    const fileNameOr = [
+      { name: { contains: query } },
+      { originalName: { contains: query } },
+      { metadata: { title: { contains: query } } },
+      { metadata: { description: { contains: query } } },
+      { metadata: { contentText: { contains: query } } },
+      { metadata: { ocrText: { contains: query } } },
+      ...tokens.flatMap((t) => [
+        { name: { contains: t } },
+        { originalName: { contains: t } },
+      ]),
+    ];
+
     const [folders, files] = await Promise.all([
       this.prisma.folder.findMany({
         where: {
           orgId: user.org_id,
           AND: [
-            {
-              OR: [
-                { name: { search: query } },
-                { name: { contains: query } },
-                ...query.split(/\s+/).filter((t) => t.length > 1).slice(0, 5).map((t) => ({ name: { contains: t } })),
-              ],
-            },
+            { OR: nameOr },
+            // Visible folders: owned, team folders, or personal under user
             { OR: [{ teamFolderId: { not: null } }, { ownerId: user.sub }] },
           ],
           ...folderScopeWhere,
@@ -107,20 +122,7 @@ export class SearchService {
       this.prisma.file.findMany({
         where: {
           orgId: user.org_id, deletedAt: null, ...typeFilter, ...(options.owner ? { ownerId: options.owner } : {}), ...dateRange, ...tagWhere,
-          OR: [
-            { name: { search: query } },
-            { originalName: { search: query } },
-            { name: { contains: query } },
-            { originalName: { contains: query } },
-            { metadata: { title: { contains: query } } },
-            { metadata: { description: { contains: query } } },
-            { metadata: { contentText: { contains: query } } },
-            { metadata: { ocrText: { contains: query } } },
-            ...query.split(/\s+/).filter((t) => t.length > 1).slice(0, 5).flatMap((t) => [
-              { name: { contains: t } },
-              { originalName: { contains: t } },
-            ]),
-          ],
+          OR: fileNameOr,
           AND: [{ OR: [{ folder: null }, { folder: { teamFolderId: { not: null } } }, { folder: { ownerId: user.sub } }] }], ...fileFolderScopeWhere,
         },
         include: {
