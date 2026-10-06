@@ -5,7 +5,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { overlaySidebarSelector, readContentLane } from "../../lib/overlay-bounds-logic";
 import { useLocale } from "../locale-provider";
 import { ThemeToggle } from "../theme-toggle";
-import { listNotifications, type NotificationRecord } from "../../lib/api/notifications";
+import { listNotifications, subscribeToNotifications, type NotificationRecord } from "../../lib/api/notifications";
 import { getTeamFolder, listTeamFolderMembers, type TeamFolderRecord } from "../../lib/api/team-folders";
 import { readScope, useShell, type ScopeDetail } from "./shell-context";
 import { Icons } from "./icons";
@@ -45,7 +45,23 @@ export function TopHeader({ adminMode = false }: { adminMode?: boolean }) {
     } catch { /* noop */ }
     const token = typeof window !== "undefined" ? localStorage.getItem("workdrive_access_token") : null;
     if (!token) return;
-    listNotifications().then(setNotes).catch(() => undefined);
+    let cancelled = false;
+    listNotifications()
+      .then((rows) => { if (!cancelled) setNotes(rows); })
+      .catch(() => { if (!cancelled) setNotes([]); });
+
+    // Real-time notifications (SSE). Badge updates without refreshing the page.
+    const unsubscribe = subscribeToNotifications((notification) => {
+      if (cancelled) return;
+      setNotes((prev) => [notification, ...prev.filter((n) => n.id !== notification.id)].slice(0, 100));
+    });
+    // Fallback poll in case SSE is blocked by proxy / multi-instance deploy
+    const poll = window.setInterval(() => {
+      listNotifications()
+        .then((rows) => { if (!cancelled) setNotes(rows); })
+        .catch(() => undefined);
+    }, 20000);
+
     setScope(readScope());
     const onScope = (e: Event) => setScope((e as CustomEvent<ScopeDetail>).detail ?? { folderId: null, folderName: null });
     const onProfile = (event: Event) => {
@@ -59,6 +75,9 @@ export function TopHeader({ adminMode = false }: { adminMode?: boolean }) {
     window.addEventListener("workdrive:scope", onScope);
     window.addEventListener("workdrive:profile", onProfile);
     return () => {
+      cancelled = true;
+      unsubscribe();
+      window.clearInterval(poll);
       window.removeEventListener("workdrive:scope", onScope);
       window.removeEventListener("workdrive:profile", onProfile);
     };
@@ -242,7 +261,16 @@ export function TopHeader({ adminMode = false }: { adminMode?: boolean }) {
         >
           {mobileNavOpen ? <Icons.x size={18} /> : <Icons.menu size={18} />}
         </button>
-
+        {adminMode ? (
+          <button
+            type="button"
+            className="wd-icon-btn hidden shrink-0 md:inline-flex"
+            aria-label={locale === "ar" ? "طي/فتح الشريط الجانبي" : "Toggle admin sidebar"}
+            onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
+          >
+            <Icons.menu size={18} />
+          </button>
+        ) : null}
         <span className="max-w-[42vw] truncate text-[15px] font-semibold text-[#212121]">{resolveTopHeaderTitle({ pathname, scopeFolderName: scope.folderName, adminMode, locale, label })}</span>
         {showMyFoldersManage ? (
           <div ref={manageRef} className="relative ms-1">
@@ -335,8 +363,7 @@ function HeaderSearchOverlay({ onClose, inputRef }: { onClose: () => void; input
     window.addEventListener("workdrive:search-in-folder", onFolderSearch);
     return () => window.removeEventListener("workdrive:search-in-folder", onFolderSearch);
   }, []);
-  const [rows, setRows] = useState<{ folders: Array<{ id: string; name: string; ownerId?: string; teamFolderId?: string | null }>; files: Array<{ id: string; name: string; ownerId?: string; mimeType?: string | null; updatedAt?: string | null; name?: string }> }>({ folders: [], files: [] });
-  const [searchError, setSearchError] = useState("");
+  const [rows, setRows] = useState<{ folders: Array<{ id: string; name: string; ownerId?: string; teamFolderId?: string | null }>; files: Array<{ id: string; name: string; ownerId?: string; mimeType?: string | null; updatedAt?: string | null }> }>({ folders: [], files: [] });
   useEffect(() => {
     try {
       const raw = localStorage.getItem("workdrive_user");
@@ -358,62 +385,37 @@ function HeaderSearchOverlay({ onClose, inputRef }: { onClose: () => void; input
   useEffect(() => {
     if (!q.trim()) {
       setRows({ folders: [], files: [] });
-      setSearchError("");
       return;
     }
     let live = true;
-    const timer = window.setTimeout(() => {
-      void (async () => {
-        try {
-          const { searchNames } = await import("../../lib/api/search");
-          const raw = await searchNames(
-            q.trim(),
-            scope === "folders" ? "folders" : scope === "files" ? "files" : "all",
-            folderScope?.folderId ? { folderId: folderScope.folderId } : {},
-          );
-          if (!live) return;
-          // Unwrap accidental { data: ... } envelopes from proxies
-          const r = (raw && typeof raw === "object" && Array.isArray((raw as { files?: unknown }).files))
-            ? raw
-            : (raw as { data?: typeof raw })?.data && typeof (raw as { data?: unknown }).data === "object"
-              ? (raw as { data: typeof raw }).data
-              : raw;
-          let files = Array.isArray(r?.files) ? [...r.files] : [];
-          let folders = Array.isArray(r?.folders) ? [...r.folders] : [];
-          const now = Date.now();
-          if (dateRange !== "all") {
-            const days = dateRange === "today" ? 1 : dateRange === "week" ? 7 : 30;
-            files = files.filter((f: { updatedAt?: string | null }) =>
-              f.updatedAt ? now - new Date(f.updatedAt).getTime() <= days * 86400000 : true,
-            );
-          }
-          if (fileType !== "all") {
-            files = files.filter((f: { mimeType?: string | null; name?: string }) => {
-              const m = (f.mimeType ?? "").toLowerCase();
-              const n = (f.name ?? "").toLowerCase();
-              if (fileType === "images") return m.startsWith("image/") || /\.(png|jpe?g|gif|webp|svg)$/i.test(n);
-              if (fileType === "pdf") return m === "application/pdf" || n.endsWith(".pdf");
-              return m.includes("document") || m.includes("word") || m.includes("text") || m.includes("spreadsheet") || m.includes("presentation") || /\.(docx?|xlsx?|pptx?|txt|md)$/i.test(n);
-            });
-          }
-          if (scope === "files") folders = [];
-          if (scope === "folders") files = [];
-          // Only apply "Created by me" when ownerId is present on the hit
-          if (createdBy === "me" && currentUserId) {
-            folders = folders.filter((f: { ownerId?: string }) => !f.ownerId || f.ownerId === currentUserId);
-            files = files.filter((f: { ownerId?: string }) => !f.ownerId || f.ownerId === currentUserId);
-          }
-          setSearchError("");
-          setRows({ folders: folders.slice(0, 12), files: files.slice(0, 20) });
-        } catch (err) {
-          if (!live) return;
-          console.error("[search]", err);
-          setRows({ folders: [], files: [] });
-          setSearchError(err instanceof Error ? err.message : "Search failed");
+    const t = window.setTimeout(() => {
+      import("../../lib/api/search").then(({ searchNames }) => searchNames(q.trim(), scope === "folders" ? "folders" : scope === "files" ? "files" : "all", { folderId: folderScope?.folderId }).then((r) => {
+        if (!live) return;
+        let files = (r.files ?? []);
+        const now = Date.now();
+        if (dateRange !== "all") {
+          const days = dateRange === "today" ? 1 : dateRange === "week" ? 7 : 30;
+          files = files.filter((f) => f.updatedAt ? now - new Date(f.updatedAt).getTime() <= days * 86400000 : false);
         }
-      })();
-    }, 200);
-    return () => { live = false; window.clearTimeout(timer); };
+        if (fileType !== "all") {
+          files = files.filter((f) => {
+            const m = (f.mimeType ?? "").toLowerCase();
+            if (fileType === "images") return m.startsWith("image/");
+            if (fileType === "pdf") return m === "application/pdf";
+            return m.includes("document") || m.includes("word") || m.includes("text") || m.includes("spreadsheet") || m.includes("presentation");
+          });
+        }
+        const folders = scope === "files" ? [] : (r.folders ?? []).filter((f) => createdBy !== "me" || !currentUserId || f.ownerId === currentUserId).slice(0, 8);
+        files = files.filter((f) => createdBy !== "me" || !currentUserId || f.ownerId === currentUserId);
+        setRows({
+          folders,
+          files: scope === "folders" ? [] : files.slice(0, 12),
+        });
+      }).catch(() => {
+        if (live) setRows({ folders: [], files: [] });
+      }));
+    }, 180);
+    return () => { live = false; window.clearTimeout(t); };
   }, [q, scope, fileType, dateRange, createdBy, currentUserId, folderScope?.folderId]);
 
   const clearFilters = () => {
@@ -509,9 +511,6 @@ function HeaderSearchOverlay({ onClose, inputRef }: { onClose: () => void; input
         </div>
 
         <div className="search-results">
-          {searchError ? (
-            <div className="search-no-results" role="alert">{searchError}</div>
-          ) : null}
           {!q.trim() ? (
             <div className="search-empty-prompt">{label("search.placeholder")}</div>
           ) : (

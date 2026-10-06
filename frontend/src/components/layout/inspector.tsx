@@ -210,12 +210,14 @@ export function InspectorPanel({ onVersionHistory }: { onVersionHistory?: (fileI
                   }}>{locale === "ar" ? "حفظ" : "Save"}</button>
                 </div>
               </div>
-            ) : (
+            ) : desc ? (
+              <p className="wd-zoho-details-desc">{desc}</p>
+            ) : null}
+            {selected.kind === "FILE" ? (
               <button type="button" onClick={() => {
                 const fileId = selected.file.id;
                 setInspectorOpen(false);
                 setMobileInspectorOpen(false);
-                // Always open the full details management page on the Versions tab
                 router.push(`/files/details/${encodeURIComponent(fileId)}?tab=versions`);
               }} className="wd-zoho-details-versions"><Icons.history size={15} /> <span>{locale === "ar" ? "عرض كل الإصدارات" : "View all versions"}</span></button>
             ) : null}

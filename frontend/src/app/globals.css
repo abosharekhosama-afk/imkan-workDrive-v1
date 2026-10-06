@@ -5557,8 +5557,8 @@ html[data-theme="dark"] .zoho-fd-panel{background:#1e293b;border-color:var(--wd-
 }
 .admin-theme-content .text-slate-900,
 .admin-theme-content .text-slate-800,
-.admin-theme-content .text-[#111827],
-.admin-theme-content .text-[#212121],
+.admin-theme-content .text-\[\#111827\],
+.admin-theme-content .text-\[\#212121\],
 .theme-aware-page .text-slate-900,
 .theme-aware-page .text-slate-800 {
   color: var(--wd-text, #212121) !important;
@@ -5571,7 +5571,7 @@ html[data-theme="dark"] .zoho-fd-panel{background:#1e293b;border-color:var(--wd-
   color: var(--wd-muted, #6b7280) !important;
 }
 .admin-theme-content .border-slate-200,
-.admin-theme-content .border-[#EDEDED],
+.admin-theme-content .border-\[\#EDEDED\],
 .theme-aware-page .border-slate-200 {
   border-color: var(--wd-line, #e5e7eb) !important;
 }
@@ -5708,19 +5708,19 @@ article.relative {
 }
 .admin-console-shell .text-slate-900,
 .admin-console-shell .text-slate-800,
-.admin-console-shell .text-[#111827],
-.admin-console-shell .text-[#212121],
+.admin-console-shell .text-\[\#111827\],
+.admin-console-shell .text-\[\#212121\],
 .admin-console-shell h1,.admin-console-shell h2,.admin-console-shell h3{
   color:var(--wd-text,#212121) !important;
 }
 .admin-console-shell .text-slate-600,
 .admin-console-shell .text-slate-500,
 .admin-console-shell .text-slate-400,
-.admin-console-shell .text-[#6b7280]{
+.admin-console-shell .text-\[\#6b7280\]{
   color:var(--wd-muted,#6b7280) !important;
 }
 .admin-console-shell .border-slate-200,
-.admin-console-shell .border-[#EDEDED],
+.admin-console-shell .border-\[\#EDEDED\],
 .admin-console-shell .border-gray-200{
   border-color:var(--wd-line,#e5e7eb) !important;
 }
