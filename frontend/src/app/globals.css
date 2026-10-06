@@ -781,12 +781,36 @@ html[data-theme="dark"] .zoho-top-actions .wd-btn-primary{background:var(--wd-pr
 
 /* ── Dark theme tokens (Zoho-style charcoal/slate, indigo accent) ────── */
 html[data-theme="dark"]{
-  --wd-primary:var(--user-accent-primary,#3b82f6);--wd-primary-dark:var(--user-accent-dark,#2563eb);--wd-primary-ink:var(--user-accent-ink,#93c5fd);--wd-primary-light:var(--user-accent-light,rgba(59,130,246,.16));
-  --wd-sidebar:#1e293b;--wd-sidebar-text:#cbd5e1;--wd-sidebar-muted:#94a3b8;
-  --wd-bg:#1a2232;--wd-canvas:#121824;--wd-line:#2e3b52;--wd-hover:#2d3a4e;--wd-text:#f1f5f9;
-  --imkan-color-bg:#1a2232;--imkan-color-fg:#f1f5f9;--imkan-color-muted:#94a3b8;
-  --imkan-color-surface:#1e293b;--imkan-color-border:#2e3b52;
-  --imkan-color-primary:#3b82f6;
+  /* Neutral gray night theme (not blue-tinted) — high contrast surfaces & dividers */
+  --wd-primary:var(--user-accent-primary,#6b8afd);
+  --wd-primary-dark:var(--user-accent-dark,#4f6ef0);
+  --wd-primary-ink:var(--user-accent-ink,#c5d0ff);
+  --wd-primary-light:var(--user-accent-light,rgba(107,138,253,.14));
+  --wd-sidebar:#141414;
+  --wd-sidebar-text:#e4e4e4;
+  --wd-sidebar-muted:#9a9a9a;
+  --wd-sidebar-active-text:#ffffff;
+  --wd-bg:#1c1c1c;
+  --wd-canvas:#111111;
+  --wd-panel:#1c1c1c;
+  --wd-panel-2:#242424;
+  --wd-line:#2f2f2f;
+  --wd-line-strong:#3d3d3d;
+  --wd-hover:#2a2a2a;
+  --wd-text:#ececec;
+  --wd-text-muted:#a8a8a8;
+  --wd-text-soft:#8c8c8c;
+  --wd-capsule:#4a4a4a;
+  --wd-menu-hover:#2a2a2a;
+  --wd-menu-border:#2f2f2f;
+  --wd-menu-shadow:0 12px 40px rgba(0,0,0,.55);
+  --wd-shadow-dark:0 14px 40px rgba(0,0,0,.55);
+  --imkan-color-bg:#1c1c1c;
+  --imkan-color-fg:#ececec;
+  --imkan-color-muted:#a8a8a8;
+  --imkan-color-surface:#242424;
+  --imkan-color-border:#2f2f2f;
+  --imkan-color-primary:var(--wd-primary);
 }
 html[data-theme="dark"] body{background:var(--wd-canvas)!important;color:var(--wd-text)!important}
 html[data-theme="dark"] .zoho-topbar,
@@ -1238,10 +1262,10 @@ html[data-theme="dark"] .zoho-member-remove:hover{background:#3b1d23;color:#f871
 .zoho-role-badge.organizer{background:var(--wd-primary-light);color:var(--wd-primary-ink);border-color:rgba(44,102,221,0.15)}
 .zoho-role-badge.editor{background:#f3ecfd;color:#6d28d9;border-color:#e0d2fb}
 .zoho-role-badge.viewer{background:#f1f3f5;color:#5b636e;border-color:#e3e6ea}
-html[data-theme="dark"] .zoho-role-badge.admin{background:#1e2a45;color:#93c5fd;border-color:#2e3b52}
-html[data-theme="dark"] .zoho-role-badge.organizer{background:#12332b;color:#6ee7b7;border-color:#2e3b52}
-html[data-theme="dark"] .zoho-role-badge.editor{background:#2a2140;color:#c4b5fd;border-color:#2e3b52}
-html[data-theme="dark"] .zoho-role-badge.viewer{background:#252b36;color:#cbd5e1;border-color:#2e3b52}
+html[data-theme="dark"] .zoho-role-badge.admin{background:#2a2a32;color:#93c5fd;border-color:#2f2f2f}
+html[data-theme="dark"] .zoho-role-badge.organizer{background:#12332b;color:#6ee7b7;border-color:#2f2f2f}
+html[data-theme="dark"] .zoho-role-badge.editor{background:#2a2140;color:#c4b5fd;border-color:#2f2f2f}
+html[data-theme="dark"] .zoho-role-badge.viewer{background:#2a2a2a;color:#cbd5e1;border-color:#2f2f2f}
 html[data-theme="dark"] .zoho-member-dropdown{background:var(--wd-bg);border-color:var(--wd-line);color:var(--wd-text)}
 
 /* ═══════════════════════════════════════════════════════════════════════
@@ -1275,12 +1299,12 @@ html[data-theme="dark"] .wd-name-cell .icon{background:var(--wd-hover)}
 html[data-theme="dark"] .wd-name-link{color:var(--wd-text)}
 html[data-theme="dark"] .wd-name-link:hover{color:#93c5fd}
 html[data-theme="dark"] .wd-badge-gray{background:var(--wd-hover);color:var(--wd-sidebar-muted);border-color:var(--wd-line)}
-html[data-theme="dark"] .wd-badge-green{background:#12332b;color:#6ee7b7;border-color:#2e3b52}
-html[data-theme="dark"] .wd-badge-blue{background:#1e2a45;color:#93c5fd;border-color:#2e3b52}
-html[data-theme="dark"] .wd-badge-red{background:#3b1d23;color:#fca5a5;border-color:#2e3b52}
-html[data-theme="dark"] .wd-alert{background:#3b1d23;border-color:#2e3b52;color:#fca5a5}
-html[data-theme="dark"] .wd-alert-info{background:#1e2a45;border-color:#2e3b52;color:#93c5fd}
-html[data-theme="dark"] .wd-alert-success{background:#12332b;border-color:#2e3b52;color:#6ee7b7}
+html[data-theme="dark"] .wd-badge-green{background:#12332b;color:#6ee7b7;border-color:#2f2f2f}
+html[data-theme="dark"] .wd-badge-blue{background:#2a2a32;color:#93c5fd;border-color:#2f2f2f}
+html[data-theme="dark"] .wd-badge-red{background:#3b1d23;color:#fca5a5;border-color:#2f2f2f}
+html[data-theme="dark"] .wd-alert{background:#3b1d23;border-color:#2f2f2f;color:#fca5a5}
+html[data-theme="dark"] .wd-alert-info{background:#2a2a32;border-color:#2f2f2f;color:#93c5fd}
+html[data-theme="dark"] .wd-alert-success{background:#12332b;border-color:#2f2f2f;color:#6ee7b7}
 html[data-theme="dark"] .wd-skel-row{border-bottom-color:var(--wd-line)}
 html[data-theme="dark"] .wd-skel-bar{background:var(--wd-hover)}
 html[data-theme="dark"] .imkan-chip{background:var(--wd-hover);border-color:var(--wd-line);color:var(--wd-sidebar-muted)}
@@ -3376,7 +3400,7 @@ html[data-theme="dark"] {
   --imkan-color-border: var(--wd-line);
   --imkan-color-focus: var(--wd-primary);
   --imkan-color-primary: var(--wd-primary);
-  --wd-panel: #1a2232;
+  --wd-panel: #1c1c1c;
   --wd-panel-2: #202a3a;
   --wd-text-strong: #f5f7fa;
   --wd-text-soft: #aeb8c6;
@@ -5045,7 +5069,7 @@ td.wd-index-letter-cell{
   z-index:3;
 }
 html[data-theme="dark"] td.wd-index-letter-cell{
-  background:#1e293b !important;
+  background:#242424 !important;
   color:#e2e8f0 !important;
   border-color:var(--wd-line) !important;
 }
@@ -5325,7 +5349,7 @@ html[data-theme="dark"] .wd-zoho-details-titlebar h2,
 html[data-theme="dark"] .wd-zoho-details-name,
 html[data-theme="dark"] .wd-zoho-details-owner strong,
 html[data-theme="dark"] .wd-zoho-details-meta strong{color:var(--wd-text)}
-html[data-theme="dark"] .wd-zoho-details-preview{background:#1e293b}
+html[data-theme="dark"] .wd-zoho-details-preview{background:#242424}
 
 /* ── Zoho File Details full page ─────────────────────────────────────────── */
 /* ── Zoho File Details full page (/files/details/[fileId]) ───────────────── */
@@ -5531,7 +5555,7 @@ html[data-theme="dark"] .zoho-fd-access-card{border-color:var(--wd-line)}
 html[data-theme="dark"] .zoho-fd-tab.is-active{color:var(--wd-primary);border-bottom-color:var(--wd-primary)}
 html[data-theme="dark"] .zoho-fd-btn-primary{background:var(--wd-primary)}
 html[data-theme="dark"] .zoho-fd-preview-box,
-html[data-theme="dark"] .zoho-fd-panel{background:#1e293b;border-color:var(--wd-line)}
+html[data-theme="dark"] .zoho-fd-panel{background:#242424;border-color:var(--wd-line)}
 
 /* Details empty state (inspector) */
 .wd-zoho-empty{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;padding:48px 18px;text-align:center;min-height:280px}
@@ -5855,7 +5879,7 @@ html[data-theme="dark"] .wd-manage-recipient{
 html[data-theme="dark"] .team-manage-tab.is-active{background:var(--wd-bg)}
 html[data-theme="dark"] .theme-aware-page .bg-white,
 html[data-theme="dark"] .zoho-file-details .bg-white{
-  background-color:var(--wd-surface,#1e293b)!important;
+  background-color:var(--wd-surface,#242424)!important;
 }
 html[data-theme="dark"] .theme-aware-page :is(.text-slate-950,.text-slate-900,.text-slate-800,.text-slate-700),
 html[data-theme="dark"] .zoho-file-details :is(.text-slate-950,.text-slate-900,.text-slate-800,.text-slate-700){
@@ -5900,3 +5924,270 @@ html[data-theme="dark"] .member-storage{color:var(--wd-text)}
 .backup-page .bg-\[\#0b63e5\]{background-color:var(--wd-primary)!important;color:#fff!important}
 .backup-page .bg-\[\#f5f9ff\],
 .backup-page .border-\[\#0b63e5\].bg-\[\#f5f9ff\]{background-color:var(--wd-primary-light)!important}
+
+
+/* ═══════════════════════════════════════════════════════════════════════
+   NIGHT THEME — neutral gray coverage (cards, tables, secondary rails)
+   Applies on top of existing dark rules; uses !important only where
+   components hardcode Tailwind bg-white / slate / #fff values.
+   ═══════════════════════════════════════════════════════════════════════ */
+
+html[data-theme="dark"] {
+  color-scheme: dark;
+}
+
+/* Page shells & main scroll surfaces */
+html[data-theme="dark"] .workdrive-frame,
+html[data-theme="dark"] .workdrive-main-scroll,
+html[data-theme="dark"] .imkan-workspace-layout,
+html[data-theme="dark"] .imkan-workspace-content,
+html[data-theme="dark"] .zoho-app-shell,
+html[data-theme="dark"] .wd-page,
+html[data-theme="dark"] .wd-file-browser,
+html[data-theme="dark"] .wd-file-browser-body {
+  background: var(--wd-canvas) !important;
+  color: var(--wd-text) !important;
+}
+
+/* Primary + secondary sidebars */
+html[data-theme="dark"] .primary-sidebar,
+html[data-theme="dark"] .secondary-sidebar,
+html[data-theme="dark"] .workflow-secondary-sidebar,
+html[data-theme="dark"] aside[data-overlay-bound="sidebar"],
+html[data-theme="dark"] .wd-mobile-nav-drawer {
+  background: var(--wd-sidebar) !important;
+  color: var(--wd-sidebar-text) !important;
+  border-color: var(--wd-line) !important;
+}
+html[data-theme="dark"] .secondary-sidebar {
+  background: var(--wd-panel-2) !important;
+  border-inline-end-color: var(--wd-line) !important;
+}
+html[data-theme="dark"] .secondary-sidebar a,
+html[data-theme="dark"] .secondary-sidebar button,
+html[data-theme="dark"] .secondary-sidebar nav {
+  color: var(--wd-sidebar-text) !important;
+}
+html[data-theme="dark"] .secondary-sidebar a:hover,
+html[data-theme="dark"] .secondary-sidebar button:hover {
+  background: var(--wd-hover) !important;
+}
+
+/* Top header / toolbars */
+html[data-theme="dark"] .zoho-topbar,
+html[data-theme="dark"] .wd-action-toolbar,
+html[data-theme="dark"] .zoho-action-bar,
+html[data-theme="dark"] [class*="action-toolbar"],
+html[data-theme="dark"] .wd-selection-bar {
+  background: var(--wd-bg) !important;
+  color: var(--wd-text) !important;
+  border-color: var(--wd-line) !important;
+}
+
+/* Cards & panels — kill hardcoded white */
+html[data-theme="dark"] .bg-white,
+html[data-theme="dark"] [class*="bg-white"],
+html[data-theme="dark"] .wd-card,
+html[data-theme="dark"] .zoho-grid-card,
+html[data-theme="dark"] .auth-card,
+html[data-theme="dark"] .wf-card,
+html[data-theme="dark"] .imkan-card,
+html[data-theme="dark"] .rounded-2xl.border.bg-white,
+html[data-theme="dark"] .rounded-xl.border.bg-white,
+html[data-theme="dark"] .rounded-\[16px\].border,
+html[data-theme="dark"] .rounded-\[12px\].border {
+  background: var(--wd-bg) !important;
+  color: var(--wd-text) !important;
+  border-color: var(--wd-line) !important;
+}
+
+/* Soft gray backgrounds → elevated panel */
+html[data-theme="dark"] .bg-slate-50,
+html[data-theme="dark"] .bg-slate-100,
+html[data-theme="dark"] .bg-\[\#f7f7f7\],
+html[data-theme="dark"] .bg-\[\#fafafa\],
+html[data-theme="dark"] .bg-\[\#fafbfc\],
+html[data-theme="dark"] .bg-\[\#f8fafc\],
+html[data-theme="dark"] .bg-\[\#F8FAFC\],
+html[data-theme="dark"] .bg-\[\#f4f7fb\] {
+  background: var(--wd-panel-2) !important;
+  color: var(--wd-text) !important;
+}
+
+/* Text contrast */
+html[data-theme="dark"] .text-slate-950,
+html[data-theme="dark"] .text-slate-900,
+html[data-theme="dark"] .text-slate-800,
+html[data-theme="dark"] .text-slate-700,
+html[data-theme="dark"] .text-\[\#202124\],
+html[data-theme="dark"] .text-\[\#212121\],
+html[data-theme="dark"] .text-\[\#2d2d2d\],
+html[data-theme="dark"] .text-\[\#333\],
+html[data-theme="dark"] .text-\[\#222\] {
+  color: var(--wd-text) !important;
+}
+html[data-theme="dark"] .text-slate-600,
+html[data-theme="dark"] .text-slate-500,
+html[data-theme="dark"] .text-slate-400,
+html[data-theme="dark"] .text-\[\#5f6368\],
+html[data-theme="dark"] .text-\[\#666\],
+html[data-theme="dark"] .text-\[\#555\],
+html[data-theme="dark"] .text-\[\#4F4F4F\] {
+  color: var(--wd-text-muted) !important;
+}
+
+/* Borders / dividers */
+html[data-theme="dark"] .border-slate-200,
+html[data-theme="dark"] .border-slate-100,
+html[data-theme="dark"] .border-\[\#ededed\],
+html[data-theme="dark"] .border-\[\#e5e5e5\],
+html[data-theme="dark"] .border-\[\#e7e7e7\],
+html[data-theme="dark"] .border-\[\#dadce0\],
+html[data-theme="dark"] .border-\[\#d7d9dc\],
+html[data-theme="dark"] .divide-slate-100 > :not([hidden]) ~ :not([hidden]),
+html[data-theme="dark"] .divide-\[\#ededed\] > :not([hidden]) ~ :not([hidden]) {
+  border-color: var(--wd-line) !important;
+}
+
+/* File tables (My Files + Team Folder content) */
+html[data-theme="dark"] .imkan-file-table-root,
+html[data-theme="dark"] .imkan-table-scroll,
+html[data-theme="dark"] .imkan-table,
+html[data-theme="dark"] table.imkan-table,
+html[data-theme="dark"] .wd-manage-table,
+html[data-theme="dark"] .zoho-content table {
+  background: var(--wd-bg) !important;
+  color: var(--wd-text) !important;
+  border-color: var(--wd-line) !important;
+}
+html[data-theme="dark"] .imkan-table thead,
+html[data-theme="dark"] .imkan-table th,
+html[data-theme="dark"] .wd-manage-table thead,
+html[data-theme="dark"] .wd-manage-table th {
+  background: var(--wd-panel-2) !important;
+  color: var(--wd-text-muted) !important;
+  border-color: var(--wd-line) !important;
+}
+html[data-theme="dark"] .imkan-table td,
+html[data-theme="dark"] .imkan-table tr,
+html[data-theme="dark"] .wd-manage-table td,
+html[data-theme="dark"] .wd-manage-table tr {
+  background: transparent !important;
+  color: var(--wd-text) !important;
+  border-color: var(--wd-line) !important;
+}
+html[data-theme="dark"] .imkan-table tr:hover td,
+html[data-theme="dark"] .wd-manage-table tr:hover td,
+html[data-theme="dark"] .imkan-table-row:hover {
+  background: var(--wd-hover) !important;
+}
+
+/* Grid cards */
+html[data-theme="dark"] .zoho-grid-card {
+  background: var(--wd-bg) !important;
+  border-color: var(--wd-line) !important;
+  color: var(--wd-text) !important;
+  box-shadow: none !important;
+}
+html[data-theme="dark"] .zoho-grid-card:hover,
+html[data-theme="dark"] .zoho-grid-card:has([data-radix-popper-content-wrapper]) {
+  border-color: var(--wd-line-strong) !important;
+  box-shadow: 0 10px 28px rgba(0,0,0,.45) !important;
+  background: var(--wd-panel-2) !important;
+}
+html[data-theme="dark"] .zoho-grid-name { color: var(--wd-text) !important; }
+html[data-theme="dark"] .zoho-grid-meta,
+html[data-theme="dark"] .zoho-grid-date,
+html[data-theme="dark"] .zoho-grid-size { color: var(--wd-text-muted) !important; }
+
+/* Inspector / secondary detail rail */
+html[data-theme="dark"] .wd-inspector,
+html[data-theme="dark"] .wd-inspector-panel,
+html[data-theme="dark"] .InspectorPanel,
+html[data-theme="dark"] [class*="inspector"] {
+  background: var(--wd-bg) !important;
+  color: var(--wd-text) !important;
+  border-color: var(--wd-line) !important;
+}
+
+/* Inputs, selects, pickers */
+html[data-theme="dark"] input,
+html[data-theme="dark"] textarea,
+html[data-theme="dark"] select,
+html[data-theme="dark"] .imkan-input,
+html[data-theme="dark"] .wd-input,
+html[data-theme="dark"] .wf-input,
+html[data-theme="dark"] .zoho-admin-input {
+  background: var(--wd-panel-2) !important;
+  color: var(--wd-text) !important;
+  border-color: var(--wd-line) !important;
+}
+html[data-theme="dark"] input::placeholder,
+html[data-theme="dark"] textarea::placeholder {
+  color: var(--wd-text-soft) !important;
+}
+
+/* Menus / dropdowns / modals */
+html[data-theme="dark"] .wd-menu,
+html[data-theme="dark"] .zoho-search-panel,
+html[data-theme="dark"] [role="menu"],
+html[data-theme="dark"] [role="listbox"],
+html[data-theme="dark"] [role="dialog"],
+html[data-theme="dark"] .imkan-option-picker-menu,
+html[data-theme="dark"] .ToolbarAnchoredPanel,
+html[data-theme="dark"] [data-toolbar-panel] {
+  background: var(--wd-bg) !important;
+  color: var(--wd-text) !important;
+  border-color: var(--wd-line) !important;
+  box-shadow: var(--wd-shadow-dark) !important;
+}
+html[data-theme="dark"] .wd-menu-item:hover,
+html[data-theme="dark"] [role="menuitem"]:hover {
+  background: var(--wd-hover) !important;
+}
+
+/* Team folder manage page */
+html[data-theme="dark"] .wd-manage-page,
+html[data-theme="dark"] section.rounded-\[16px\],
+html[data-theme="dark"] .team-manage-tab {
+  background: var(--wd-bg) !important;
+  color: var(--wd-text) !important;
+  border-color: var(--wd-line) !important;
+}
+html[data-theme="dark"] .team-manage-tab.is-active {
+  background: var(--wd-panel-2) !important;
+  color: var(--wd-text) !important;
+}
+
+/* Admin / DLP / settings cards */
+html[data-theme="dark"] .admin-console-shell,
+html[data-theme="dark"] .admin-theme-content,
+html[data-theme="dark"] .theme-aware-page {
+  background: var(--wd-canvas) !important;
+  color: var(--wd-text) !important;
+}
+
+/* Scrollbars (WebKit) */
+html[data-theme="dark"] ::-webkit-scrollbar-track {
+  background: var(--wd-canvas);
+}
+html[data-theme="dark"] ::-webkit-scrollbar-thumb {
+  background: #3a3a3a;
+  border-radius: 8px;
+}
+html[data-theme="dark"] ::-webkit-scrollbar-thumb:hover {
+  background: #4a4a4a;
+}
+
+/* Links that used blue ink on white */
+html[data-theme="dark"] a.wd-name-link,
+html[data-theme="dark"] .wd-name-link {
+  color: var(--wd-primary-ink) !important;
+}
+
+/* Empty states */
+html[data-theme="dark"] .wd-empty,
+html[data-theme="dark"] .zoho-search-empty {
+  background: transparent !important;
+  color: var(--wd-text-muted) !important;
+}
