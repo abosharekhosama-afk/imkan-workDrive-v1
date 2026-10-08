@@ -1,4 +1,4 @@
-import { apiRequest } from "./client";
+import { apiRequest, ApiError, getAccessToken, getApiBaseUrl } from "./client";
 import { emitGlobalToast } from "../global-toast";
 
 export type UploadRequestResponse = {
@@ -71,6 +71,52 @@ export function completeUpload(upload_id: string): Promise<{ status: string }> {
 
 export function requestDownload(fileId: string): Promise<{ download_url: string }> {
   return apiRequest(`/files/${fileId}/download`);
+}
+
+export async function downloadFilesArchive(items: Array<{ type: "FILE" | "FOLDER"; id: string }>): Promise<void> {
+  const token = await getAccessToken();
+  if (!token) throw new ApiError(401, "UNAUTHENTICATED");
+
+  const response = await fetch(`${getApiBaseUrl()}/files/bulk/download`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ items }),
+  });
+
+  if (!response.ok) {
+    const rawBody = await response.text();
+    let message = rawBody || `Download failed (${response.status})`;
+    try {
+      const parsed = JSON.parse(rawBody) as { message?: unknown };
+      if (typeof parsed.message === "string" && parsed.message) message = parsed.message;
+      else if (Array.isArray(parsed.message)) message = parsed.message.join(", ");
+    } catch {
+      // Keep the response text for plain-text errors.
+    }
+    throw new ApiError(response.status, message);
+  }
+
+  const blob = await response.blob();
+  const signature = new Uint8Array(await blob.slice(0, 4).arrayBuffer());
+  const validZipHeader = signature[0] === 0x50 && signature[1] === 0x4b &&
+    ((signature[2] === 0x03 && signature[3] === 0x04) ||
+      (signature[2] === 0x05 && signature[3] === 0x06));
+  if (!validZipHeader || blob.type && !blob.type.toLowerCase().includes("zip")) {
+    throw new ApiError(502, "The server returned an invalid ZIP archive");
+  }
+
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = "imkan-files.zip";
+  link.rel = "noopener";
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  window.setTimeout(() => URL.revokeObjectURL(url), 60_000);
 }
 
 export async function renameFile(id: string, name: string): Promise<{ id: string; name: string }> { const result=await apiRequest(`/files/${id}`, { method:"PATCH", body:JSON.stringify({name}) }); emitGlobalToast({message:"File renamed",messageAr:"تمت إعادة تسمية الملف"}); return result; }
