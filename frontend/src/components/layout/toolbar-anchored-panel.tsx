@@ -86,7 +86,7 @@ export function ToolbarAnchoredPanel({ open, onClose, anchorId, align = "end", w
       data-toolbar-panel=""
       role="menu"
       style={style}
-      className={`z-[120] rounded-[var(--wd-menu-radius)] border border-slate-200/80 bg-white shadow-[var(--wd-menu-shadow)] ${className}`.trim()}
+      className={`z-[120] rounded-[var(--wd-menu-radius)] border border-[color:var(--wd-menu-border,var(--wd-line,#e5e7eb))] bg-[var(--wd-bg,#fff)] text-[var(--wd-text,#212121)] shadow-[var(--wd-menu-shadow)] ${className}`.trim()}
     >
       {children}
     </div>,
