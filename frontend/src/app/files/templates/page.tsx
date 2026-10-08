@@ -590,16 +590,16 @@ export default function TemplatesPage() {
                       <button type="button" aria-label={text(ar, "More actions", "إجراءات إضافية")} onClick={() => setMenuTemplateId(menuTemplateId === template.id ? null : template.id)} className="rounded-md px-1.5 py-0.5 text-slate-500 hover:bg-slate-100">⋯</button>
                       {menuTemplateId === template.id && (
                         <div className={`wd-floating-action-menu absolute ${ar ? "left-0" : "right-0"} top-7 z-[200] w-48 rounded-xl border border-[color:var(--wd-line,#e5e7eb)] bg-[var(--wd-surface,#fff)] p-1.5 shadow-xl`}>
-                          {template.permissions.canUse && <button type="button" onClick={() => { setUseTarget(template); setNewName(template.name); setMenuTemplateId(null); }} className="block w-full rounded-lg px-3 py-2 text-left text-[11.5px] text-slate-700 hover:bg-slate-50">{text(ar, "Use template", "استخدام القالب")}</button>}
+                          {template.permissions.canUse && <button type="button" onClick={() => { setUseTarget(template); setNewName(template.name); setMenuTemplateId(null); }} className="block w-full rounded-lg px-3 py-2 text-left text-[11.5px] text-[var(--wd-text,#334155)] hover:bg-[var(--wd-hover,#f8fafc)]">{text(ar, "Use template", "استخدام القالب")}</button>}
                           {template.permissions.canEdit && <button type="button" onClick={() => openContentEditor(template)} className="block w-full rounded-lg px-3 py-2 text-left text-[11.5px] font-medium text-[var(--wd-primary)] hover:bg-slate-50">{text(ar, "Edit content", "تحرير المحتوى")}</button>}
                           {template.permissions.canEdit && <button type="button" onClick={() => { setMenuTemplateId(null); router.push(`/files/templates/studio/${template.id}`); }} className="block w-full rounded-lg px-3 py-2 text-left text-[11.5px] font-medium text-[var(--wd-primary)] hover:bg-slate-50">{text(ar, "Template Studio", "استوديو القوالب")}</button>}
                           {template.permissions.canEdit && <button type="button" onClick={() => { setMenuTemplateId(null); router.push(`/files/templates/builder/${template.id}`); }} className="block w-full rounded-lg px-3 py-2 text-left text-[11.5px] font-medium text-[var(--wd-primary)] hover:bg-slate-50">{text(ar, "Template Builder", "منشئ القالب")}</button>}
-                          {template.permissions.canManage && <button type="button" onClick={() => { setVariablesTarget(template); setMenuTemplateId(null); }} className="block w-full rounded-lg px-3 py-2 text-left text-[11.5px] text-slate-700 hover:bg-slate-50">{text(ar, "Variables", "المتغيرات")}</button>}
-                          {template.permissions.canEdit && <button type="button" onClick={() => { openEdit(template); setMenuTemplateId(null); }} className="block w-full rounded-lg px-3 py-2 text-left text-[11.5px] text-slate-700 hover:bg-slate-50">{text(ar, "Edit", "تعديل")}</button>}
-                          {template.permissions.canEdit && <button type="button" onClick={() => { setCategoryTarget(template); setCategoryTargetId(template.category?.id || ""); setMenuTemplateId(null); }} className="block w-full rounded-lg px-3 py-2 text-left text-[11.5px] text-slate-700 hover:bg-slate-50">{text(ar, "Change category", "تغيير التصنيف")}</button>}
-                          {template.permissions.canDuplicate && <button type="button" onClick={() => { setDuplicateTarget(template); setDuplicateName(`${template.name} Copy`); setMenuTemplateId(null); }} className="block w-full rounded-lg px-3 py-2 text-left text-[11.5px] text-slate-700 hover:bg-slate-50">{text(ar, "Duplicate", "نسخ")}</button>}
-                          {template.permissions.canViewVersions && <button type="button" onClick={() => { void openVersions(template); setMenuTemplateId(null); }} className="block w-full rounded-lg px-3 py-2 text-left text-[11.5px] text-slate-700 hover:bg-slate-50">{text(ar, "Version history", "سجل الإصدارات")}</button>}
-                          {template.permissions.canDelete && <button type="button" onClick={() => { void doDelete(template); setMenuTemplateId(null); }} className="block w-full rounded-lg px-3 py-2 text-left text-[11.5px] text-red-600 hover:bg-red-50">{text(ar, "Delete", "حذف")}</button>}
+                          {template.permissions.canManage && <button type="button" onClick={() => { setVariablesTarget(template); setMenuTemplateId(null); }} className="block w-full rounded-lg px-3 py-2 text-left text-[11.5px] text-[var(--wd-text,#334155)] hover:bg-[var(--wd-hover,#f8fafc)]">{text(ar, "Variables", "المتغيرات")}</button>}
+                          {template.permissions.canEdit && <button type="button" onClick={() => { openEdit(template); setMenuTemplateId(null); }} className="block w-full rounded-lg px-3 py-2 text-left text-[11.5px] text-[var(--wd-text,#334155)] hover:bg-[var(--wd-hover,#f8fafc)]">{text(ar, "Edit", "تعديل")}</button>}
+                          {template.permissions.canEdit && <button type="button" onClick={() => { setCategoryTarget(template); setCategoryTargetId(template.category?.id || ""); setMenuTemplateId(null); }} className="block w-full rounded-lg px-3 py-2 text-left text-[11.5px] text-[var(--wd-text,#334155)] hover:bg-[var(--wd-hover,#f8fafc)]">{text(ar, "Change category", "تغيير التصنيف")}</button>}
+                          {template.permissions.canDuplicate && <button type="button" onClick={() => { setDuplicateTarget(template); setDuplicateName(`${template.name} Copy`); setMenuTemplateId(null); }} className="block w-full rounded-lg px-3 py-2 text-left text-[11.5px] text-[var(--wd-text,#334155)] hover:bg-[var(--wd-hover,#f8fafc)]">{text(ar, "Duplicate", "نسخ")}</button>}
+                          {template.permissions.canViewVersions && <button type="button" onClick={() => { void openVersions(template); setMenuTemplateId(null); }} className="block w-full rounded-lg px-3 py-2 text-left text-[11.5px] text-[var(--wd-text,#334155)] hover:bg-[var(--wd-hover,#f8fafc)]">{text(ar, "Version history", "سجل الإصدارات")}</button>}
+                          {template.permissions.canDelete && <button type="button" onClick={() => { void doDelete(template); setMenuTemplateId(null); }} className="block w-full rounded-lg px-3 py-2 text-left text-[11.5px] text-red-500 hover:bg-[var(--wd-hover,#fef2f2)]">{text(ar, "Delete", "حذف")}</button>}
                         </div>
                       )}
                     </div>
@@ -642,7 +642,7 @@ export default function TemplatesPage() {
       {createTemplateOpen && (
         <div className="fixed inset-0 z-[140] flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-black/30" onClick={() => !busy && setCreateTemplateOpen(false)} />
-          <div className="relative w-[min(620px,94vw)] max-h-[90vh] overflow-y-auto rounded-2xl bg-white p-5 shadow-2xl">
+          <div className="relative w-[min(620px,94vw)] max-h-[90vh] overflow-y-auto rounded-2xl border border-[var(--wd-line,#e5e7eb)] bg-[var(--wd-bg,#fff)] p-5 shadow-2xl text-[var(--wd-text,#0f172a)]">
             <div className="flex items-start justify-between gap-3">
               <div>
                 <h2 className="text-[16px] font-semibold text-slate-900">{text(ar, "Create a template", "إنشاء قالب جديد")}</h2>
@@ -651,9 +651,9 @@ export default function TemplatesPage() {
               <button type="button" onClick={() => !busy && setCreateTemplateOpen(false)} className="rounded-lg px-2 py-1 hover:bg-slate-100">✕</button>
             </div>
 
-            <div className="mt-5 grid grid-cols-2 gap-2 rounded-xl bg-slate-100 p-1">
-              <button type="button" onClick={() => setCreateMode("blank")} className={`rounded-lg px-3 py-2 text-[12px] font-medium ${createMode === "blank" ? "bg-white text-slate-900 shadow-sm" : "text-slate-500"}`}>{text(ar, "Start from scratch", "إنشاء من الصفر")}</button>
-              <button type="button" onClick={() => setCreateMode("existing")} className={`rounded-lg px-3 py-2 text-[12px] font-medium ${createMode === "existing" ? "bg-white text-slate-900 shadow-sm" : "text-slate-500"}`}>{text(ar, "Use existing file", "استخدام ملف موجود")}</button>
+            <div className="mt-5 grid grid-cols-2 gap-2 rounded-xl bg-[var(--wd-panel-2,#f1f5f9)] p-1">
+              <button type="button" onClick={() => setCreateMode("blank")} className={`rounded-lg px-3 py-2 text-[12px] font-medium ${createMode === "blank" ? "bg-[var(--wd-bg,#fff)] text-[var(--wd-text,#0f172a)] shadow-sm" : "text-[var(--wd-text-muted,#64748b)]"}`}>{text(ar, "Start from scratch", "إنشاء من الصفر")}</button>
+              <button type="button" onClick={() => setCreateMode("existing")} className={`rounded-lg px-3 py-2 text-[12px] font-medium ${createMode === "existing" ? "bg-[var(--wd-bg,#fff)] text-[var(--wd-text,#0f172a)] shadow-sm" : "text-[var(--wd-text-muted,#64748b)]"}`}>{text(ar, "Use existing file", "استخدام ملف موجود")}</button>
             </div>
 
             {createMode === "blank" && (
@@ -661,8 +661,8 @@ export default function TemplatesPage() {
                 <div className="mt-5 text-[12px] font-medium text-slate-700">{text(ar, "Choose the office type", "اختر نوع القالب")}</div>
                 <div className="mt-2 grid grid-cols-3 gap-2">
                   {(["DOCUMENT", "SPREADSHEET", "PRESENTATION"] as TemplateType[]).map((kind) => (
-                    <button key={kind} type="button" onClick={() => setCreateType(kind)} className={`rounded-xl border p-3 text-left transition ${createType === kind ? "border-[var(--wd-primary)] bg-blue-50" : "border-slate-200 hover:border-slate-300"}`}>
-                      <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-white shadow-sm">{kind === "DOCUMENT" ? <Icons.doc size={20} /> : kind === "SPREADSHEET" ? <Icons.sheet size={20} /> : <Icons.slide size={20} />}</div>
+                    <button key={kind} type="button" onClick={() => setCreateType(kind)} className={`rounded-xl border p-3 text-left transition ${createType === kind ? "border-[var(--wd-primary)] bg-[var(--wd-primary-light,#eff6ff)]" : "border-[var(--wd-line,#e2e8f0)] hover:border-[var(--wd-line-strong,#cbd5e1)] hover:bg-[var(--wd-hover,transparent)]"}`}>
+                      <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-[var(--wd-panel-2,#fff)] shadow-sm">{kind === "DOCUMENT" ? <Icons.doc size={20} /> : kind === "SPREADSHEET" ? <Icons.sheet size={20} /> : <Icons.slide size={20} />}</div>
                       <div className="mt-2 text-[12px] font-semibold text-slate-800">{typeLabels[kind][ar ? 1 : 0]}</div>
                       <div className="mt-1 text-[10px] leading-4 text-slate-500">{kind === "DOCUMENT" ? text(ar, "Writer-style document", "مستند بأسلوب Writer") : kind === "SPREADSHEET" ? text(ar, "Sheet-style workbook", "جدول بأسلوب Sheet") : text(ar, "Show-style presentation", "عرض بأسلوب Show")}</div>
                     </button>
