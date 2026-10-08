@@ -5786,14 +5786,30 @@ html[data-theme="dark"] .admin-theme-content [class*="bg-white"]{
   color:#EEEEEE !important;
 }
 .admin-console-sidebar a{
-  color:#EEEEEE;
+  background: transparent !important;
+  color:#EEEEEE !important;
+  font-weight: 500 !important;
+}
+.admin-console-sidebar a:hover:not([aria-current="page"]){
+  background: rgba(255,255,255,.08) !important;
 }
 .admin-console-sidebar a[aria-current="page"]{
-  background:var(--wd-active) !important;
-  color:#DBE3FA !important;
+  background: var(--wd-sidebar-active-bg, rgba(255,255,255,.12)) !important;
+  color: var(--wd-sidebar-active-text, #DBE3FA) !important;
+  font-weight: 700 !important;
 }
 .admin-console-sidebar a[aria-current="page"] span{
-  color:#DBE3FA !important;
+  color: inherit !important;
+}
+html[data-theme="dark"] .admin-console-sidebar a:not([aria-current="page"]){
+  background: transparent !important;
+  color: #EEEEEE !important;
+  font-weight: 500 !important;
+}
+html[data-theme="dark"] .admin-console-sidebar a[aria-current="page"]{
+  background: var(--wd-sidebar-active-bg, rgba(255,255,255,.12)) !important;
+  color: #ffffff !important;
+  font-weight: 700 !important;
 }
 html[data-theme="dark"] .search-filter-popover,
 html[data-theme="dark"] .search-overlay-panel,
@@ -6382,4 +6398,289 @@ html[data-theme="dark"] .admin-custom-functions-page table thead,
 html[data-theme="dark"] .admin-custom-functions-page th {
   background: var(--wd-panel-2) !important;
   color: var(--wd-text-muted) !important;
+}
+
+
+/* ═══════════════════════════════════════════════════════════════════════
+   DARK THEME v78 — dropdowns, notifications, templates, workflows, admin
+   ═══════════════════════════════════════════════════════════════════════ */
+
+/* Dropdown / action menus (always portaled over content) */
+html[data-theme="dark"] .wd-menu,
+html[data-theme="dark"] .action-submenu,
+html[data-theme="dark"] [role="menu"].wd-menu,
+html[data-theme="dark"] .ToolbarAnchoredPanel,
+html[data-theme="dark"] [class*="toolbar-anchored"],
+html[data-theme="dark"] .z-\[120\].rounded-\[var\(--wd-menu-radius\)\],
+html[data-theme="dark"] .rounded-\[var\(--wd-menu-radius\)\].border.bg-white,
+html[data-theme="dark"] .shadow-\[var\(--wd-menu-shadow\)\].bg-white,
+html[data-theme="dark"] .bg-white.shadow-\[var\(--wd-menu-shadow\)\],
+html[data-theme="dark"] div.bg-white.shadow-2xl,
+html[data-theme="dark"] div.bg-white.shadow-xl,
+html[data-theme="dark"] div.bg-white.shadow-lg {
+  background: var(--wd-bg, #1c1c1c) !important;
+  color: var(--wd-text, #ececec) !important;
+  border-color: var(--wd-line, #2f2f2f) !important;
+  box-shadow: 0 14px 40px rgba(0,0,0,.55) !important;
+}
+html[data-theme="dark"] .wd-menu-item,
+html[data-theme="dark"] .wd-menu button,
+html[data-theme="dark"] .wd-menu a,
+html[data-theme="dark"] [role="menuitem"] {
+  color: var(--wd-text) !important;
+  background: transparent !important;
+}
+html[data-theme="dark"] .wd-menu-item:hover,
+html[data-theme="dark"] .wd-menu button:hover,
+html[data-theme="dark"] [role="menuitem"]:hover {
+  background: var(--wd-hover, #2a2a2a) !important;
+}
+html[data-theme="dark"] .wd-menu-sep {
+  background: var(--wd-line) !important;
+  border-color: var(--wd-line) !important;
+}
+html[data-theme="dark"] .wd-menu .text-slate-500,
+html[data-theme="dark"] .wd-menu .text-slate-400,
+html[data-theme="dark"] .wd-menu .text-slate-700 {
+  color: var(--wd-text-muted) !important;
+}
+html[data-theme="dark"] .wd-menu .bg-slate-100,
+html[data-theme="dark"] .wd-menu .hover\:bg-slate-50:hover,
+html[data-theme="dark"] .hover\:bg-slate-50:hover,
+html[data-theme="dark"] .hover\:bg-slate-100:hover {
+  background: var(--wd-hover) !important;
+}
+
+/* Manage button (top header) + its menu */
+html[data-theme="dark"] .wd-my-folders-manage,
+html[data-theme="dark"] .team-context-manage {
+  background: var(--wd-panel-2, #242424) !important;
+  color: var(--wd-text) !important;
+  border-color: var(--wd-line) !important;
+}
+html[data-theme="dark"] .wd-my-folders-manage:hover,
+html[data-theme="dark"] .wd-my-folders-manage[aria-expanded="true"],
+html[data-theme="dark"] .team-context-manage:hover,
+html[data-theme="dark"] .team-context-manage[aria-expanded="true"] {
+  background: var(--wd-hover) !important;
+  color: var(--wd-text) !important;
+}
+html[data-theme="dark"] .wd-manage-menu,
+html[data-theme="dark"] .wd-manage-menu button {
+  background: var(--wd-bg) !important;
+  color: var(--wd-text) !important;
+  border-color: var(--wd-line) !important;
+}
+html[data-theme="dark"] .wd-manage-menu button:hover {
+  background: var(--wd-hover) !important;
+}
+html[data-theme="dark"] .wd-default-topbar {
+  background: var(--wd-bg) !important;
+  border-color: var(--wd-line) !important;
+  color: var(--wd-text) !important;
+}
+html[data-theme="dark"] .wd-default-topbar .hover\:bg-slate-100:hover {
+  background: var(--wd-hover) !important;
+}
+
+/* Notifications table — force dark rows (not only on hover) */
+html[data-theme="dark"] .workflow-like-list {
+  background: var(--wd-bg) !important;
+  border-color: var(--wd-line) !important;
+}
+html[data-theme="dark"] .workflow-like-table,
+html[data-theme="dark"] .workflow-like-table thead,
+html[data-theme="dark"] .workflow-like-table tbody {
+  background: var(--wd-bg) !important;
+  color: var(--wd-text) !important;
+}
+html[data-theme="dark"] .workflow-like-table thead th {
+  background: var(--wd-panel-2) !important;
+  color: var(--wd-text-muted) !important;
+  border-bottom-color: var(--wd-line) !important;
+}
+html[data-theme="dark"] .workflow-like-table tbody tr {
+  background: var(--wd-bg) !important;
+}
+html[data-theme="dark"] .workflow-like-table tbody tr:hover {
+  background: var(--wd-hover) !important;
+}
+html[data-theme="dark"] .workflow-like-table tbody td,
+html[data-theme="dark"] .workflow-like-table tbody tr + tr td {
+  color: var(--wd-text) !important;
+  border-top-color: var(--wd-line) !important;
+  border-color: var(--wd-line) !important;
+  background: transparent !important;
+}
+html[data-theme="dark"] .workflow-like-table .wd-name-link {
+  color: var(--wd-primary-ink, #c5d0ff) !important;
+}
+html[data-theme="dark"] .workflow-like-table .wd-list-meta {
+  color: var(--wd-text-muted) !important;
+}
+html[data-theme="dark"] .notifications-page,
+html[data-theme="dark"] .notifications-page section,
+html[data-theme="dark"] .notifications-page .bg-white {
+  background: var(--wd-canvas) !important;
+  color: var(--wd-text) !important;
+  border-color: var(--wd-line) !important;
+}
+html[data-theme="dark"] .notifications-page .bg-\[\#F3F6FB\],
+html[data-theme="dark"] .notifications-page .bg-\[\#EEF4FF\] {
+  background: var(--wd-panel-2) !important;
+  color: var(--wd-text) !important;
+}
+
+/* Templates library + cards + create modal */
+html[data-theme="dark"] .files-templates-page,
+html[data-theme="dark"] .files-templates-page .bg-white,
+html[data-theme="dark"] .files-templates-page aside,
+html[data-theme="dark"] article[class*="rounded-xl"].border {
+  background: var(--wd-bg) !important;
+  color: var(--wd-text) !important;
+  border-color: var(--wd-line) !important;
+}
+html[data-theme="dark"] .files-templates-page article:hover {
+  border-color: var(--wd-line-strong, #3d3d3d) !important;
+  background: var(--wd-panel-2) !important;
+  box-shadow: 0 8px 24px rgba(0,0,0,.4) !important;
+}
+/* Create template: type/mode toggles — no white hover */
+html[data-theme="dark"] .files-templates-page .bg-slate-100,
+html[data-theme="dark"] .files-templates-page .grid.grid-cols-2.gap-2.rounded-xl {
+  background: var(--wd-panel-2) !important;
+}
+html[data-theme="dark"] .files-templates-page button.hover\:bg-white:hover,
+html[data-theme="dark"] .files-templates-page .hover\:bg-white:hover,
+html[data-theme="dark"] .hover\:bg-white:hover {
+  background: var(--wd-hover) !important;
+  color: var(--wd-text) !important;
+}
+html[data-theme="dark"] .files-templates-page .hover\:bg-slate-50:hover,
+html[data-theme="dark"] .files-templates-page .hover\:bg-slate-100:hover,
+html[data-theme="dark"] .files-templates-page .hover\:bg-red-50:hover {
+  background: var(--wd-hover) !important;
+}
+/* Template actions dropdown */
+html[data-theme="dark"] .files-templates-page [class*="absolute"][class*="rounded"].border.bg-white,
+html[data-theme="dark"] .files-templates-page .absolute.z-\[80\],
+html[data-theme="dark"] .files-templates-page .absolute.z-\[70\] {
+  background: var(--wd-bg) !important;
+  border-color: var(--wd-line) !important;
+  color: var(--wd-text) !important;
+}
+html[data-theme="dark"] .files-templates-page .absolute button {
+  color: var(--wd-text) !important;
+}
+html[data-theme="dark"] .files-templates-page .absolute button:hover {
+  background: var(--wd-hover) !important;
+}
+html[data-theme="dark"] .files-templates-page .absolute button.text-red-600 {
+  color: #f87171 !important;
+}
+
+/* Workflow shell tabs — no white hover / white tab strip */
+html[data-theme="dark"] .workflow-shell-tab,
+html[data-theme="dark"] .workflow-shell-nav a,
+html[data-theme="dark"] .workflow-shell-nav button {
+  background: transparent !important;
+  color: var(--wd-text-muted) !important;
+  border-color: transparent !important;
+}
+html[data-theme="dark"] .workflow-shell-tab:hover,
+html[data-theme="dark"] .workflow-shell-nav a:hover,
+html[data-theme="dark"] .workflow-shell-nav button:hover {
+  background: var(--wd-hover) !important;
+  color: var(--wd-text) !important;
+}
+html[data-theme="dark"] .workflow-shell-tab.is-active,
+html[data-theme="dark"] .workflow-shell-nav a.is-active,
+html[data-theme="dark"] .workflow-shell-nav a[aria-current="page"] {
+  background: var(--wd-panel-2) !important;
+  color: var(--wd-primary-ink, #c5d0ff) !important;
+  border-color: var(--wd-line) !important;
+}
+html[data-theme="dark"] .workflow-shell-header,
+html[data-theme="dark"] .workflow-shell-nav {
+  background: var(--wd-bg) !important;
+  border-color: var(--wd-line) !important;
+  color: var(--wd-text) !important;
+}
+html[data-theme="dark"] .workflow-segment,
+html[data-theme="dark"] .workflow-segment-bar {
+  background: var(--wd-panel-2) !important;
+  border-color: var(--wd-line) !important;
+  color: var(--wd-text-muted) !important;
+}
+html[data-theme="dark"] .workflow-segment.is-active {
+  background: var(--wd-primary-light) !important;
+  color: var(--wd-primary-ink) !important;
+  border-color: var(--wd-primary) !important;
+}
+
+/* Create Workflow card — readable text + themed toggles */
+html[data-theme="dark"] .workflow-ui .wf-card,
+html[data-theme="dark"] .workflow-ui .rounded-2xl.border,
+html[data-theme="dark"] .workflow-ui .rounded-xl.border {
+  background: var(--wd-bg) !important;
+  border-color: var(--wd-line) !important;
+  color: var(--wd-text) !important;
+}
+html[data-theme="dark"] .workflow-ui h1,
+html[data-theme="dark"] .workflow-ui h2,
+html[data-theme="dark"] .workflow-ui h3,
+html[data-theme="dark"] .workflow-ui label,
+html[data-theme="dark"] .workflow-ui .text-slate-900,
+html[data-theme="dark"] .workflow-ui .text-slate-800,
+html[data-theme="dark"] .workflow-ui .text-slate-700 {
+  color: var(--wd-text) !important;
+}
+html[data-theme="dark"] .workflow-ui .text-slate-600,
+html[data-theme="dark"] .workflow-ui .text-slate-500,
+html[data-theme="dark"] .workflow-ui .text-slate-400 {
+  color: var(--wd-text-muted) !important;
+}
+html[data-theme="dark"] .workflow-ui input,
+html[data-theme="dark"] .workflow-ui textarea,
+html[data-theme="dark"] .workflow-ui select {
+  background: var(--wd-panel-2) !important;
+  color: var(--wd-text) !important;
+  border-color: var(--wd-line) !important;
+}
+html[data-theme="dark"] .workflow-ui input::placeholder,
+html[data-theme="dark"] .workflow-ui textarea::placeholder {
+  color: var(--wd-text-soft) !important;
+}
+
+/* Team folders table */
+html[data-theme="dark"] .team-folders-page,
+html[data-theme="dark"] .team-folders-page .bg-white,
+html[data-theme="dark"] .team-folders-page table,
+html[data-theme="dark"] .team-folders-page thead,
+html[data-theme="dark"] .team-folders-page th,
+html[data-theme="dark"] .team-folders-page td {
+  background: var(--wd-bg) !important;
+  color: var(--wd-text) !important;
+  border-color: var(--wd-line) !important;
+}
+html[data-theme="dark"] .team-folders-page thead,
+html[data-theme="dark"] .team-folders-page th {
+  background: var(--wd-panel-2) !important;
+  color: var(--wd-text-muted) !important;
+}
+html[data-theme="dark"] .team-folders-page tr:hover td {
+  background: var(--wd-hover) !important;
+}
+
+/* Generic: kill white hover flashes in dark mode across app */
+html[data-theme="dark"] .hover\:bg-white:hover,
+html[data-theme="dark"] .hover\:bg-slate-50:hover,
+html[data-theme="dark"] .hover\:bg-slate-100:hover,
+html[data-theme="dark"] .hover\:bg-\[\#f7f8fa\]:hover,
+html[data-theme="dark"] .hover\:bg-\[\#fafbfc\]:hover {
+  background-color: var(--wd-hover) !important;
+}
+html[data-theme="dark"] .bg-white\/95,
+html[data-theme="dark"] .bg-white\/90 {
+  background-color: rgba(28,28,28,.95) !important;
 }
