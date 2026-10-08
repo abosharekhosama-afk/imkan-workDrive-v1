@@ -20,6 +20,7 @@ import { AccessAction, ResourceType } from '@prisma/client';
 import { CurrentUser } from '../auth/current-user.decorator';
 import type { AccessTokenPayload } from '../auth/jwt.types';
 import { parseResourceName } from '../common/parse-resource-name';
+import { contentDispositionAttachment } from '../common/content-disposition';
 import { RecentService } from '../recent/recent.service';
 import { FilesService } from './files.service';
 import { parseUploadComplete } from './upload-complete.schema';
@@ -180,6 +181,22 @@ export class FilesController {
       .record(user, ResourceType.FILE, id, AccessAction.DOWNLOAD)
       .catch(() => undefined);
     return result;
+  }
+
+  @Post('bulk/download')
+  async bulkDownload(
+    @CurrentUser() user: AccessTokenPayload,
+    @Body() body: { items?: unknown },
+    @Res() response: Response,
+  ): Promise<void> {
+    const archive = await this.files.createBulkDownloadArchive(user, body?.items);
+    response.setHeader('Content-Type', 'application/zip');
+    response.setHeader(
+      'Content-Disposition',
+      contentDispositionAttachment('imkan-files.zip'),
+    );
+    response.setHeader('Content-Length', String(archive.length));
+    response.send(archive);
   }
 
   @Get(':id/versions')

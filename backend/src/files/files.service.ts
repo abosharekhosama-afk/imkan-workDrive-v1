@@ -7,6 +7,7 @@ import {
   ConflictException,
   ForbiddenException,
   Inject,
+  HttpException,
   Injectable,
   Logger,
   forwardRef,
@@ -147,6 +148,9 @@ export type VersionHistoryEntry = {
 };
 
 const TRASH_RETENTION_DAYS = 30;
+const BULK_DOWNLOAD_MAX_SELECTIONS = 100;
+const BULK_DOWNLOAD_MAX_FILES = 2000;
+const BULK_DOWNLOAD_MAX_BYTES = 500n * 1024n * 1024n;
 
 @Injectable()
 export class FilesService {
@@ -828,6 +832,262 @@ export class FilesService {
       expires_in_seconds: signed.expiresInSeconds,
       file_id: file.id,
     };
+  }
+
+  async createBulkDownloadArchive(
+    user: AccessTokenPayload,
+    rawItems: unknown,
+  ): Promise<Buffer> {
+    if (!Array.isArray(rawItems) || rawItems.length === 0 || rawItems.length > BULK_DOWNLOAD_MAX_SELECTIONS) {
+      throw new BadRequestException(`Select between 1 and ${BULK_DOWNLOAD_MAX_SELECTIONS} items`);
+    }
+
+    const items: Array<{ type: 'FILE' | 'FOLDER'; id: string }> = [];
+    const selectedKeys = new Set<string>();
+    for (const value of rawItems) {
+      if (
+        !value ||
+        typeof value !== 'object' ||
+        !['FILE', 'FOLDER'].includes((value as any).type) ||
+        typeof (value as any).id !== 'string' ||
+        !(value as any).id.trim() ||
+        (value as any).id.length > 64
+      ) {
+        throw new BadRequestException('Invalid download selection');
+      }
+      const item = value as { type: 'FILE' | 'FOLDER'; id: string };
+      const key = `${item.type}:${item.id}`;
+      if (!selectedKeys.has(key)) {
+        selectedKeys.add(key);
+        items.push(item);
+      }
+    }
+
+    const selectedFileIds = new Set(items.filter((item) => item.type === 'FILE').map((item) => item.id));
+    const requestedFolders = items.filter((item) => item.type === 'FOLDER').map((item) => item.id);
+    const requestedFolderRows = await this.prisma.folder.findMany({
+      where: { id: { in: requestedFolders }, orgId: user.org_id },
+      select: { id: true, name: true, parentId: true },
+    });
+    if (requestedFolderRows.length !== new Set(requestedFolders).size) {
+      throw new NotFoundException('Folder not found');
+    }
+    for (const folder of requestedFolderRows) {
+      if (!(await this.effective.canRead(user, ResourceType.FOLDER, folder.id))) {
+        throw new NotFoundException('Folder not found');
+      }
+    }
+
+    // If both a parent and one of its descendants were selected, export the
+    // descendant only through the parent so the ZIP does not contain duplicates.
+    const requestedFolderSet = new Set(requestedFolders);
+    const rootFolders: typeof requestedFolderRows = [];
+    for (const folder of requestedFolderRows) {
+      let parentId = folder.parentId;
+      let nestedUnderSelection = false;
+      const ancestors = new Set<string>();
+      while (parentId && !ancestors.has(parentId)) {
+        if (requestedFolderSet.has(parentId)) {
+          nestedUnderSelection = true;
+          break;
+        }
+        ancestors.add(parentId);
+        const parent = await this.prisma.folder.findFirst({
+          where: { id: parentId, orgId: user.org_id },
+          select: { parentId: true },
+        });
+        parentId = parent?.parentId ?? null;
+      }
+      if (!nestedUnderSelection) rootFolders.push(folder);
+    }
+
+    const folderPaths = new Map<string, string>();
+    const folderRows = new Map<string, { id: string; name: string; parentId: string | null }>();
+    for (const folder of rootFolders) {
+      const rootPath = this.safeArchiveSegment(folder.name);
+      folderPaths.set(folder.id, rootPath);
+      folderRows.set(folder.id, folder);
+    }
+
+    let frontier = rootFolders.map((folder) => folder.id);
+    while (frontier.length > 0) {
+      const children = await this.prisma.folder.findMany({
+        where: { orgId: user.org_id, parentId: { in: frontier } },
+        select: { id: true, name: true, parentId: true },
+        orderBy: { name: 'asc' },
+      });
+      const next: string[] = [];
+      for (const child of children) {
+        if (folderPaths.has(child.id)) continue;
+        if (!(await this.effective.canRead(user, ResourceType.FOLDER, child.id))) continue;
+        const parentPath = child.parentId ? folderPaths.get(child.parentId) : undefined;
+        if (!parentPath) continue;
+        folderPaths.set(child.id, `${parentPath}/${this.safeArchiveSegment(child.name)}`);
+        folderRows.set(child.id, child);
+        next.push(child.id);
+      }
+      frontier = next;
+    }
+
+    const candidateFiles = await this.prisma.file.findMany({
+      where: {
+        orgId: user.org_id,
+        deletedAt: null,
+        status: FileStatus.ACTIVE,
+        OR: [
+          ...(selectedFileIds.size ? [{ id: { in: [...selectedFileIds] } }] : []),
+          ...(folderPaths.size ? [{ folderId: { in: [...folderPaths.keys()] } }] : []),
+        ],
+      },
+      include: {
+        versions: {
+          where: { uploadStatus: UploadStatus.COMPLETE },
+          orderBy: { versionNumber: 'desc' },
+          take: 1,
+        },
+      },
+      orderBy: { name: 'asc' },
+    });
+
+    const fileById = new Map(candidateFiles.map((file) => [file.id, file]));
+    for (const fileId of selectedFileIds) {
+      const file = fileById.get(fileId);
+      if (!file || !(await this.canReadFile(user, file))) {
+        throw new NotFoundException('File not found');
+      }
+    }
+
+    const downloadable: Array<{
+      file: (typeof candidateFiles)[number];
+      version: (typeof candidateFiles)[number]['versions'][number];
+      path: string;
+    }> = [];
+    for (const file of candidateFiles) {
+      if (!(await this.canReadFile(user, file))) continue;
+      const version = file.versions[0];
+      if (!version) {
+        if (selectedFileIds.has(file.id)) throw new NotFoundException('File not found');
+        continue;
+      }
+      const parentPath = file.folderId ? folderPaths.get(file.folderId) : undefined;
+      const path = parentPath
+        ? `${parentPath}/${this.safeArchiveSegment(file.name)}`
+        : this.safeArchiveSegment(file.name);
+      downloadable.push({ file, version, path });
+      if (downloadable.length > BULK_DOWNLOAD_MAX_FILES) {
+        throw new BadRequestException(`Selected folders contain more than ${BULK_DOWNLOAD_MAX_FILES} files`);
+      }
+    }
+
+    let totalBytes = 0n;
+    for (const item of downloadable) {
+      totalBytes += item.version.size;
+      if (totalBytes > BULK_DOWNLOAD_MAX_BYTES) {
+        throw new BadRequestException('Selected files exceed the 500 MiB ZIP download limit');
+      }
+    }
+
+    // Use archiver rather than launching many browser downloads. This produces
+    // one complete ZIP and keeps the exact stored bytes for each file.
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const archiver = require('archiver') as typeof import('archiver');
+    const { PassThrough } = await import('node:stream');
+    const chunks: Buffer[] = [];
+    const output = new PassThrough();
+    output.on('data', (chunk: Buffer) => chunks.push(Buffer.from(chunk)));
+    const archive = archiver('zip', { zlib: { level: 6 } });
+    archive.pipe(output);
+    const archiveFinished = new Promise<void>((resolve, reject) => {
+      output.once('finish', resolve);
+      output.once('error', reject);
+      archive.once('error', reject);
+      archive.once('warning', reject);
+    });
+    void archiveFinished.catch(() => undefined);
+
+    const usedPaths = new Set<string>();
+    try {
+      for (const folder of folderRows.values()) {
+        const hasChildOrFile = downloadable.some(({ path }) => path.startsWith(`${folderPaths.get(folder.id)}/`));
+        if (!hasChildOrFile) {
+          const directoryPath = `${folderPaths.get(folder.id)}/`;
+          if (!usedPaths.has(directoryPath)) {
+            usedPaths.add(directoryPath);
+            archive.append(Buffer.alloc(0), { name: directoryPath });
+          }
+        }
+      }
+
+      for (const item of downloadable) {
+        const file = item.file;
+        await this.dlp.assertAllowed(user, file.id, 'DOWNLOAD');
+        const scan = await this.prisma.$queryRawUnsafe<any[]>(
+          `SELECT status FROM malware_scans WHERE org_id=? AND file_id=? ORDER BY created_at DESC LIMIT 1`,
+          user.org_id,
+          file.id,
+        ).catch(() => []);
+        if (scan[0]?.status === 'INFECTED') {
+          throw new NotFoundException('A selected file is unavailable');
+        }
+        const storageObject = await this.resolveVersionStorageObject(item.version);
+        if (!storageObject) throw new NotFoundException('A selected file is unavailable');
+        const bytes = await this.storage.readStoredObject(storageObject.storageKey);
+        if (BigInt(bytes.length) !== item.version.size) {
+          throw new BadRequestException(`Stored file integrity check failed: ${file.name}`);
+        }
+        const actualSha256 = createHash('sha256').update(bytes).digest('hex');
+        if (item.version.sha256Hash && actualSha256 !== item.version.sha256Hash.toLowerCase()) {
+          throw new BadRequestException(`Stored file integrity check failed: ${file.name}`);
+        }
+        const path = this.uniqueArchivePath(item.path, usedPaths);
+        archive.append(bytes, { name: path });
+      }
+
+      await archive.finalize();
+      await archiveFinished;
+    } catch (error) {
+      archive.destroy();
+      output.destroy();
+      if (error instanceof HttpException) throw error;
+      throw new BadRequestException(
+        `Could not create a complete ZIP archive${error instanceof Error ? `: ${error.message}` : ''}`,
+      );
+    }
+
+    for (const item of downloadable) {
+      await this.recordDownloadActivity(user, item.file.id, item.version.versionNumber);
+    }
+    return Buffer.concat(chunks);
+  }
+
+  private safeArchiveSegment(name: string): string {
+    const safe = name
+      .replace(/[\\/]+/g, '_')
+      .replace(/[\x00-\x1F\x7F]/g, '_')
+      .replace(/^\.+$/, '_')
+      .trim();
+    return safe || 'untitled';
+  }
+
+  private uniqueArchivePath(path: string, usedPaths: Set<string>): string {
+    if (!usedPaths.has(path)) {
+      usedPaths.add(path);
+      return path;
+    }
+    const separator = path.lastIndexOf('/');
+    const directory = separator >= 0 ? path.slice(0, separator + 1) : '';
+    const name = separator >= 0 ? path.slice(separator + 1) : path;
+    const extensionIndex = name.lastIndexOf('.');
+    const stem = extensionIndex > 0 ? name.slice(0, extensionIndex) : name;
+    const extension = extensionIndex > 0 ? name.slice(extensionIndex) : '';
+    let suffix = 2;
+    let candidate = '';
+    do {
+      candidate = `${directory}${stem} (${suffix})${extension}`;
+      suffix += 1;
+    } while (usedPaths.has(candidate));
+    usedPaths.add(candidate);
+    return candidate;
   }
 
   async createVersionDownloadUrl(
