@@ -69,8 +69,8 @@ export function AdminConsoleSidebar() {
             <div key={item.href}>
               {showSection && !collapsed ? <div className="px-[15px] pb-1 pt-4 text-[11px] font-medium text-[#9CA3AF]">{item.section}</div> : null}
               <Link href={item.href} onClick={closeMobile} aria-current={active ? "page" : undefined}
-                className={`flex h-10 items-center gap-4 rounded-[16px] px-[15px] text-[14px] leading-[22px] transition-colors duration-150 ease-in-out ${active ? "bg-[var(--wd-active)] font-bold text-[#DBE3FA]" : "font-medium text-[#EEEEEE] hover:bg-white/[0.08]"} ${collapsed ? "justify-center px-0" : ""}`}>
-                <span className={active ? "text-[#DBE3FA]" : "text-[#EEEEEE]"}><Icon size={20} /></span>
+                className={`flex h-10 items-center gap-4 rounded-[16px] px-[15px] text-[14px] leading-[22px] transition-colors duration-150 ease-in-out ${active ? "is-active bg-[var(--wd-sidebar-active-bg)] font-bold text-[var(--wd-sidebar-active-text,#DBE3FA)]" : "font-medium text-[#EEEEEE] hover:bg-white/[0.08]"} ${collapsed ? "justify-center px-0" : ""}`}>
+                <span className={active ? "text-[var(--wd-sidebar-active-text,#DBE3FA)]" : "text-[#EEEEEE]"}><Icon size={20} /></span>
                 {collapsed ? null : <span className="min-w-0 flex-1 truncate">{ar ? item.ar : item.en}</span>}
               </Link>
             </div>
