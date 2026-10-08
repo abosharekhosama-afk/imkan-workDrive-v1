@@ -53,7 +53,7 @@ export function SelectionBar({
     onAssignWorkflow: singleSelected && canMutate ? () => onAction("assignWorkflow") : undefined,
     onOrganize: canMutate ? () => onAction("organize") : undefined,
     onSearchInFolder: () => onAction("searchInFold"),
-    onDownload: fileCount > 0 ? onDownload : undefined,
+    onDownload,
     onRename: singleSelected && canMutate ? () => onAction("rename") : undefined,
     onFollowUpdates: () => onAction("followUpdates"),
     isFollowingUpdates: isFollowingSelected,
