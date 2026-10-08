@@ -13,8 +13,8 @@ import { FileTable } from "./file-table";
 import { ShareModal } from "./share-modal";
 import { useLocale } from "./locale-provider";
 import { bulkTrashFolders, createFolder, deleteFolder, getFolder, listRootContents, renameFolder, moveFolder, copyFolder } from "../lib/api/folders";
-import { bulkTrashFiles, renameFile, requestDownload, trashFile, moveFile, copyFile, getFileDetails, runFileControl, type FileControlAction } from "../lib/api/files";
-import { triggerDownload, triggerDownloads } from "../lib/api/download";
+import { bulkTrashFiles, downloadFilesArchive, renameFile, requestDownload, trashFile, moveFile, copyFile, getFileDetails, runFileControl, type FileControlAction } from "../lib/api/files";
+import { triggerDownload } from "../lib/api/download";
 import { addFavorite, listFavorites, removeFavorite } from "../lib/api/favorites";
 import { ApiError } from "../lib/api/client";
 import type { FileRecord, FolderRecord } from "../lib/api/types";
@@ -514,10 +514,17 @@ export function FileBrowser({
     triggerDownload(result.download_url);
   }
 
-  async function onDownloadMany(fileIds: string[]) {
-    if (fileIds.length === 1) { await onDownload(fileIds[0]).catch(() => setToast(locale === "ar" ? "تعذر تنزيل الملف" : "Could not download the file")); return; }
-    const { failed } = await triggerDownloads(fileIds.map((id) => async () => (await requestDownload(id)).download_url));
-    if (failed > 0) setToast(locale === "ar" ? `تعذر تنزيل ${failed} من ${fileIds.length} ملفات` : `Could not download ${failed} of ${fileIds.length} files`);
+  async function onDownloadMany(items: Array<{ type: "FILE" | "FOLDER"; id: string }>) {
+    if (items.length === 0) return;
+    if (items.length === 1 && items[0].type === "FILE") {
+      await onDownload(items[0].id).catch(() => setToast(locale === "ar" ? "تعذر تنزيل الملف" : "Could not download the file"));
+      return;
+    }
+    try {
+      await downloadFilesArchive(items);
+    } catch {
+      setToast(locale === "ar" ? "تعذر إنشاء ملف التنزيل أو التحقق من سلامته" : "Could not create or verify the download archive");
+    }
   }
 
   async function onPreview(type: "FILE" | "FOLDER", id: string, name: string, mimeType?: string, size?: number, panel?: "details" | "comments", commentId?: string | null) {
@@ -738,11 +745,14 @@ export function FileBrowser({
         return;
       }
       case "download":
-        if (fileIds.length === 0) {
+        if (fileIds.length + folderIds.length === 0) {
           setToast(label("sel.noFilesSelected"));
           return;
         }
-        void onDownloadMany(fileIds);
+        void onDownloadMany([
+          ...folderIds.map((id) => ({ type: "FOLDER" as const, id })),
+          ...fileIds.map((id) => ({ type: "FILE" as const, id })),
+        ]);
         return;
       case "rename":
         if (!canMutate || !single) return;
@@ -894,11 +904,15 @@ export function FileBrowser({
             })()}
             onDownload={() => {
               const { fileIds } = partitionSelection(selectedIds, folders, files);
-              if (fileIds.length === 0) {
+              const folderIds = folders.filter((folder) => selectedIds.has(folder.id)).map((folder) => folder.id);
+              if (fileIds.length + folderIds.length === 0) {
                 setToast(label("sel.noFilesSelected"));
                 return;
               }
-              void onDownloadMany(fileIds);
+              void onDownloadMany([
+                ...folderIds.map((id) => ({ type: "FOLDER" as const, id })),
+                ...fileIds.map((id) => ({ type: "FILE" as const, id })),
+              ]);
             }}
             onAction={handleSelectionAction}
             extraHandlers={singleExtra}
