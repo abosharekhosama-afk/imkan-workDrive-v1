@@ -215,7 +215,7 @@ export default function TeamFoldersPage() {
   };
 
   return (
-    <section className="team-folders-page flex min-h-[calc(100dvh-56px)] w-full min-w-0 flex-1 flex-col bg-white">
+    <section className="team-folders-page flex min-h-[calc(100dvh-56px)] w-full min-w-0 flex-1 flex-col bg-[var(--wd-bg,#fff)]">
       {confirmModal}
       <div className="team-folders-toolbar flex shrink-0 items-center border-b border-slate-100 px-5" data-team-folders-toolbar>
         <div className="relative shrink-0" data-team-folder-filter>
@@ -257,7 +257,7 @@ export default function TeamFoldersPage() {
       {loading ? (
         <div className="team-folders-list-loading"><SkeletonLoader rows={4} columns={1} /></div>
       ) : visibleFolders.length === 0 ? (
-        <div className="flex min-h-[calc(100vh-220px)] w-full flex-1 items-center justify-center self-stretch bg-white px-6 py-12">
+        <div className="flex min-h-[calc(100vh-220px)] w-full flex-1 items-center justify-center self-stretch bg-[var(--wd-bg,#fff)] px-6 py-12">
           <EmptyState
             title={search ? (locale === "ar" ? "لا توجد نتائج" : "No matching Team Folders") : label("teamFolders.empty")}
             description={search ? undefined : label("teamFolders.emptyDescription")}
@@ -321,7 +321,7 @@ export default function TeamFoldersPage() {
                     <div className="team-folder-main" aria-label={locale === "ar" ? "مجلد فريق عام" : "Public Team Folder"}>
                       <span className="team-folder-glyph"><FolderGlyph /></span>
                       <span className="team-folder-copy">
-                        <span className="team-folder-name"><span className="truncate">{tf.name}</span><span className="text-[10px] text-slate-400">Public</span></span>
+                        <span className="team-folder-name"><span className="truncate">{tf.name}</span><span className="text-[10px] text-[color:var(--wd-text-muted,#94a3b8)]">Public</span></span>
                       </span>
                     </div>
                   )}
@@ -341,12 +341,12 @@ export default function TeamFoldersPage() {
 
                   {detailsTf?.id === tf.id ? (
                     <div className="team-folder-details-card">
-                      <div className="flex items-center gap-2 border-b border-slate-100 pb-2"><span className="text-slate-700"><FolderGlyph /></span><strong className="truncate text-[13px]">{tf.name}</strong></div>
-                      <div className="grid grid-cols-2 gap-y-2 pt-3 text-[11px] text-slate-500">
-                        <span>{locale === "ar" ? "الدور" : "Role"}</span><span className="text-end text-slate-700">{tf.role}</span>
-                        <span>{locale === "ar" ? "الأعضاء" : "Members"}</span><span className="text-end text-slate-700">{tf.memberCount}</span>
-                        <span>{locale === "ar" ? "آخر تعديل" : "Modified"}</span><span className="text-end text-slate-700">{tf.updatedAt ? new Intl.DateTimeFormat(undefined, { dateStyle: "medium" }).format(new Date(tf.updatedAt)) : "—"}</span>
-                        <span>{locale === "ar" ? "الحجم" : "Size"}</span><span className="text-end text-slate-700">{formatBytes(tf.totalSize ?? 0)}</span>
+                      <div className="flex items-center gap-2 border-b border-slate-100 pb-2"><span className="text-[color:var(--wd-text,#334155)]"><FolderGlyph /></span><strong className="truncate text-[13px]">{tf.name}</strong></div>
+                      <div className="grid grid-cols-2 gap-y-2 pt-3 text-[11px] text-[color:var(--wd-text-muted,#64748b)]">
+                        <span>{locale === "ar" ? "الدور" : "Role"}</span><span className="text-end text-[color:var(--wd-text,#334155)]">{tf.role}</span>
+                        <span>{locale === "ar" ? "الأعضاء" : "Members"}</span><span className="text-end text-[color:var(--wd-text,#334155)]">{tf.memberCount}</span>
+                        <span>{locale === "ar" ? "آخر تعديل" : "Modified"}</span><span className="text-end text-[color:var(--wd-text,#334155)]">{tf.updatedAt ? new Intl.DateTimeFormat(undefined, { dateStyle: "medium" }).format(new Date(tf.updatedAt)) : "—"}</span>
+                        <span>{locale === "ar" ? "الحجم" : "Size"}</span><span className="text-end text-[color:var(--wd-text,#334155)]">{formatBytes(tf.totalSize ?? 0)}</span>
                       </div>
                     </div>
                   ) : null}
@@ -359,7 +359,7 @@ export default function TeamFoldersPage() {
 
       {renameTarget ? (
         <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/30 px-4" role="dialog" aria-modal="true">
-          <div className="w-[min(420px,100%)] rounded-xl border border-slate-200 bg-white p-4 shadow-2xl">
+          <div className="w-[min(420px,100%)] rounded-xl border border-[color:var(--wd-line,#e2e8f0)] bg-[var(--wd-bg,#fff)] p-4 shadow-2xl">
             <h2 className="text-sm font-semibold text-slate-800">{locale === "ar" ? "إعادة تسمية مجلد الفريق" : "Rename Team Folder"}</h2>
             <input autoFocus value={renameName} onChange={(e) => setRenameName(e.target.value)} className="imkan-input mt-3 w-full" disabled={actionBusy} onKeyDown={(e) => {
               if (e.key !== "Enter") return;
