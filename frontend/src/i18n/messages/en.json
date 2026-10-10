@@ -278,7 +278,7 @@
   "nav.files": "Files",
   "nav.filter": "Filter",
   "nav.general": "General",
-  "nav.getStarted": "Get Started",
+  "nav.getStarted": "My Account",
   "nav.help": "Help",
   "nav.integratedApps": "Integrated Apps",
   "nav.labels": "Labels",
@@ -475,7 +475,7 @@
   "sel.filesSelected": "{count} files selected",
   "sel.foldersSelected": "{count} folders selected",
   "sel.itemsSelected": "{count} items selected",
-  "settings.account": "Account",
+  "settings.account": "My Account",
   "settings.changePassword": "Change password",
   "settings.changePhoto": "Change photo",
   "settings.currentPassword": "Current password",
@@ -501,7 +501,7 @@
   "settings.sessionId": "Session",
   "settings.sessions": "Active sessions",
   "settings.userId": "User ID",
-  "settings.title": "Settings",
+  "settings.title": "My Account",
   "share.allowDownload": "Allow download",
   "share.cancel": "Cancel",
   "share.copied": "Copied",
@@ -892,5 +892,10 @@
   "share.public.expires": "Expires",
   "share.public.noExpiry": "No expiration",
   "share.public.protected": "Password protected",
-  "common.cancel": "Cancel"
+  "common.cancel": "Cancel",
+  "settings.securityTitle": "Security & sessions",
+  "settings.securityLog": "Security log",
+  "settings.securityNavHint": "Review active sessions and the security log.",
+  "settings.thisDevice": "This device",
+  "settings.noSecurityEvents": "No security events yet."
 }

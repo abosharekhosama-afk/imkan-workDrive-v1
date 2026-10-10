@@ -278,7 +278,7 @@
   "nav.files": "الملفات",
   "nav.filter": "تصفية",
   "nav.general": "عام",
-  "nav.getStarted": "البدء",
+  "nav.getStarted": "حسابي",
   "nav.help": "المساعدة",
   "nav.integratedApps": "التطبيقات المدمجة",
   "nav.labels": "التسميات",
@@ -475,7 +475,7 @@
   "sel.filesSelected": "{count} ملفات محددة",
   "sel.foldersSelected": "{count} مجلدات محددة",
   "sel.itemsSelected": "{count} عناصر محددة",
-  "settings.account": "الحساب",
+  "settings.account": "حسابي",
   "settings.changePassword": "تغيير كلمة المرور",
   "settings.changePhoto": "تغيير الصورة",
   "settings.currentPassword": "كلمة المرور الحالية",
@@ -501,7 +501,7 @@
   "settings.sessionId": "الجلسة",
   "settings.sessions": "الجلسات النشطة",
   "settings.userId": "معرف المستخدم",
-  "settings.title": "الإعدادات",
+  "settings.title": "حسابي",
   "share.allowDownload": "السماح بالتنزيل",
   "share.cancel": "إلغاء",
   "share.copied": "تم النسخ",
@@ -892,5 +892,10 @@
   "share.public.expires": "ينتهي في",
   "share.public.noExpiry": "بدون انتهاء",
   "share.public.protected": "محمي بكلمة مرور",
-  "common.cancel": "إلغاء"
+  "common.cancel": "إلغاء",
+  "settings.securityTitle": "الأمان والجلسات",
+  "settings.securityLog": "سجل الحماية",
+  "settings.securityNavHint": "راجع الجلسات النشطة وسجل الحماية.",
+  "settings.thisDevice": "هذه الجلسة",
+  "settings.noSecurityEvents": "لا توجد أحداث حماية بعد."
 }
