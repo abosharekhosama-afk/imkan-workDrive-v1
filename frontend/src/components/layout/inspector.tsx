@@ -18,34 +18,60 @@ import { formatBytes } from "../../lib/api/quota";
 import { getFolder } from "../../lib/api/folders";
 import { LABELS_CHANGED_EVENT, listLabelsForResource, type WorkspaceLabel } from "../../lib/api/workspace-labels";
 import { ImkanOptionPicker, toImkanPickerOptions } from "../imkan-option-picker";
+import { ThemeToggle } from "../theme-toggle";
 
 function descKey(id: string) { return `wd.desc.${id}`; }
 
 export function InspectorDock() {
-  const { label } = useLocale();
+  const { label, locale } = useLocale();
   const { inspectorOpen, setInspectorOpen, inspectorTab, setInspectorTab, setMobileInspectorOpen } = useShell();
   const items: Array<{ tab: InspectorTab; icon: keyof typeof Icons; tipKey: "nav.openDetails" | "nav.dataTemplates" | "nav.zia"; textKey: "inspector.details" | "inspector.dataTemplates" | "inspector.zia" }> = [
     { tab: "details", icon: "info", tipKey: "nav.openDetails", textKey: "inspector.details" },
     { tab: "dataTemplates", icon: "layout", tipKey: "nav.dataTemplates", textKey: "inspector.dataTemplates" },
     { tab: "activity", icon: "spark", tipKey: "nav.zia", textKey: "inspector.zia" },
   ];
+
+  function activateTab(tab: InspectorTab) {
+    // Clicking the active open section closes the panel again (toggle).
+    if (inspectorOpen && inspectorTab === tab) {
+      setInspectorOpen(false);
+      setMobileInspectorOpen(false);
+      return;
+    }
+    setInspectorTab(tab);
+    setInspectorOpen(true);
+    setMobileInspectorOpen(true);
+  }
+
   return (
-    <div className="wd-rail flex shrink-0 flex-col items-center gap-1 border-s border-[color:var(--wd-line)] bg-white" role="toolbar" aria-label={label("inspector.details")}>
+    <div className="wd-rail flex h-full shrink-0 flex-col items-center gap-1 border-s border-[color:var(--wd-line)] bg-white" role="toolbar" aria-label={label("inspector.details")}>
       {items.map((i, idx) => {
         const pressed = inspectorOpen && i.tipKey !== "nav.zia" && i.tab === inspectorTab;
         return (
-          <button key={`${i.tipKey}-${idx}`} type="button" title={label(i.tipKey)} aria-label={label(i.tipKey)} aria-pressed={pressed}
+          <button
+            key={`${i.tipKey}-${idx}`}
+            type="button"
+            title={label(i.tipKey)}
+            aria-label={label(i.tipKey)}
+            aria-pressed={pressed}
             onClick={() => {
-              if (i.tipKey === "nav.dataTemplates") { setInspectorTab("dataTemplates"); setInspectorOpen(true); setMobileInspectorOpen(true); return; }
-              if (i.tipKey === "nav.zia") { openWip(label("zia.comingSoon")); return; }
-              setInspectorTab(i.tab); setInspectorOpen(true); setMobileInspectorOpen(true);
+              if (i.tipKey === "nav.zia") {
+                openWip(label("zia.comingSoon"));
+                return;
+              }
+              activateTab(i.tab);
             }}
-            className={`flex min-h-[65px] w-full flex-col items-center justify-center gap-1 rounded-[16px] px-[7px] py-[7px] text-[13px] transition-colors duration-150 ease-in-out ${pressed ? "bg-[#F0F4FF] text-[#254993]" : "text-[#212121] hover:bg-[#F3F5F7]"}`}>
+            className={`flex min-h-[65px] w-full flex-col items-center justify-center gap-1 rounded-[16px] px-[7px] py-[7px] text-[13px] transition-colors duration-150 ease-in-out ${pressed ? "bg-[#F0F4FF] text-[#254993]" : "text-[#212121] hover:bg-[#F3F5F7]"}`}
+          >
             {(() => { const I = Icons[i.icon]; return <I size={18} />; })()}
             <span className="text-center text-[11px] leading-4">{label(i.textKey)}</span>
           </button>
         );
       })}
+      <div className="mt-auto flex w-full flex-col items-center gap-1 border-t border-[color:var(--wd-line)] px-1 py-3">
+        <span className="text-center text-[10px] font-medium leading-3 text-slate-500">{locale === "ar" ? "المظهر" : "Theme"}</span>
+        <ThemeToggle />
+      </div>
     </div>
   );
 }

@@ -3,7 +3,6 @@ import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
 import { useLocale } from "../locale-provider";
 import { Icons } from "./icons";
-import { ThemeToggle } from "../theme-toggle";
 import { buildWorkflowSecondaryItems } from "../workflow-nav-logic";
 
 type TemplateItem = { href: string; labelKey: "templates.all" | "templates.myTemplates" | "templates.documents" | "templates.spreadsheets" | "templates.presentations"; icon: keyof typeof Icons };
@@ -30,8 +29,7 @@ function workflowItemActive(labelKey: ReturnType<typeof buildWorkflowSecondaryIt
 export function SecondarySidebar({ section }: { section: "templates" | "workflows" }) {
   const pathname = usePathname();
   const searchParams = useSearchParams();
-  const { label, locale } = useLocale();
-  const ar = locale === "ar";
+  const { label } = useLocale();
   const templateItems: TemplateItem[] = [
     { href: "/files/templates", labelKey: "templates.all", icon: "layout" },
     { href: "/files/templates?library=PERSONAL", labelKey: "templates.myTemplates", icon: "users" },
@@ -43,39 +41,20 @@ export function SecondarySidebar({ section }: { section: "templates" | "workflow
   const items = section === "templates" ? templateItems : workflowItems;
 
   return (
-    <aside
-      data-overlay-bound="sidebar"
-      className="secondary-sidebar hidden w-56 shrink-0 border-e border-[color:var(--imkan-color-border)] bg-[#FAFBFD] lg:flex lg:flex-col"
-      aria-label={section === "templates" ? label("nav.templates") : label("nav.workflows")}
-    >
+    <aside data-overlay-bound="sidebar" className="secondary-sidebar hidden w-56 shrink-0 border-e border-[color:var(--imkan-color-border)] bg-[#FAFBFD] lg:flex lg:flex-col" aria-label={section === "templates" ? label("nav.templates") : label("nav.workflows")}>
       <div className="border-b border-[color:var(--imkan-color-border)] px-4 py-4">
         <h2 className="text-[13px] font-semibold text-slate-900">{section === "templates" ? label("templates.title") : label("workflows.title")}</h2>
         <p className="mt-1 text-[11.5px] leading-5 text-slate-500">{section === "templates" ? label("templates.description") : label("workflows.description")}</p>
       </div>
-      <nav className="flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto p-2" aria-label="secondary">
+      <nav className="flex flex-col gap-1 p-2" aria-label="secondary">
         {items.map((item) => {
           const active = section === "templates"
             ? templateItemActive(item as TemplateItem, searchParams)
             : workflowItemActive((item as ReturnType<typeof buildWorkflowSecondaryItems>[number]).labelKey, pathname, searchParams);
           const Icon = Icons[item.icon];
-          return (
-            <Link
-              key={item.href}
-              href={item.href}
-              className={`flex items-center gap-2.5 rounded-lg px-3 py-2 text-[12.5px] ${active ? "bg-[var(--wd-active)] font-medium text-[var(--wd-primary-ink)]" : "text-slate-600 hover:bg-slate-100"}`}
-            >
-              <Icon size={15} />
-              <span>{label(item.labelKey)}</span>
-            </Link>
-          );
+          return <Link key={item.href} href={item.href} className={`flex items-center gap-2.5 rounded-lg px-3 py-2 text-[12.5px] ${active ? "bg-[var(--wd-active)] font-medium text-[var(--wd-primary-ink)]" : "text-slate-600 hover:bg-slate-100"}`}><Icon size={15}/><span>{label(item.labelKey)}</span></Link>;
         })}
       </nav>
-      <div className="mt-auto border-t border-[color:var(--imkan-color-border)] px-3 py-3">
-        <div className="flex items-center justify-between gap-2 rounded-xl bg-white/80 px-2.5 py-2 shadow-sm ring-1 ring-slate-200/80">
-          <span className="text-[11px] font-medium text-slate-600">{ar ? "المظهر" : "Theme"}</span>
-          <ThemeToggle />
-        </div>
-      </div>
     </aside>
   );
 }
