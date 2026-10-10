@@ -7,6 +7,7 @@ import { useLocale } from "../locale-provider";
 import { ThemeToggle } from "../theme-toggle";
 import { listNotifications, subscribeToNotifications, type NotificationRecord } from "../../lib/api/notifications";
 import { getTeamFolder, listTeamFolderMembers, type TeamFolderRecord } from "../../lib/api/team-folders";
+import { listDataTemplates, type DataTemplate } from "../../lib/api/metadata";
 import { readScope, useShell, type ScopeDetail } from "./shell-context";
 import { Icons } from "./icons";
 import { AccountMenu } from "./account-menu";
@@ -345,9 +346,11 @@ function HeaderSearchOverlay({ onClose, inputRef }: { onClose: () => void; input
   const [fileType, setFileType] = useState<"all" | "documents" | "images" | "pdf">("all");
   const [dateRange, setDateRange] = useState<"all" | "today" | "week" | "month">("all");
   const [createdBy, setCreatedBy] = useState<"all" | "me">("all");
+  const [dataTemplateId, setDataTemplateId] = useState<string | null>(null);
+  const [dataTemplates, setDataTemplates] = useState<DataTemplate[]>([]);
   const [folderScope, setFolderScope] = useState<{ folderId: string; folderName: string } | null>(null);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
-  const [openFilter, setOpenFilter] = useState<"scope" | "fileType" | "date" | "createdBy" | null>(null);
+  const [openFilter, setOpenFilter] = useState<"scope" | "fileType" | "date" | "createdBy" | "dataTemplate" | null>(null);
 
   useEffect(() => {
     const onFolderSearch = (event: Event) => {
@@ -366,6 +369,18 @@ function HeaderSearchOverlay({ onClose, inputRef }: { onClose: () => void; input
       const user = raw ? JSON.parse(raw) as { id?: string; userId?: string } : null;
       setCurrentUserId(user?.id ?? user?.userId ?? null);
     } catch { /* noop */ }
+  }, []);
+
+
+  useEffect(() => {
+    let live = true;
+    listDataTemplates(false).then((list) => {
+      if (!live) return;
+      setDataTemplates(Array.isArray(list) ? list.filter((t) => t.active !== false) : []);
+    }).catch(() => {
+      if (live) setDataTemplates([]);
+    });
+    return () => { live = false; };
   }, []);
 
   useEffect(() => {
@@ -388,7 +403,7 @@ function HeaderSearchOverlay({ onClose, inputRef }: { onClose: () => void; input
     }
     let live = true;
     const t = window.setTimeout(() => {
-      import("../../lib/api/search").then(({ searchNames }) => searchNames(q.trim(), scope === "folders" ? "folders" : scope === "files" ? "files" : "all", { folderId: folderScope?.folderId }).then((r) => {
+      import("../../lib/api/search").then(({ searchNames }) => searchNames(q.trim(), scope === "folders" ? "folders" : scope === "files" ? "files" : "all", { folderId: folderScope?.folderId, dataTemplateId: dataTemplateId || undefined }).then((r) => {
         if (!live) return;
         let files = (r.files ?? []);
         const now = Date.now();
@@ -415,7 +430,7 @@ function HeaderSearchOverlay({ onClose, inputRef }: { onClose: () => void; input
       }));
     }, 180);
     return () => { live = false; window.clearTimeout(t); };
-  }, [q, scope, fileType, dateRange, createdBy, currentUserId, folderScope?.folderId]);
+  }, [q, scope, fileType, dateRange, createdBy, currentUserId, folderScope?.folderId, dataTemplateId]);
 
   const clearFilters = () => {
     setScope("all");
@@ -423,14 +438,14 @@ function HeaderSearchOverlay({ onClose, inputRef }: { onClose: () => void; input
     setDateRange("all");
     setCreatedBy("all");
     setOpenFilter(null);
-  };
+   setDataTemplateId(null); };
 
   const FilterChip = ({
     kind,
     icon,
     children,
   }: {
-    kind: "scope" | "fileType" | "date" | "createdBy";
+    kind: "scope" | "fileType" | "date" | "createdBy" | "dataTemplate";
     icon: React.ReactNode;
     children: React.ReactNode;
   }) => (
@@ -476,6 +491,20 @@ function HeaderSearchOverlay({ onClose, inputRef }: { onClose: () => void; input
               <span>{t}</span>{dateRange === k ? <span>✓</span> : null}
             </button>
           )) : null}
+          {kind === "dataTemplate" ? (
+            <>
+              <button type="button" className={!dataTemplateId ? "is-selected" : ""} onClick={() => { setDataTemplateId(null); setOpenFilter(null); }}>
+                <span>All templates</span>{!dataTemplateId ? <span>✓</span> : null}
+              </button>
+              {dataTemplates.length === 0 ? (
+                <button type="button" disabled className="opacity-60"><span>No templates</span></button>
+              ) : dataTemplates.map((t) => (
+                <button key={t.id} type="button" className={dataTemplateId === t.id ? "is-selected" : ""} onClick={() => { setDataTemplateId(t.id); setOpenFilter(null); }}>
+                  <span className="truncate">{t.name}</span>{dataTemplateId === t.id ? <span>✓</span> : null}
+                </button>
+              ))}
+            </>
+          ) : null}
           {kind === "createdBy" ? (
             <>
               <button type="button" className={createdBy === "all" ? "is-selected" : ""} onClick={() => { setCreatedBy("all"); setOpenFilter(null); }}>
@@ -491,7 +520,7 @@ function HeaderSearchOverlay({ onClose, inputRef }: { onClose: () => void; input
     </div>
   );
 
-  const hasFilters = scope !== "all" || fileType !== "all" || dateRange !== "all" || createdBy !== "all";
+  const hasFilters = scope !== "all" || fileType !== "all" || dateRange !== "all" || createdBy !== "all" || Boolean(dataTemplateId);
 
   return (
     <div className="search-overlay" role="dialog" aria-modal="true" aria-label={label("search.placeholder")}>
@@ -520,6 +549,7 @@ function HeaderSearchOverlay({ onClose, inputRef }: { onClose: () => void; input
           ) : null}
           <FilterChip kind="fileType" icon={<Icons.doc size={14} />}>{fileType === "all" ? "All File Types" : fileType === "pdf" ? "PDF" : fileType[0].toUpperCase() + fileType.slice(1)}</FilterChip>
           <FilterChip kind="date" icon={<Icons.clock size={14} />}>{dateRange === "all" ? "All Dates" : dateRange === "today" ? "Today" : dateRange === "week" ? "Last 7 days" : "Last 30 days"}</FilterChip>
+          <FilterChip kind="dataTemplate" icon={<Icons.tag size={14} />}>{dataTemplateId ? (dataTemplates.find((t) => t.id === dataTemplateId)?.name ?? "Template") : "Data Template"}</FilterChip>
           <FilterChip kind="createdBy" icon={<Icons.users size={14} />}>{createdBy === "all" ? "Created by" : "Me"}</FilterChip>
           {hasFilters || folderScope ? <button type="button" className="search-clear-filters" onClick={() => { clearFilters(); setFolderScope(null); }}>Clear Filters</button> : null}
         </div>
