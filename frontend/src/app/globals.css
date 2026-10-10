@@ -7268,3 +7268,44 @@ html[data-theme="dark"] .search-filter-popover button.is-selected{
 .search-results{
   z-index: 1 !important;
 }
+
+
+/* Secondary sidebar theme footer */
+.secondary-sidebar { min-height: 0; }
+html[data-theme="dark"] .secondary-sidebar {
+  background: var(--wd-bg, #1a1a1a) !important;
+  border-color: var(--wd-line) !important;
+  color: var(--wd-text) !important;
+}
+html[data-theme="dark"] .secondary-sidebar h2 { color: var(--wd-text) !important; }
+html[data-theme="dark"] .secondary-sidebar p,
+html[data-theme="dark"] .secondary-sidebar span { color: var(--wd-text-muted, #94a3b8) !important; }
+html[data-theme="dark"] .secondary-sidebar a:hover { background: var(--wd-hover) !important; }
+
+/* Workflow design: keep canvas nodes inside pane; inspector editable */
+.workflow-canvas-pane {
+  overflow: auto !important;
+  position: relative !important;
+  isolation: isolate !important;
+}
+.workflow-canvas-pane .workflow-state-node {
+  max-width: 100%;
+}
+.workflow-inspector {
+  position: relative !important;
+  z-index: 40 !important;
+  pointer-events: auto !important;
+  background: var(--wd-bg, #fff) !important;
+}
+.workflow-inspector-fields,
+.workflow-inspector input,
+.workflow-inspector textarea,
+.workflow-inspector select,
+.workflow-inspector button {
+  pointer-events: auto !important;
+  position: relative;
+  z-index: 2;
+}
+.workflow-design-shell {
+  overflow: hidden !important;
+}
