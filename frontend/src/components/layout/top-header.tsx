@@ -422,6 +422,29 @@ function HeaderSearchOverlay({ onClose, inputRef }: { onClose: () => void; input
     setOpenFilter(null);
   };
 
+  const filterBtnRefs = useRef<Partial<Record<"scope" | "fileType" | "date" | "createdBy", HTMLButtonElement | null>>>({});
+  const [popoverPos, setPopoverPos] = useState<{ top: number; left: number } | null>(null);
+
+  useLayoutEffect(() => {
+    if (!openFilter) {
+      setPopoverPos(null);
+      return;
+    }
+    const btn = filterBtnRefs.current[openFilter];
+    if (!btn) return;
+    const place = () => {
+      const r = btn.getBoundingClientRect();
+      setPopoverPos({ top: r.bottom + 6, left: r.left });
+    };
+    place();
+    window.addEventListener("resize", place);
+    window.addEventListener("scroll", place, true);
+    return () => {
+      window.removeEventListener("resize", place);
+      window.removeEventListener("scroll", place, true);
+    };
+  }, [openFilter]);
+
   const FilterChip = ({
     kind,
     icon,
@@ -431,42 +454,52 @@ function HeaderSearchOverlay({ onClose, inputRef }: { onClose: () => void; input
     icon: React.ReactNode;
     children: React.ReactNode;
   }) => (
-    <div className="relative" data-search-filter>
+    <div className="search-filter-wrap" data-search-filter>
       <button
         type="button"
+        ref={(el) => { filterBtnRefs.current[kind] = el; }}
         className={`search-filter-chip ${openFilter === kind ? "is-open" : ""}`}
-        onClick={() => setOpenFilter((v) => v === kind ? null : kind)}
+        onClick={() => setOpenFilter((v) => (v === kind ? null : kind))}
         aria-expanded={openFilter === kind}
       >
         {icon}<span>{children}</span><Icons.chevD size={12} />
       </button>
-      {openFilter === kind ? (
-        <div className="search-filter-popover" role="menu">
+      {openFilter === kind && popoverPos ? (
+        <div
+          className="search-filter-popover"
+          role="menu"
+          style={{ position: "fixed", top: popoverPos.top, left: popoverPos.left, zIndex: 5000 }}
+        >
           {kind === "scope" ? ([
             ["all", "Search All"], ["folders", "Folders"], ["files", "Files"],
-          ] as const).map(([k, text]) => (
+          ] as const).map(([k, t]) => (
             <button key={k} type="button" className={scope === k ? "is-selected" : ""} onClick={() => { setScope(k); setOpenFilter(null); }}>
-              <span>{text}</span>{scope === k ? <span>✓</span> : null}
+              <span>{t}</span>{scope === k ? <span>✓</span> : null}
             </button>
           )) : null}
           {kind === "fileType" ? ([
             ["all", "All File Types"], ["documents", "Documents"], ["images", "Images"], ["pdf", "PDF"],
-          ] as const).map(([k, text]) => (
+          ] as const).map(([k, t]) => (
             <button key={k} type="button" className={fileType === k ? "is-selected" : ""} onClick={() => { setFileType(k); setOpenFilter(null); }}>
-              <span>{text}</span>{fileType === k ? <span>✓</span> : null}
+              <span>{t}</span>{fileType === k ? <span>✓</span> : null}
             </button>
           )) : null}
           {kind === "date" ? ([
             ["all", "All Dates"], ["today", "Today"], ["week", "Last 7 days"], ["month", "Last 30 days"],
-          ] as const).map(([k, text]) => (
+          ] as const).map(([k, t]) => (
             <button key={k} type="button" className={dateRange === k ? "is-selected" : ""} onClick={() => { setDateRange(k); setOpenFilter(null); }}>
-              <span>{text}</span>{dateRange === k ? <span>✓</span> : null}
+              <span>{t}</span>{dateRange === k ? <span>✓</span> : null}
             </button>
           )) : null}
           {kind === "createdBy" ? (
-            <button type="button" className={createdBy === "me" ? "is-selected" : ""} onClick={() => { setCreatedBy(createdBy === "me" ? "all" : "me"); setOpenFilter(null); }}>
-              <span>Me</span>{createdBy === "me" ? <span>✓</span> : null}
-            </button>
+            <>
+              <button type="button" className={createdBy === "all" ? "is-selected" : ""} onClick={() => { setCreatedBy("all"); setOpenFilter(null); }}>
+                <span>Anyone</span>{createdBy === "all" ? <span>✓</span> : null}
+              </button>
+              <button type="button" className={createdBy === "me" ? "is-selected" : ""} onClick={() => { setCreatedBy("me"); setOpenFilter(null); }}>
+                <span>Me</span>{createdBy === "me" ? <span>✓</span> : null}
+              </button>
+            </>
           ) : null}
         </div>
       ) : null}
