@@ -919,29 +919,12 @@ button.wd-name-link{background:none;border:0;padding:0;font:inherit;color:inheri
 
 /* ── Global instant search ────────────────────────────────────────────── */
 .zoho-global-search{position:relative;display:flex;align-items:center;gap:8px;height:34px;background:var(--wd-canvas);border:1px solid var(--wd-line);border-radius:6px;padding-inline:10px;color:#8b929e;transition:border-color .15s ease,background .15s ease;overflow:visible;isolation:isolate}
-.zoho-global-search:focus-within,.zoho-global-search.expanded{border-color:var(--wd-primary);background:var(--wd-bg,#fff);outline:none;box-shadow:0 0 0 1px var(--wd-primary);z-index:60}
+.zoho-global-search:focus-within{border-color:var(--wd-primary);background:var(--wd-bg,#fff);outline:none;z-index:60}
 .zoho-global-search input{flex:1;min-width:0;border:0;outline:0;background:transparent;font-size:12.5px;color:var(--wd-text,#252a31)}
 .zoho-global-search kbd{font-size:9px;color:var(--wd-text-muted,#8b929e);border:1px solid var(--wd-line);border-radius:4px;padding:2px 5px;background:var(--wd-panel-2,#fff);white-space:nowrap}
 .zoho-search-glyph{font-size:13px;line-height:1}
-/* Results panel stays within the search card bounds (Zoho-style dropdown) */
-.zoho-global-search.expanded .zoho-search-panel{
-  position:absolute;
-  top:calc(100% + 4px);
-  inset-inline-start:0;
-  inset-inline-end:0;
-  width:100%;
-  max-width:100%;
-  box-sizing:border-box;
-  max-height:min(420px,55vh);
-  overflow-x:hidden;
-  overflow-y:auto;
-  background:var(--wd-bg,#fff);
-  border:1px solid var(--wd-line);
-  border-radius:8px;
-  box-shadow:0 12px 36px rgba(20,30,40,.14);
-  padding:6px;
-  z-index:80;
-}
+/* Results panel: overridden by unified card rules below */
+.zoho-global-search.expanded .zoho-search-panel{/* legacy block disabled */}
 .wd-folder-empty-shell .imkan-panel{border:0;background:transparent;box-shadow:none}
 .wd-folder-empty-shell .imkan-badge{display:none}
 .zoho-search-filters{display:flex;align-items:center;gap:6px;padding:4px 4px 8px;border-bottom:1px solid var(--wd-line)}
@@ -6919,110 +6902,180 @@ html[data-theme="dark"] .imkan-option-picker-menu [role="option"]:hover {
 }
 
 
-/* ── Search card layout fixes (filters above results, no double border) ── */
+/* ═══════════════════════════════════════════════════════════════════════════
+   UNIFIED GLOBAL SEARCH CARD
+   One rounded card when open: input → filters (on top) → results (below).
+   No second bordered panel floating above the input bar.
+   ═══════════════════════════════════════════════════════════════════════════ */
 .zoho-global-search{
   position: relative !important;
-  overflow: visible !important;
-  isolation: isolate;
-  height: 34px !important;
-  min-height: 34px !important;
-  max-height: 34px !important;
-  box-sizing: border-box;
-}
-.zoho-global-search:focus-within,
-.zoho-global-search.expanded{
-  outline: none !important;
-  /* single subtle focus ring — avoids a second “card” above the input */
-  box-shadow: 0 0 0 1px var(--wd-primary, #2c66dd) !important;
-  border-color: var(--wd-primary, #2c66dd) !important;
-}
-.zoho-global-search.expanded .zoho-search-panel,
-.zoho-search-panel{
-  position: absolute !important;
-  top: calc(100% + 6px) !important;
-  inset-inline-start: 0 !important;
-  inset-inline-end: 0 !important;
-  left: 0 !important;
-  right: 0 !important;
-  width: 100% !important;
-  max-width: 100% !important;
-  min-width: 0 !important;
-  box-sizing: border-box !important;
-  max-height: min(440px, 60vh) !important;
   display: flex !important;
   flex-direction: column !important;
-  overflow: hidden !important;
+  align-items: stretch !important;
+  gap: 0 !important;
+  height: auto !important;
+  min-height: 34px !important;
+  max-height: none !important;
+  padding: 0 !important;
+  overflow: visible !important;
+  isolation: isolate !important;
+  background: var(--wd-canvas, #f4f6f8) !important;
+  border: 1px solid var(--wd-line, #e5e7eb) !important;
+  border-radius: 8px !important;
+  box-sizing: border-box !important;
+  z-index: 50;
+}
+.zoho-global-search:focus-within{
+  border-color: var(--wd-primary, #2c66dd) !important;
+  outline: none !important;
+  box-shadow: none !important;
+}
+/* Expanded = single elevated card (not input + separate bordered dropdown) */
+.zoho-global-search.expanded,
+.zoho-global-search.is-open{
   background: var(--wd-bg, #fff) !important;
   border: 1px solid var(--wd-line, #e5e7eb) !important;
   border-radius: 10px !important;
-  box-shadow: 0 14px 40px rgba(15, 23, 42, 0.16) !important;
-  padding: 0 !important;
-  z-index: 120 !important;
+  box-shadow: 0 16px 40px rgba(15, 23, 42, 0.14) !important;
+  z-index: 200 !important;
+  outline: none !important;
 }
+.zoho-search-input-row{
+  display: flex !important;
+  align-items: center !important;
+  gap: 8px !important;
+  height: 34px !important;
+  min-height: 34px !important;
+  padding-inline: 10px !important;
+  flex: 0 0 auto !important;
+  border: 0 !important;
+  box-shadow: none !important;
+  outline: none !important;
+  background: transparent !important;
+}
+.zoho-global-search.expanded .zoho-search-input-row{
+  border-bottom: 1px solid var(--wd-line, #e5e7eb) !important;
+  border-radius: 10px 10px 0 0 !important;
+}
+.zoho-global-search input{
+  flex: 1 !important;
+  min-width: 0 !important;
+  border: 0 !important;
+  outline: 0 !important;
+  box-shadow: none !important;
+  background: transparent !important;
+  font-size: 12.5px !important;
+  color: var(--wd-text, #252a31) !important;
+}
+/* Panel is INSIDE the same card — not a second floating bordered box above the input */
+.zoho-global-search.expanded .zoho-search-panel,
+.zoho-global-search.is-open .zoho-search-panel,
+.zoho-search-panel{
+  position: relative !important;
+  top: auto !important;
+  left: auto !important;
+  right: auto !important;
+  inset: auto !important;
+  width: 100% !important;
+  max-width: 100% !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  border: 0 !important;
+  border-radius: 0 0 10px 10px !important;
+  box-shadow: none !important;
+  outline: none !important;
+  background: transparent !important;
+  display: flex !important;
+  flex-direction: column !important;
+  max-height: min(420px, 55vh) !important;
+  overflow: hidden !important;
+  z-index: 1 !important;
+}
+/* Filters layer ABOVE results */
 .zoho-search-toolbar{
-  flex: 0 0 auto;
-  position: sticky;
-  top: 0;
-  z-index: 3;
-  background: var(--wd-bg, #fff);
-  border-bottom: 1px solid var(--wd-line, #e5e7eb);
-  padding: 8px 10px 6px;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
+  position: relative !important;
+  z-index: 5 !important;
+  flex: 0 0 auto !important;
+  order: 0 !important;
+  background: var(--wd-bg, #fff) !important;
+  border: 0 !important;
+  border-bottom: 1px solid var(--wd-line, #e5e7eb) !important;
+  padding: 8px 10px !important;
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 6px !important;
+  box-shadow: 0 1px 0 rgba(0,0,0,.02);
 }
-.zoho-search-filters{
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  flex-wrap: wrap;
-  padding: 0 !important;
-  border-bottom: none !important;
-}
+.zoho-search-filters,
 .zoho-search-owner-filters{
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  flex-wrap: wrap;
+  display: flex !important;
+  align-items: center !important;
+  gap: 6px !important;
+  flex-wrap: wrap !important;
+  padding: 0 !important;
+  border: 0 !important;
 }
 .zoho-search-owner-label{
-  font-size: 10px;
-  font-weight: 700;
-  letter-spacing: .04em;
-  text-transform: uppercase;
-  color: var(--wd-text-muted, #64748b);
-  margin-inline-end: 2px;
+  font-size: 10px !important;
+  font-weight: 700 !important;
+  letter-spacing: .04em !important;
+  text-transform: uppercase !important;
+  color: var(--wd-text-muted, #64748b) !important;
 }
 .zoho-search-results-body{
-  flex: 1 1 auto;
-  overflow-x: hidden;
-  overflow-y: auto;
-  padding: 6px 8px 8px;
-  min-height: 0;
+  position: relative !important;
+  z-index: 1 !important;
+  order: 1 !important;
+  flex: 1 1 auto !important;
+  min-height: 0 !important;
+  overflow-x: hidden !important;
+  overflow-y: auto !important;
+  padding: 6px 8px 8px !important;
+  background: var(--wd-bg, #fff) !important;
 }
 .zoho-filter-chip{
-  appearance: none;
-  border: 1px solid var(--wd-line, #e5e7eb);
-  background: var(--wd-panel-2, #f8fafc);
-  color: var(--wd-text, #334155);
-  border-radius: 999px;
-  padding: 4px 10px;
-  font-size: 11px;
-  font-weight: 600;
-  cursor: pointer;
-  line-height: 1.2;
+  appearance: none !important;
+  border: 1px solid var(--wd-line, #e5e7eb) !important;
+  background: var(--wd-panel-2, #f8fafc) !important;
+  color: var(--wd-text, #334155) !important;
+  border-radius: 999px !important;
+  padding: 4px 10px !important;
+  font-size: 11px !important;
+  font-weight: 600 !important;
+  cursor: pointer !important;
+  line-height: 1.2 !important;
+  position: relative !important;
+  z-index: 6 !important;
 }
 .zoho-filter-chip.active{
-  background: var(--wd-primary-light, #eef4ff);
-  border-color: var(--wd-primary, #2c66dd);
-  color: var(--wd-primary-ink, #1b66ea);
+  background: var(--wd-primary-light, #eef4ff) !important;
+  border-color: var(--wd-primary, #2c66dd) !important;
+  color: var(--wd-primary-ink, #1b66ea) !important;
+}
+/* Any nested picker/menu inside search must float over results */
+.zoho-global-search .imkan-option-picker-menu,
+.zoho-global-search [data-imkan-picker],
+.zoho-global-search [role="listbox"].imkan-option-picker-menu,
+.zoho-search-toolbar .imkan-option-picker-menu,
+.zoho-search-panel [data-toolbar-panel],
+.zoho-search-panel .wd-menu{
+  z-index: 300 !important;
+  position: absolute !important;
+}
+html[data-theme="dark"] .zoho-global-search,
+html[data-theme="dark"] .zoho-global-search.expanded,
+html[data-theme="dark"] .zoho-global-search.is-open{
+  background: var(--wd-bg) !important;
+  border-color: var(--wd-line) !important;
+  box-shadow: 0 16px 40px rgba(0,0,0,.45) !important;
 }
 html[data-theme="dark"] .zoho-search-toolbar,
-html[data-theme="dark"] .zoho-search-panel,
-html[data-theme="dark"] .zoho-search-results-body{
+html[data-theme="dark"] .zoho-search-results-body,
+html[data-theme="dark"] .zoho-search-panel{
   background: var(--wd-bg) !important;
   border-color: var(--wd-line) !important;
   color: var(--wd-text) !important;
+  box-shadow: none !important;
 }
 html[data-theme="dark"] .zoho-filter-chip{
   background: var(--wd-panel-2) !important;
@@ -7032,10 +7085,16 @@ html[data-theme="dark"] .zoho-filter-chip{
 html[data-theme="dark"] .zoho-filter-chip.active{
   background: rgba(255,255,255,.12) !important;
   border-color: var(--wd-primary) !important;
-  color: var(--wd-text) !important;
 }
-html[data-theme="dark"] .zoho-global-search:focus-within,
-html[data-theme="dark"] .zoho-global-search.expanded{
-  outline: none !important;
-  box-shadow: 0 0 0 1px var(--wd-primary) !important;
+
+/* Allow unified search dropdown to escape the topbar */
+.zoho-topbar,
+.zoho-topbar-start,
+.zoho-topbar-center,
+.zoho-header,
+.wd-topbar {
+  overflow: visible !important;
+}
+.zoho-topbar-start .zoho-global-search {
+  z-index: 200;
 }
