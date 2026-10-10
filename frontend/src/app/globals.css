@@ -7239,3 +7239,32 @@ html[data-theme="dark"] .search-filter-popover button.is-selected{
 .search-mainbar{z-index:25 !important;overflow:visible !important;}
 .search-results{z-index:1 !important;}
 .search-overlay-panel{overflow:visible !important;}
+
+
+/* Search All (mainbar) popover must float ABOVE the filters row */
+.search-mainbar{
+  position: relative !important;
+  z-index: 50 !important;
+  overflow: visible !important;
+}
+.search-mainbar .search-filter-wrap{
+  position: relative !important;
+  z-index: 51 !important;
+}
+.search-mainbar .search-filter-popover{
+  position: absolute !important;
+  top: calc(100% + 6px) !important;
+  left: 0 !important;
+  z-index: 6000 !important;
+}
+.search-filters-row{
+  position: relative !important;
+  z-index: 30 !important;
+  overflow: visible !important;
+}
+.search-filters-row .search-filter-popover{
+  z-index: 5000 !important;
+}
+.search-results{
+  z-index: 1 !important;
+}
