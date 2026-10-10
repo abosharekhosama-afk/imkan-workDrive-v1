@@ -372,8 +372,11 @@ function HeaderSearchOverlay({ onClose, inputRef }: { onClose: () => void; input
     if (!openFilter) return;
     const onDown = (e: MouseEvent) => {
       const target = e.target instanceof Element ? e.target : null;
-      if (!target?.closest("[data-search-filter]")) setOpenFilter(null);
+      if (!target) return;
+      if (target.closest("[data-search-filter]") || target.closest(".search-filter-popover")) return;
+      setOpenFilter(null);
     };
+    // bubble phase so chip onMouseDown stopPropagation runs first
     document.addEventListener("mousedown", onDown);
     return () => document.removeEventListener("mousedown", onDown);
   }, [openFilter]);
@@ -422,29 +425,6 @@ function HeaderSearchOverlay({ onClose, inputRef }: { onClose: () => void; input
     setOpenFilter(null);
   };
 
-  const filterBtnRefs = useRef<Partial<Record<"scope" | "fileType" | "date" | "createdBy", HTMLButtonElement | null>>>({});
-  const [popoverPos, setPopoverPos] = useState<{ top: number; left: number } | null>(null);
-
-  useLayoutEffect(() => {
-    if (!openFilter) {
-      setPopoverPos(null);
-      return;
-    }
-    const btn = filterBtnRefs.current[openFilter];
-    if (!btn) return;
-    const place = () => {
-      const r = btn.getBoundingClientRect();
-      setPopoverPos({ top: r.bottom + 6, left: r.left });
-    };
-    place();
-    window.addEventListener("resize", place);
-    window.addEventListener("scroll", place, true);
-    return () => {
-      window.removeEventListener("resize", place);
-      window.removeEventListener("scroll", place, true);
-    };
-  }, [openFilter]);
-
   const FilterChip = ({
     kind,
     icon,
@@ -457,18 +437,23 @@ function HeaderSearchOverlay({ onClose, inputRef }: { onClose: () => void; input
     <div className="search-filter-wrap" data-search-filter>
       <button
         type="button"
-        ref={(el) => { filterBtnRefs.current[kind] = el; }}
         className={`search-filter-chip ${openFilter === kind ? "is-open" : ""}`}
-        onClick={() => setOpenFilter((v) => (v === kind ? null : kind))}
+        onClick={(e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          setOpenFilter((v) => (v === kind ? null : kind));
+        }}
+        onMouseDown={(e) => e.stopPropagation()}
         aria-expanded={openFilter === kind}
       >
         {icon}<span>{children}</span><Icons.chevD size={12} />
       </button>
-      {openFilter === kind && popoverPos ? (
+      {openFilter === kind ? (
         <div
           className="search-filter-popover"
           role="menu"
-          style={{ position: "fixed", top: popoverPos.top, left: popoverPos.left, zIndex: 5000 }}
+          onMouseDown={(e) => e.stopPropagation()}
+          onClick={(e) => e.stopPropagation()}
         >
           {kind === "scope" ? ([
             ["all", "Search All"], ["folders", "Folders"], ["files", "Files"],
