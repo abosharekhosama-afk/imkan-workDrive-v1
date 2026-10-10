@@ -7270,42 +7270,39 @@ html[data-theme="dark"] .search-filter-popover button.is-selected{
 }
 
 
-/* Secondary sidebar theme footer */
-.secondary-sidebar { min-height: 0; }
-html[data-theme="dark"] .secondary-sidebar {
-  background: var(--wd-bg, #1a1a1a) !important;
+/* Inspector rail (Details / Data Templates) — theme at bottom */
+.wd-rail {
+  min-height: 100%;
+  height: 100%;
+}
+.wd-rail .zoho-icon-btn {
+  width: 36px;
+  height: 36px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 10px;
+  border: 1px solid var(--wd-line, #e5e7eb);
+  background: var(--wd-panel-2, #f8fafc);
+  color: var(--wd-text, #334155);
+}
+.wd-rail .zoho-icon-btn:hover {
+  background: var(--wd-hover, #eef2ff);
+}
+html[data-theme="dark"] .wd-rail {
+  background: var(--wd-bg) !important;
   border-color: var(--wd-line) !important;
   color: var(--wd-text) !important;
 }
-html[data-theme="dark"] .secondary-sidebar h2 { color: var(--wd-text) !important; }
-html[data-theme="dark"] .secondary-sidebar p,
-html[data-theme="dark"] .secondary-sidebar span { color: var(--wd-text-muted, #94a3b8) !important; }
-html[data-theme="dark"] .secondary-sidebar a:hover { background: var(--wd-hover) !important; }
-
-/* Workflow design: keep canvas nodes inside pane; inspector editable */
-.workflow-canvas-pane {
-  overflow: auto !important;
-  position: relative !important;
-  isolation: isolate !important;
+html[data-theme="dark"] .wd-rail button {
+  color: var(--wd-text) !important;
 }
-.workflow-canvas-pane .workflow-state-node {
-  max-width: 100%;
+html[data-theme="dark"] .wd-rail button[aria-pressed="true"] {
+  background: rgba(255,255,255,.08) !important;
+  color: var(--wd-text) !important;
 }
-.workflow-inspector {
-  position: relative !important;
-  z-index: 40 !important;
-  pointer-events: auto !important;
-  background: var(--wd-bg, #fff) !important;
-}
-.workflow-inspector-fields,
-.workflow-inspector input,
-.workflow-inspector textarea,
-.workflow-inspector select,
-.workflow-inspector button {
-  pointer-events: auto !important;
-  position: relative;
-  z-index: 2;
-}
-.workflow-design-shell {
-  overflow: hidden !important;
+html[data-theme="dark"] .wd-rail .zoho-icon-btn {
+  background: var(--wd-panel-2) !important;
+  border-color: var(--wd-line) !important;
+  color: var(--wd-text) !important;
 }
