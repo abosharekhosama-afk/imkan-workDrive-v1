@@ -4,7 +4,6 @@ import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { overlaySidebarSelector, readContentLane } from "../../lib/overlay-bounds-logic";
 import { useLocale } from "../locale-provider";
-import { ThemeToggle } from "../theme-toggle";
 import { listNotifications, subscribeToNotifications, type NotificationRecord } from "../../lib/api/notifications";
 import { getTeamFolder, listTeamFolderMembers, type TeamFolderRecord } from "../../lib/api/team-folders";
 import { listDataTemplates, type DataTemplate } from "../../lib/api/metadata";
@@ -186,7 +185,6 @@ export function TopHeader({ adminMode = false }: { adminMode?: boolean }) {
             {unread > 0 ? <span className="absolute end-1 top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-[#DC2626] px-1 text-[10px] font-bold text-white">{unread > 9 ? "9+" : unread}</span> : null}
           </button>
           {notifOpen ? <NotificationPanel open={notifOpen} onClose={() => setNotifOpen(false)} /> : null}
-          <ThemeToggle />
           <button type="button" className="rounded-md px-2 py-1.5 text-[12px] font-semibold text-slate-500 hover:bg-slate-100" aria-label={locale === "en" ? "العربية" : "English"} onClick={() => setLocale(locale === "en" ? "ar" : "en")}>{locale === "en" ? "ع" : "En"}</button>
           <AccountMenu name={name} avatarUrl={avatarUrl} adminMode={adminMode} />
           
@@ -232,7 +230,6 @@ export function TopHeader({ adminMode = false }: { adminMode?: boolean }) {
             <button type="button" className="wd-icon-btn" aria-label={label('search.placeholder')} onClick={() => setSearchOpen(true)}><Icons.search size={17} /></button>
             <button type="button" className="wd-icon-btn relative" aria-label={label('nav.notifications')} onClick={() => setNotifOpen((v) => !v)}><Icons.bell size={17} />{unread > 0 ? <span className="absolute end-1 top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-[#DC2626] px-1 text-[10px] font-bold text-white">{unread > 9 ? '9+' : unread}</span> : null}</button>
             {notifOpen ? <NotificationPanel open={notifOpen} onClose={() => setNotifOpen(false)} /> : null}
-            <ThemeToggle />
             <button type="button" className="rounded-md px-2 py-1.5 text-[12px] font-semibold text-slate-500 hover:bg-slate-100" aria-label={locale === "en" ? "العربية" : "English"} onClick={() => setLocale(locale === "en" ? "ar" : "en")}>{locale === "en" ? "ع" : "En"}</button>
             <AccountMenu name={name} avatarUrl={avatarUrl} adminMode={adminMode} />
             
@@ -245,7 +242,6 @@ export function TopHeader({ adminMode = false }: { adminMode?: boolean }) {
               {unread > 0 ? <span className="absolute end-1 top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-[#DC2626] px-1 text-[10px] font-bold text-white">{unread > 9 ? "9+" : unread}</span> : null}
             </button>
             {notifOpen ? <NotificationPanel open={notifOpen} onClose={() => setNotifOpen(false)} /> : null}
-            <ThemeToggle />
             <button type="button" className="rounded-md px-2 py-1.5 text-[12px] font-semibold text-slate-500 hover:bg-slate-100" aria-label={locale === "en" ? "العربية" : "English"} onClick={() => setLocale(locale === "en" ? "ar" : "en")}>{locale === "en" ? "ع" : "En"}</button>
             <AccountMenu name={name} avatarUrl={avatarUrl} adminMode={adminMode} />
           </div>
@@ -298,7 +294,7 @@ export function TopHeader({ adminMode = false }: { adminMode?: boolean }) {
         <button type="button" className="wd-icon-btn" aria-label={label("search.placeholder")} onClick={() => setSearchOpen(true)}><Icons.search size={17} /></button>
         <button type="button" className="wd-icon-btn relative" aria-label={label("nav.notifications")} onClick={() => setNotifOpen((v) => !v)}><Icons.bell size={17} />{unread > 0 ? <span className="absolute end-1 top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-[#DC2626] px-1 text-[10px] font-bold text-white">{unread > 9 ? "9+" : unread}</span> : null}</button>
         {notifOpen ? <NotificationPanel open={notifOpen} onClose={() => setNotifOpen(false)} /> : null}
-        <ThemeToggle /><button type="button" className="rounded-md px-2 py-1.5 text-[12px] font-semibold text-slate-500 hover:bg-slate-100" onClick={() => setLocale(locale === "en" ? "ar" : "en")}>{locale === "en" ? "ع" : "En"}</button><AccountMenu name={name} avatarUrl={avatarUrl} adminMode={adminMode} />
+        <button type="button" className="rounded-md px-2 py-1.5 text-[12px] font-semibold text-slate-500 hover:bg-slate-100" onClick={() => setLocale(locale === "en" ? "ar" : "en")}>{locale === "en" ? "ع" : "En"}</button><AccountMenu name={name} avatarUrl={avatarUrl} adminMode={adminMode} />
       </div>
       {searchOpen ? <HeaderSearchOverlay onClose={() => setSearchOpen(false)} inputRef={searchInputRef} /> : null}
     </header>
