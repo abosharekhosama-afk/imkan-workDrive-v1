@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { searchNames } from "../lib/api/search";
 import type { FileRecord, FolderRecord } from "../lib/api/types";
 import { debounce } from "./view-mode-logic";
-import { GlobalSearchPanel, type SearchFilter } from "./global-search-panel";
+import { GlobalSearchPanel, type SearchFilter, type OwnerFilter } from "./global-search-panel";
 
 export const WORKDRIVE_PREVIEW_EVENT = "workdrive:preview";
 
@@ -32,6 +32,7 @@ export function GlobalSearch({ onNavigate }: GlobalSearchProps) {
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [filter, setFilter] = useState<SearchFilter>("all");
+  const [ownerFilter, setOwnerFilter] = useState<OwnerFilter>("anyone");
   const [folders, setFolders] = useState<FolderRecord[]>([]);
   const [files, setFiles] = useState<FileRecord[]>([]);
   const containerRef = useRef<HTMLDivElement | null>(null);
@@ -49,7 +50,7 @@ export function GlobalSearch({ onNavigate }: GlobalSearchProps) {
     const runId = ++runIdRef.current;
     setLoading(true);
     try {
-      const result = await searchNames(query, filter);
+      const result = await searchNames(query, filter, ownerFilter === "me" ? { owner: "me" } : {});
       if (runId !== runIdRef.current) return; // stale response
       setFolders(Array.isArray(result.folders) ? result.folders : []);
       setFiles(Array.isArray(result.files) ? result.files : []);
@@ -65,7 +66,7 @@ export function GlobalSearch({ onNavigate }: GlobalSearchProps) {
     } finally {
       if (runId === runIdRef.current) setLoading(false);
     }
-  }, [filter]);
+  }, [filter, ownerFilter]);
 
   const debouncedSearch = useMemo(() => debounce((q: string) => void runSearch(q), 250), [runSearch]);
 
@@ -77,7 +78,7 @@ export function GlobalSearch({ onNavigate }: GlobalSearchProps) {
     if (!q) return;
     void runSearch(q);
     // eslint-disable-next-line react-hooks/exhaustive-deps -- only re-fire when filter changes
-  }, [filter]);
+  }, [filter, ownerFilter]);
 
   useEffect(() => {
     if (!open) return;
@@ -136,7 +137,9 @@ export function GlobalSearch({ onNavigate }: GlobalSearchProps) {
       files={files}
       containerRef={containerRef}
       onInputChange={onChange}
+      ownerFilter={ownerFilter}
       onFilterChange={setFilter}
+      onOwnerFilterChange={setOwnerFilter}
       onSubmit={onSubmit}
       onOpenFolder={openFolder}
       onPreviewFile={previewFile}
