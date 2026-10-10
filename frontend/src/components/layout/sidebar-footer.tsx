@@ -5,7 +5,7 @@ import { useLocale } from "../locale-provider";
 import { formatBytes, type QuotaOverview } from "../../lib/api/quota";
 import { Icons } from "./icons";
 export function SidebarFooter({ quota, role, onNav }: { quota: QuotaOverview | null; role: string; onNav: () => void }) {
-  const { label } = useLocale();
+  const { label, locale } = useLocale();
   const router = useRouter();
   const used = quota?.buckets.total.usedBytes ?? 12.4 * 1024 ** 3;
   const total = quota?.buckets.total.quotaBytes ?? 100 * 1024 ** 3;
@@ -18,7 +18,7 @@ export function SidebarFooter({ quota, role, onNav }: { quota: QuotaOverview | n
           <Icons.ext size={18} /> {label("nav.zohoCrm")}
         </a>
         <Link href="/settings" onClick={onNav} className="mt-1 flex h-[42px] items-center justify-between rounded-[16px] bg-[#3E3E3E] px-3 text-[13px] font-bold text-white hover:bg-[#4A4A4A]">
-          <span className="inline-flex items-center gap-1.5"><Icons.spark size={16} /> {label("nav.getStarted")}</span> <Icons.chevR size={16} />
+          <span className="inline-flex items-center gap-1.5"><Icons.spark size={16} /> {locale === "ar" ? "حسابي" : "My Account"}</span> <Icons.chevR size={16} />
         </Link>
         {admin ? (
           /* Native <a target=_blank> is more reliable than window.open(..., "noopener")
