@@ -7165,8 +7165,17 @@ html[data-theme="dark"] .zoho-filter-chip.active{
   z-index: 11 !important;
   flex: 0 0 auto !important;
 }
+.search-filter-wrap{
+  position: relative !important;
+  z-index: 20 !important;
+  display: inline-flex !important;
+  flex: 0 0 auto !important;
+}
 .search-filter-popover{
-  position: fixed !important;
+  position: absolute !important;
+  top: calc(100% + 6px) !important;
+  left: 0 !important;
+  right: auto !important;
   z-index: 5000 !important;
   width: 200px !important;
   min-width: 190px !important;
@@ -7177,6 +7186,7 @@ html[data-theme="dark"] .zoho-filter-chip.active{
   border-radius: 10px !important;
   background: #fff !important;
   box-shadow: 0 12px 32px rgba(0,0,0,.18) !important;
+  pointer-events: auto !important;
 }
 .search-results{
   position: relative !important;
@@ -7223,3 +7233,9 @@ html[data-theme="dark"] .search-filter-popover button:hover,
 html[data-theme="dark"] .search-filter-popover button.is-selected{
   background: rgba(255,255,255,.08) !important;
 }
+
+/* search-results never over filters */
+.search-filters-row{z-index:30 !important;overflow:visible !important;}
+.search-mainbar{z-index:25 !important;overflow:visible !important;}
+.search-results{z-index:1 !important;}
+.search-overlay-panel{overflow:visible !important;}
