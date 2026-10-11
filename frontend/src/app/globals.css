@@ -7306,3 +7306,74 @@ html[data-theme="dark"] .wd-rail .zoho-icon-btn {
   border-color: var(--wd-line) !important;
   color: var(--wd-text) !important;
 }
+
+/* Template library: keep the toolbar, filters, cards and dialogs readable at night. */
+html[data-theme="dark"] .files-templates-page {
+  --wd-surface: var(--wd-bg);
+  --imkan-color-border: var(--wd-line);
+  color: var(--wd-text);
+  background: var(--wd-canvas);
+}
+html[data-theme="dark"] .files-templates-page main {
+  color: var(--wd-text) !important;
+  background: var(--wd-canvas) !important;
+}
+html[data-theme="dark"] .files-templates-page main > div:first-child {
+  background: var(--wd-bg);
+  border-color: var(--wd-line) !important;
+}
+html[data-theme="dark"] .files-templates-page article,
+html[data-theme="dark"] .files-templates-page [class*="wd-floating-action-menu"],
+html[data-theme="dark"] .files-templates-page [class*="rounded-2xl"][class*="shadow-2xl"] {
+  color: var(--wd-text) !important;
+  background-color: var(--wd-bg) !important;
+  border-color: var(--wd-line) !important;
+}
+html[data-theme="dark"] .files-templates-page :is(.text-slate-900, .text-slate-800, .text-slate-700) {
+  color: var(--wd-text) !important;
+}
+html[data-theme="dark"] .files-templates-page :is(.text-slate-600, .text-slate-500, .text-slate-400) {
+  color: var(--wd-text-muted) !important;
+}
+html[data-theme="dark"] .files-templates-page :is(.border-slate-100, .border-slate-200, .border-slate-300) {
+  border-color: var(--wd-line) !important;
+}
+html[data-theme="dark"] .files-templates-page input:not([type="checkbox"]),
+html[data-theme="dark"] .files-templates-page textarea {
+  color: var(--wd-text) !important;
+  background-color: var(--wd-bg) !important;
+  border-color: var(--wd-line) !important;
+  color-scheme: dark;
+}
+html[data-theme="dark"] .files-templates-page input::placeholder,
+html[data-theme="dark"] .files-templates-page textarea::placeholder {
+  color: var(--wd-text-muted) !important;
+  opacity: 1;
+}
+html[data-theme="dark"] .files-templates-page .bg-blue-50 {
+  background-color: #172554 !important;
+}
+html[data-theme="dark"] .files-templates-page :is(.border-blue-100, .border-blue-200) {
+  border-color: #1e3a8a !important;
+}
+html[data-theme="dark"] .files-templates-page .text-blue-800 {
+  color: #bfdbfe !important;
+}
+html[data-theme="dark"] .files-templates-page .bg-amber-50 {
+  background-color: #422006 !important;
+}
+html[data-theme="dark"] .files-templates-page .border-amber-100 {
+  border-color: #78350f !important;
+}
+html[data-theme="dark"] .files-templates-page .text-amber-800 {
+  color: #fde68a !important;
+}
+html[data-theme="dark"] .files-templates-page .bg-red-50 {
+  background-color: #450a0a !important;
+}
+html[data-theme="dark"] .files-templates-page .border-red-200 {
+  border-color: #7f1d1d !important;
+}
+html[data-theme="dark"] .files-templates-page :is(.text-red-500, .text-red-600, .text-red-700) {
+  color: #fca5a5 !important;
+}
