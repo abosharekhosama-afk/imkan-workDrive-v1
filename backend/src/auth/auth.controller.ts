@@ -15,6 +15,7 @@ export class AuthController {
   @Public() @Post('login/otp') requestLoginOtp(@Body() body: { email: string }) { return this.auth.requestPasswordlessOtp(body.email); }
   @Public() @Post('otp/resend') resendOtp(@Body() body: { challengeId: string }) { return this.auth.resendOtp(body.challengeId); }
   @Public() @Post('oauth-resume') oauthResume(@Body() body: { code?: string }) { return this.auth.redeemOAuthResumeCode(String(body?.code ?? '')); }
+  @Public() @Post('refresh') refresh(@Body() body: { refresh_token?: string }, @Req() req: Request) { return this.auth.refresh(String(body?.refresh_token ?? ''), { ipAddress: req.ip, userAgent: req.headers['user-agent'] }); }
   @Post('logout') logout(@CurrentUser() user: AccessTokenPayload) { return this.auth.logout(user); }
   @Post('logout-all') logoutAll(@CurrentUser() user: AccessTokenPayload) { return this.auth.logoutAll(user); }
   @Get('sessions') sessions(@CurrentUser() user: AccessTokenPayload) { return this.auth.sessions(user); }
@@ -30,5 +31,5 @@ export class AuthController {
   @Get('memberships') memberships(@CurrentUser() user: AccessTokenPayload) { return this.auth.getUserMemberships(user.sub); }
   @Post('organizations/switch') switchOrganization(@CurrentUser() user: AccessTokenPayload, @Body() body: { organizationId: string }) { return this.auth.switchOrganization(user, body.organizationId); }
   @Public() @Get('google') google() { return this.auth.googleStart(); }
-  @Public() @Get('google/callback') async googleCallback(@Query('code') code: string, @Query('state') state: string, @Res() response: Response) { const result = await this.auth.googleCallback(code, state); response.redirect(`${this.auth.frontendUrl()}/auth/callback?token=${encodeURIComponent(result.access_token)}`); }
+  @Public() @Get('google/callback') async googleCallback(@Query('code') code: string, @Query('state') state: string, @Res() response: Response) { const result = await this.auth.googleCallback(code, state); response.redirect(`${this.auth.frontendUrl()}/auth/callback?token=${encodeURIComponent(result.access_token)}&refresh_token=${encodeURIComponent(result.refresh_token)}`); }
 }
