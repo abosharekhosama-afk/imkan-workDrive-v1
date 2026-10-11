@@ -32,8 +32,16 @@ const scrypt = promisify(scryptCallback);
 
 type AuthResult = {
   access_token: string;
+  refresh_token: string;
+  expires_in: number;
+  token_type: 'Bearer';
   user: { id: string; name: string | null; email: string; org_id: string; role: string; membershipId: string };
 };
+
+/** Access token lifetime (short). Refresh token keeps the browser session alive. */
+const ACCESS_TOKEN_TTL_SEC = 60 * 60; // 1 hour
+const REFRESH_TOKEN_TTL_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
+
 
 type MembershipInfo = {
   id: string;
@@ -723,8 +731,10 @@ export class AuthService {
     if (!secret) throw new UnauthorizedException('JWT is not configured');
 
     const sessionId = randomUUID();
-    const expiresAt = new Date(Date.now() + 8 * 60 * 60 * 1000);
+    const expiresAt = new Date(Date.now() + ACCESS_TOKEN_TTL_SEC * 1000);
+    const refreshExpiresAt = new Date(Date.now() + REFRESH_TOKEN_TTL_MS);
     const userAgent = context?.userAgent?.replace(/\s+/g, ' ').trim().slice(0, 180) || null;
+    const refreshToken = randomBytes(48).toString('base64url');
 
     const payload: AccessTokenPayload = {
       sub: user.id,
@@ -736,20 +746,111 @@ export class AuthService {
       jti: sessionId
     };
 
-    const accessToken = jwt.sign(payload, secret, { expiresIn: '8h' });
+    const accessToken = jwt.sign(payload, secret, { expiresIn: ACCESS_TOKEN_TTL_SEC });
 
     const deviceId = randomUUID();
     await this.prisma.$transaction([
       this.prisma.userDevice.create({ data: { id: deviceId, orgId: membership.organizationId, userId: user.id, name: userAgent?.slice(0, 120) || 'Web browser', platform: userAgent?.slice(0, 80), lastSeenAt: new Date() } }),
-      this.prisma.session.create({ data: { id: sessionId, orgId: membership.organizationId, userId: user.id, tokenHash: this.hashToken(accessToken), expiresAt, ipAddress: context?.ipAddress?.slice(0, 64) ?? null, userAgent, deviceId } }),
+      this.prisma.session.create({
+        data: {
+          id: sessionId,
+          orgId: membership.organizationId,
+          userId: user.id,
+          tokenHash: this.hashToken(accessToken),
+          expiresAt,
+          refreshTokenHash: this.hashToken(refreshToken),
+          refreshExpiresAt,
+          ipAddress: context?.ipAddress?.slice(0, 64) ?? null,
+          userAgent,
+          deviceId,
+        },
+      }),
     ]);
 
     return {
       access_token: accessToken,
+      refresh_token: refreshToken,
+      expires_in: ACCESS_TOKEN_TTL_SEC,
+      token_type: 'Bearer',
       user: {
         id: user.id,
         name: user.name,
         email: user.email,
+        org_id: membership.organizationId,
+        role: membership.role,
+        membershipId: membership.id,
+      },
+    };
+  }
+
+  /**
+   * Exchange a valid refresh token for a new access token (and rotated refresh token).
+   * Keeps the same session/device row so "active sessions" still reflects the browser.
+   */
+  async refresh(refreshToken: string, context?: { ipAddress?: string; userAgent?: string }): Promise<AuthResult> {
+    const raw = String(refreshToken ?? '').trim();
+    if (!raw) throw new UnauthorizedException('Refresh token is required');
+
+    const secret = this.config.get<string>('JWT_SECRET');
+    if (!secret) throw new UnauthorizedException('JWT is not configured');
+
+    const tokenHash = this.hashToken(raw);
+    const session = await this.prisma.session.findFirst({
+      where: {
+        refreshTokenHash: tokenHash,
+        revokedAt: null,
+        refreshExpiresAt: { gt: new Date() },
+      },
+      include: { user: { select: { id: true, name: true, email: true, status: true } } },
+    });
+    if (!session || !session.user) throw new UnauthorizedException('Refresh token is invalid or expired');
+    if (String(session.user.status) !== 'ACTIVE') {
+      throw new UnauthorizedException('Account is disabled');
+    }
+
+    const membership = await this.prisma.organizationMembership.findFirst({
+      where: { userId: session.userId, organizationId: session.orgId, status: MembershipStatus.ACTIVE },
+    });
+    if (!membership) throw new UnauthorizedException('Membership is no longer active');
+
+    const newRefresh = randomBytes(48).toString('base64url');
+    const accessExpiresAt = new Date(Date.now() + ACCESS_TOKEN_TTL_SEC * 1000);
+    // Keep the original refresh window; do not extend beyond the original family lifetime on each rotate.
+    const refreshExpiresAt = session.refreshExpiresAt ?? new Date(Date.now() + REFRESH_TOKEN_TTL_MS);
+
+    const payload: AccessTokenPayload = {
+      sub: session.user.id,
+      org_id: membership.organizationId,
+      email: session.user.email,
+      role: membership.role,
+      membershipId: membership.id,
+      membershipStatus: membership.status,
+      jti: session.id,
+    };
+    const accessToken = jwt.sign(payload, secret, { expiresIn: ACCESS_TOKEN_TTL_SEC });
+
+    await this.prisma.session.update({
+      where: { id: session.id },
+      data: {
+        tokenHash: this.hashToken(accessToken),
+        expiresAt: accessExpiresAt,
+        refreshTokenHash: this.hashToken(newRefresh),
+        refreshExpiresAt,
+        lastSeenAt: new Date(),
+        ipAddress: context?.ipAddress?.slice(0, 64) ?? session.ipAddress,
+        userAgent: context?.userAgent?.replace(/\s+/g, ' ').trim().slice(0, 180) || session.userAgent,
+      },
+    });
+
+    return {
+      access_token: accessToken,
+      refresh_token: newRefresh,
+      expires_in: ACCESS_TOKEN_TTL_SEC,
+      token_type: 'Bearer',
+      user: {
+        id: session.user.id,
+        name: session.user.name,
+        email: session.user.email,
         org_id: membership.organizationId,
         role: membership.role,
         membershipId: membership.id,
