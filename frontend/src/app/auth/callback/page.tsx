@@ -4,14 +4,26 @@ import { useRouter } from "next/navigation";
 import { AuthShell } from "../../../components/auth/auth-shell";
 import { useLocale } from "../../../components/locale-provider";
 import { persistBrowserAccessToken } from "../../../components/auth-gate-logic";
+import { saveSession } from "../../../lib/api/auth";
 
 export default function AuthCallback() {
   const router = useRouter();
   const { label } = useLocale();
   useEffect(() => {
-    const token = new URLSearchParams(window.location.search).get("token");
+    const params = new URLSearchParams(window.location.search);
+    const token = params.get("token");
+    const refreshToken = params.get("refresh_token");
     if (token) {
-      persistBrowserAccessToken(token);
+      try {
+        saveSession({
+          access_token: token,
+          refresh_token: refreshToken || undefined,
+          user: { id: "", name: null, email: "", org_id: "", role: "" },
+        });
+      } catch {
+        persistBrowserAccessToken(token);
+      }
+      // Prefer a soft navigation; /auth/me will fill user profile.
       router.replace("/files");
       return;
     }
