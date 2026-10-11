@@ -286,7 +286,36 @@ export class FoldersService {
       throw new NotFoundException('Folder not found');
     }
     const contents = await this.listContents(user, id, filters);
-    return { ...folder, ...contents };
+    // Direct children counts for the details inspector (Contains / Size / Storage Used).
+    const [folderCount, fileCount, sizeAggregate] = await Promise.all([
+      this.prisma.folder.count({ where: { parentId: id } }),
+      this.prisma.file.count({ where: { folderId: id, deletedAt: null, status: 'ACTIVE' } }),
+      this.prisma.file.aggregate({
+        _sum: { size: true },
+        where: { folderId: id, deletedAt: null, status: 'ACTIVE' },
+      }),
+    ]);
+    // Include nested folder storage when aggregate helper is available.
+    let storageUsedBytes = Number(sizeAggregate._sum.size ?? 0);
+    try {
+      const nested = await this.folderTreeAggregates([id]);
+      if (typeof nested.folderSizes?.[id] === 'number') {
+        storageUsedBytes = nested.folderSizes[id];
+      }
+    } catch {
+      /* keep direct sum */
+    }
+    return {
+      ...folder,
+      ...contents,
+      folderCount,
+      fileCount,
+      itemCount: folderCount + fileCount,
+      size: storageUsedBytes,
+      storageUsedBytes,
+      ownerName: folder.owner?.name ?? null,
+      ownerEmail: folder.owner?.email ?? null,
+    };
   }
 
   async rename(user: AccessTokenPayload, id: string, name: string) {
