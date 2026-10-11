@@ -62,7 +62,7 @@ export async function getAccessToken(): Promise<string | null> {
       // Refresh cookie expiry so multi-tab / admin console windows keep a valid cookie.
       try {
         const isSecure = window.location.protocol === "https:" ? "; Secure" : "";
-        document.cookie = `workdrive_access_token=${encodeURIComponent(primary)}; path=/; max-age=28800; SameSite=Lax${isSecure}`;
+        document.cookie = `workdrive_access_token=${encodeURIComponent(primary)}; path=/; max-age=3600; SameSite=Lax${isSecure}`;
       } catch { /* noop */ }
       return primary;
     }
@@ -88,59 +88,93 @@ export async function getAccessToken(): Promise<string | null> {
   }
 }
 
-export async function apiRequest<T>(path: string, init: RequestInit = {}): Promise<T> {
-  const token = await getAccessToken();
+let refreshInFlight: Promise<string | null> | null = null;
 
-  if (!token) {
-    throw new ApiError(401, "UNAUTHENTICATED");
-  }
-
-  const headers = new Headers(init.headers);
-  headers.set("Authorization", `Bearer ${token}`);
-  if (init.body && !headers.has("Content-Type")) {
-    headers.set("Content-Type", "application/json");
-  }
-
-  const response = await fetch(`${getApiBaseUrl()}${path}`, {
-    ...init,
-    headers,
-  });
-
-  if (!response.ok) {
-    const rawBody = await response.text();
-    let message = rawBody;
-    let code: string | undefined;
+async function tryRefreshAccessToken(): Promise<string | null> {
+  if (refreshInFlight) return refreshInFlight;
+  refreshInFlight = (async () => {
     try {
-      const parsed = JSON.parse(rawBody) as { message?: unknown; code?: unknown; error?: unknown };
-      if (parsed && typeof parsed.message === "object" && parsed.message && !Array.isArray(parsed.message)) {
-        const nested = parsed.message as { message?: unknown; code?: unknown };
-        if (typeof nested.message === "string" && nested.message.length > 0) message = nested.message;
-        if (typeof nested.code === "string" && nested.code.length > 0) code = nested.code;
-      } else if (typeof parsed.message === "string" && parsed.message.length > 0) {
-        message = parsed.message;
-      }
-      if (typeof parsed.code === "string" && parsed.code.length > 0) code = parsed.code;
+      const { refreshSession } = await import("./auth");
+      const result = await refreshSession();
+      return result?.access_token ?? null;
     } catch {
-      // Preserve the original plain-text response body.
+      return null;
+    } finally {
+      refreshInFlight = null;
     }
-    throw new ApiError(response.status, message, code);
-  }
+  })();
+  return refreshInFlight;
+}
 
-  if (response.status === 204) {
-    return undefined as T;
+function parseApiError(response: Response, rawBody: string): ApiError {
+  let message = rawBody;
+  let code: string | undefined;
+  try {
+    const parsed = JSON.parse(rawBody) as { message?: unknown; code?: unknown; error?: unknown };
+    if (parsed && typeof parsed.message === "object" && parsed.message && !Array.isArray(parsed.message)) {
+      const nested = parsed.message as { message?: unknown; code?: unknown };
+      if (typeof nested.message === "string" && nested.message.length > 0) message = nested.message;
+      if (typeof nested.code === "string" && nested.code.length > 0) code = nested.code;
+    } else if (typeof parsed.message === "string" && parsed.message.length > 0) {
+      message = parsed.message;
+    }
+    if (typeof parsed.code === "string" && parsed.code.length > 0) code = parsed.code;
+  } catch {
+    // Preserve the original plain-text response body.
   }
+  return new ApiError(response.status, message, code);
+}
 
-  // API calls must never silently consume an HTML Next.js page. When a
-  // deployment accidentally points NEXT_PUBLIC_API_URL at the frontend
-  // origin, fetch can return HTTP 200 with an HTML error/document. Treat that
-  // as an API configuration failure instead of letting JSON.parse throw and
-  // taking down the current page.
+async function parseApiSuccess<T>(response: Response): Promise<T> {
+  if (response.status === 204) return undefined as T;
   const contentType = response.headers.get("content-type")?.toLowerCase() ?? "";
   if (!contentType.includes("application/json") && !contentType.includes("application/problem+json")) {
     throw new ApiError(502, "WORKFLOW_API_INVALID_RESPONSE");
   }
-
   return (await response.json()) as T;
+}
+
+export async function apiRequest<T>(path: string, init: RequestInit = {}): Promise<T> {
+  let token = await getAccessToken();
+
+  // No access token — try silent refresh before failing hard.
+  if (!token) {
+    token = await tryRefreshAccessToken();
+  }
+  if (!token) {
+    throw new ApiError(401, "UNAUTHENTICATED");
+  }
+
+  const buildHeaders = (accessToken: string) => {
+    const headers = new Headers(init.headers);
+    headers.set("Authorization", `Bearer ${accessToken}`);
+    if (init.body && !headers.has("Content-Type")) {
+      headers.set("Content-Type", "application/json");
+    }
+    return headers;
+  };
+
+  let response = await fetch(`${getApiBaseUrl()}${path}`, {
+    ...init,
+    headers: buildHeaders(token),
+  });
+
+  // Expired access token: rotate via refresh token once, then retry the request.
+  if (response.status === 401 && !path.startsWith("/auth/")) {
+    const refreshed = await tryRefreshAccessToken();
+    if (refreshed) {
+      response = await fetch(`${getApiBaseUrl()}${path}`, {
+        ...init,
+        headers: buildHeaders(refreshed),
+      });
+    }
+  }
+
+  if (!response.ok) {
+    throw parseApiError(response, await response.text());
+  }
+
+  return parseApiSuccess<T>(response);
 }
 
 export function isUnauthorizedError(error: unknown): boolean {

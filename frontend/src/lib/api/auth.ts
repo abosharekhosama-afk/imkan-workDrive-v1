@@ -4,7 +4,7 @@ import { getApiBaseUrl } from './client';
 export type AuthUser = { id: string; name: string | null; email: string; avatarUrl?: string | null; org_id: string; role: string; membershipId?: string; membershipStatus?: string };
 export type OrganizationMembershipSummary = { id: string; organizationId: string; role: string; status: string; isPrimary: boolean; organization: { id: string; name: string } };
 
-export type AuthResult = { access_token: string; user: AuthUser };
+export type AuthResult = { access_token: string; refresh_token?: string; expires_in?: number; token_type?: string; user: AuthUser };
 
 async function request<T>(path: string, body?: unknown): Promise<T> {
   const response = await fetch(`${getApiBaseUrl()}${path}`, {
@@ -69,22 +69,65 @@ export async function me(token: string) {
   return response.json() as Promise<AuthUser>;
 }
 
-export function saveSession(result: AuthResult) { 
-  if (typeof window !== 'undefined') {
-    localStorage.setItem('workdrive_access_token', result.access_token); 
-    localStorage.setItem('workdrive_user', JSON.stringify(result.user));
-    localStorage.removeItem('access_token');
-    localStorage.removeItem('token');
+const REFRESH_TOKEN_KEY = 'workdrive_refresh_token';
+const ACCESS_MAX_AGE_SEC = 60 * 60; // matches backend access TTL
+const REFRESH_MAX_AGE_SEC = 30 * 24 * 60 * 60; // 30 days
 
-    // حفظ التوكن في الكوكي ليتسنى للسيرفر قراءته أثناء الـ SSR
-    const isSecure = window.location.protocol === 'https:' ? '; Secure' : '';
-    document.cookie = `workdrive_access_token=${encodeURIComponent(result.access_token)}; path=/; max-age=28800; SameSite=Lax${isSecure}`;
+export function saveSession(result: AuthResult) {
+  if (typeof window === 'undefined') return;
+  localStorage.setItem('workdrive_access_token', result.access_token);
+  localStorage.setItem('workdrive_user', JSON.stringify(result.user));
+  localStorage.removeItem('access_token');
+  localStorage.removeItem('token');
+
+  if (result.refresh_token) {
+    localStorage.setItem(REFRESH_TOKEN_KEY, result.refresh_token);
+  }
+
+  const isSecure = window.location.protocol === 'https:' ? '; Secure' : '';
+  const accessMax = result.expires_in && result.expires_in > 0 ? result.expires_in : ACCESS_MAX_AGE_SEC;
+  document.cookie = `workdrive_access_token=${encodeURIComponent(result.access_token)}; path=/; max-age=${accessMax}; SameSite=Lax${isSecure}`;
+  if (result.refresh_token) {
+    document.cookie = `workdrive_refresh_token=${encodeURIComponent(result.refresh_token)}; path=/; max-age=${REFRESH_MAX_AGE_SEC}; SameSite=Lax${isSecure}`;
+  }
+}
+
+export function getRefreshToken(): string | null {
+  if (typeof window === 'undefined') return null;
+  try {
+    return localStorage.getItem(REFRESH_TOKEN_KEY) || null;
+  } catch {
+    return null;
+  }
+}
+
+/** Exchange refresh_token for a new access token. Returns null if refresh is impossible. */
+export async function refreshSession(): Promise<AuthResult | null> {
+  const refreshToken = getRefreshToken();
+  if (!refreshToken) return null;
+  try {
+    const response = await fetch(`${getApiBaseUrl()}/auth/refresh`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ refresh_token: refreshToken }),
+    });
+    if (!response.ok) {
+      if (response.status === 401) clearSession();
+      return null;
+    }
+    const result = (await response.json()) as AuthResult;
+    if (!result?.access_token) return null;
+    saveSession(result);
+    return result;
+  } catch {
+    return null;
   }
 }
 
 export function clearSession() {
   try {
     localStorage.removeItem('workdrive_access_token');
+    localStorage.removeItem(REFRESH_TOKEN_KEY);
     localStorage.removeItem('workdrive_user');
     localStorage.removeItem('access_token');
     localStorage.removeItem('token');
@@ -92,6 +135,7 @@ export function clearSession() {
   try {
     if (typeof document !== 'undefined') {
       document.cookie = 'workdrive_access_token=; path=/; max-age=0; SameSite=Lax';
+      document.cookie = 'workdrive_refresh_token=; path=/; max-age=0; SameSite=Lax';
     }
   } catch { /* noop */ }
 }
