@@ -57,13 +57,32 @@ export default function AdminPage() {
   const [selectedActivity, setSelectedActivity] = useState("PREVIEW");
 
   useEffect(() => {
-    Promise.all([getAdminOverview(), getEnterpriseDashboard(), listAdminUsers(), listTeamFolders(), listCollaborationActivity(120), getStorageOverview()])
+    Promise.all([getAdminOverview(), getEnterpriseDashboard(), listAdminUsers(), listTeamFolders(), listCollaborationActivity(500), getStorageOverview()])
       .then(([o, d, u, tf, a, q]) => { setOverview(o); setEnterprise(d); setUsers(u); setTeamFolders(tf.teamFolders ?? []); setActivity(a); setQuota(q); })
       .catch(() => setError(ar ? "تعذر تحميل بيانات وحدة الإدارة." : "Unable to load Admin Console data."));
   }, [ar]);
 
-  const filteredActivity = activity.filter((row) => selectedActivity === "ALL" || (selectedActivity === "UPDATE" ? ["UPDATE", "EDIT"].includes(row.action) : row.action === selectedActivity));
-  const actionCounts = { PREVIEW: activity.filter((x) => x.action === "PREVIEW").length, UPLOAD: activity.filter((x) => ["UPLOAD", "UPLOAD_VERSION"].includes(x.action)).length, CREATE: activity.filter((x) => x.action === "CREATE").length, UPDATE: activity.filter((x) => ["UPDATE", "EDIT"].includes(x.action)).length, DOWNLOAD: activity.filter((x) => x.action === "DOWNLOAD").length };
+  // Map UI tabs to real AuditAction / activity values stored in FileActivity.
+  const activityGroups: Record<string, string[]> = {
+    PREVIEW: ["PREVIEW", "VIEW"],
+    UPLOAD: ["UPLOAD", "UPLOAD_VERSION"],
+    CREATE: ["CREATE"],
+    UPDATE: ["UPDATE", "EDIT", "MODIFY", "RENAME"],
+    DOWNLOAD: ["DOWNLOAD"],
+  };
+  const matchesActivity = (action: string, tab: string) => {
+    const group = activityGroups[tab] ?? [tab];
+    const normalized = String(action || "").toUpperCase();
+    return group.some((g) => normalized === g || normalized.endsWith(`_${g}`) || normalized.includes(g));
+  };
+  const filteredActivity = activity.filter((row) => selectedActivity === "ALL" || matchesActivity(row.action, selectedActivity));
+  const actionCounts = {
+    PREVIEW: activity.filter((x) => matchesActivity(x.action, "PREVIEW")).length,
+    UPLOAD: activity.filter((x) => matchesActivity(x.action, "UPLOAD")).length,
+    CREATE: activity.filter((x) => matchesActivity(x.action, "CREATE")).length,
+    UPDATE: activity.filter((x) => matchesActivity(x.action, "UPDATE")).length,
+    DOWNLOAD: activity.filter((x) => matchesActivity(x.action, "DOWNLOAD")).length,
+  };
   const topFolders = [...teamFolders].sort((a, b) => (Number(b.storageUsedBytes ?? b.size ?? 0) - Number(a.storageUsedBytes ?? a.size ?? 0))).slice(0, 4);
   const adminUser = users.find((u) => u.role === "SUPER_ADMIN") || users.find((u) => u.role === "ADMIN") || users[0];
   const quotaBytes = quota?.buckets.total.quotaBytes ?? 0;
