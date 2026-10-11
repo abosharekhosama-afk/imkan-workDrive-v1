@@ -1438,6 +1438,12 @@ export class FilesService {
       fileName: file.name,
     });
 
+    // Dashboard File Activity relies on PREVIEW rows; keep this non-blocking.
+    void this.recordActivity(user.org_id, file.id, user.sub, AuditAction.PREVIEW, {
+      versionId: version.id,
+      source: 'preview-url',
+    }).catch(() => undefined);
+
     return {
       preview_url: signed.url,
       expires_in_seconds: signed.expiresInSeconds,
@@ -1451,8 +1457,26 @@ export class FilesService {
   }
 
 
-  /** Aggregated collaboration activity visible to the current user. */
+  /** Aggregated collaboration activity visible to the current user (org-wide for admins). */
   async collaborationActivity(user: AccessTokenPayload, limit = 50) {
+    const take = Math.min(Math.max(limit, 1), 500);
+    const isOrgAdmin = user.role === 'ORG_ADMIN' || user.role === 'SUPER_ADMIN' || user.role === 'ADMIN';
+    // Admins see org-wide FileActivity so dashboard charts reflect CREATE / UPDATE / PREVIEW / DOWNLOAD.
+    if (isOrgAdmin) {
+      const rows = await this.prisma.fileActivity.findMany({
+        where: { orgId: user.org_id },
+        orderBy: { createdAt: 'desc' },
+        take,
+        include: {
+          file: { select: { id: true, name: true, ownerId: true } },
+          user: { select: { id: true, name: true, email: true, avatarUrl: true } },
+        },
+      });
+      return rows.map((row) => ({
+        id: row.id, action: row.action, createdAt: row.createdAt.toISOString(),
+        file: row.file, actor: row.user, metadata: (row.metadata as Record<string, unknown> | null) ?? null,
+      }));
+    }
     const candidates = await this.prisma.file.findMany({
       where: { orgId: user.org_id, deletedAt: null },
       take: 250,
@@ -1468,7 +1492,7 @@ export class FilesService {
     const rows = await this.prisma.fileActivity.findMany({
       where: { orgId: user.org_id, fileId: { in: visible } },
       orderBy: { createdAt: 'desc' },
-      take: Math.min(Math.max(limit, 1), 100),
+      take,
       include: {
         file: { select: { id: true, name: true, ownerId: true } },
         user: { select: { id: true, name: true, email: true, avatarUrl: true } },
