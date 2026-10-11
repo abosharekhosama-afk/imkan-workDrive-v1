@@ -520,7 +520,7 @@ export default function TemplatesPage() {
             <button type="button" disabled={busy || !newCategory.trim()} onClick={() => void addCategory()} className="rounded-lg border border-slate-200 px-3 py-2 text-[12px] font-medium text-slate-700 disabled:opacity-50">+ {text(ar, "Category", "تصنيف")}</button>
             </div>}
           </div>}
-          {message && <div className="mt-3 rounded-lg bg-[#EEF4FF] px-3 py-2 text-[12px] text-[#1B66EA]">{message}</div>}
+          {message && <div className="mt-3 rounded-lg bg-[var(--wd-primary-light,#eff6ff)] px-3 py-2 text-[12px] text-[var(--wd-primary-ink,var(--wd-primary))]">{message}</div>}
           {error && <div className="mt-3 rounded-lg bg-red-50 px-3 py-2 text-[12px] text-red-700">{error}</div>}
         </div>
 
@@ -530,11 +530,11 @@ export default function TemplatesPage() {
                 <div className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">{text(ar, "Category", "التصنيف")}</div>
                 {libraryCapabilities?.canCreateCategory && library !== "PUBLIC" && <button type="button" onClick={() => document.getElementById("new-template-category")?.focus()} className="rounded-md px-2 py-1 text-[15px] leading-none text-slate-500 hover:bg-[var(--wd-hover,#f1f5f9)]" aria-label={text(ar, "Create category", "إنشاء تصنيف")}>+</button>}
               </div>
-              <button type="button" onClick={() => setCategoryId(undefined)} className={`mb-1 flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-[12px] ${!categoryId ? "bg-[#EEF4FF] font-medium text-[var(--wd-primary)]" : "text-slate-600 hover:bg-[var(--wd-hover,#f8fafc)]"}`}>
+              <button type="button" onClick={() => setCategoryId(undefined)} className={`mb-1 flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-[12px] ${!categoryId ? "bg-[var(--wd-primary-light,#eff6ff)] font-medium text-[var(--wd-primary)]" : "text-slate-600 hover:bg-[var(--wd-hover,#f8fafc)]"}`}>
                 <span>{text(ar, "All", "الكل")}</span>
               </button>
               {library !== "PUBLIC" && categories.map((c) => (
-                <button key={c.id} type="button" onClick={() => setCategoryId(c.id)} className={`mb-1 flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-[12px] ${categoryId === c.id ? "bg-[#EEF4FF] font-medium text-[var(--wd-primary)]" : "text-slate-600 hover:bg-[var(--wd-hover,#f8fafc)]"}`}>
+              <button key={c.id} type="button" onClick={() => setCategoryId(c.id)} className={`mb-1 flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-[12px] ${categoryId === c.id ? "bg-[var(--wd-primary-light,#eff6ff)] font-medium text-[var(--wd-primary)]" : "text-slate-600 hover:bg-[var(--wd-hover,#f8fafc)]"}`}>
                   <span className="truncate">{c.name}</span>
                 </button>
               ))}
@@ -543,7 +543,7 @@ export default function TemplatesPage() {
             {empty ? (
               <div className="flex min-h-[420px] flex-1 items-center justify-center p-8">
                 <div className="max-w-sm text-center">
-                  <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-[#f6f8fb] text-slate-400"><Icons.layout size={28} /></div>
+                  <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-[var(--wd-panel-2,#f1f5f9)] text-slate-400"><Icons.layout size={28} /></div>
                   <h2 className="mt-4 text-[15px] font-semibold text-slate-800">{text(ar, "No templates yet", "لا توجد قوالب بعد")}</h2>
                   <p className="mt-1 text-[12px] leading-5 text-slate-500">{text(ar, library === "PUBLIC" ? "Public templates will appear here when available." : "Save a file as a template to populate this library.", library === "PUBLIC" ? "ستظهر القوالب العامة هنا عند توفرها." : "احفظ ملفًا كقالب لإضافة القوالب إلى هذه المكتبة.")}</p>
                 </div>
@@ -572,7 +572,7 @@ export default function TemplatesPage() {
             <div className={layout === "grid" ? "grid grid-cols-[repeat(auto-fill,minmax(245px,1fr))] gap-4 p-5" : "space-y-2 p-5"}>
             {templates.map((template) => (
               <article key={template.id} className={layout === "grid" ? `relative overflow-visible rounded-xl border border-[color:var(--wd-line,#e5e7eb)] bg-[var(--wd-surface,#fff)] shadow-sm transition hover:border-slate-300 hover:shadow-md ${menuTemplateId === template.id ? "z-[70]" : "z-0"}` : `relative flex items-center gap-4 rounded-xl border border-slate-200 bg-[var(--wd-bg,#fff)] p-3 shadow-sm transition hover:border-slate-300 ${menuTemplateId === template.id ? "z-[70]" : "z-0"}`}>
-                <button type="button" onClick={() => void previewTemplate(template)} className={layout === "grid" ? "group relative flex h-36 w-full items-center justify-center overflow-hidden bg-[#f6f8fb] text-[var(--wd-primary)]" : "group flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-[#f6f8fb] text-[var(--wd-primary)]"}>
+                <button type="button" onClick={() => void previewTemplate(template)} className={layout === "grid" ? "group relative flex h-36 w-full items-center justify-center overflow-hidden bg-[var(--wd-panel-2,#f1f5f9)] text-[var(--wd-primary)]" : "group flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-[var(--wd-panel-2,#f1f5f9)] text-[var(--wd-primary)]"}>
                   {layout === "grid" ? (
                     <img
                       src={`/templates/thumbnails/${thumbnailSlug(template.name)}.png`}
