@@ -694,6 +694,7 @@
   "menu.moveToTrash": "Move to Trash",
   "menu.openNewTab": "Open in new tab",
   "menu.organize": "Organize",
+  "menu.assignDataTemplate": "Assign data template",
   "menu.properties": "Properties",
   "menu.record": "Record",
   "menu.searchInFold": "Search in fold",
