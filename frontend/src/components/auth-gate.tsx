@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useState, type ReactNode } from "react";
 import { usePathname, useRouter } from "next/navigation";
-import { clearSession, me, redeemOAuthResume, SessionCheckError } from "../lib/api/auth";
+import { clearSession, me, redeemOAuthResume, refreshSession, saveSession, SessionCheckError } from "../lib/api/auth";
 import {
   authCheckRetryDelayMs,
   buildAuthGateDiagnostic,
@@ -112,15 +112,29 @@ export function AuthGate({ children }: { children: ReactNode }) {
             return;
           }
 
-          logAuthGate("auth_state_cleared", buildAuthGateDiagnostic({
-            stage: "auth_state_cleared",
-            hasAccessToken: false,
-            hasCookie: false,
-            authMeStatus: status,
-          }));
-          clearSession();
-          const next = buildAuthLoginNextPath(pathname, window.location.search);
-          router.replace(`/auth/login?next=${encodeURIComponent(next)}`);
+          // Access token expired/invalid — try silent refresh before forcing login.
+          void refreshSession().then((refreshed) => {
+            if (cancelled) return;
+            if (refreshed?.access_token) {
+              logAuthGate("auth_refreshed", buildAuthGateDiagnostic({
+                stage: "auth_refreshed",
+                hasAccessToken: true,
+                hasCookie: true,
+                authMeStatus: 200,
+              }));
+              setReady(true);
+              return;
+            }
+            logAuthGate("auth_state_cleared", buildAuthGateDiagnostic({
+              stage: "auth_state_cleared",
+              hasAccessToken: false,
+              hasCookie: false,
+              authMeStatus: status,
+            }));
+            clearSession();
+            const next = buildAuthLoginNextPath(pathname, window.location.search);
+            router.replace(`/auth/login?next=${encodeURIComponent(next)}`);
+          });
         });
     };
 
@@ -128,7 +142,7 @@ export function AuthGate({ children }: { children: ReactNode }) {
     };
     if (resumeCode) {
       void redeemOAuthResume(resumeCode).then((result) => {
-        persistBrowserAccessToken(result.access_token);
+        try { saveSession(result); } catch { persistBrowserAccessToken(result.access_token); }
         finish(result.access_token);
       }).catch(() => finish(storedToken));
     } else finish(storedToken);

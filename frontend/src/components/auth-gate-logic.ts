@@ -67,7 +67,7 @@ export function persistBrowserAccessToken(token: string): void {
   localStorage.removeItem("access_token");
   localStorage.removeItem("token");
   const isSecure = window.location.protocol === "https:" ? "; Secure" : "";
-  document.cookie = `workdrive_access_token=${encodeURIComponent(token)}; path=/; max-age=28800; SameSite=Lax${isSecure}`;
+  document.cookie = `workdrive_access_token=${encodeURIComponent(token)}; path=/; max-age=3600; SameSite=Lax${isSecure}`;
 }
 
 const TRANSIENT_AUTH_STATUSES = new Set([0, 502, 503, 504]);
