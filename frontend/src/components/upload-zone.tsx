@@ -1,7 +1,7 @@
 "use client";
 
 import { useLocale } from "./locale-provider";
-import { filesFromDrop, uploadFileToFolder } from "../lib/api/upload-file";
+import { filesFromDrop, uploadFileToFolder, isBrowserOnline, isNetworkError, waitForOnline } from "../lib/api/upload-file";
 import { ApiError } from "../lib/api/client";
 import { createFolder } from "../lib/api/folders";
 import type { ChangeEvent, DragEvent } from "react";
@@ -27,9 +27,12 @@ export function UploadZone({ folderId, onUploaded, triggerOnly = false }: { fold
   const patchItem = useCallback((id: string, update: Partial<Pick<UploadQueueItem, "status" | "progress" | "error">>) => {
     const current = itemsRef.current.find((item) => item.id === id);
     if (!current || current.status === "completed") return;
-    if (current.status === "failed" && update.status !== "processing" && update.status !== "queued") return;
+    // Only block progress on terminal failed items unless we explicitly re-queue them.
+    if (current.status === "failed" && update.status !== "processing" && update.status !== "queued" && update.status !== "uploading") return;
     publish(updateUploadQueueItem(itemsRef.current, id, update));
   }, [publish]);
+  const runningRef = useRef(false);
+  const folderTargetRef = useRef<Map<string, string | null>>(new Map());
   const inputRef = useRef<HTMLInputElement | null>(null);
   const folderInputRef = useRef<HTMLInputElement | null>(null);
   const mandateResolver = useRef<((value: { templateId: string; customFields: Record<string, unknown> } | null) => void) | null>(null);
@@ -71,7 +74,8 @@ export function UploadZone({ folderId, onUploaded, triggerOnly = false }: { fold
     window.dispatchEvent(new Event("workdrive:content-changed"));
     void Promise.resolve(onUploaded()).catch(() => undefined);
   }, [onUploaded]);
-  const upload = useCallback(async (item: UploadQueueItem) => {
+
+  const uploadOne = useCallback(async (item: UploadQueueItem, targetFolderId: string | null) => {
     patchItem(item.id, { status: "processing", progress: 0, error: undefined });
     let fields: { templateId: string; customFields: Record<string, unknown> } | null | undefined;
     try {
@@ -84,7 +88,14 @@ export function UploadZone({ folderId, onUploaded, triggerOnly = false }: { fold
       return;
     }
     try {
-      await uploadFileToFolder(folderId, item.file, (progress) => patchItem(item.id, { status: "uploading", progress }), fields?.customFields, fields?.templateId);
+      if (!isBrowserOnline()) await waitForOnline();
+      await uploadFileToFolder(
+        targetFolderId,
+        item.file,
+        (progress) => patchItem(item.id, { status: "uploading", progress }),
+        fields?.customFields,
+        fields?.templateId,
+      );
       patchItem(item.id, { status: "completed", progress: 100, error: undefined });
       refreshAfterUpload();
     } catch (error) {
@@ -93,16 +104,39 @@ export function UploadZone({ folderId, onUploaded, triggerOnly = false }: { fold
         patchItem(item.id, { status: "completed", progress: 100, error: undefined });
         refreshAfterUpload();
       } else {
-        patchItem(item.id, { status: "failed", error: label("upload.failed") });
+        const network = isNetworkError(error) || !isBrowserOnline();
+        patchItem(item.id, {
+          status: "failed",
+          error: network ? (ar ? "انقطع الاتصال — سيُستأنف تلقائياً" : "Connection lost — will auto-resume") : label("upload.failed"),
+        });
       }
     }
-  }, [askForTemplateFields, folderId, label, patchItem, publish, refreshAfterUpload]);
+  }, [ar, askForTemplateFields, label, patchItem, publish, refreshAfterUpload]);
 
-  const enqueue = useCallback((files: File[]) => {
+  /** Process queue sequentially; failures do not stop remaining items. */
+  const pumpQueue = useCallback(async () => {
+    if (runningRef.current) return;
+    runningRef.current = true;
+    try {
+      while (true) {
+        const next = itemsRef.current.find((row) => row.status === "queued");
+        if (!next) break;
+        const target = folderTargetRef.current.get(next.id) ?? folderId;
+        await uploadOne(next, target);
+      }
+    } finally {
+      runningRef.current = false;
+    }
+  }, [folderId, uploadOne]);
+
+  const enqueue = useCallback((files: File[], targets?: Array<string | null>) => {
     const added = createUploadQueueItems(files);
+    added.forEach((item, index) => {
+      folderTargetRef.current.set(item.id, targets?.[index] ?? folderId);
+    });
     publish([...itemsRef.current, ...added]);
-    void added.reduce((chain, item) => chain.then(() => upload(item)), Promise.resolve());
-  }, [publish, upload]);
+    void pumpQueue();
+  }, [folderId, publish, pumpQueue]);
 
   async function onFolderChange(event: ChangeEvent<HTMLInputElement>) {
     const files = Array.from(event.target.files ?? []);
@@ -119,46 +153,72 @@ export function UploadZone({ folderId, onUploaded, triggerOnly = false }: { fold
         const existing = folderCache.get(built);
         if (existing) { parent = existing; continue; }
         const created = await createFolder(part, parent ?? undefined);
-        folderCache.set(built, created.id); parent = created.id;
+        folderCache.set(built, created.id);
+        parent = created.id;
       }
       return parent;
     };
-    const queued = createUploadQueueItems(files);
-    publish([...itemsRef.current, ...queued]);
-    for (let i = 0; i < queued.length; i++) {
-      const item = queued[i];
-      patchItem(item.id, { status: "processing", progress: 0 });
-      try {
-        const relative = (files[i] as File & { webkitRelativePath?: string }).webkitRelativePath ?? files[i].name;
-        const parts = relative.split("/").filter(Boolean);
-        const target = await ensureFolder(parts.length > 1 ? parts.slice(0, -1).join("/") : "");
-        await uploadFileToFolder(target ?? folderId, item.file, (progress) => patchItem(item.id, { status: "uploading", progress }));
-        patchItem(item.id, { status: "completed", progress: 100, error: undefined });
-        refreshAfterUpload();
-      } catch (error) {
-        const alreadyDone = error instanceof ApiError && (error.status === 409 || /already processed|already complete/i.test(error.message));
-        if (alreadyDone) {
-          patchItem(item.id, { status: "completed", progress: 100, error: undefined });
-          refreshAfterUpload();
-        } else {
-          patchItem(item.id, { status: "failed", error: label("upload.failed") });
-        }
-      }
+    const targets: Array<string | null> = [];
+    for (let i = 0; i < files.length; i++) {
+      const relative = (files[i] as File & { webkitRelativePath?: string }).webkitRelativePath ?? files[i].name;
+      const parts = relative.split("/").filter(Boolean);
+      const target = await ensureFolder(parts.length > 1 ? parts.slice(0, -1).join("/") : "");
+      targets.push(target ?? folderId);
     }
+    enqueue(files, targets);
   }
-  function onChange(event: ChangeEvent<HTMLInputElement>) { enqueue(Array.from(event.target.files ?? [])); event.target.value = ""; }
-  function onDrop(event: DragEvent<HTMLLabelElement>) { event.preventDefault(); setActive(false); enqueue(filesFromDrop(event.dataTransfer)); }
-  function retry(item: UploadQueueItem) { void upload(item); }
-  function remove(id: string) { publish(itemsRef.current.filter((item) => item.id !== id)); }
+
+  function onChange(event: ChangeEvent<HTMLInputElement>) {
+    enqueue(Array.from(event.target.files ?? []));
+    event.target.value = "";
+  }
+  function onDrop(event: DragEvent<HTMLLabelElement>) {
+    event.preventDefault();
+    setActive(false);
+    enqueue(filesFromDrop(event.dataTransfer));
+  }
+  function retry(item: UploadQueueItem) {
+    folderTargetRef.current.set(item.id, folderTargetRef.current.get(item.id) ?? folderId);
+    publish(updateUploadQueueItem(itemsRef.current, item.id, { status: "queued", error: undefined, progress: 0 }));
+    void pumpQueue();
+  }
+  function remove(id: string) {
+    folderTargetRef.current.delete(id);
+    publish(itemsRef.current.filter((item) => item.id !== id));
+  }
+
+  // Manual retry from toast / global event
   useEffect(() => {
     const onRetry = (event: Event) => {
       const id = (event as CustomEvent<{ id?: string }>).detail?.id;
       const item = itemsRef.current.find((row) => row.id === id);
-      if (item) void upload({ ...item, status: "queued", error: undefined, progress: 0 });
+      if (!item) return;
+      folderTargetRef.current.set(item.id, folderTargetRef.current.get(item.id) ?? folderId);
+      publish(updateUploadQueueItem(itemsRef.current, item.id, { status: "queued", error: undefined, progress: 0 }));
+      void pumpQueue();
     };
     window.addEventListener("workdrive:retry-upload", onRetry);
     return () => window.removeEventListener("workdrive:retry-upload", onRetry);
-  }, [upload]);
+  }, [folderId, publish, pumpQueue]);
+
+  // Auto-resume when the browser comes back online: re-queue failed items and continue the queue.
+  useEffect(() => {
+    const onOnline = () => {
+      const failed = itemsRef.current.filter((row) => row.status === "failed");
+      if (!failed.length) {
+        void pumpQueue();
+        return;
+      }
+      let next = itemsRef.current;
+      for (const item of failed) {
+        next = updateUploadQueueItem(next, item.id, { status: "queued", error: undefined, progress: item.progress ?? 0 });
+      }
+      publish(next);
+      void pumpQueue();
+    };
+    window.addEventListener("online", onOnline);
+    return () => window.removeEventListener("online", onOnline);
+  }, [publish, pumpQueue]);
 
   const resolveTemplatePrompt = (accepted: boolean) => {
     const resolver = mandateResolver.current;
