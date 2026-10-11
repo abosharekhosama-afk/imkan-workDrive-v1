@@ -30,8 +30,13 @@ export type FolderRecord = {
   ownerEmail?: string | null;
   ownerAvatar?: string | null;
   updatedAt?: string | null;
+  createdAt?: string | null;
   teamFolderId?: string | null;
-  itemCount?: number | null; // <-- إضافة هذه الخاصية تنهي خطأ البناء في Vercel
+  itemCount?: number | null;
+  folderCount?: number | null;
+  fileCount?: number | null;
+  size?: number | null;
+  storageUsedBytes?: number | null;
 };
 
 export type FolderContents = {
