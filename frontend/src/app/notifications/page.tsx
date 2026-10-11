@@ -81,8 +81,11 @@ export default function NotificationsPage() {
                 ["compliance", ar ? "الأمان والامتثال" : "Security & compliance"],
                 ["externalStorage", ar ? "التخزين الخارجي" : "External storage"],
               ].map(([key,title]) => { const k=key as keyof Pick<OfficeNotificationPreferences, "collaboration"|"templateAutomation"|"exports"|"compliance"|"externalStorage">; return (
-                <button key={key} type="button" disabled={prefsBusy} onClick={() => void togglePref(k)} className="flex min-h-[42px] items-center justify-between rounded-md border border-slate-100 px-3 text-start hover:bg-slate-50">
-                  <span className="text-[11px] font-medium text-slate-700">{title}</span><span className={`h-5 w-9 rounded-full p-0.5 transition ${prefs[k] ? "bg-[#1B66EA]" : "bg-slate-200"}`}><span className={`block h-4 w-4 rounded-full bg-white shadow-sm transition ${prefs[k] ? "translate-x-4" : "translate-x-0"}`} /></span>
+                <button key={key} type="button" disabled={prefsBusy} onClick={() => void togglePref(k)} className="flex min-h-[42px] items-center justify-between gap-3 rounded-md border border-slate-100 px-3 text-start hover:bg-slate-50" role="switch" aria-checked={prefs[k]}>
+                  <span className="text-[11px] font-medium text-slate-700">{title}</span>
+                  <span className={`flex h-5 w-9 shrink-0 items-center rounded-full p-0.5 transition ${prefs[k] ? "justify-end bg-[#1B66EA]" : "justify-start bg-slate-200"}`} aria-hidden="true">
+                    <span className="block h-4 w-4 rounded-full bg-white shadow-sm" />
+                  </span>
                 </button>
               ); })}
             </div>
