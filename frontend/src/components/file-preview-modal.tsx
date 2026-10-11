@@ -451,7 +451,11 @@ export function FilePreviewModal({ target, onClose, onPrevFile, onNextFile, init
           {onNextFile ? <button type="button" className="zoho-preview-arrow end" onClick={onNextFile} aria-label={label("preview.nextPage")} title="Next">›</button> : null}
         </div>
 
-        {panel === "details" ? <DetailsSidebar open fileId={activeTarget.id} fileName={fileName} mimeType={effectiveMime} size={effectiveSize} versionNumber={info?.version_number} updatedAt={info?.updated_at} onClose={() => setPanel(null)} onShare={() => setShareMenuOpen(true)} onViewVersions={() => setVersionOpen(true)} /> : null}
+        {panel === "details" ? <DetailsSidebar open fileId={activeTarget.id} fileName={fileName} mimeType={effectiveMime} size={effectiveSize} versionNumber={info?.version_number} updatedAt={info?.updated_at} onClose={() => setPanel(null)} onShare={() => setShareMenuOpen(true)} onViewVersions={() => {
+          const fileId = activeTarget.id;
+          onClose?.();
+          router.push(`/files/details/${encodeURIComponent(fileId)}?tab=versions`);
+        }} /> : null}
         {panel === "comments" ? <FileCommentsPanel fileId={activeTarget.id} focusCommentId={focusCommentId} onCount={setCommentCount} onClose={() => setPanel(null)} /> : null}
         {panel === "dataTemplate" ? <DataTemplateSidebar open fileId={activeTarget.id} onClose={() => setPanel(null)} /> : null}
         {panel === "watermark" ? <WatermarkSidebar open fileId={activeTarget.id} config={watermarkConfig} onChange={setWatermarkConfig} onClose={() => setPanel(null)} /> : null}
