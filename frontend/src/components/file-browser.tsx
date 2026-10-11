@@ -1180,6 +1180,13 @@ export function FileBrowser({
           onClose={() => setPreviewTarget(null)}
           onPrevFile={handlePrevFile}
           onNextFile={handleNextFile}
+          canMutate={canMutate}
+          canShare={canShare}
+          isFavorite={favoriteIds.has(previewTarget.id)}
+          onOrganize={() => setDataTemplateTargets([{ type: "FILE", id: previewTarget.id, name: previewTarget.name }])}
+          onLabels={(type, id, name) => setLabelTarget({ type, id, name })}
+          onClassify={(type, id, name) => setClassifyTarget({ type, id, name })}
+          onFavoriteToggle={(type, id) => { void handleFavorite(type, id); }}
         />
       ) : null}
       {versionHistoryTarget? (

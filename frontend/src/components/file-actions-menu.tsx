@@ -149,13 +149,13 @@ export function buildUnifiedFileActionItems(opts: {
 
   if (handlers.onOrganize || handlers.onLabels || handlers.onClassify || handlers.onCreateShortcut || handlers.onInspect) {
     const organizeSub: ActionDropdownItem[] = [];
-    if (handlers.onOrganize) organizeSub.push({ label: label("menu.organize"), icon: FileMenuIcons.organize, onSelect: handlers.onOrganize });
+    if (handlers.onOrganize) organizeSub.push({ label: label("menu.assignDataTemplate"), icon: FileMenuIcons.organize, onSelect: handlers.onOrganize });
     if (handlers.onLabels) organizeSub.push({ label: label("menu.labels"), icon: FileMenuIcons.organize, onSelect: handlers.onLabels });
     if (handlers.onClassify) organizeSub.push({ label: "Add DLP classification / إضافة تصنيف DLP", icon: FileMenuIcons.organize, onSelect: handlers.onClassify });
     if (handlers.onCreateShortcut) organizeSub.push({ label: label("menu.createShortcut"), icon: FileMenuIcons.organize, onSelect: handlers.onCreateShortcut });
     if (handlers.onInspect) organizeSub.push({ label: label("menu.properties"), icon: FileMenuIcons.properties, onSelect: handlers.onInspect });
     if (organizeSub.length === 1 && handlers.onOrganize) {
-      push({ label: label("menu.organize"), icon: FileMenuIcons.organize, onSelect: handlers.onOrganize });
+      push({ label: label("menu.assignDataTemplate"), icon: FileMenuIcons.organize, onSelect: handlers.onOrganize });
     } else if (organizeSub.length > 0) {
       push({
         label: label("menu.organize"),
@@ -167,8 +167,7 @@ export function buildUnifiedFileActionItems(opts: {
   }
 
   // —— Download / Rename / Follow / Versions ——
-  if (handlers.onClassify) push({ label: "Add DLP classification / إضافة تصنيف DLP", icon: FileMenuIcons.organize, onSelect: handlers.onClassify, dividerBefore: true });
-  if (handlers.onDownload) push({ label: label("menu.download"), icon: FileMenuIcons.download, onSelect: handlers.onDownload, dividerBefore: !handlers.onClassify });
+  if (handlers.onDownload) push({ label: label("menu.download"), icon: FileMenuIcons.download, onSelect: handlers.onDownload, dividerBefore: true });
   if (handlers.onRename) push({ label: label("menu.rename"), icon: FileMenuIcons.rename, onSelect: handlers.onRename });
   if (handlers.onFollowUpdates) {
     push({
@@ -188,7 +187,6 @@ export function buildUnifiedFileActionItems(opts: {
   const moreSub: ActionDropdownItem[] = [];
   if (handlers.onComment) moreSub.push({ label: label("menu.addComment"), icon: FileMenuIcons.comment, onSelect: handlers.onComment });
   if (handlers.onInspect) moreSub.push({ label: label("menu.properties"), icon: FileMenuIcons.properties, onSelect: handlers.onInspect });
-  if (control.onReindex) moreSub.push({ label: label("menu.reindex"), icon: FileMenuIcons.organize, onSelect: control.onReindex });
   if (handlers.onFavoriteToggle) {
     moreSub.push({
       label: label(context.isFavorite ? "files.unfavorite" : "files.favorite"),

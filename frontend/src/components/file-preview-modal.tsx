@@ -55,6 +55,13 @@ interface FilePreviewModalProps {
   onNextFile?: () => void;
   initialPanel?: "details" | "comments" | "dataTemplate" | "watermark" | "zia";
   focusCommentId?: string | null;
+  canMutate?: boolean;
+  canShare?: boolean;
+  isFavorite?: boolean;
+  onOrganize?: (resourceType: "FILE", resourceId: string, resourceName: string) => void;
+  onLabels?: (resourceType: "FILE", resourceId: string, resourceName: string) => void;
+  onClassify?: (resourceType: "FILE", resourceId: string, resourceName: string) => void;
+  onFavoriteToggle?: (resourceType: "FILE", resourceId: string) => void;
 }
 
 function WorkDriveLogo() {
@@ -73,7 +80,21 @@ function WorkDriveLogo() {
  * fetch — the root cause of the CORS/403 redirect failures) and a collapsible
  * details/activity sidebar.
  */
-export function FilePreviewModal({ target, onClose, onPrevFile, onNextFile, initialPanel, focusCommentId }: FilePreviewModalProps) {
+export function FilePreviewModal({
+  target,
+  onClose,
+  onPrevFile,
+  onNextFile,
+  initialPanel,
+  focusCommentId,
+  canMutate = true,
+  canShare = true,
+  isFavorite = false,
+  onOrganize,
+  onLabels,
+  onClassify,
+  onFavoriteToggle,
+}: FilePreviewModalProps) {
   const { label, locale } = useLocale();
   const previousActiveRef = useRef<HTMLElement | null>(null);
   const [panel, setPanel] = useState<"details" | "comments" | "dataTemplate" | "watermark" | "zia" | null>(initialPanel ?? null);
@@ -409,29 +430,30 @@ export function FilePreviewModal({ target, onClose, onPrevFile, onNextFile, init
           <FileActionsMenu
             zIndex={280}
             control={fileControl}
-            context={{ resourceType: "FILE", canMutate: true, canShare: true, canFavorite: false }}
+            context={{ resourceType: "FILE", canMutate, canShare, canFavorite: Boolean(onFavoriteToggle), isFavorite }}
             handlers={{
-              onCheckOut: () => applyControl("check-out"),
-              onCheckIn: () => applyControl("check-in"),
-              onMarkFinal: () => applyControl("mark-final"),
-              onEnableEditing: () => applyControl("enable-editing"),
-              onReindex: () => applyControl("reindex"),
+              onCheckOut: canMutate ? () => applyControl("check-out") : undefined,
+              onCheckIn: canMutate ? () => applyControl("check-in") : undefined,
+              onMarkFinal: canMutate ? () => applyControl("mark-final") : undefined,
+              onEnableEditing: canMutate ? () => applyControl("enable-editing") : undefined,
+              onReindex: canMutate ? () => applyControl("reindex") : undefined,
               onOpen: () => runAction("openNewTab"),
-              onShare: () => runAction("share"),
-              onCopyLink: () => runAction("copyPermalink"),
-              onSaveAsTemplate: () => runAction("saveAsTemplate"),
-              onMove: () => runAction("moveTo"),
-              onCopy: () => runAction("copyTo"),
-              onAssignWorkflow: () => runAction("assignWorkflow"),
-              onOrganize: () => runAction("organize"),
-              onSearchInFolder: () => runAction("searchInFold"),
+              onShare: canShare ? () => runAction("share") : undefined,
+              onCopyLink: canShare ? () => runAction("copyPermalink") : undefined,
+              onMove: canMutate ? () => runAction("moveTo") : undefined,
+              onCopy: canMutate ? () => runAction("copyTo") : undefined,
+              onAssignWorkflow: canMutate ? () => runAction("assignWorkflow") : undefined,
+              onOrganize: canMutate && onOrganize ? () => onOrganize("FILE", activeTarget.id, activeTarget.name) : undefined,
+              onLabels: onLabels ? () => onLabels("FILE", activeTarget.id, activeTarget.name) : undefined,
+              onClassify: onClassify ? () => onClassify("FILE", activeTarget.id, activeTarget.name) : undefined,
+              onFavoriteToggle: onFavoriteToggle ? () => onFavoriteToggle("FILE", activeTarget.id) : undefined,
               onDownload: () => runAction("download"),
-              onRename: () => runAction("rename"),
+              onRename: canMutate ? () => runAction("rename") : undefined,
               onFollowUpdates: () => runAction("followUpdates"),
               onComment: () => setPanel("comments"),
               onInspect: () => runAction("moreOptions"),
               onVersionHistory: () => setVersionOpen(true),
-              onDelete: () => runAction("moveToTrash"),
+              onDelete: canMutate ? () => runAction("moveToTrash") : undefined,
             }}
             trigger={<button type="button" className="zoho-preview-icon-top" onClick={() => setShareMenuOpen(false)} aria-label={label("files.actions")} title={label("files.actions")}><Icons.dots size={16} /></button>}
           />
