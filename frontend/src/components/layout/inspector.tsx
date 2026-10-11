@@ -139,11 +139,31 @@ export function InspectorPanel() {
       const folder = selected.folder;
       const parentId = folder.parentId ?? null;
       Promise.all([
+        getFolder(id).catch(() => null),
         parentId ? getFolder(parentId).then((row) => row.name).catch(() => null) : Promise.resolve(null),
         listLabelsForResource("FOLDER", id).catch(() => [] as WorkspaceLabel[]),
-      ]).then(([location, workspaceLabels]) => {
+      ]).then(([detail, location, workspaceLabels]) => {
         if (cancel) return;
-        setFacts({ id, location, labels: mergeLabels(workspaceLabels), createdAt: (folder as { createdAt?: string }).createdAt ?? folder.updatedAt ?? null, updatedAt: folder.updatedAt ?? null, size: (folder as { size?: number }).size ?? null, mimeType: null, ownerName: folder.ownerName ?? null, containsFolders: (folder as { folderCount?: number }).folderCount ?? null, containsFiles: (folder as { fileCount?: number }).fileCount ?? folder.itemCount ?? null });
+        const d = detail as {
+          folderCount?: number; fileCount?: number; itemCount?: number; size?: number;
+          storageUsedBytes?: number; ownerName?: string | null; owner?: { name?: string | null } | null;
+          createdAt?: string; updatedAt?: string; folders?: unknown[]; files?: unknown[];
+        } | null;
+        const containsFolders = d?.folderCount ?? (Array.isArray(d?.folders) ? d!.folders!.length : null) ?? (folder as { folderCount?: number }).folderCount ?? null;
+        const containsFiles = d?.fileCount ?? (Array.isArray(d?.files) ? d!.files!.length : null) ?? (folder as { fileCount?: number }).fileCount ?? folder.itemCount ?? null;
+        const storage = d?.storageUsedBytes ?? d?.size ?? (folder as { size?: number }).size ?? null;
+        setFacts({
+          id,
+          location,
+          labels: mergeLabels(workspaceLabels),
+          createdAt: d?.createdAt ?? (folder as { createdAt?: string }).createdAt ?? folder.updatedAt ?? null,
+          updatedAt: d?.updatedAt ?? folder.updatedAt ?? null,
+          size: storage != null ? Number(storage) : null,
+          mimeType: null,
+          ownerName: d?.ownerName ?? d?.owner?.name ?? folder.ownerName ?? null,
+          containsFolders: containsFolders != null ? Number(containsFolders) : null,
+          containsFiles: containsFiles != null ? Number(containsFiles) : null,
+        });
         setFileActivities([]);
       });
     }
