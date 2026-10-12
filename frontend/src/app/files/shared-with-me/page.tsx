@@ -91,7 +91,7 @@ export default function SharedWithMePage() {
   };
 
   return (
-    <div className="wd-page shared-with-me-page flex h-full min-h-0 flex-1 flex-col overflow-hidden !p-0 wd-list-page">
+    <div className="wd-page shared-with-me-page flex h-full min-h-0 w-full min-w-0 flex-1 flex-col overflow-hidden !p-0 wd-list-page">
       <header className="wd-page-head shrink-0 px-4 pt-4 md:px-6">
         <div className="wd-page-head-titles">
           <h1>{label("shared.withMe")}</h1>
@@ -106,7 +106,7 @@ export default function SharedWithMePage() {
         ) : null}
       </header>
 
-      <div className="shared-with-me-scroll min-h-0 flex-1 overflow-y-auto overflow-x-auto px-4 pb-6 md:px-6">
+      <div className="shared-with-me-scroll min-h-0 min-w-0 flex-1 overflow-x-auto overflow-y-auto overflow-x-auto px-4 pb-6 md:px-6">
       {error ? <div className="wd-alert" role="alert">{error}</div> : null}
 
       {loading ? (
