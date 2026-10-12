@@ -150,11 +150,12 @@ export function TopHeader({ adminMode = false }: { adminMode?: boolean }) {
         setTeamContextKey(contextKey);
         setTeamFolder(candidate);
         if (candidate) {
-          if (typeof candidate.memberCount === "number") {
-            if (live) setTeamMemberCount(candidate.memberCount);
-          } else {
+          // Prefer live members list so the badge always reflects real data.
+          try {
             const memberRes = await listTeamFolderMembers(candidate.id);
-            if (live) setTeamMemberCount(memberRes.members.length);
+            if (live) setTeamMemberCount(memberRes.members?.length ?? candidate.memberCount ?? 0);
+          } catch {
+            if (live) setTeamMemberCount(typeof candidate.memberCount === "number" ? candidate.memberCount : 0);
           }
         } else {
           setTeamMemberCount(0);
@@ -176,7 +177,18 @@ export function TopHeader({ adminMode = false }: { adminMode?: boolean }) {
   if (isTeamFoldersDirectory) {
     return (
       <header className="team-context-header">
-        <div className="team-context-title"><span className="team-context-name">Team Folders</span></div>
+        <div className="team-context-title">
+        <button
+          type="button"
+          className="wd-icon-btn mobile-sidebar-toggle shrink-0"
+          aria-label={locale === "ar" ? (mobileNavOpen ? "إغلاق القائمة الجانبية" : "فتح القائمة الجانبية") : (mobileNavOpen ? "Close sidebar" : "Open sidebar")}
+          aria-expanded={mobileNavOpen}
+          onClick={() => setMobileNavOpen(!mobileNavOpen)}
+        >
+          {mobileNavOpen ? <Icons.x size={18} /> : <Icons.menu size={18} />}
+        </button>
+          <span className="team-context-name">Team Folders</span>
+        </div>
         <div className="team-context-actions">
           <OrgSwitcher organizationName={org || "IMKAN"} userRole={role} />
           <button type="button" className="wd-icon-btn" aria-label={label("search.placeholder")} onClick={() => setSearchOpen(true)}><Icons.search size={17} /></button>
@@ -199,6 +211,16 @@ export function TopHeader({ adminMode = false }: { adminMode?: boolean }) {
     return (
       <header className={`team-context-header ${isTeamManageRoute ? 'team-context-header--manage' : ''}`}>
         <div className="team-context-title">
+        <button
+          type="button"
+          className="wd-icon-btn mobile-sidebar-toggle shrink-0"
+          aria-label={locale === "ar" ? (mobileNavOpen ? "إغلاق القائمة الجانبية" : "فتح القائمة الجانبية") : (mobileNavOpen ? "Close sidebar" : "Open sidebar")}
+          aria-expanded={mobileNavOpen}
+          onClick={() => setMobileNavOpen(!mobileNavOpen)}
+        >
+          {mobileNavOpen ? <Icons.x size={18} /> : <Icons.menu size={18} />}
+        </button>
+
           
           <span className="team-context-name" title={teamFolder.name}>{teamFolder.name}</span>
           <span className="team-context-lock" aria-hidden="true"><Icons.shield size={13} /></span>
