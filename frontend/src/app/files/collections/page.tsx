@@ -214,7 +214,9 @@ export default function CollectionsPage() {
       setMenuAnchor(null);
     };
     document.addEventListener("mousedown", close);
-  
+    return () => document.removeEventListener("mousedown", close);
+  }, [menuFor]);
+
   const groupedSubmitters = useMemo(() => {
     const q = submissionSearch.trim().toLowerCase();
     const map = new Map<string, { key: string; name: string; email: string; lastAt: string; files: Array<{ id: string; name: string; at: string }> }>();
@@ -250,9 +252,6 @@ export default function CollectionsPage() {
     a.click();
     URL.revokeObjectURL(url);
   }
-
-  return () => document.removeEventListener("mousedown", close);
-  }, [menuFor]);
 
   return <main className="wd-page theme-aware-page flex min-h-0 flex-1 flex-col" dir={ar ? "rtl" : "ltr"} style={{ fontFamily: "var(--user-font-family), Arial, system-ui, sans-serif", color: "var(--wd-text, #212121)", background: "var(--wd-canvas, #fff)" }}>{confirmModal}
     <header className="wd-page-head"><div className="wd-page-head-titles"><h1>{label("nav.collectFiles")}</h1><p>{text("Collect files from team members and external people into a selected WorkDrive folder.", "اجمع الملفات من أعضاء الفريق والأشخاص الخارجيين داخل مجلد محدد في WorkDrive.")}</p></div><button className="wd-primary-button" onClick={() => setShow(true)}>＋ {text("Create Collection", "إنشاء مجموعة تجميع")}</button></header>
