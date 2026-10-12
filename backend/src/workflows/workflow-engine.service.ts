@@ -24,7 +24,7 @@ export type WorkflowFileEvent = {
 type WorkflowAction = { type: string; config?: Record<string, unknown> };
 type PhaseActions = { before: WorkflowAction[]; during: WorkflowAction[]; after: WorkflowAction[] };
 type WorkflowTransitionLike = { id: string; fromStateId: string; toStateId: string; name: string; trigger: string | null; condition: unknown; actions: unknown };
-type WorkflowDefinition = { trigger?: string | string[]; condition?: unknown; actions?: WorkflowAction[]; fields: Array<Record<string, unknown>>; calendarConfig?: Record<string, unknown>; states: Array<{ id: string; terminal: boolean }>; transitions: WorkflowTransitionLike[] };
+type WorkflowDefinition = { trigger?: string | string[]; condition?: unknown; actions?: WorkflowAction[]; fields: Array<Record<string, unknown>>; calendarConfig?: Record<string, unknown>; scopeFolderId?: string | null; includeSubfolders?: boolean; states: Array<{ id: string; terminal: boolean }>; transitions: WorkflowTransitionLike[] };
 type ParticipantRule = { type: 'USER' | 'GROUP' | 'ROLE'; ids?: string[]; roles?: string[] };
 type EscalationRule = { afterMinutes?: number; userIds?: string[]; groupIds?: string[]; roles?: string[]; notifyOnly?: boolean };
 
@@ -64,16 +64,57 @@ export class WorkflowEngineService implements OnModuleInit, OnModuleDestroy {
 
   async onFileEvent(user: AccessTokenPayload, event: WorkflowFileEvent): Promise<void> {
     const eventType = event.eventType ?? 'upload';
+    const eventResourceType = event.resourceType ?? 'FILE';
     const workflows = await this.prisma.workflow.findMany({ where: { orgId: user.org_id, status: 'ACTIVE' }, include: { steps: { orderBy: { position: 'asc' } }, states: { orderBy: { position: 'asc' } }, transitions: true, activeVersion: true } });
     for (const workflow of workflows) {
       if (event.sourceWorkflowId && workflow.id === event.sourceWorkflowId) continue;
-      if (workflow.mode !== 'AUTOMATIC' || workflow.resourceType !== (event.resourceType ?? 'FILE')) continue;
+      if (workflow.mode !== 'AUTOMATIC') continue;
       const definition = workflow.activeVersion ? this.definitionFromSnapshot(workflow.activeVersion.snapshot) : this.definitionFromWorkflow(workflow);
+      // FILE workflows match FILE events. FOLDER workflows match FOLDER entity events
+      // and also FILE events that happen inside a folder (content automation, Zoho-like).
+      let resourceMatches = workflow.resourceType === eventResourceType;
+      if (!resourceMatches && workflow.resourceType === 'FOLDER' && eventResourceType === 'FILE') {
+        resourceMatches = Boolean(event.folderId);
+      }
+      if (!resourceMatches) continue;
+      if (!(await this.matchesFolderScope(definition, event, eventResourceType))) continue;
       const triggers = Array.isArray(definition.trigger) ? definition.trigger.map(String) : [String(definition.trigger ?? '')];
       if (!this.triggerMatches(triggers, eventType)) continue;
       if (!this.conditionMatches(definition.condition, event, {})) continue;
       await this.enqueue(user, workflow.id, event, definition, workflow.activeVersionId ?? undefined);
     }
+  }
+
+  /** Optional folder scope: only fire when the event is inside (or is) the configured folder. */
+  private async matchesFolderScope(definition: WorkflowDefinition, event: WorkflowFileEvent, eventResourceType: string): Promise<boolean> {
+    const scopeFolderId = typeof definition.scopeFolderId === 'string' ? definition.scopeFolderId.trim() : '';
+    if (!scopeFolderId) return true;
+    if (eventResourceType === 'FILE') {
+      if (event.folderId === scopeFolderId) return true;
+      if (definition.includeSubfolders && event.folderId) {
+        return this.isFolderDescendant(event.folderId, scopeFolderId);
+      }
+      return false;
+    }
+    // FOLDER entity event: match the scoped folder itself or activity under its parent scope
+    if (event.fileId === scopeFolderId) return true;
+    if (event.folderId === scopeFolderId) return true;
+    if (definition.includeSubfolders && event.folderId) {
+      return this.isFolderDescendant(event.folderId, scopeFolderId);
+    }
+    return false;
+  }
+
+  private async isFolderDescendant(folderId: string, ancestorId: string): Promise<boolean> {
+    let current: string | null = folderId;
+    const seen = new Set<string>();
+    while (current && !seen.has(current)) {
+      if (current === ancestorId) return true;
+      seen.add(current);
+      const row = await this.prisma.folder.findFirst({ where: { id: current }, select: { parentId: true } });
+      current = row?.parentId ?? null;
+    }
+    return false;
   }
 
   async startManual(user: AccessTokenPayload, workflowId: string, event: WorkflowFileEvent) {
@@ -196,7 +237,7 @@ export class WorkflowEngineService implements OnModuleInit, OnModuleDestroy {
     const values = Object.fromEntries(workflow.steps.map((step) => [step.kind, (step.config as { value?: unknown })?.value]));
     const actions = Array.isArray(values.ACTIONS) ? values.ACTIONS as WorkflowAction[] : [];
     const fields = Array.isArray(values.WORKFLOW_FIELDS) ? values.WORKFLOW_FIELDS as Array<Record<string, unknown>> : [];
-    return { trigger: Array.isArray(values.TRIGGER) ? values.TRIGGER.map(String) : String(values.TRIGGER ?? ''), condition: values.CONDITION ?? 'any', actions, fields, calendarConfig: (workflow as any).calendarConfig ?? undefined, states: workflow.states ?? [], transitions: workflow.transitions ?? [] };
+    return { trigger: Array.isArray(values.TRIGGER) ? values.TRIGGER.map(String) : String(values.TRIGGER ?? ''), condition: values.CONDITION ?? 'any', actions, fields, calendarConfig: (workflow as any).calendarConfig ?? undefined, scopeFolderId: typeof (workflow as any).scopeFolderId === 'string' ? (workflow as any).scopeFolderId : (typeof values.SCOPE_FOLDER_ID === 'string' ? values.SCOPE_FOLDER_ID : null), includeSubfolders: Boolean((workflow as any).includeSubfolders ?? values.INCLUDE_SUBFOLDERS), states: workflow.states ?? [], transitions: workflow.transitions ?? [] };
   }
 
   private definitionFromSnapshot(snapshot: unknown): WorkflowDefinition {
@@ -205,7 +246,7 @@ export class WorkflowEngineService implements OnModuleInit, OnModuleDestroy {
     const values = Object.fromEntries(steps.map((step) => [step.kind, (step.config as { value?: unknown })?.value]));
     const states = Array.isArray(s.states) ? s.states as Array<{ id: string; terminal: boolean }> : [];
     const transitions = Array.isArray(s.transitions) ? s.transitions as WorkflowTransitionLike[] : [];
-    return { trigger: Array.isArray(values.TRIGGER) ? values.TRIGGER.map(String) : String(values.TRIGGER ?? ''), condition: values.CONDITION ?? 'any', actions: Array.isArray(values.ACTIONS) ? values.ACTIONS as WorkflowAction[] : [], fields: Array.isArray(values.WORKFLOW_FIELDS) ? values.WORKFLOW_FIELDS as Array<Record<string, unknown>> : [], calendarConfig: (s.calendarConfig && typeof s.calendarConfig === 'object' ? s.calendarConfig : undefined) as Record<string, unknown> | undefined, states, transitions };
+    return { trigger: Array.isArray(values.TRIGGER) ? values.TRIGGER.map(String) : String(values.TRIGGER ?? ''), condition: values.CONDITION ?? 'any', actions: Array.isArray(values.ACTIONS) ? values.ACTIONS as WorkflowAction[] : [], fields: Array.isArray(values.WORKFLOW_FIELDS) ? values.WORKFLOW_FIELDS as Array<Record<string, unknown>> : [], calendarConfig: (s.calendarConfig && typeof s.calendarConfig === 'object' ? s.calendarConfig : undefined) as Record<string, unknown> | undefined, scopeFolderId: typeof s.scopeFolderId === 'string' ? s.scopeFolderId : (typeof values.SCOPE_FOLDER_ID === 'string' ? String(values.SCOPE_FOLDER_ID) : null), includeSubfolders: Boolean(s.includeSubfolders ?? values.INCLUDE_SUBFOLDERS), states, transitions };
   }
 
   private triggerMatches(configured: string[], eventType: string) {

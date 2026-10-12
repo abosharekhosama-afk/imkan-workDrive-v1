@@ -11,7 +11,7 @@ import { ConnectionsService } from '../connections/connections.service';
 
 type ActionInput = { type?: unknown; config?: unknown };
 type FieldInput = { id?: unknown; name?: unknown; description?: unknown; type?: unknown; required?: unknown; defaultValue?: unknown; max?: unknown; options?: unknown };
-type WorkflowInput = { name?: unknown; description?: unknown; mode?: unknown; resourceType?: unknown; trigger?: unknown; condition?: unknown; action?: unknown; actions?: unknown; status?: unknown; states?: unknown; transitions?: unknown; fields?: unknown; calendarConfig?: unknown };
+type WorkflowInput = { name?: unknown; description?: unknown; mode?: unknown; resourceType?: unknown; trigger?: unknown; condition?: unknown; action?: unknown; actions?: unknown; status?: unknown; states?: unknown; transitions?: unknown; fields?: unknown; calendarConfig?: unknown; scopeFolderId?: unknown; includeSubfolders?: unknown };
 type WorkflowStatus = 'DRAFT' | 'ACTIVE';
 
 export function isWorkflowAdmin(user: Pick<AccessTokenPayload, 'role'>): boolean {
@@ -130,7 +130,9 @@ export class WorkflowsService {
       for (const phase of ['before', 'during', 'after']) if (this.normalizeActions(phaseActions[phase]).length > 5) throw new BadRequestException('A workflow transition can contain at most 5 actions per phase');
     }
     if (actions.length > 5) throw new BadRequestException('Legacy workflow actions are limited to 5');
-    return { name, description: typeof value.description === 'string' ? value.description.trim() : '', mode, resourceType, trigger, condition, actions, status, fields, states, transitions, calendarConfig };
+    const scopeFolderId = typeof value.scopeFolderId === 'string' && value.scopeFolderId.trim() ? value.scopeFolderId.trim() : null;
+    const includeSubfolders = value.includeSubfolders === true;
+    return { name, description: typeof value.description === 'string' ? value.description.trim() : '', mode, resourceType, trigger, condition, actions, status, fields, states, transitions, calendarConfig, scopeFolderId, includeSubfolders };
   }
 
   private stepData(input: ReturnType<WorkflowsService['validate']>) {
@@ -139,6 +141,8 @@ export class WorkflowsService {
       { position: 1, kind: 'CONDITION', config: { value: input.condition } as unknown as Prisma.InputJsonValue },
       { position: 2, kind: 'ACTIONS', config: { value: input.actions } as unknown as Prisma.InputJsonValue },
       { position: 3, kind: 'WORKFLOW_FIELDS', config: { value: input.fields } as unknown as Prisma.InputJsonValue },
+      { position: 4, kind: 'SCOPE_FOLDER_ID', config: { value: input.scopeFolderId } as unknown as Prisma.InputJsonValue },
+      { position: 5, kind: 'INCLUDE_SUBFOLDERS', config: { value: input.includeSubfolders } as unknown as Prisma.InputJsonValue },
     ];
   }
 
