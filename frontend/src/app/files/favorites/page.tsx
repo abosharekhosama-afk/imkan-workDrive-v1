@@ -88,87 +88,56 @@ export default function FavoritesPage() {
   };
 
   return (
-    <div className="wd-page favorites-page flex h-full min-h-0 w-full min-w-0 flex-1 flex-col overflow-hidden !p-0 wd-list-page">
-      <header className="wd-page-head shrink-0 px-4 pt-4 md:px-6">
-        <div className="wd-page-head-titles">
-          <h1>
-            ☆ {label("nav.favorites")}
-            {items.length > 0 ? <span className="wd-count-pill ms-2 align-middle">{items.length}</span> : null}
-          </h1>
-          <p>{label("files.favoritesDescription")}</p>
-        </div>
-        <div className="wd-page-head-actions">
-          <button type="button" className="wd-btn wd-btn-ghost" onClick={() => void load()} disabled={loading}>
-            ⟳ {label("recent.refresh")}
-          </button>
-        </div>
-      </header>
-
-      <div className="favorites-scroll min-h-0 min-w-0 flex-1 overflow-y-auto overflow-x-auto px-4 pb-6 md:px-6">
-      {error ? <div className="wd-alert" role="alert">{error}</div> : null}
-
-      {loading ? (
-        <div className="wd-card" aria-busy="true">
-          {[64, 48, 72].map((width, index) => (
-            <div key={index} className="wd-skel-row" style={{ paddingInline: 16 }}>
-              <span className="wd-skel-bar" style={{ width: 30, height: 30 }} />
-              <span className="wd-skel-bar flex-1" style={{ width: `${width}%` }} />
-              <span className="wd-skel-bar" style={{ width: 110 }} />
-            </div>
-          ))}
-          <span className="sr-only" role="status">{label("common.loading")}</span>
-        </div>
-      ) : items.length === 0 ? (
-        <div className="wd-card">
-          <div className="wd-empty">
-            <span className="wd-empty-icon" aria-hidden="true">☆</span>
-            <h2>{label("nav.favorites")}</h2>
-            <p>{label("files.favoritesEmpty")}</p>
+    <div className="flex min-h-0 flex-1 flex-col" style={{ fontFamily: "var(--user-font-family), Arial, system-ui, sans-serif" }}>
+      <div className="flex h-12 shrink-0 items-center justify-between gap-3 border-b border-[color:var(--imkan-color-border)] bg-white px-3">
+        <h1 className="text-[15px] font-semibold text-[#212121]">
+          ☆ {label("nav.favorites")}
+          {items.length > 0 ? <span className="ms-2 text-[12px] font-medium text-slate-500">({items.length})</span> : null}
+        </h1>
+        <button type="button" className="rounded-md px-2.5 py-1.5 text-[12.5px] text-slate-600 hover:bg-slate-100" onClick={() => void load()} disabled={loading}>
+          ⟳ {label("recent.refresh")}
+        </button>
+      </div>
+      <div className="min-h-0 flex-1 overflow-y-auto px-3 md:px-5">
+        {error ? <div className="mt-3 rounded-lg bg-red-50 p-3 text-[12px] text-red-700" role="alert">{error}</div> : null}
+        {loading ? (
+          <div className="p-6 text-center text-[13px] text-slate-400">{label("common.loading")}</div>
+        ) : items.length === 0 ? (
+          <div className="flex flex-col items-center justify-center gap-3 py-12 text-center">
+            <span className="text-[40px] text-slate-300" aria-hidden="true">☆</span>
+            <h2 className="text-[15px] font-medium text-slate-800">{label("nav.favorites")}</h2>
+            <p className="text-[13px] text-slate-500">{label("files.favoritesEmpty")}</p>
           </div>
-        </div>
-      ) : (
-        <div className="wd-card workflow-like-list wd-list-table-card w-full max-w-full">
-          <table className="wd-table workflow-like-table borderless wd-list-table min-w-[48rem]">
+        ) : (
+          <table className="w-full table-fixed border-collapse" style={{ fontFamily: "var(--user-font-family), Arial, system-ui, sans-serif" }}>
             <thead>
-              <tr>
-                <th>{label("files.column.name")}</th>
-                <th>{label("files.column.type")}</th>
-                <th>{label("files.column.size")}</th>
-                <th className="num"><span className="sr-only">{label("files.actions")}</span></th>
+              <tr className="border-b border-[color:var(--imkan-color-border)]">
+                <th className="px-3 py-2 text-start text-[12px] font-medium text-slate-500">{label("files.column.name")}</th>
+                <th className="w-[16%] px-3 py-2 text-start text-[12px] font-medium text-slate-500">{label("files.column.type")}</th>
+                <th className="w-[14%] px-3 py-2 text-start text-[12px] font-medium text-slate-500">{label("files.column.size")}</th>
+                <th className="w-[12%] px-3 py-2 text-end text-[12px] font-medium text-slate-500">{label("files.actions")}</th>
               </tr>
             </thead>
             <tbody>
               {items.map((item) => (
-                <tr
-                  key={item.id}
-                  className="wd-row-clickable"
-                  onDoubleClick={() => openFavoriteRow(item)}
-                >
-                  <td>
-                    <div className="wd-name-cell min-w-0">
-                      <span className="icon" aria-hidden="true">
-                        <FileTypeIcon size={18} kind={fileIconKind(item.resourceType === "FOLDER" ? "folder" : "file", undefined, item.name)} />
-                      </span>
+                <tr key={item.id} className="border-b border-[color:var(--imkan-color-border)] hover:bg-slate-50" onDoubleClick={() => openFavoriteRow(item)}>
+                  <td className="px-3 py-2.5">
+                    <div className="flex min-w-0 items-center gap-2">
+                      <FileTypeIcon size={18} kind={fileIconKind(item.resourceType === "FOLDER" ? "folder" : "file", undefined, item.name)} />
                       {item.resourceType === "FOLDER" ? (
-                        <Link href={`/files/${item.resourceId}`} className="wd-name-link">{item.name}</Link>
+                        <Link href={`/files/${item.resourceId}`} className="truncate text-[13px] text-slate-800 hover:underline">{item.name}</Link>
                       ) : (
-                        <button
-                          type="button"
-                          className="wd-name-link imkan-focusable"
-                          onClick={() => dispatchPreview(item)}
-                        >
-                          {item.name}
-                        </button>
+                        <button type="button" className="truncate text-start text-[13px] text-slate-800 hover:underline" onClick={() => dispatchPreview(item)}>{item.name}</button>
                       )}
                     </div>
                   </td>
-                  <td>
-                    <span className={`wd-badge ${item.resourceType === "FOLDER" ? "wd-badge-amber" : "wd-badge-gray"}`}>
-                      {item.resourceType === "FOLDER" ? label("files.type.folder") : label("files.type.file")}
-                    </span>
+                  <td className="px-3 py-2.5 truncate text-[13px] text-slate-600">
+                    {item.resourceType === "FOLDER" ? label("files.type.folder") : label("files.type.file")}
                   </td>
-                  <td className="num imkan-muted">{item.resourceType === "FOLDER" ? "—" : formatBytes(resolveItemSize(item) ?? 0)}</td>
-                  <td className="num">
+                  <td className="px-3 py-2.5 truncate text-[13px] text-slate-600">
+                    {item.resourceType === "FOLDER" ? "—" : formatBytes(resolveItemSize(item) ?? 0)}
+                  </td>
+                  <td className="px-3 py-2.5 text-end">
                     <FileActionsMenu
                       context={{
                         resourceType: item.resourceType,
@@ -178,26 +147,13 @@ export default function FavoritesPage() {
                         isFavorite: true,
                       }}
                       handlers={{
-                        onOpen:
-                          item.resourceType === "FOLDER"
-                            ? () => router.push(`/files/${item.resourceId}`)
-                            : () => dispatchPreview(item),
-                        onPreview:
-                          item.resourceType === "FILE" ? () => dispatchPreview(item) : undefined,
-                        onDownload:
-                          item.resourceType === "FILE"
-                            ? async () => {
-                                const result = await requestDownload(item.resourceId);
-                                triggerDownload(result.download_url);
-                              }
-                            : undefined,
+                        onOpen: item.resourceType === "FOLDER" ? () => router.push(`/files/${item.resourceId}`) : () => dispatchPreview(item),
+                        onPreview: item.resourceType === "FILE" ? () => dispatchPreview(item) : undefined,
+                        onDownload: item.resourceType === "FILE" ? async () => { const result = await requestDownload(item.resourceId); triggerDownload(result.download_url); } : undefined,
                         onShare: () => setShareTarget({ type: item.resourceType, id: item.resourceId, name: item.name }),
                         onRename: () => setRenameTarget({ type: item.resourceType, id: item.resourceId, name: item.name }),
                         onMove: () => setMoveTarget({ type: item.resourceType, id: item.resourceId, name: item.name }),
-                        onFavoriteToggle: async () => {
-                          await removeFavorite(item.resourceType, item.resourceId);
-                          await reload();
-                        },
+                        onFavoriteToggle: async () => { await removeFavorite(item.resourceType, item.resourceId); await reload(); },
                         onDelete: () => setDeleteTarget({ type: item.resourceType, id: item.resourceId, name: item.name }),
                       }}
                     />
@@ -206,9 +162,8 @@ export default function FavoritesPage() {
               ))}
             </tbody>
           </table>
-        </div>
-      )}
-
+        )}
+      </div>
       {toast ? <Toast message={toast} onDismiss={() => setToast(null)} /> : null}
       {shareTarget ? (
         <ShareModal
@@ -260,7 +215,6 @@ export default function FavoritesPage() {
           }}
         />
       ) : null}
-    </div>
     </div>
   );
 }
