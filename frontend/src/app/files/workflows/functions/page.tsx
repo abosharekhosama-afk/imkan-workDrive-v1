@@ -20,7 +20,7 @@ import {
   type WorkflowFunctionVersion,
   type Connection,
 } from "@/lib/api/workflows";
-import { ImkanOptionPicker, toImkanPickerOptions } from "@/components/imkan-option-picker";
+import { ConnectionPicker } from "@/components/connection-picker";
 
 type Port = { key: string; label: string; type: string; required?: boolean; description?: string };
 type Operation = Record<string, unknown> & { op: string };
@@ -349,7 +349,6 @@ function OperationConfigForm({
   onClose: () => void;
 }) {
   const set = (patch: Record<string, unknown>) => onChange({ ...operation, ...patch });
-  const connOpts = toImkanPickerOptions(connections.map((c) => ({ value: c.id, label: c.name || c.id })));
 
   return (
     <div className="flex h-full min-h-0 flex-col border-e border-[#e8e8e8] bg-white">
@@ -482,8 +481,13 @@ function OperationConfigForm({
             <Field label={ar ? "تخزين الاستجابة في" : "Store Response in"}>
               <ZohoInput value={String(operation.outputField ?? "")} onChange={(e) => set({ outputField: e.target.value })} />
             </Field>
-            <Field label={ar ? "الاتصال" : "Connection"} required>
-              <ImkanOptionPicker value={String(operation.connectionId ?? "")} onChange={(v) => set({ connectionId: v })} options={connOpts} placeholder={ar ? "اختر اتصالاً" : "Select Connection"} />
+            <Field label={ar ? "الاتصال / الخدمة" : "Connection / Service"} required>
+              <ConnectionPicker
+                connections={connections}
+                value={String(operation.connectionId ?? "")}
+                onChange={(id) => set({ connectionId: id })}
+                capability="request"
+              />
             </Field>
             <Field label={ar ? "المسار النسبي" : "Relative Path URL String"} required>
               <ZohoInput value={String(operation.path ?? "")} onChange={(e) => set({ path: e.target.value })} placeholder="/v1/resource" />
@@ -505,8 +509,13 @@ function OperationConfigForm({
             <Field label={ar ? "تخزين في" : "Store Response in"}>
               <ZohoInput value={String(operation.outputField ?? "")} onChange={(e) => set({ outputField: e.target.value })} />
             </Field>
-            <Field label={ar ? "الاتصال" : "Connection"} required>
-              <ImkanOptionPicker value={String(operation.connectionId ?? "")} onChange={(v) => set({ connectionId: v })} options={connOpts} placeholder={ar ? "اختر اتصالاً" : "Select Connection"} />
+            <Field label={ar ? "الاتصال / الخدمة" : "Connection / Service"} required>
+              <ConnectionPicker
+                connections={connections}
+                value={String(operation.connectionId ?? "")}
+                onChange={(id) => set({ connectionId: id })}
+                capability="browse"
+              />
             </Field>
             <Field label={ar ? "معرف المورد" : "Resource ID"} required>
               <ZohoInput value={String(operation.resourceId ?? "")} onChange={(e) => set({ resourceId: e.target.value })} />
