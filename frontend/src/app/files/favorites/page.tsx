@@ -88,7 +88,7 @@ export default function FavoritesPage() {
   };
 
   return (
-    <div className="wd-page favorites-page flex h-full min-h-0 flex-1 flex-col overflow-hidden !p-0 wd-list-page">
+    <div className="wd-page favorites-page flex h-full min-h-0 w-full min-w-0 flex-1 flex-col overflow-hidden !p-0 wd-list-page">
       <header className="wd-page-head shrink-0 px-4 pt-4 md:px-6">
         <div className="wd-page-head-titles">
           <h1>
@@ -104,7 +104,7 @@ export default function FavoritesPage() {
         </div>
       </header>
 
-      <div className="favorites-scroll min-h-0 flex-1 overflow-y-auto overflow-x-auto px-4 pb-6 md:px-6">
+      <div className="favorites-scroll min-h-0 min-w-0 flex-1 overflow-y-auto overflow-x-auto px-4 pb-6 md:px-6">
       {error ? <div className="wd-alert" role="alert">{error}</div> : null}
 
       {loading ? (
@@ -128,7 +128,7 @@ export default function FavoritesPage() {
         </div>
       ) : (
         <div className="wd-card workflow-like-list w-full max-w-full">
-          <table className="wd-table workflow-like-table borderless min-w-[36rem]">
+          <table className="wd-table workflow-like-table borderless w-full min-w-[42rem] table-fixed sm:table-auto">
             <thead>
               <tr>
                 <th>{label("files.column.name")}</th>
@@ -145,7 +145,7 @@ export default function FavoritesPage() {
                   onDoubleClick={() => openFavoriteRow(item)}
                 >
                   <td>
-                    <div className="wd-name-cell">
+                    <div className="wd-name-cell min-w-0">
                       <span className="icon" aria-hidden="true">
                         <FileTypeIcon size={18} kind={fileIconKind(item.resourceType === "FOLDER" ? "folder" : "file", undefined, item.name)} />
                       </span>
