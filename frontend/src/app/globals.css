@@ -7377,3 +7377,81 @@ html[data-theme="dark"] .files-templates-page .border-red-200 {
 html[data-theme="dark"] .files-templates-page :is(.text-red-500, .text-red-600, .text-red-700) {
   color: #fca5a5 !important;
 }
+
+
+/* IMKAN list-page anti-shrink v2 */
+.wd-list-page,
+.recent-page,
+.favorites-page,
+.shared-with-me-page,
+.shared-by-me-page,
+.notifications-page,
+.labels-page {
+  min-width: 0 !important;
+  width: 100% !important;
+  max-width: 100% !important;
+}
+.recent-scroll,
+.favorites-scroll,
+.shared-with-me-scroll,
+.labels-scroll,
+.notifications-scroll,
+.labels-strip-scroll {
+  min-width: 0;
+  max-width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+.wd-list-table-card {
+  overflow-x: auto !important;
+  max-width: 100% !important;
+  -webkit-overflow-scrolling: touch;
+}
+.wd-list-table,
+table.wd-list-table,
+.recent-page table.wd-table,
+.favorites-page table.wd-table,
+.shared-with-me-page table.wd-table,
+.shared-by-me-page table.wd-table {
+  width: max-content !important;
+  min-width: 48rem !important;
+  table-layout: auto !important;
+  border-collapse: separate;
+}
+.recent-page table.wd-table th,
+.recent-page table.wd-table td,
+.favorites-page table.wd-table th,
+.favorites-page table.wd-table td,
+.shared-with-me-page table.wd-table th,
+.shared-with-me-page table.wd-table td,
+.shared-by-me-page table.wd-table th,
+.shared-by-me-page table.wd-table td,
+.labels-page table.wd-table th,
+.labels-page table.wd-table td {
+  white-space: nowrap;
+  vertical-align: middle;
+}
+.wd-col-name,
+.recent-page table.wd-table th:first-child,
+.recent-page table.wd-table td:first-child,
+.favorites-page table.wd-table th:first-child,
+.favorites-page table.wd-table td:first-child {
+  min-width: 14rem;
+}
+.wd-col-location,
+.recent-page table.wd-table th.wd-col-location,
+.recent-page table.wd-table td:nth-child(3) {
+  min-width: 10rem;
+}
+.wd-name-cell {
+  min-width: 12rem;
+  max-width: none;
+}
+.wd-name-cell .wd-name-link {
+  overflow: visible;
+  text-overflow: unset;
+  white-space: nowrap;
+}
+.labels-strip-scroll {
+  scrollbar-width: thin;
+}
