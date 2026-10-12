@@ -148,8 +148,14 @@ export async function apiRequest<T>(path: string, init: RequestInit = {}): Promi
   const buildHeaders = (accessToken: string) => {
     const headers = new Headers(init.headers);
     headers.set("Authorization", `Bearer ${accessToken}`);
-    if (init.body && !headers.has("Content-Type")) {
+    // FormData must keep the browser-generated multipart boundary.
+    // Setting application/json here breaks version uploads and any multipart POST.
+    const isFormData = typeof FormData !== "undefined" && init.body instanceof FormData;
+    if (init.body && !isFormData && !headers.has("Content-Type")) {
       headers.set("Content-Type", "application/json");
+    }
+    if (isFormData && headers.has("Content-Type")) {
+      headers.delete("Content-Type");
     }
     return headers;
   };
