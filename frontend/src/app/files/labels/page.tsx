@@ -84,6 +84,19 @@ export default function LabelsPage() {
   const [viewMode, setViewMode] = useState<"list" | "grid">("list");
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [shareTarget, setShareTarget] = useState<{ type: "FILE" | "FOLDER"; id: string; name: string } | null>(null);
+  const [overflowOpen, setOverflowOpen] = useState(false);
+  const [stripWide, setStripWide] = useState(true);
+  const stripHostRef = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    const node = stripHostRef.current;
+    if (!node || typeof ResizeObserver === "undefined") return;
+    const ro = new ResizeObserver((entries) => {
+      const w = entries[0]?.contentRect.width ?? 0;
+      setStripWide(w >= 380);
+    });
+    ro.observe(node);
+    return () => ro.disconnect();
+  }, []);
 
   const load = useCallback(async () => {
     try {
@@ -268,45 +281,70 @@ export default function LabelsPage() {
         <h1 className="text-[19px] font-semibold text-slate-900">{ar ? "التصنيفات" : "Labels"}</h1>
       </header>
 
-      <div className="flex min-h-[52px] shrink-0 items-center justify-between gap-3 border-b border-slate-200 px-4">
-        <div className="labels-strip-scroll min-w-0 flex-1 overflow-x-auto py-2 [-ms-overflow-style:none] [scrollbar-width:thin]">
-          <div className="inline-flex h-9 min-w-max items-stretch overflow-hidden rounded-full border border-slate-300 bg-white shadow-sm">
+      {/* Zoho-style icon strip: Following + color chips; names only when wide / overflow menu */}
+      <div className="flex min-h-[48px] shrink-0 items-center justify-between gap-2 border-b border-slate-200 px-3 sm:px-4">
+        <div ref={stripHostRef} className="relative min-w-0 flex-1">
+          <div className="inline-flex h-8 max-w-full items-stretch overflow-hidden rounded-full border border-slate-300 bg-white shadow-sm">
             <button
               type="button"
               onClick={() => setSelected("following")}
-              className={`flex h-full shrink-0 items-center gap-2 border-e border-slate-300 px-4 text-[12px] transition-colors ${
+              title={ar ? "المتابعة" : "Following"}
+              className={`flex h-full shrink-0 items-center gap-1.5 border-e border-slate-300 px-2.5 text-[12px] transition-colors sm:px-3 ${
                 selected === "following"
                   ? "bg-[var(--wd-primary-light,#eff6ff)] font-semibold text-[color:var(--wd-primary-ink,#1e40af)]"
                   : "bg-white text-slate-700 hover:bg-slate-50"
               }`}
             >
               <Icons.bell size={14} />
-              {ar ? "المتابعة" : "Following"}
+              {stripWide ? <span className="whitespace-nowrap">{ar ? "المتابعة" : "Following"}</span> : null}
             </button>
-            {labels.map((l, index) => {
-              const isLast = index === labels.length - 1;
-              return (
+            {(stripWide ? labels : labels.slice(0, 6)).map((l, index, arr) => (
               <button
                 key={l.id}
                 type="button"
+                title={l.name}
                 onClick={() => setSelected(l.id)}
-                className={`flex h-full shrink-0 items-center gap-2 px-4 text-[12px] transition-colors ${
-                  !isLast ? "border-e border-slate-300" : ""
-                } ${
-                  selected === l.id
-                    ? "bg-[var(--wd-primary-light,#eff6ff)] font-semibold text-[color:var(--wd-primary-ink,#1e40af)]"
-                    : "bg-white text-slate-700 hover:bg-slate-50"
+                className={`flex h-full w-9 shrink-0 items-center justify-center border-e border-slate-300 transition-colors ${
+                  selected === l.id ? "bg-[var(--wd-primary-light,#eff6ff)]" : "bg-white hover:bg-slate-50"
                 }`}
               >
-                <span className="h-3 w-3 shrink-0 rounded-[2px]" style={{ background: l.color }} />
-                <span className="max-w-[10rem] truncate">{l.name}</span>
+                <span className="h-3.5 w-3.5 rounded-[3px] shadow-sm ring-1 ring-black/5" style={{ background: l.color }} />
               </button>
-              );
-            })}
+            ))}
+            {(!stripWide && labels.length > 6) || labels.length > 12 ? (
+              <div className="relative flex shrink-0">
+                <button
+                  type="button"
+                  onClick={() => setOverflowOpen((v) => !v)}
+                  className="flex h-full w-9 items-center justify-center text-[14px] font-semibold text-slate-600 hover:bg-slate-50"
+                  aria-label={ar ? "المزيد" : "More labels"}
+                >
+                  ···
+                </button>
+                {overflowOpen ? (
+                  <div className="absolute start-0 top-[calc(100%+6px)] z-30 min-w-[180px] rounded-xl border border-slate-200 bg-white py-1 shadow-xl">
+                    {(stripWide ? labels.slice(12) : labels.slice(6)).map((l) => (
+                      <button
+                        key={l.id}
+                        type="button"
+                        onClick={() => { setSelected(l.id); setOverflowOpen(false); }}
+                        className={`flex w-full items-center gap-2 px-3 py-2 text-start text-[12px] hover:bg-slate-50 ${selected === l.id ? "bg-blue-50 text-blue-800" : "text-slate-700"}`}
+                      >
+                        <span className="h-3 w-3 rounded-[2px]" style={{ background: l.color }} />
+                        <span className="truncate">{l.name}</span>
+                      </button>
+                    ))}
+                    {(stripWide ? labels.slice(12) : labels.slice(6)).length === 0 ? (
+                      <p className="px-3 py-2 text-[11px] text-slate-400">{ar ? "لا توجد تصنيفات إضافية" : "No more labels"}</p>
+                    ) : null}
+                  </div>
+                ) : null}
+              </div>
+            ) : null}
           </div>
         </div>
-        <div className="flex shrink-0 items-center gap-2">
-          <button type="button" onClick={() => setManageOpen(true)} className="h-9 rounded-full bg-[var(--wd-primary,#2c66dd)] px-5 text-[12px] font-semibold text-white hover:bg-blue-700">
+        <div className="flex shrink-0 items-center gap-1.5">
+          <button type="button" onClick={() => setManageOpen(true)} className="h-8 rounded-full bg-[var(--wd-primary,#2c66dd)] px-3 text-[11px] font-semibold text-white hover:bg-blue-700 sm:px-4 sm:text-[12px]">
             {ar ? "إدارة التصنيفات" : "Manage Labels"}
           </button>
           <button type="button" title={ar ? "ترتيب" : "Sort"} onClick={() => setSortDesc((v) => !v)} className="grid h-8 w-8 place-items-center rounded text-slate-600 hover:bg-slate-100">
