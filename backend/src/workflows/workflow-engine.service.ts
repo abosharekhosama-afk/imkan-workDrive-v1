@@ -111,7 +111,11 @@ export class WorkflowEngineService implements OnModuleInit, OnModuleDestroy {
     while (current && !seen.has(current)) {
       if (current === ancestorId) return true;
       seen.add(current);
-      const row = await this.prisma.folder.findFirst({ where: { id: current }, select: { parentId: true } });
+      const parentId: string = current;
+      const row: { parentId: string | null } | null = await this.prisma.folder.findFirst({
+        where: { id: parentId },
+        select: { parentId: true },
+      });
       current = row?.parentId ?? null;
     }
     return false;
