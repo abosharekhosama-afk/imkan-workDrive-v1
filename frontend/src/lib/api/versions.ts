@@ -71,8 +71,12 @@ export type UploadNewVersionResponse = {
  */
 export function uploadNewVersion(fileId: string, file: File): Promise<UploadNewVersionResponse> {
   const form = new FormData();
-  form.append("file", file, file.name);
-  return apiRequest<UploadNewVersionResponse>(`/files/${fileId}/versions`, {
+  // Ensure a non-empty filename and a usable MIME (empty File.type breaks server validation).
+  const name = (file.name && file.name.trim()) || "upload.bin";
+  const type = (file.type && file.type.trim()) || "application/octet-stream";
+  const payload = type !== file.type || name !== file.name ? new File([file], name, { type }) : file;
+  form.append("file", payload, name);
+  return apiRequest<UploadNewVersionResponse>(`/files/${encodeURIComponent(fileId)}/versions`, {
     method: "POST",
     body: form,
   });
