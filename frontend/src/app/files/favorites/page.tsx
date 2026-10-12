@@ -127,8 +127,8 @@ export default function FavoritesPage() {
           </div>
         </div>
       ) : (
-        <div className="wd-card workflow-like-list w-full max-w-full">
-          <table className="wd-table workflow-like-table borderless w-full min-w-[42rem] table-fixed sm:table-auto">
+        <div className="wd-card workflow-like-list wd-list-table-card w-full max-w-full">
+          <table className="wd-table workflow-like-table borderless wd-list-table min-w-[48rem]">
             <thead>
               <tr>
                 <th>{label("files.column.name")}</th>
