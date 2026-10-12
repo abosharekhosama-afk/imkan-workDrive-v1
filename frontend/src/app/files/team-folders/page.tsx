@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState, useId } from "react";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { useLocale } from "../../../components/locale-provider";
 import { useConfirmAction } from "../../../components/confirm-action-modal";
 import { ApiError } from "../../../lib/api/client";
@@ -44,6 +44,7 @@ function MoreIcon() {
 
 export default function TeamFoldersPage() {
   const { label, locale } = useLocale();
+  const router = useRouter();
   const { requestConfirm, confirmModal } = useConfirmAction();
   const pathname = usePathname();
   const isAdminConsole = pathname.startsWith("/admin/team-folders");
@@ -214,6 +215,14 @@ export default function TeamFoldersPage() {
     setMenuAnchor(event.currentTarget);
   };
 
+
+  function goToTeamFolderMembers(tf: TeamFolderListItem) {
+    setMenuId(null);
+    setMenuAnchor(null);
+    setActiveMembersTf(null);
+    router.push(`/files/team-folders/${encodeURIComponent(tf.id)}/manage?tab=members`);
+  }
+
   return (
     <section className="team-folders-page flex min-h-[calc(100dvh-56px)] w-full min-w-0 flex-1 flex-col bg-[var(--wd-bg,#fff)]">
       {confirmModal}
@@ -289,7 +298,9 @@ export default function TeamFoldersPage() {
                   </div>
                   <div className="team-folder-card-actions">
                     {tf.isMember ? (
-                      <span className="team-folder-members" aria-label={`${tf.memberCount} ${locale === "ar" ? "عضو" : tf.memberCount === 1 ? "Member" : "Members"}`}><MembersIcon /><span>{tf.memberCount} {locale === "ar" ? "عضو" : tf.memberCount === 1 ? "Member" : "Members"}</span></span>
+                      <button type="button" className="team-folder-members" onClick={() => goToTeamFolderMembers(tf)} title={locale === "ar" ? "الأعضاء" : "Members"} aria-label={`${tf.memberCount} ${locale === "ar" ? "عضو" : "Members"}`}>
+                        <MembersIcon /><span>{tf.memberCount} {locale === "ar" ? "عضو" : tf.memberCount === 1 ? "Member" : "Members"}</span>
+                      </button>
                     ) : (
                       <button type="button" className="team-folder-members" disabled={actionBusy} onClick={() => void join(tf)}><span className="text-[11px] font-semibold text-blue-600">{locale === "ar" ? "انضمام" : "Join"}</span></button>
                     )}
@@ -326,8 +337,8 @@ export default function TeamFoldersPage() {
                     </div>
                   )}
 
-                  {tf.isMember ? <span className="team-folder-members" aria-label={`${tf.memberCount} ${locale === "ar" ? "عضو" : tf.memberCount === 1 ? "Member" : "Members"}`}>
-                    <MembersIcon /><span>{tf.memberCount} {locale === "ar" ? "عضو" : tf.memberCount === 1 ? "Member" : "Members"}</span>
+                  {tf.isMember ? <button type="button" className="team-folder-members" onClick={() => goToTeamFolderMembers(tf)} title={locale === "ar" ? "الأعضاء" : "Members"}>
+                    <MembersIcon /><span>{tf.memberCount} {locale === "ar" ? "عضو" : tf.memberCount === 1 ? "Member" : "Members"}</button>
                   </span> : <button type="button" className="team-folder-members" disabled={actionBusy} onClick={() => void join(tf)} title={locale === "ar" ? "الانضمام إلى مجلد الفريق العام" : "Join public Team Folder"}><span className="text-[11px] font-semibold text-blue-600">{locale === "ar" ? "انضمام" : "Join"}</span></button>}
 
                   <div className="team-folder-row-actions" data-team-folder-menu>
@@ -385,7 +396,7 @@ export default function TeamFoldersPage() {
         <TeamFolderActionMenu open={Boolean(menuId)} anchorEl={menuAnchor} onClose={() => { setMenuId(null); setMenuAnchor(null); }}>
           {!menuTf.isMember && menuTf.isPublicToOrg ? <button type="button" disabled={actionBusy} onClick={() => { setMenuId(null); setMenuAnchor(null); void join(menuTf); }}>{locale === "ar" ? "انضمام" : "Join"}</button> : null}
           <button type="button" onClick={() => { setDetailsTf(menuTf); setMenuId(null); setMenuAnchor(null); }}>{locale === "ar" ? "التفاصيل" : "Details"}</button>
-          {menuTf.isMember ? <><button type="button" onClick={() => { setActiveMembersTf(menuTf); setMenuId(null); setMenuAnchor(null); }}>{locale === "ar" ? "الأعضاء" : "Members"}</button><button type="button" onClick={() => openRename(menuTf)}>{label("files.rename")}</button><button type="button" className="danger" onClick={() => remove(menuTf)}>{label("files.delete")}</button></> : null}
+          {menuTf.isMember ? <><button type="button" onClick={() => goToTeamFolderMembers(menuTf)}>{locale === "ar" ? "الأعضاء" : "Members"}</button><button type="button" onClick={() => openRename(menuTf)}>{label("files.rename")}</button><button type="button" className="danger" onClick={() => remove(menuTf)}>{label("files.delete")}</button></> : null}
         </TeamFolderActionMenu>
       ) : null}
 
