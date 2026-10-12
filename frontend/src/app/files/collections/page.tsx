@@ -6,6 +6,7 @@ import { useLocale } from "../../../components/locale-provider";
 import { useConfirmAction } from "../../../components/confirm-action-modal";
 import { createCollection, deleteCollection, emailCollectionLink, listCollections, listCollectionSubmissions, regenerateCollectionLink, updateCollection, type FileCollection, type CollectionSubmission } from "../../../lib/api/collections";
 import { createFolder, getFolder, listRootContents } from "../../../lib/api/folders";
+import { WORKDRIVE_PREVIEW_EVENT, type PreviewEventDetail } from "../../../components/global-search";
 import type { FolderRecord } from "../../../lib/api/types";
 
 const SIZE_OPTIONS = [
@@ -181,7 +182,7 @@ export default function CollectionsPage() {
     finally { setLinkBusy(false); }
   }
   async function openSubmissions(row: FileCollection) {
-    setMenuFor(null); setSelected(row); setSubmissionsLoading(true); setSubmissions([]);
+    setMenuFor(null); setSubmissionsLoading(true); setSubmissions([]);
     try { setSubmissions(await listCollectionSubmissions(row.id)); }
     catch (e) { setError(e instanceof Error ? e.message : text("Unable to load submissions", "تعذر تحميل الإرسالات")); }
     finally { setSubmissionsLoading(false); }
@@ -241,7 +242,11 @@ export default function CollectionsPage() {
     return Array.from(map.values()).sort((a, b) => new Date(b.lastAt).getTime() - new Date(a.lastAt).getTime());
   }, [submissions, submissionSearch, ar]);
 
-  function exportSubmissionsCsv() {
+  
+  const liveUserCount = groupedSubmitters.length;
+  const liveFileCount = groupedSubmitters.reduce((n, g) => n + g.files.length, 0);
+
+function exportSubmissionsCsv() {
     const lines = [["User", "Email", "File", "Submitted at"].join(",")];
     for (const g of groupedSubmitters) {
       for (const f of g.files) {
@@ -274,7 +279,7 @@ export default function CollectionsPage() {
     </article>)}</div>}
 
 
-    {selected && <div className="fixed inset-0 z-[250] flex items-center justify-center bg-black/40 p-4"><section dir={ar?"rtl":"ltr"} className="w-full max-w-3xl rounded-xl bg-white p-6 shadow-xl"><div className="mb-4 flex items-center justify-between"><h2 className="text-xl font-semibold">{text("Submissions", "الإرسالات")} · {selected.name}</h2><button onClick={()=>setSelected(null)}>{text("Close", "إغلاق")}</button></div>{submissionsLoading?<p>{text("Loading…", "جارٍ التحميل…")}</p>:submissions.length===0?<p className="text-sm text-slate-500">{text("No submissions yet.", "لا توجد إرسالات بعد.")}</p>:<div className="max-h-[60vh] overflow-auto"><table className="w-full text-sm"><thead><tr>{[text("Submitter", "المرسل"),text("File", "الملف"),text("Status", "الحالة"),text("Received", "تاريخ الاستلام")].map(v=><th key={v} className="p-2 text-start">{v}</th>)}</tr></thead><tbody>{submissions.map(s=><tr key={s.id} className="border-t"><td className="p-2">{s.submitterName||s.submitterEmail||text("External submitter", "مرسل خارجي")}</td><td className="p-2">{s.file?.name||"—"}</td><td className="p-2">{s.status}</td><td className="p-2">{s.submittedAt?new Date(s.submittedAt).toLocaleString(ar?"ar":"en"):"—"}</td></tr>)}</tbody></table></div>}</section></div>}
+    
 
     {show && <div className="fixed inset-0 z-[240] flex items-center justify-center bg-slate-950/55 p-3 backdrop-blur-[1px]" onMouseDown={e=>{if(e.target===e.currentTarget)setShow(false);}}>
       <section dir={ar?"rtl":"ltr"} className="relative max-h-[min(92dvh,900px)] w-[min(510px,96vw)] overflow-y-auto rounded-[18px] border border-slate-200 bg-white px-5 py-5 shadow-2xl sm:px-6" role="dialog" aria-modal="true" aria-labelledby="collection-create-title">
@@ -314,11 +319,11 @@ export default function CollectionsPage() {
         <div className="hidden items-center gap-2 sm:flex">
           <span className="inline-flex items-center gap-2 rounded-full bg-[#1B66EA] px-3 py-1.5 text-[11px] font-medium text-white">
             <span className="grid h-5 w-5 place-items-center rounded-full bg-white/20 text-[10px]">↑</span>
-            {detail.submissionsCount} {text("user submitted", "مستخدم أرسل")}
+            {liveUserCount} {text("user submitted", "مستخدم أرسل")}
           </span>
           <span className="inline-flex items-center gap-2 rounded-full bg-[#1B66EA] px-3 py-1.5 text-[11px] font-medium text-white">
             <span className="grid h-5 w-5 place-items-center rounded-full bg-white/20 text-[10px]">▤</span>
-            {detail.filesCount} {text("file uploaded", "ملف مرفوع")}
+            {liveFileCount} {text("file uploaded", "ملف مرفوع")}
           </span>
         </div>
         <button
@@ -443,10 +448,15 @@ export default function CollectionsPage() {
                     {(groupedSubmitters.find((g) => g.key === expandedUserKey)?.files ?? []).map((f) => (
                       <tr key={f.id} className="border-b border-slate-50 hover:bg-slate-50">
                         <td className="px-4 py-2.5">
-                          <div className="flex min-w-0 items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={() => openUploadedFile(f.id, f.name)}
+                            className="flex min-w-0 max-w-full items-center gap-2 text-start hover:underline"
+                            title={text("Open", "فتح")}
+                          >
                             <span className="text-slate-400">▤</span>
-                            <span className="truncate text-[12px] text-slate-800">{f.name}</span>
-                          </div>
+                            <span className="truncate text-[12px] text-[#1B66EA]">{f.name}</span>
+                          </button>
                         </td>
                         <td className="truncate px-3 py-2.5 text-[12px] text-slate-500">
                           {f.at
