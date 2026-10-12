@@ -78,6 +78,7 @@ export default function FileDetailsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [uploadBusy, setUploadBusy] = useState(false);
+  const [toast, setToast] = useState<string | null>(null);
   const [versionBusy, setVersionBusy] = useState<string | null>(null);
   const [openVersionMenu, setOpenVersionMenu] = useState<string | null>(null);
   const [accessExpanded, setAccessExpanded] = useState(true);
@@ -182,8 +183,15 @@ export default function FileDetailsPage() {
       setVersionNotes("");
       await load();
       changeTab("versions");
-    } catch {
-      setError(ar ? "تعذر رفع الإصدار الجديد." : "Unable to upload the new version.");
+    } catch (cause) {
+      // Do NOT set the page-level `error` flag — it hides every tab section.
+      const msg =
+        cause && typeof cause === "object" && "message" in cause && typeof (cause as { message: unknown }).message === "string"
+          ? (cause as { message: string }).message
+          : ar
+            ? "تعذر رفع الإصدار الجديد."
+            : "Unable to upload the new version.";
+      setToast(msg);
     } finally {
       setUploadBusy(false);
       if (uploadRef.current) uploadRef.current.value = "";
@@ -204,8 +212,14 @@ export default function FileDetailsPage() {
     try {
       await restoreVersionById(resourceId, version.id);
       await load();
-    } catch {
-      setError(ar ? "تعذر استعادة الإصدار." : "Unable to restore version.");
+    } catch (cause) {
+      const msg =
+        cause && typeof cause === "object" && "message" in cause && typeof (cause as { message: unknown }).message === "string"
+          ? (cause as { message: string }).message
+          : ar
+            ? "تعذر استعادة الإصدار."
+            : "Unable to restore version.";
+      setToast(msg);
     } finally {
       setVersionBusy(null);
       setOpenVersionMenu(null);
@@ -262,6 +276,14 @@ export default function FileDetailsPage() {
           <div className="zoho-fd-loading">{ar ? "جارٍ التحميل…" : "Loading…"}</div>
         ) : error ? (
           <div className="zoho-fd-error" role="alert">{error}</div>
+      {toast ? (
+        <div className="fixed bottom-6 start-1/2 z-[300] max-w-md -translate-x-1/2 rounded-xl border border-slate-200 bg-white px-4 py-3 text-[13px] shadow-xl" role="status">
+          <div className="flex items-start gap-3">
+            <span className="min-w-0 flex-1 text-slate-800">{toast}</span>
+            <button type="button" className="text-slate-400 hover:text-slate-700" onClick={() => setToast(null)} aria-label="Close">×</button>
+          </div>
+        </div>
+      ) : null}
         ) : null}
 
         {!loading && !error && tab === "general" ? (
