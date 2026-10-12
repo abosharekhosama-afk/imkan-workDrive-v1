@@ -48,9 +48,9 @@ export default function CollectionsPage() {
   const [token, setToken] = useState("");
   const [selected, setSelected] = useState<FileCollection | null>(null);
   const [submissions, setSubmissions] = useState<CollectionSubmission[]>([]);
+  const [submissionsLoading, setSubmissionsLoading] = useState(false);
   const [expandedUserKey, setExpandedUserKey] = useState<string | null>(null);
   const [submissionSearch, setSubmissionSearch] = useState("");
-  const [submissionsLoading, setSubmissionsLoading] = useState(false);
   const [pickerOpen, setPickerOpen] = useState(false);
   const [pickerFolderId, setPickerFolderId] = useState<string | null>(null);
   const [pickerPath, setPickerPath] = useState<FolderRecord[]>([]);
@@ -221,17 +221,21 @@ export default function CollectionsPage() {
     const q = submissionSearch.trim().toLowerCase();
     const map = new Map<string, { key: string; name: string; email: string; lastAt: string; files: Array<{ id: string; name: string; at: string }> }>();
     for (const s of submissions) {
-      const name = (s.submitterName || s.submitterEmail || text("Anonymous", "مجهول")).trim();
+      const name = (s.submitterName || s.submitterEmail || (ar ? "مجهول" : "Anonymous")).trim();
       const email = (s.submitterEmail || "").trim();
       const key = (email || name || s.id).toLowerCase();
-      if (q && !name.toLowerCase().includes(q) && !email.toLowerCase().includes(q) && !(s.file?.name || "").toLowerCase().includes(q)) continue;
-      const cur = map.get(key) ?? { key, name, email, lastAt: s.submittedAt, files: [] };
+      if (q && !name.toLowerCase().includes(q) && !email.toLowerCase().includes(q) && !(s.file?.name || "").toLowerCase().includes(q)) {
+        continue;
+      }
+      const cur = map.get(key) ?? { key, name, email, lastAt: s.submittedAt, files: [] as Array<{ id: string; name: string; at: string }> };
       if (s.file?.id) {
         cur.files.push({ id: s.file.id, name: s.file.name, at: s.submittedAt });
-      } else if (s.fileCount > 0) {
-        cur.files.push({ id: s.id, name: text("Submission","إرسال"), at: s.submittedAt });
+      } else if ((s.fileCount ?? 0) > 0) {
+        cur.files.push({ id: s.id, name: ar ? "إرسال" : "Submission", at: s.submittedAt });
       }
-      if (new Date(s.submittedAt).getTime() > new Date(cur.lastAt).getTime()) cur.lastAt = s.submittedAt;
+      if (new Date(s.submittedAt).getTime() > new Date(cur.lastAt).getTime()) {
+        cur.lastAt = s.submittedAt;
+      }
       map.set(key, cur);
     }
     return Array.from(map.values()).sort((a, b) => new Date(b.lastAt).getTime() - new Date(a.lastAt).getTime());
@@ -248,16 +252,18 @@ export default function CollectionsPage() {
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `${detail?.name || "collection"}-submissions.csv`;
+    a.download = `${(detail && detail.name) || "collection"}-submissions.csv`;
     a.click();
     URL.revokeObjectURL(url);
   }
+
+
 
   return <main className="wd-page theme-aware-page flex min-h-0 flex-1 flex-col" dir={ar ? "rtl" : "ltr"} style={{ fontFamily: "var(--user-font-family), Arial, system-ui, sans-serif", color: "var(--wd-text, #212121)", background: "var(--wd-canvas, #fff)" }}>{confirmModal}
     <header className="wd-page-head"><div className="wd-page-head-titles"><h1>{label("nav.collectFiles")}</h1><p>{text("Collect files from team members and external people into a selected WorkDrive folder.", "اجمع الملفات من أعضاء الفريق والأشخاص الخارجيين داخل مجلد محدد في WorkDrive.")}</p></div><button className="wd-primary-button" onClick={() => setShow(true)}>＋ {text("Create Collection", "إنشاء مجموعة تجميع")}</button></header>
     {error && <div className="wd-alert" role="alert">{error}</div>}
     {token && <div className="wd-alert" role="status">{text("Collection created. Save this one-time link token:", "تم إنشاء المجموعة. احتفظ برمز الرابط لمرة واحدة:")} <strong dir="ltr">{token}</strong> <button onClick={() => setToken("")}>{text("Dismiss", "إغلاق")}</button></div>}
-    {loading ? <div className="wd-card flex flex-1 items-center justify-center p-6">{text("Loading collections…", "جارٍ تحميل المجموعات…")}</div> : rows.length === 0 ? <section className="wd-card flex flex-1 items-center justify-center"><div className="wd-empty"><div className="wd-empty-icon">⇧</div><h2>{text("No collections yet", "لا توجد مجموعات بعد")}</h2><p>{text("Create a collection to receive files from employees, clients, or suppliers.", "أنشئ مجموعة لاستلام الملفات من الموظفين أو العملاء أو الموردين.")}</p><button className="wd-primary-button" onClick={() => setShow(true)}>{text("Create Collection", "إنشاء مجموعة")}</button></div></section> : <div className="grid flex-1 grid-cols-1 content-start gap-4 sm:grid-cols-2 xl:grid-cols-3">{rows.map(r=><article key={r.id} onClick={()=>{setDetail(r);setMenuFor(null);setExpandedUserKey(null);void openSubmissions(r);}} className="group relative min-h-[188px] cursor-pointer rounded-xl border border-slate-200 bg-white p-5 shadow-[0_1px_2px_rgba(15,23,42,.04)] transition hover:border-slate-300 hover:shadow-md">
+    {loading ? <div className="wd-card flex flex-1 items-center justify-center p-6">{text("Loading collections…", "جارٍ تحميل المجموعات…")}</div> : rows.length === 0 ? <section className="wd-card flex flex-1 items-center justify-center"><div className="wd-empty"><div className="wd-empty-icon">⇧</div><h2>{text("No collections yet", "لا توجد مجموعات بعد")}</h2><p>{text("Create a collection to receive files from employees, clients, or suppliers.", "أنشئ مجموعة لاستلام الملفات من الموظفين أو العملاء أو الموردين.")}</p><button className="wd-primary-button" onClick={() => setShow(true)}>{text("Create Collection", "إنشاء مجموعة")}</button></div></section> : <div className="grid flex-1 grid-cols-1 content-start gap-4 sm:grid-cols-2 xl:grid-cols-3">{rows.map(r=><article key={r.id} onClick={()=>{setDetail(r);setMenuFor(null);setExpandedUserKey(null);setSubmissionSearch("");void openSubmissions(r);}} className="group relative min-h-[188px] cursor-pointer rounded-xl border border-slate-200 bg-white p-5 shadow-[0_1px_2px_rgba(15,23,42,.04)] transition hover:border-slate-300 hover:shadow-md">
       <div className="flex items-start gap-3"><div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-slate-100 text-lg text-slate-700">▣</div><div className="min-w-0 flex-1"><h2 className="truncate text-[15px] font-semibold text-slate-800">{r.name}</h2><p className="mt-1 text-[11px] text-slate-500">{text("Created by you on", "أنشأتها في")} {new Date(r.createdAt).toLocaleString(ar?"ar":"en",{month:"short",day:"numeric",hour:"numeric",minute:"2-digit"})}</p></div>
       <div className="relative" onClick={e=>e.stopPropagation()}><button type="button" aria-label={text("Collection settings", "إعدادات المجموعة")} title={text("Settings", "الإعدادات")} data-collection-menu-button onClick={(event)=>{event.stopPropagation(); if(menuFor===r.id){setMenuFor(null);setMenuAnchor(null);return;} const rect=event.currentTarget.getBoundingClientRect(); const menuWidth=208; const menuHeight=292; const top=window.innerHeight-rect.bottom<menuHeight+8?Math.max(8, rect.top-menuHeight-6):rect.bottom+6; const left=Math.min(Math.max(8, ar?rect.left:rect.right-menuWidth), window.innerWidth-menuWidth-8); setMenuAnchor({top,left}); setMenuFor(r.id);}} className={`flex h-9 w-9 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-600 shadow-sm transition hover:bg-slate-50 ${menuFor===r.id?"opacity-100":"opacity-0 group-hover:opacity-100 group-focus-within:opacity-100"}`}>⚙</button>
       {menuFor===r.id&&menuAnchor&&createPortal((<div data-collection-menu style={{position:"fixed",top:menuAnchor.top,left:menuAnchor.left,width:208}} className="z-[80] rounded-xl border border-slate-200 bg-white p-1.5 shadow-xl" role="menu">{[["copy",text("Copy link","نسخ الرابط"),"▢"],["view",text("View submissions","عرض الإرسالات"),"♧"],["email",text("Email link","إرسال الرابط بالبريد"),"✉"],["settings",text("Change settings","تغيير الإعدادات"),"⚙"],["toggle",r.status==="ACTIVE"?text("Disable collection","تعطيل المجموعة"):text("Enable collection","تفعيل المجموعة"),r.status==="ACTIVE"?"⊗":"✓"],["delete",text("Delete collection","حذف المجموعة"),"⌫"]].map(([key,label,ico])=><button key={key} role="menuitem" className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-start text-[12px] text-slate-700 hover:bg-blue-50 hover:text-blue-800" onClick={()=>{if(key==="copy")void showCollectionLink(r);else if(key==="view")void openSubmissions(r);else if(key==="email")void showCollectionLink(r,true);else if(key==="settings"){setMenuFor(null);setMenuAnchor(null);openSettings(r);}else if(key==="toggle"){setMenuFor(null);void updateCollection(r.id,{status:r.status==="ACTIVE"?"DISABLED":"ACTIVE"}).then(refresh).catch(e=>setError(e instanceof Error?e.message:"Update failed"));}else{setMenuFor(null);const collectionId=r.id;requestConfirm({title:text("Delete collection","حذف المجموعة"),description:text("Delete this collection? This cannot be undone.","هل تريد حذف هذه المجموعة؟ لا يمكن التراجع عن ذلك."),confirmLabel:text("Delete","حذف"),run:async()=>{try{await deleteCollection(collectionId);await refresh();}catch(e){setError(e instanceof Error?e.message:"Delete failed");}}});}}}><span className="w-4 text-center">{ico}</span>{label}</button>)}</div>), document.body)}</div></div>
@@ -294,82 +300,88 @@ export default function CollectionsPage() {
 
     {linkCollection&&<div className="fixed inset-0 z-[300] flex items-center justify-center bg-slate-950/50 p-4" onMouseDown={e=>{if(e.target===e.currentTarget)setLinkCollection(null);}}><section dir={ar?"rtl":"ltr"} role="dialog" aria-modal="true" className="w-full max-w-[470px] overflow-hidden rounded-xl border border-slate-200 bg-white shadow-2xl"><header className="flex items-center justify-between px-6 py-4"><h2 className="text-[17px] font-semibold">{text("Collect Files", "جمع الملفات")} ▣ {linkCollection.name}</h2><button onClick={()=>setLinkCollection(null)} className="text-xl text-slate-500">×</button></header><div className="px-6 pb-5"><p className="mb-3 text-[13px] text-slate-600">{text("Copy and share this collection link", "انسخ رابط المجموعة وشاركه") } ↗</p><div className="flex overflow-hidden rounded-xl border border-slate-300"><input readOnly value={linkBusy?text("Generating link…","جارٍ إنشاء الرابط…"):linkUrl} className="min-w-0 flex-1 px-3 py-2 text-[12px]" dir="ltr"/><button disabled={!linkUrl} onClick={()=>void navigator.clipboard.writeText(linkUrl)} className="border-s border-slate-300 px-4 text-[12px] text-blue-700 disabled:opacity-40">{text("Copy","نسخ")}</button></div><p className="mt-3 text-[11px] text-slate-500">{text("Created by you", "أنشأتها أنت")} · {new Date(linkCollection.createdAt).toLocaleString(ar?"ar":"en")}</p><div className="mt-4 border-t border-slate-100 pt-4"><p className="mb-2 text-[13px] font-medium text-slate-800">{text("Email collection link", "إرسال رابط المجموعة بالبريد")}</p><textarea className="wd-input min-h-[64px] w-full" value={emailTo} onChange={e=>setEmailTo(e.target.value)} placeholder={text("Add email addresses, separated by commas", "أضف عناوين البريد، مفصولة بفواصل")}/><textarea className="wd-input mt-2 min-h-[64px] w-full" value={emailMessage} onChange={e=>setEmailMessage(e.target.value)} placeholder={text("Add a message (optional)", "أضف رسالة (اختياري)")} maxLength={2000}/>{emailNotice&&<p className="mt-2 text-[12px] text-slate-600">{emailNotice}</p>}</div></div><footer className="flex items-center justify-between border-t border-slate-100 px-6 py-4"><button onClick={()=>void sendCollectionEmail()} disabled={!linkUrl||emailBusy||!emailTo.trim()} className="text-[12px] font-medium text-blue-700 disabled:opacity-40">{emailBusy?text("Sending…","جارٍ الإرسال…"):text("Send email","إرسال البريد")}</button><button onClick={()=>{setLinkCollection(null);openSettings(linkCollection);}} className="text-[12px] font-medium text-blue-700">{text("Link Settings","إعدادات الرابط")}</button></footer></section></div>}
     {settings&&<div className="fixed inset-0 z-[300] flex items-center justify-center bg-slate-950/50 p-4"><section dir={ar?"rtl":"ltr"} role="dialog" aria-modal="true" className="w-full max-w-lg rounded-xl bg-white p-6 shadow-2xl"><header className="mb-5 flex items-center justify-between"><h2 className="text-lg font-semibold">{text("Collection settings","إعدادات المجموعة")}</h2><button onClick={()=>setSettings(null)} className="text-xl text-slate-500">×</button></header><div className="space-y-4"><label className="block text-[12px]">{text("Collection name","اسم المجموعة")}<input className="wd-input mt-1 w-full" value={settingsName} onChange={e=>setSettingsName(e.target.value)}/></label><label className="block text-[12px]">{text("Description","الوصف")}<textarea className="wd-input mt-1 w-full" value={settingsDescription} onChange={e=>setSettingsDescription(e.target.value)}/></label><label className="block text-[12px]">{text("Expiration","تاريخ الانتهاء")}<input type="datetime-local" className="wd-input mt-1 w-full" value={settingsExpires} onChange={e=>setSettingsExpires(e.target.value)}/></label><p className="text-[11px] text-slate-500">{text("Changing link settings does not change the destination folder.","تغيير إعدادات الرابط لا يغير مجلد الوجهة.")}</p></div><footer className="mt-6 flex justify-end gap-2"><button className="wd-secondary-button" onClick={()=>setSettings(null)}>{text("Cancel","إلغاء")}</button><button className="wd-primary-button" disabled={!settingsName.trim()||settingsBusy} onClick={()=>void saveSettings()}>{settingsBusy?text("Saving…","جارٍ الحفظ…"):text("Save","حفظ")}</button></footer></section></div>}
-    {detail&&(
-    <div className="fixed inset-0 z-[230] flex flex-col bg-white" dir={ar?"rtl":"ltr"}>
-      {/* Header */}
+    {detail ? (
+    <div className="fixed inset-0 z-[230] flex flex-col bg-white" dir={ar ? "rtl" : "ltr"}>
       <header className="flex min-h-[64px] shrink-0 items-center gap-3 border-b border-slate-200 px-4 sm:px-6">
         <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-slate-100 text-slate-600">▣</span>
         <div className="min-w-0 flex-1">
           <h2 className="truncate text-[14px] font-semibold text-slate-900">{detail.name}</h2>
           <p className="truncate text-[11px] text-slate-500">
-            {text("Created by you on","أنشأتها في")} {new Date(detail.createdAt).toLocaleString(ar?"ar":"en",{month:"short",day:"numeric",hour:"numeric",minute:"2-digit"})}
+            {text("Created by you on", "أنشأتها في")}{" "}
+            {new Date(detail.createdAt).toLocaleString(ar ? "ar" : "en", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}
           </p>
         </div>
         <div className="hidden items-center gap-2 sm:flex">
           <span className="inline-flex items-center gap-2 rounded-full bg-[#1B66EA] px-3 py-1.5 text-[11px] font-medium text-white">
             <span className="grid h-5 w-5 place-items-center rounded-full bg-white/20 text-[10px]">↑</span>
-            {detail.submissionsCount} {text("user submitted","مستخدم أرسل")}
+            {detail.submissionsCount} {text("user submitted", "مستخدم أرسل")}
           </span>
           <span className="inline-flex items-center gap-2 rounded-full bg-[#1B66EA] px-3 py-1.5 text-[11px] font-medium text-white">
             <span className="grid h-5 w-5 place-items-center rounded-full bg-white/20 text-[10px]">▤</span>
-            {detail.filesCount} {text("file uploaded","ملف مرفوع")}
+            {detail.filesCount} {text("file uploaded", "ملف مرفوع")}
           </span>
         </div>
-        <button type="button" onClick={()=>{setDetail(null);setExpandedUserKey(null);setSubmissions([]);}} className="ms-1 grid h-9 w-9 place-items-center rounded-full text-2xl text-slate-500 hover:bg-slate-100" aria-label={text("Close","إغلاق")}>×</button>
+        <button
+          type="button"
+          onClick={() => { setDetail(null); setExpandedUserKey(null); setSubmissions([]); setSubmissionSearch(""); }}
+          className="ms-1 grid h-9 w-9 place-items-center rounded-full text-2xl text-slate-500 hover:bg-slate-100"
+          aria-label={text("Close", "إغلاق")}
+        >
+          ×
+        </button>
       </header>
 
-      {/* Toolbar */}
       <div className="flex shrink-0 flex-wrap items-center gap-2 border-b border-slate-100 px-4 py-3 sm:px-6">
         <div className="relative min-w-0 flex-1 sm:max-w-xs">
           <span className="pointer-events-none absolute start-3 top-1/2 -translate-y-1/2 text-slate-400">⌕</span>
           <input
             value={submissionSearch}
-            onChange={(e)=>setSubmissionSearch(e.target.value)}
-            placeholder={text("Search","بحث")}
+            onChange={(e) => setSubmissionSearch(e.target.value)}
+            placeholder={text("Search", "بحث")}
             className="h-9 w-full rounded-full border border-slate-200 bg-white pe-3 ps-8 text-[12px] outline-none focus:border-[#1B66EA]"
           />
         </div>
         <div className="ms-auto flex items-center gap-2">
-          <button type="button" onClick={()=>void exportSubmissionsCsv()} className="h-9 rounded-full bg-[#1B66EA] px-4 text-[12px] font-semibold text-white hover:bg-blue-700">
-            {text("Export","تصدير")}
+          <button type="button" onClick={() => exportSubmissionsCsv()} className="h-9 rounded-full bg-[#1B66EA] px-4 text-[12px] font-semibold text-white hover:bg-blue-700">
+            {text("Export", "تصدير")}
           </button>
-          <button type="button" onClick={()=>{window.location.href=detail.folder?.id?`/files/${encodeURIComponent(detail.folder.id)}`:"/files";}} className="h-9 rounded-full bg-[#1B66EA] px-4 text-[12px] font-semibold text-white hover:bg-blue-700">
-            {text("Open folder","فتح المجلد")}
+          <button
+            type="button"
+            onClick={() => { window.location.href = detail.folder?.id ? `/files/${encodeURIComponent(detail.folder.id)}` : "/files"; }}
+            className="h-9 rounded-full bg-[#1B66EA] px-4 text-[12px] font-semibold text-white hover:bg-blue-700"
+          >
+            {text("Open folder", "فتح المجلد")}
           </button>
         </div>
       </div>
 
-      {/* Body: users table + optional files panel */}
       <div className="flex min-h-0 flex-1 overflow-hidden">
-        <div className={`min-h-0 min-w-0 flex-1 overflow-y-auto transition-all duration-300 ${expandedUserKey?"sm:max-w-[58%]":""}`}>
+        <div className={`min-h-0 min-w-0 flex-1 overflow-y-auto transition-all duration-300 ${expandedUserKey ? "sm:max-w-[58%]" : ""}`}>
           {submissionsLoading ? (
-            <div className="p-8 text-center text-[13px] text-slate-400">{text("Loading…","جارٍ التحميل…")}</div>
+            <div className="p-8 text-center text-[13px] text-slate-400">{text("Loading…", "جارٍ التحميل…")}</div>
           ) : groupedSubmitters.length === 0 ? (
             <div className="flex h-full min-h-[240px] flex-col items-center justify-center gap-2 text-center text-[13px] text-slate-500">
               <span className="text-3xl text-slate-300">▣</span>
-              <p>{text("No user submissions made yet","لم يتم استلام أي ملفات بعد")}</p>
+              <p>{text("No user submissions made yet", "لم يتم استلام أي ملفات بعد")}</p>
             </div>
           ) : (
             <table className="w-full table-fixed border-collapse">
               <thead>
                 <tr className="border-b border-slate-200">
-                  <th className="px-4 py-2.5 text-start text-[12px] font-medium text-slate-500 sm:px-6">{text("Users","المستخدمون")}</th>
-                  <th className="w-[28%] px-3 py-2.5 text-start text-[12px] font-medium text-slate-500">{text("Last submitted","آخر إرسال")}</th>
-                  <th className="w-[18%] px-3 py-2.5 text-start text-[12px] font-medium text-slate-500">{text("Uploads","الرفوعات")}</th>
+                  <th className="px-4 py-2.5 text-start text-[12px] font-medium text-slate-500 sm:px-6">{text("Users", "المستخدمون")}</th>
+                  <th className="w-[28%] px-3 py-2.5 text-start text-[12px] font-medium text-slate-500">{text("Last submitted", "آخر إرسال")}</th>
+                  <th className="w-[18%] px-3 py-2.5 text-start text-[12px] font-medium text-slate-500">{text("Uploads", "الرفوعات")}</th>
                 </tr>
               </thead>
               <tbody>
                 {groupedSubmitters.map((g) => {
                   const open = expandedUserKey === g.key;
                   return (
-                    <tr
-                      key={g.key}
-                      className={`border-b border-slate-100 transition-colors ${open?"bg-slate-50":"hover:bg-slate-50"}`}
-                    >
+                    <tr key={g.key} className={`border-b border-slate-100 transition-colors ${open ? "bg-slate-50" : "hover:bg-slate-50"}`}>
                       <td className="px-4 py-3 sm:px-6">
                         <div className="flex min-w-0 items-center gap-2.5">
                           <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-slate-200 text-[12px] font-semibold text-slate-700">
-                            {(g.name || "?").slice(0,1).toUpperCase()}
+                            {(g.name || "?").slice(0, 1).toUpperCase()}
                           </span>
                           <div className="min-w-0">
                             <p className="truncate text-[13px] font-medium text-slate-800">{g.name}</p>
@@ -377,8 +389,10 @@ export default function CollectionsPage() {
                           </div>
                         </div>
                       </td>
-                      <td className="px-3 py-3 truncate text-[13px] text-slate-600">
-                        {g.lastAt ? new Date(g.lastAt).toLocaleString(ar?"ar":"en",{month:"short",day:"numeric",hour:"numeric",minute:"2-digit"}) : "—"}
+                      <td className="truncate px-3 py-3 text-[13px] text-slate-600">
+                        {g.lastAt
+                          ? new Date(g.lastAt).toLocaleString(ar ? "ar" : "en", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })
+                          : "—"}
                       </td>
                       <td className="px-3 py-3">
                         <button
@@ -387,7 +401,11 @@ export default function CollectionsPage() {
                           className="inline-flex items-center gap-2 text-[13px] text-slate-700"
                         >
                           <span>{g.files.length}</span>
-                          <span className={`grid h-7 w-7 place-items-center rounded-full border border-slate-200 text-slate-500 transition-transform duration-300 ${open?"rotate-180 bg-slate-100":"hover:bg-slate-100"}`}>
+                          <span
+                            className={`grid h-7 w-7 place-items-center rounded-full border border-slate-200 text-slate-500 transition-transform duration-300 ${
+                              open ? "rotate-180 bg-slate-100" : "hover:bg-slate-100"
+                            }`}
+                          >
                             {ar ? "‹" : "›"}
                           </span>
                         </button>
@@ -400,28 +418,29 @@ export default function CollectionsPage() {
           )}
         </div>
 
-        {/* Files side panel */}
         <aside
           className={`flex shrink-0 flex-col overflow-hidden border-s border-slate-200 bg-white transition-all duration-300 ease-out ${
-            expandedUserKey ? "w-full max-w-full sm:w-[42%] opacity-100" : "w-0 max-w-0 opacity-0 border-s-0"
+            expandedUserKey ? "w-full max-w-full opacity-100 sm:w-[42%]" : "w-0 max-w-0 border-s-0 opacity-0"
           }`}
         >
           {expandedUserKey ? (
             <>
               <div className="flex h-11 shrink-0 items-center justify-between border-b border-slate-100 px-4">
-                <p className="text-[12px] font-semibold text-slate-700">{text("Uploaded files","الملفات المرفوعة")}</p>
-                <button type="button" onClick={()=>setExpandedUserKey(null)} className="text-lg text-slate-400 hover:text-slate-600">×</button>
+                <p className="text-[12px] font-semibold text-slate-700">{text("Uploaded files", "الملفات المرفوعة")}</p>
+                <button type="button" onClick={() => setExpandedUserKey(null)} className="text-lg text-slate-400 hover:text-slate-600">
+                  ×
+                </button>
               </div>
               <div className="min-h-0 flex-1 overflow-y-auto">
                 <table className="w-full table-fixed border-collapse">
                   <thead>
                     <tr className="border-b border-slate-100">
-                      <th className="px-4 py-2 text-start text-[11px] font-medium text-slate-500">{text("File name","اسم الملف")}</th>
-                      <th className="w-[38%] px-3 py-2 text-start text-[11px] font-medium text-slate-500">{text("Uploaded on","تاريخ الرفع")}</th>
+                      <th className="px-4 py-2 text-start text-[11px] font-medium text-slate-500">{text("File name", "اسم الملف")}</th>
+                      <th className="w-[38%] px-3 py-2 text-start text-[11px] font-medium text-slate-500">{text("Uploaded on", "تاريخ الرفع")}</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {(groupedSubmitters.find((g)=>g.key===expandedUserKey)?.files ?? []).map((f) => (
+                    {(groupedSubmitters.find((g) => g.key === expandedUserKey)?.files ?? []).map((f) => (
                       <tr key={f.id} className="border-b border-slate-50 hover:bg-slate-50">
                         <td className="px-4 py-2.5">
                           <div className="flex min-w-0 items-center gap-2">
@@ -429,8 +448,10 @@ export default function CollectionsPage() {
                             <span className="truncate text-[12px] text-slate-800">{f.name}</span>
                           </div>
                         </td>
-                        <td className="px-3 py-2.5 truncate text-[12px] text-slate-500">
-                          {f.at ? new Date(f.at).toLocaleString(ar?"ar":"en",{month:"short",day:"numeric",hour:"numeric",minute:"2-digit"}) : "—"}
+                        <td className="truncate px-3 py-2.5 text-[12px] text-slate-500">
+                          {f.at
+                            ? new Date(f.at).toLocaleString(ar ? "ar" : "en", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })
+                            : "—"}
                         </td>
                       </tr>
                     ))}
@@ -442,7 +463,7 @@ export default function CollectionsPage() {
         </aside>
       </div>
     </div>
-  )}
+  ) : null}
 
 {pickerOpen&&<div className="fixed inset-0 z-[270] flex items-center justify-center bg-slate-950/55 p-2 sm:p-4" onMouseDown={e=>{if(e.target===e.currentTarget)setPickerOpen(false);}}><section dir={ar?"rtl":"ltr"} className="flex h-[min(82dvh,720px)] w-[min(820px,98vw)] flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl" role="dialog" aria-modal="true" aria-labelledby="collection-folder-picker-title">
       <header className="flex items-center gap-3 border-b border-slate-100 px-5 py-4"><h3 id="collection-folder-picker-title" className="min-w-0 flex-1 text-[17px] font-semibold">{text("Choose destination folder", "اختيار مجلد الوجهة")}</h3><div className="hidden w-52 sm:block"><input className="wd-input !py-2" value={pickerSearch} onChange={e=>setPickerSearch(e.target.value)} placeholder={text("Search", "بحث")}/></div><button type="button" onClick={()=>setPickerOpen(false)} className="h-8 w-8 rounded-lg text-xl text-slate-500 hover:bg-slate-100" aria-label={text("Close", "إغلاق")}>×</button></header>
