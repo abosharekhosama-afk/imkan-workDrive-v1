@@ -220,6 +220,7 @@ export default function TeamFoldersPage() {
     setMenuId(null);
     setMenuAnchor(null);
     setActiveMembersTf(null);
+    setDetailsTf(null);
     router.push(`/files/team-folders/${encodeURIComponent(tf.id)}/manage?tab=members`);
   }
 
@@ -400,7 +401,7 @@ export default function TeamFoldersPage() {
         </TeamFolderActionMenu>
       ) : null}
 
-      {activeMembersTf ? <MembersModal teamFolderId={activeMembersTf.id} teamFolderName={activeMembersTf.name} userRole={activeMembersTf.role} onClose={() => setActiveMembersTf(null)} /> : null}
+      {/* MembersModal removed — members open manage?tab=members */}
     </section>
   );
 }
