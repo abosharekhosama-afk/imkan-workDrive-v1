@@ -91,123 +91,74 @@ export default function SharedWithMePage() {
   };
 
   return (
-    <div className="wd-page shared-with-me-page flex h-full min-h-0 w-full min-w-0 flex-1 flex-col overflow-hidden !p-0 wd-list-page">
-      <header className="wd-page-head shrink-0 px-4 pt-4 md:px-6">
-        <div className="wd-page-head-titles">
-          <h1>{label("shared.withMe")}</h1>
-          <p>{label("nav.workspace")}</p>
-        </div>
-        {rows.length > 0 ? (
-          <div className="wd-page-head-actions">
-            <span className="wd-badge wd-badge-gray">
-              <span className="wd-count-pill">{rows.length}</span> {label("shared.withMe")}
-            </span>
+    <div className="flex min-h-0 flex-1 flex-col" style={{ fontFamily: "var(--user-font-family), Arial, system-ui, sans-serif" }}>
+      <div className="flex h-12 shrink-0 items-center justify-between gap-3 border-b border-[color:var(--imkan-color-border)] bg-white px-3">
+        <h1 className="text-[15px] font-semibold text-[#212121]">
+          {label("nav.sharedWithMe")}
+          {rows.length > 0 ? <span className="ms-2 text-[12px] font-medium text-slate-500">({rows.length})</span> : null}
+        </h1>
+        <button type="button" className="rounded-md px-2.5 py-1.5 text-[12.5px] text-slate-600 hover:bg-slate-100" onClick={() => void reload()} disabled={loading}>
+          ⟳ {label("recent.refresh")}
+        </button>
+      </div>
+      <div className="min-h-0 flex-1 overflow-y-auto px-3 md:px-5">
+        {error ? <div className="mt-3 rounded-lg bg-red-50 p-3 text-[12px] text-red-700" role="alert">{error}</div> : null}
+        {loading ? (
+          <div className="p-6 text-center text-[13px] text-slate-400">{label("common.loading")}</div>
+        ) : rows.length === 0 ? (
+          <div className="flex flex-col items-center justify-center gap-3 py-12 text-center">
+            <span className="text-[40px] text-slate-300" aria-hidden="true">⇄</span>
+            <h2 className="text-[15px] font-medium text-slate-800">{label("nav.sharedWithMe")}</h2>
+            <p className="text-[13px] text-slate-500">{label("shared.empty")}</p>
           </div>
-        ) : null}
-      </header>
-
-      <div className="shared-with-me-scroll min-h-0 min-w-0 flex-1 overflow-x-auto overflow-y-auto overflow-x-auto px-4 pb-6 md:px-6">
-      {error ? <div className="wd-alert" role="alert">{error}</div> : null}
-
-      {loading ? (
-        <div className="wd-card" aria-busy="true">
-          {[58, 44, 66].map((width, index) => (
-            <div key={index} className="wd-skel-row" style={{ paddingInline: 16 }}>
-              <span className="wd-skel-bar" style={{ width: 30, height: 30 }} />
-              <span className="wd-skel-bar flex-1" style={{ width: `${width}%` }} />
-              <span className="wd-skel-bar" style={{ width: 110 }} />
-            </div>
-          ))}
-          <span className="sr-only" role="status">{label("common.loading")}</span>
-        </div>
-      ) : rows.length === 0 ? (
-        <div className="wd-card">
-          <div className="wd-empty">
-            <span className="wd-empty-icon" aria-hidden="true">⇄</span>
-            <h2>{label("shared.withMe")}</h2>
-            <p>{label("shared.noSharedItems")}</p>
-          </div>
-        </div>
-      ) : (
-        <div className="wd-card workflow-like-list wd-list-table-card w-full max-w-full">
-          <table className="wd-table workflow-like-table wd-list-table min-w-[48rem]">
+        ) : (
+          <table className="w-full table-fixed border-collapse" style={{ fontFamily: "var(--user-font-family), Arial, system-ui, sans-serif" }}>
             <thead>
-              <tr>
-                <th>{label("shared.name")}</th>
-                <th>{label("shared.owner")}</th>
-                <th>{label("shared.permission")}</th>
-                <th>{label("files.column.size")}</th>
-                <th>{label("shared.expires")}</th>
-                <th className="num"><span className="sr-only">{label("files.actions")}</span></th>
+              <tr className="border-b border-[color:var(--imkan-color-border)]">
+                <th className="px-3 py-2 text-start text-[12px] font-medium text-slate-500">{label("shared.name")}</th>
+                <th className="w-[18%] px-3 py-2 text-start text-[12px] font-medium text-slate-500">{label("shared.owner")}</th>
+                <th className="w-[14%] px-3 py-2 text-start text-[12px] font-medium text-slate-500">{label("shared.permission")}</th>
+                <th className="w-[12%] px-3 py-2 text-start text-[12px] font-medium text-slate-500">{label("files.column.size")}</th>
+                <th className="w-[16%] px-3 py-2 text-start text-[12px] font-medium text-slate-500">{label("shared.expires")}</th>
+                <th className="w-[10%] px-3 py-2 text-end text-[12px] font-medium text-slate-500">{label("files.actions")}</th>
               </tr>
             </thead>
             <tbody>
               {rows.map((r) => (
-                <tr
-                  key={r.id}
-                  className="wd-row-clickable"
-                  onClick={() => openSharedRow(r)}
-                >
-                  <td>
-                    <div className="wd-name-cell">
-                      <span className="icon" aria-hidden="true">
-                        <FileTypeIcon size={18} kind={fileIconKind(r.resourceType === "FOLDER" ? "folder" : "file", r.mimeType ?? undefined, r.name ?? r.resourceId)} />
-                      </span>
+                <tr key={r.id} className="border-b border-[color:var(--imkan-color-border)] hover:bg-slate-50" onDoubleClick={() => openSharedRow(r)}>
+                  <td className="px-3 py-2.5">
+                    <div className="flex min-w-0 items-center gap-2">
+                      <FileTypeIcon size={18} kind={fileIconKind(r.resourceType === "FOLDER" ? "folder" : "file", r.mimeType ?? undefined, r.name ?? r.resourceId)} />
                       {r.resourceType === "FOLDER" ? (
-                        <Link href={`/files/${r.resourceId}`} className="wd-name-link" onClick={(event) => event.stopPropagation()}>
+                        <Link href={`/files/${r.resourceId}`} className="truncate text-[13px] text-slate-800 hover:underline" onClick={(e) => e.stopPropagation()}>
                           {r.name ?? r.resourceId}
                         </Link>
                       ) : (
-                        <button
-                          type="button"
-                          className="wd-name-link imkan-focusable"
-                          onClick={(event) => { event.stopPropagation(); dispatchPreview(r); }}
-                        >
+                        <button type="button" className="truncate text-start text-[13px] text-slate-800 hover:underline" onClick={(e) => { e.stopPropagation(); dispatchPreview(r); }}>
                           {r.name ?? r.resourceId}
                         </button>
                       )}
                     </div>
                   </td>
-                  <td className="imkan-muted">{r.owner?.name || r.owner?.email || "—"}</td>
-                  <td>
-                    <span className={permissionBadge(r.permission)}>{r.permission ?? "VIEW"}</span>
-                  </td>
-                  <td className="num imkan-muted">{r.resourceType === "FOLDER" ? "—" : formatBytes(resolveItemSize(r) ?? 0)}</td>
-                  <td className="imkan-muted">
-                    {r.expiresAt ? new Date(r.expiresAt).toLocaleDateString() : "—"}
-                  </td>
-                  <td className="num">
+                  <td className="px-3 py-2.5 truncate text-[13px] text-slate-600">{r.owner?.name || r.owner?.email || "—"}</td>
+                  <td className="px-3 py-2.5 truncate text-[13px] text-slate-600">{r.permission ?? "VIEW"}</td>
+                  <td className="px-3 py-2.5 truncate text-[13px] text-slate-600">{r.resourceType === "FOLDER" ? "—" : formatBytes(resolveItemSize(r) ?? 0)}</td>
+                  <td className="px-3 py-2.5 truncate text-[13px] text-slate-600">{r.expiresAt ? new Date(r.expiresAt).toLocaleDateString() : "—"}</td>
+                  <td className="px-3 py-2.5 text-end" onClick={(e) => e.stopPropagation()}>
                     <FileActionsMenu
                       context={{
                         resourceType: r.resourceType,
-                        permission: r.permission,
-                        canDownload: r.canDownload,
                         canMutate: permissionAllowsEdit(r.permission),
                         canShare: false,
+                        canFavorite: true,
                       }}
                       handlers={{
-                        onOpen:
-                          r.resourceType === "FOLDER"
-                            ? () => router.push(`/files/${r.resourceId}`)
-                            : () => dispatchPreview(r),
-                        onPreview:
-                          r.resourceType === "FILE" ? () => dispatchPreview(r) : undefined,
-                        onDownload:
-                          r.resourceType === "FILE"
-                            ? async () => {
-                                const result = await requestDownload(r.resourceId);
-                                triggerDownload(result.download_url);
-                              }
-                            : undefined,
-                        onRename: permissionAllowsEdit(r.permission)
-                          ? () => setRenameTarget({ type: r.resourceType, id: r.resourceId, name: r.name ?? r.resourceId })
-                          : undefined,
-                        onMove: permissionAllowsEdit(r.permission)
-                          ? () => setMoveTarget({ type: r.resourceType, id: r.resourceId, name: r.name ?? r.resourceId })
-                          : undefined,
-                        onDelete: permissionAllowsEdit(r.permission)
-                          ? () => setDeleteTarget({ type: r.resourceType, id: r.resourceId, name: r.name ?? r.resourceId })
-                          : undefined,
+                        onOpen: r.resourceType === "FOLDER" ? () => router.push(`/files/${r.resourceId}`) : () => dispatchPreview(r),
+                        onPreview: r.resourceType === "FILE" ? () => dispatchPreview(r) : undefined,
+                        onDownload: r.resourceType === "FILE" ? async () => { const result = await requestDownload(r.resourceId); triggerDownload(result.download_url); } : undefined,
+                        onRename: permissionAllowsEdit(r.permission) ? () => setRenameTarget({ type: r.resourceType, id: r.resourceId, name: r.name ?? r.resourceId }) : undefined,
+                        onMove: permissionAllowsEdit(r.permission) ? () => setMoveTarget({ type: r.resourceType, id: r.resourceId, name: r.name ?? r.resourceId }) : undefined,
+                        onDelete: permissionAllowsEdit(r.permission) ? () => setDeleteTarget({ type: r.resourceType, id: r.resourceId, name: r.name ?? r.resourceId }) : undefined,
                       }}
                     />
                   </td>
@@ -215,9 +166,7 @@ export default function SharedWithMePage() {
               ))}
             </tbody>
           </table>
-        </div>
-      )}
-
+        )}
       </div>
       {toast ? <Toast message={toast} onDismiss={() => setToast(null)} /> : null}
       {renameTarget ? (
