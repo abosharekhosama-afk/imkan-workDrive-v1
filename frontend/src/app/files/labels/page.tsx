@@ -260,12 +260,12 @@ export default function LabelsPage() {
       </header>
 
       <div className="flex min-h-[52px] shrink-0 items-center justify-between gap-3 border-b border-slate-200 px-4">
-        <div className="flex min-w-0 flex-1 items-center overflow-x-auto py-2">
-          <div className="inline-flex h-9 items-stretch overflow-hidden rounded-full border border-slate-300 bg-white shadow-sm">
+        <div className="labels-strip-scroll min-w-0 flex-1 overflow-x-auto py-2 [-ms-overflow-style:none] [scrollbar-width:thin]">
+          <div className="inline-flex h-9 min-w-max items-stretch overflow-hidden rounded-full border border-slate-300 bg-white shadow-sm">
             <button
               type="button"
               onClick={() => setSelected("following")}
-              className={`flex h-full shrink-0 items-center gap-2 border-e border-slate-300 px-4 text-[12px] transition-colors first:rounded-s-full ${
+              className={`flex h-full shrink-0 items-center gap-2 border-e border-slate-300 px-4 text-[12px] transition-colors ${
                 selected === "following"
                   ? "bg-[var(--wd-primary-light,#eff6ff)] font-semibold text-[color:var(--wd-primary-ink,#1e40af)]"
                   : "bg-white text-slate-700 hover:bg-slate-50"
@@ -274,13 +274,15 @@ export default function LabelsPage() {
               <Icons.bell size={14} />
               {ar ? "المتابعة" : "Following"}
             </button>
-            {labels.map((l, index) => (
+            {labels.map((l, index) => {
+              const isLast = index === labels.length - 1;
+              return (
               <button
                 key={l.id}
                 type="button"
                 onClick={() => setSelected(l.id)}
                 className={`flex h-full shrink-0 items-center gap-2 px-4 text-[12px] transition-colors ${
-                  index < labels.length - 1 ? "border-e border-slate-300" : ""
+                  !isLast ? "border-e border-slate-300" : ""
                 } ${
                   selected === l.id
                     ? "bg-[var(--wd-primary-light,#eff6ff)] font-semibold text-[color:var(--wd-primary-ink,#1e40af)]"
@@ -290,7 +292,8 @@ export default function LabelsPage() {
                 <span className="h-3 w-3 shrink-0 rounded-[2px]" style={{ background: l.color }} />
                 <span className="max-w-[10rem] truncate">{l.name}</span>
               </button>
-            ))}
+              );
+            })}
           </div>
         </div>
         <div className="flex shrink-0 items-center gap-2">
