@@ -68,14 +68,16 @@ export function parseVersionUploadFile(file: unknown): VersionUploadFile {
     throw new BadRequestException('Invalid file extension');
   }
   
-  if (typeof rawMimeType !== 'string' || !MIME_TYPE_RE.test(rawMimeType)) {
-    throw new BadRequestException('Invalid mime_type');
+  // Browsers often send an empty MIME for unknown types; default safely.
+  let mimeType = typeof rawMimeType === 'string' ? rawMimeType.trim() : '';
+  if (!mimeType || !MIME_TYPE_RE.test(mimeType)) {
+    mimeType = 'application/octet-stream';
   }
   
   return {
     buffer,
     originalName,
-    mimeType: rawMimeType,
+    mimeType,
     size: buffer.length,
   };
 }
