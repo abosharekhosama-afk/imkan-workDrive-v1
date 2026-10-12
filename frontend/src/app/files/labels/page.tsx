@@ -30,12 +30,13 @@ const COLORS = [
 ];
 type Tab = "following" | string;
 
-async function fetchFollowResource(resourceType: string, resourceId: string) {
+async function fetchFollowResource(type: string, id: string): Promise<WorkspaceLabelResource["resource"] | null> {
   try {
-    if (resourceType === "FOLDER") {
-      return await apiRequest<{ id: string; name: string; updatedAt?: string }>(`/folders/${resourceId}`);
-    }
-    return await apiRequest<{ id: string; name: string; mimeType?: string | null; size?: number | null; updatedAt?: string }>(`/files/${resourceId}`);
+    const path = type === "FOLDER"
+      ? `/folders/${encodeURIComponent(id)}`
+      : `/files/${encodeURIComponent(id)}/details`;
+    const value = await apiRequest<any>(path);
+    return (value?.file ?? value?.folder ?? value) as WorkspaceLabelResource["resource"];
   } catch {
     return null;
   }
@@ -117,7 +118,15 @@ export default function LabelsPage() {
                       labelId: "following",
                       resourceType: row.resourceType as "FILE" | "FOLDER",
                       resourceId: row.resourceId,
-                      resource,
+                      resource: {
+                        id: resource.id ?? row.resourceId,
+                        name: resource.name ?? row.resourceId,
+                        mimeType: resource.mimeType ?? null,
+                        size: resource.size ?? null,
+                        folderId: resource.folderId ?? null,
+                        parentId: resource.parentId ?? null,
+                        updatedAt: resource.updatedAt ?? row.updatedAt,
+                      },
                     } as WorkspaceLabelResource)
                   : null;
               } catch {
@@ -368,41 +377,41 @@ export default function LabelsPage() {
               ))}
             </div>
           ) : (
-            <table className="wd-table workflow-like-table borderless w-full min-w-[40rem] border-collapse text-start">
-              <thead className="sticky top-0 z-[1] bg-white">
-                <tr className="h-[52px] border-b border-slate-200 text-[12px] text-slate-700">
-                  <th className="w-10 px-2 text-center font-normal">
+            <table className="w-full table-fixed border-collapse" style={{ fontFamily: "var(--user-font-family), Arial, system-ui, sans-serif" }}>
+              <thead>
+                <tr className="border-b border-[color:var(--imkan-color-border)]">
+                  <th className="w-10 px-3 py-2 text-center text-[12px] font-medium text-slate-500">
                     <input type="checkbox" checked={filtered.length > 0 && selectedIds.size === filtered.length} onChange={toggleSelectAll} aria-label={ar ? "تحديد الكل" : "Select all"} />
                   </th>
-                  <th className="w-10 px-2 text-center font-normal" />
-                  <th className="min-w-[14rem] px-3 text-start font-medium">{ar ? "الاسم" : "Name"}</th>
-                  <th className="w-[28%] min-w-[9rem] px-3 text-start font-medium">
+                  <th className="w-10 px-3 py-2 text-center text-[12px] font-medium text-slate-500" />
+                  <th className="px-3 py-2 text-start text-[12px] font-medium text-slate-500">{ar ? "الاسم" : "Name"}</th>
+                  <th className="w-[22%] px-3 py-2 text-start text-[12px] font-medium text-slate-500">
                     {ar ? "آخر تعديل" : "Last Modified"}{" "}
                     <button type="button" onClick={() => setSortDesc((v) => !v)} aria-label="Sort">{sortDesc ? "↓" : "↑"}</button>
                   </th>
-                  <th className="w-12" />
+                  <th className="w-12 px-3 py-2 text-end text-[12px] font-medium text-slate-500" />
                 </tr>
               </thead>
               <tbody>
                 {filtered.map((r) => (
-                  <tr key={r.id} className={`h-[56px] border-b border-slate-100 hover:bg-slate-50 ${selectedIds.has(r.id) ? "bg-[var(--wd-primary-light,#eff6ff)]" : ""}`} data-selected={selectedIds.has(r.id) || undefined}>
-                    <td className="px-2 text-center">
+                  <tr key={r.id} className={`border-b border-[color:var(--imkan-color-border)] hover:bg-slate-50 ${selectedIds.has(r.id) ? "bg-[var(--wd-primary-light,#eff6ff)]" : ""}`} data-selected={selectedIds.has(r.id) || undefined}>
+                    <td className="px-3 py-2.5 text-center">
                       <input type="checkbox" checked={selectedIds.has(r.id)} onChange={() => toggleSelect(r.id)} aria-label={ar ? "تحديد" : "Select"} />
                     </td>
-                    <td className="px-2 text-center">
-                      <FileTypeIcon size={20} kind={fileIconKind(r.resourceType === "FOLDER" ? "folder" : "file", r.resource.mimeType ?? undefined, r.resource.name)} />
+                    <td className="px-3 py-2.5 text-center">
+                      <FileTypeIcon size={18} kind={fileIconKind(r.resourceType === "FOLDER" ? "folder" : "file", r.resource.mimeType ?? undefined, r.resource.name)} />
                     </td>
-                    <td className="px-3">
-                      <button type="button" onClick={() => openResource(r)} className="inline-flex max-w-full items-center gap-2 text-start text-[13px] text-slate-800 hover:underline">
+                    <td className="px-3 py-2.5">
+                      <button type="button" onClick={() => openResource(r)} className="inline-flex max-w-full min-w-0 items-center gap-2 text-start text-[13px] text-slate-800 hover:underline">
                         <span className="truncate">{r.resource.name}</span>
-                        {r.resourceType === "FOLDER" && selected === "following" ? <span title={ar ? "تتم متابعة التحديثات" : "Following updates"} className="text-[12px] text-slate-500">♧</span> : null}
-                        {activeLabel ? <span className="inline-flex items-center gap-1 text-[11px] text-slate-600"><i className="h-2 w-2 rounded-full" style={{ background: activeLabel.color }} />{activeLabel.name}</span> : null}
+                        {selected === "following" ? <span title={ar ? "تتم متابعة التحديثات" : "Following updates"} className="shrink-0 text-[12px] text-slate-500">♧</span> : null}
+                        {activeLabel ? <span className="inline-flex shrink-0 items-center gap-1 text-[11px] text-slate-600"><i className="h-2 w-2 rounded-full" style={{ background: activeLabel.color }} />{activeLabel.name}</span> : null}
                       </button>
                     </td>
-                    <td className="whitespace-nowrap px-3 text-[12px] text-slate-500">
+                    <td className="px-3 py-2.5 truncate text-[13px] text-slate-600">
                       {r.resource.updatedAt ? new Date(r.resource.updatedAt).toLocaleDateString(ar ? "ar" : "en-US", { month: "short", day: "numeric" }) : "—"}
                     </td>
-                    <td className="px-2 text-end">
+                    <td className="px-3 py-2.5 text-end">
                       <FileActionsMenu context={{ resourceType: r.resourceType, canMutate: false, canShare: r.resourceType === "FILE", canFavorite: true }} handlers={{ onOpen: () => openResource(r), onPreview: r.resourceType === "FILE" ? () => openResource(r) : undefined, onShare: r.resourceType === "FILE" ? () => openShareFor(r) : undefined }} />
                     </td>
                   </tr>
@@ -480,7 +489,7 @@ export default function LabelsPage() {
         <ShareModal resourceType={shareTarget.type} resourceId={shareTarget.id} resourceName={shareTarget.name} onClose={() => setShareTarget(null)} />
       ) : null}
 
-      {toast ? <Toast message={toast} onClose={() => setToast(null)} /> : null}
+      {toast ? <Toast message={toast} onDismiss={() => setToast(null)} /> : null}
     </main>
   );
 }
