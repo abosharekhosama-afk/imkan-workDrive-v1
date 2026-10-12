@@ -49,6 +49,7 @@ export default function CollectionsPage() {
   const [selected, setSelected] = useState<FileCollection | null>(null);
   const [submissions, setSubmissions] = useState<CollectionSubmission[]>([]);
   const [expandedUserKey, setExpandedUserKey] = useState<string | null>(null);
+  const [submissionSearch, setSubmissionSearch] = useState("");
   const [submissionsLoading, setSubmissionsLoading] = useState(false);
   const [pickerOpen, setPickerOpen] = useState(false);
   const [pickerFolderId, setPickerFolderId] = useState<string | null>(null);
