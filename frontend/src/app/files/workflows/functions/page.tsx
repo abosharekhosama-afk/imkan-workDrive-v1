@@ -25,6 +25,7 @@ import { ImkanOptionPicker, toImkanPickerOptions } from "@/components/imkan-opti
 type Port = { key: string; label: string; type: string; required?: boolean; description?: string };
 type Operation = Record<string, unknown> & { op: string };
 type FunctionDefinition = { inputs: Port[]; operations: Operation[]; outputs: Port[] };
+
 function functionKeyFromName(name: string) {
   const slug = name.trim().toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "");
   return /^[a-z_][a-z0-9_]*$/.test(slug) ? slug.slice(0, 64) : "";
@@ -41,68 +42,84 @@ type Draft = {
   memoryLimitMb: number;
 };
 
-const OP_GROUPS = [
+/** Zoho-style palette groups mapped onto SAFE backend operations */
+const ZOHO_PALETTE = [
   {
-    label: "Data",
-    arLabel: "البيانات",
+    id: "basic",
+    label: "BASIC",
+    arLabel: "أساسي",
     items: [
-      ["SET_FIELD", "Set field", "تعيين حقل", "Set a workflow value."],
-      ["COPY_VALUE", "Copy value", "نسخ قيمة", "Copy a dynamic value into a field."],
-      ["CONCAT", "Join text", "دمج نص", "Join two values."],
-      ["LOWERCASE", "Lowercase", "أحرف صغيرة", "Convert text to lowercase."],
-      ["UPPERCASE", "Uppercase", "أحرف كبيرة", "Convert text to uppercase."],
-      ["NUMBER", "To number", "تحويل إلى رقم", "Convert a value to a number."],
+      { op: "SET_FIELD", en: "set variable", ar: "تعيين متغير", desc: "Sets the content of the specified field with the value of an expression" },
+      { op: "COPY_VALUE", en: "add comment", ar: "تعليق", desc: "Copy / annotate a value into a field (comment-style assignment)" },
+      { op: "LOWERCASE", en: "info", ar: "معلومات", desc: "Normalize text (info-style transform)" },
     ],
   },
   {
-    label: "Math",
-    arLabel: "الحساب",
+    id: "condition",
+    label: "CONDITION",
+    arLabel: "شرط",
     items: [
-      ["ADD", "Add", "جمع", "Add two values."],
-      ["SUBTRACT", "Subtract", "طرح", "Subtract the second value."],
-      ["MULTIPLY", "Multiply", "ضرب", "Multiply two values."],
-      ["DIVIDE", "Divide", "قسمة", "Divide the first value by the second."],
+      { op: "IF", en: "if", ar: "if", desc: "Performs a set of tasks conditionally based on evaluating a boolean expression." },
+      { op: "IF", en: "else if", ar: "else if", desc: "Executes statements when the if condition fails and the else if condition is true.", variant: "elseif" },
+      { op: "IF", en: "else", ar: "else", desc: "Executes when prior conditions fail.", variant: "else" },
     ],
   },
   {
-    label: "Logic",
-    arLabel: "المنطق",
-    items: [["IF", "If / Else", "شرط If / Else", "Set a value based on a condition."]],
-  },
-  {
-    label: "Integration",
-    arLabel: "التكامل",
+    id: "notifications",
+    label: "NOTIFICATIONS",
+    arLabel: "إشعارات",
     items: [
-      ["HTTP_REQUEST", "Invoke API", "استدعاء API", "Call an external service through a Connection."],
-      ["CONNECTION_READ", "Read from Connection", "قراءة من اتصال", "Read a resource through a Connection."],
+      { op: "NOTIFY_OWNER", en: "send mail", ar: "إرسال بريد", desc: "Sends a notification / mail-style message to the resource owner." },
+      { op: "ADD_TAG", en: "post to chat", ar: "نشر في المحادثة", desc: "Post a tag-style marker (chat-style signal in SAFE runtime)." },
     ],
   },
   {
-    label: "Actions",
-    arLabel: "الإجراءات",
+    id: "integrations",
+    label: "INTEGRATIONS",
+    arLabel: "تكاملات",
     items: [
-      ["NOTIFY_OWNER", "Notify owner", "إشعار المالك", "Send a system notification."],
-      ["ADD_TAG", "Add tag", "إضافة وسم", "Add a tag to the workflow result."],
+      { op: "HTTP_REQUEST", en: "invoke API", ar: "استدعاء API", desc: "Runs actions via API calls using a Connection (Zoho invoke API style)." },
+      { op: "CONNECTION_READ", en: "webhook", ar: "Webhook", desc: "Read a resource through a Connection." },
+      { op: "HTTP_REQUEST", en: "zoho integration", ar: "تكامل Zoho", desc: "Integration call through a preconfigured Connection." },
+      { op: "HTTP_REQUEST", en: "FTP/SFTP", ar: "FTP/SFTP", desc: "File transfer style call via Connection HTTP bridge." },
+    ],
+  },
+  {
+    id: "collection",
+    label: "COLLECTION",
+    arLabel: "مجموعة",
+    items: [
+      { op: "SET_FIELD", en: "create collection", ar: "إنشاء مجموعة", desc: "Create a collection field value." },
+      { op: "CONCAT", en: "insert", ar: "إدراج", desc: "Insert / join values into a field." },
+      { op: "COPY_VALUE", en: "get", ar: "جلب", desc: "Get / copy a value." },
+      { op: "SET_FIELD", en: "update", ar: "تحديث", desc: "Update a field value." },
+      { op: "SET_FIELD", en: "delete", ar: "حذف", desc: "Clear a field value." },
+      { op: "IF", en: "for each element", ar: "لكل عنصر", desc: "Conditional loop-style branch (SAFE maps to IF)." },
+    ],
+  },
+  {
+    id: "math",
+    label: "MATH",
+    arLabel: "حساب",
+    items: [
+      { op: "ADD", en: "add", ar: "جمع", desc: "Add two values." },
+      { op: "SUBTRACT", en: "subtract", ar: "طرح", desc: "Subtract values." },
+      { op: "MULTIPLY", en: "multiply", ar: "ضرب", desc: "Multiply values." },
+      { op: "DIVIDE", en: "divide", ar: "قسمة", desc: "Divide values." },
+      { op: "NUMBER", en: "to number", ar: "إلى رقم", desc: "Convert to number." },
+      { op: "UPPERCASE", en: "uppercase", ar: "أحرف كبيرة", desc: "Uppercase text." },
     ],
   },
 ] as const;
-
-const OPERATION_ITEMS: Array<readonly [string, string, string, string]> = OP_GROUPS.reduce<Array<readonly [string, string, string, string]>>(
-  (acc, group) => { group.items.forEach((item) => acc.push(item as readonly [string, string, string, string])); return acc; }, []
-);
 
 const STARTER: Draft = {
   name: "Normalize file status",
   key: "normalize_file_status",
   description: "Normalize file metadata and return a reusable status value.",
   definition: {
-    inputs: [
-      { key: "status", label: "Current status", type: "text", required: false, description: "Optional workflow status." },
-    ],
+    inputs: [{ key: "status", label: "Current status", type: "text", required: false, description: "Optional workflow status." }],
     operations: [{ op: "LOWERCASE", left: "{{status}}", field: "normalized_status" }],
-    outputs: [
-      { key: "normalized_status", label: "Normalized status", type: "text", description: "Lowercase status." },
-    ],
+    outputs: [{ key: "normalized_status", label: "Normalized status", type: "text", description: "Lowercase status." }],
   },
   runtime: "SAFE",
   permissions: ["read_file_metadata", "write_workflow_fields"],
@@ -111,253 +128,642 @@ const STARTER: Draft = {
 };
 
 function txt(ar: boolean, en: string, arText: string) { return ar ? arText : en; }
+
 function cloneDefinition(definition: unknown): FunctionDefinition {
   const d = definition && typeof definition === "object" ? definition as Record<string, unknown> : {};
   const ports = (value: unknown): Port[] => Array.isArray(value) ? value.map((p) => {
     const x = p && typeof p === "object" ? p as Record<string, unknown> : {};
     return { key: String(x.key ?? ""), label: String(x.label ?? x.key ?? ""), type: String(x.type ?? "text"), required: x.required === true, description: String(x.description ?? "") };
   }) : [];
-  const operations: Operation[] = Array.isArray(d.operations) ? d.operations.map((x) => ({ ...(x as Record<string, unknown>), op: String((x as Record<string, unknown>)?.op ?? "SET_FIELD") })) : [];
+  const operations: Operation[] = Array.isArray(d.operations) ? d.operations.map((x) => ({ ...(x as Record<string, unknown>), op: String((x as Record<string, unknown>).op ?? "SET_FIELD") })) as Operation[] : [];
   return { inputs: ports(d.inputs), operations, outputs: ports(d.outputs) };
 }
+
 function emptyOperation(op: string): Operation {
   switch (op) {
     case "SET_FIELD": return { op, field: "result", value: "{{file.name}}" };
     case "COPY_VALUE": return { op, field: "result", left: "{{file.name}}" };
-    case "CONCAT": return { op, field: "result", left: "{{file.name}}", right: "{{file.extension}}", separator: " " };
-    case "LOWERCASE": case "UPPERCASE": case "NUMBER": return { op, field: "result", left: "{{file.name}}" };
-    case "ADD": case "SUBTRACT": case "MULTIPLY": case "DIVIDE": return { op, field: "result", left: "0", right: "0" };
-    case "IF": return { op, condition: "{{workflow.status}}", then: { op: "SET_FIELD", field: "result", value: "yes" }, else: { op: "SET_FIELD", field: "result", value: "no" } };
-    case "HTTP_REQUEST": return { op, connectionId: "", method: "GET", path: "/", responseMode: "JSON", outputField: "http_response", headers: {}, body: "" };
-    case "CONNECTION_READ": return { op, connectionId: "", resourceId: "{{file.id}}", outputField: "connection_resource" };
-    case "NOTIFY_OWNER": return { op, title: "Workflow update", body: "{{file.name}} was processed." };
-    case "ADD_TAG": return { op, tag: "processed" };
-    default: return { op };
+    case "CONCAT": return { op, field: "result", left: "{{file.name}}", right: "", separator: " " };
+    case "LOWERCASE": return { op, field: "result", left: "{{file.name}}" };
+    case "UPPERCASE": return { op, field: "result", left: "{{file.name}}" };
+    case "NUMBER": return { op, field: "result", left: "0" };
+    case "ADD": return { op, field: "result", left: "1", right: "1" };
+    case "SUBTRACT": return { op, field: "result", left: "1", right: "1" };
+    case "MULTIPLY": return { op, field: "result", left: "1", right: "1" };
+    case "DIVIDE": return { op, field: "result", left: "1", right: "1" };
+    case "NOTIFY_OWNER": return { op, title: "Workflow update", body: "File {{file.name}} was updated" };
+    case "ADD_TAG": return { op, tag: "{{file.extension}}" };
+    case "IF": return { op, condition: "{{status}} == active", then: { op: "SET_FIELD", field: "result", value: "yes" }, else: { op: "SET_FIELD", field: "result", value: "no" } };
+    case "HTTP_REQUEST": return { op, connectionId: "", method: "GET", path: "/", outputField: "http_result", responseMode: "TEXT", retries: 0 };
+    case "CONNECTION_READ": return { op, connectionId: "", resourceId: "{{file.id}}", outputField: "resource" };
+    default: return { op: "SET_FIELD", field: "result", value: "" };
   }
 }
 
-function PortEditor({ port, ar, onChange, onRemove }: { port: Port; ar: boolean; onChange: (p: Port) => void; onRemove: () => void }) {
+/** Generate Zoho Deluge-style script lines from SAFE operations */
+function operationToScriptLines(op: Operation, index: number): { lines: string[]; lineErrors: Record<number, string> } {
+  const errors: Record<number, string> = {};
+  const lines: string[] = [];
+  const field = String(op.field ?? op.outputField ?? `step_${index + 1}`);
+  const mark = (rel: number, msg: string) => { errors[rel] = msg; };
+
+  switch (op.op) {
+    case "SET_FIELD": {
+      const v = String(op.value ?? "");
+      if (!field.trim()) mark(0, "Variable name is required");
+      if (!v.trim()) mark(0, "Expression is required");
+      lines.push(`    ${field || "<variable>"} = ${v || "<expression>"};`);
+      break;
+    }
+    case "COPY_VALUE": {
+      const left = String(op.left ?? "");
+      if (!field.trim()) mark(0, "Variable name is required");
+      if (!left.trim()) mark(0, "Expression is required");
+      lines.push(`    ${field || "<variable>"} = ${left || "<expression>"};`);
+      break;
+    }
+    case "CONCAT": {
+      const left = String(op.left ?? "");
+      const right = String(op.right ?? "");
+      const sep = String(op.separator ?? "");
+      if (!field.trim()) mark(0, "Variable name is required");
+      lines.push(`    ${field || "<variable>"} = ${left || "<expression>"} + "${sep}" + ${right || "<expression>"};`);
+      break;
+    }
+    case "LOWERCASE":
+    case "UPPERCASE":
+    case "NUMBER": {
+      const left = String(op.left ?? "");
+      if (!field.trim()) mark(0, "Variable name is required");
+      if (!left.trim()) mark(0, "Expression is required");
+      const fn = op.op === "LOWERCASE" ? "lower" : op.op === "UPPERCASE" ? "upper" : "tonumber";
+      lines.push(`    ${field || "<variable>"} = ${fn}(${left || "<expression>"});`);
+      break;
+    }
+    case "ADD":
+    case "SUBTRACT":
+    case "MULTIPLY":
+    case "DIVIDE": {
+      const left = String(op.left ?? "");
+      const right = String(op.right ?? "");
+      const sym = op.op === "ADD" ? "+" : op.op === "SUBTRACT" ? "-" : op.op === "MULTIPLY" ? "*" : "/";
+      if (!field.trim()) mark(0, "Variable name is required");
+      if (!left.trim() || !right.trim()) mark(0, "Both operands are required");
+      if (op.op === "DIVIDE" && right.trim() === "0") mark(0, "Division by zero is not allowed");
+      lines.push(`    ${field || "<variable>"} = ${left || "<expression>"} ${sym} ${right || "<expression>"};`);
+      break;
+    }
+    case "NOTIFY_OWNER": {
+      const title = String(op.title ?? "");
+      const body = String(op.body ?? "");
+      if (!title.trim()) mark(1, "Subject / title is required");
+      if (!body.trim()) mark(2, "Message is required");
+      lines.push(`    sendmail`);
+      lines.push(`    [`);
+      lines.push(`        from: <expression>`);
+      lines.push(`        to: owner`);
+      lines.push(`        subject: ${title || "<expression>"}`);
+      lines.push(`        message: ${body || "<expression>"}`);
+      lines.push(`    ]`);
+      break;
+    }
+    case "ADD_TAG": {
+      const tag = String(op.tag ?? "");
+      if (!tag.trim()) mark(0, "Message / tag is required");
+      lines.push(`    zoho.cliq.postToChat(<chatid>, ${tag || "<message>"});`);
+      break;
+    }
+    case "IF": {
+      const cond = String(op.condition ?? "");
+      const thenOp = op.then && typeof op.then === "object" ? op.then as Record<string, unknown> : {};
+      const elseOp = op.else && typeof op.else === "object" ? op.else as Record<string, unknown> : {};
+      if (!cond.trim()) mark(0, "Condition is required");
+      lines.push(`    if ( ${cond || "<variable> <opr> <expression>"} )`);
+      lines.push(`    {`);
+      lines.push(`        ${String(thenOp.field ?? "result")} = ${JSON.stringify(thenOp.value ?? "")};`);
+      lines.push(`    }`);
+      lines.push(`    else`);
+      lines.push(`    {`);
+      lines.push(`        ${String(elseOp.field ?? "result")} = ${JSON.stringify(elseOp.value ?? "")};`);
+      lines.push(`    }`);
+      break;
+    }
+    case "HTTP_REQUEST": {
+      const path = String(op.path ?? "");
+      const method = String(op.method ?? "GET");
+      const conn = String(op.connectionId ?? "");
+      const out = String(op.outputField ?? "http_result");
+      if (!conn.trim()) mark(0, "Connection is required");
+      if (!path.trim()) mark(1, "Relative path is required");
+      lines.push(`    ${out} = invokeapi`);
+      lines.push(`    [`);
+      lines.push(`        service: <service>`);
+      lines.push(`        path: ${path || "<path>"}`);
+      lines.push(`        type: ${method}`);
+      lines.push(`        parameters: <expression>`);
+      lines.push(`        headers: <expression>`);
+      lines.push(`        connection: ${conn || "<connection>"}`);
+      lines.push(`    ];`);
+      break;
+    }
+    case "CONNECTION_READ": {
+      const conn = String(op.connectionId ?? "");
+      const rid = String(op.resourceId ?? "");
+      const out = String(op.outputField ?? "resource");
+      if (!conn.trim()) mark(0, "Connection is required");
+      if (!rid.trim()) mark(0, "Resource id is required");
+      lines.push(`    ${out} = invokeurl`);
+      lines.push(`    [`);
+      lines.push(`        url: ${rid || "<expression>"}`);
+      lines.push(`        type: GET`);
+      lines.push(`        connection: ${conn || "<connection>"}`);
+      lines.push(`    ];`);
+      break;
+    }
+    default:
+      lines.push(`    // unsupported: ${op.op}`);
+      mark(0, `Unsupported operation: ${op.op}`);
+  }
+  return { lines, lineErrors: errors };
+}
+
+function buildScript(ops: Operation[]): { text: string; lineMeta: Array<{ opIndex: number; rel: number }>; errors: Map<number, string> } {
+  const header = ["void automation.data()", "{"];
+  const body: string[] = [];
+  const lineMeta: Array<{ opIndex: number; rel: number }> = [];
+  const errors = new Map<number, string>();
+  let lineNo = header.length; // 1-based later
+  ops.forEach((op, opIndex) => {
+    const { lines, lineErrors } = operationToScriptLines(op, opIndex);
+    lines.forEach((ln, rel) => {
+      body.push(ln);
+      lineMeta.push({ opIndex, rel });
+      if (lineErrors[rel]) errors.set(lineNo + rel + 1, lineErrors[rel]); // 1-based absolute
+    });
+    lineNo += lines.length;
+  });
+  const footer = ["}"];
+  const all = [...header, ...body, ...footer];
+  // absolute line numbers: header is lines 1..header.length
+  const absErrors = new Map<number, string>();
+  errors.forEach((msg, abs) => absErrors.set(abs, msg));
+  // recompute properly
+  absErrors.clear();
+  let abs = header.length;
+  ops.forEach((op, opIndex) => {
+    const { lines, lineErrors } = operationToScriptLines(op, opIndex);
+    lines.forEach((_, rel) => {
+      abs += 1;
+      if (lineErrors[rel]) absErrors.set(abs, lineErrors[rel]);
+    });
+  });
+  return { text: all.join("\n"), lineMeta, errors: absErrors };
+}
+
+function Field({ label, required, children }: { label: string; required?: boolean; children: ReactNode }) {
   return (
-    <div className="workflow-ui admin-custom-functions-page grid gap-2 rounded-xl border border-slate-200 bg-white p-3 sm:grid-cols-[1fr_1fr_120px_auto]">
-      <input className="wf-input" value={port.key} onChange={(e) => onChange({ ...port, key: e.target.value })} placeholder={ar ? "المفتاح" : "key"} />
-      <input className="wf-input" value={port.label} onChange={(e) => onChange({ ...port, label: e.target.value })} placeholder={ar ? "الاسم الظاهر" : "Display name"} />
-      <ImkanOptionPicker value={port.type} onChange={(v) => onChange({ ...port, type: v || "text" })} options={toImkanPickerOptions(["text", "number", "boolean", "date", "datetime", "object"])} ariaLabel={ar ? "نوع البيانات" : "Data type"} fullWidth />
-      <button type="button" className="wd-icon-btn" onClick={onRemove} aria-label={ar ? "حذف" : "Remove"}>×</button>
-      <input className="wf-input sm:col-span-3" value={port.description ?? ""} onChange={(e) => onChange({ ...port, description: e.target.value })} placeholder={ar ? "وصف اختياري" : "Optional description"} />
-      {port.required !== undefined && (
-        <label className="flex items-center gap-2 text-[9px] text-slate-600">
-          <input type="checkbox" checked={port.required === true} onChange={(e) => onChange({ ...port, required: e.target.checked })} />
-          {ar ? "إلزامي" : "Required"}
-        </label>
-      )}
-    </div>
+    <label className="block space-y-1.5">
+      <span className="text-[12px] font-medium text-[#333]">{label}{required ? <span className="text-red-500"> *</span> : null}</span>
+      {children}
+    </label>
   );
 }
 
-function OperationEditor({
-  operation, index, ar, connections, onChange, onRemove, onDragStart, onDrop,
+function ZohoInput(props: React.InputHTMLAttributes<HTMLInputElement>) {
+  return <input {...props} className={`w-full rounded border border-[#cfcfcf] bg-white px-3 py-2 text-[13px] text-[#222] outline-none focus:border-[#4b8bf5] ${props.className ?? ""}`} />;
+}
+function ZohoTextarea(props: React.TextareaHTMLAttributes<HTMLTextAreaElement>) {
+  return <textarea {...props} className={`w-full rounded border border-[#cfcfcf] bg-white px-3 py-2 text-[13px] text-[#222] outline-none focus:border-[#4b8bf5] ${props.className ?? ""}`} />;
+}
+
+/** Configuration drawer form for a selected operation — Zoho style */
+function OperationConfigForm({
+  operation, onChange, ar, connections, title, description, onClose,
 }: {
-  operation: Operation; index: number; ar: boolean; connections: Connection[];
-  onChange: (next: Operation) => void; onRemove: () => void; onDragStart: () => void; onDrop: (event: DragEvent<HTMLDivElement>) => void;
+  operation: Operation;
+  onChange: (next: Operation) => void;
+  ar: boolean;
+  connections: Connection[];
+  title: string;
+  description: string;
+  onClose: () => void;
 }) {
-  const op = operation.op;
-  const set = (key: string, value: unknown) => onChange({ ...operation, [key]: value });
-  const dynamicInput = (key: string, placeholder: string) => (
-    <input className="wf-input" value={String(operation[key] ?? "")} onChange={(e) => set(key, e.target.value)} placeholder={placeholder} />
-  );
-  const fieldInput = (label: string, key: string, placeholder = "result") => (
-    <label className="workflow-action-field">
-      <span>{label}</span>{dynamicInput(key, placeholder)}
-    </label>
-  );
+  const set = (patch: Record<string, unknown>) => onChange({ ...operation, ...patch });
+  const connOpts = toImkanPickerOptions(connections.map((c) => ({ value: c.id, label: c.name || c.id })));
+
   return (
-    <div draggable onDragStart={onDragStart} onDragOver={(e) => e.preventDefault()} onDrop={onDrop} className="rounded-2xl border border-slate-200 bg-white shadow-sm">
-      <div className="flex items-center gap-2 border-b border-slate-100 px-3 py-2.5">
-        <span className="cursor-grab text-slate-400" title={ar ? "اسحب لإعادة الترتيب" : "Drag to reorder"}>⠿</span>
-        <span className="grid h-7 w-7 place-items-center rounded-lg bg-violet-50 text-[11px] font-bold text-violet-700">{index + 1}</span>
-        <ImkanOptionPicker value={op} onChange={(v) => v && onChange(emptyOperation(v))} options={OP_GROUPS.flatMap(g => g.items.map(x => ({ value: x[0], label: `${ar ? g.arLabel : g.label} · ${ar ? x[2] : x[1]}` })))} ariaLabel={ar ? "نوع العملية" : "Operation type"} className="min-w-[190px]" />
-        <span className="ml-auto text-[8px] uppercase tracking-wider text-slate-400">SAFE</span>
-        <button type="button" className="wd-icon-btn" onClick={onRemove}>×</button>
+    <div className="flex h-full min-h-0 flex-col border-e border-[#e8e8e8] bg-white">
+      <div className="flex items-start justify-between gap-2 border-b border-[#eee] px-4 py-3">
+        <div>
+          <h3 className="text-[15px] font-semibold text-[#222]">{title}</h3>
+          <p className="mt-0.5 text-[11px] text-[#777]">{description}</p>
+        </div>
+        <button type="button" className="text-[#888] hover:text-[#333]" onClick={onClose} aria-label="Close">×</button>
       </div>
-      <div className="border-b border-slate-100 bg-slate-50 px-3 py-2 text-[9px] leading-4 text-slate-600">{OPERATION_ITEMS.find((x) => x[0] === op)?.[3] ?? (ar ? "اضبط حقول العملية ثم استخدم الناتج في المخرجات." : "Configure this step, then expose its result through Outputs.")}</div>
-      <div className="grid gap-3 p-3 sm:grid-cols-2">
-        {(op === "SET_FIELD" || op === "COPY_VALUE" || ["CONCAT","LOWERCASE","UPPERCASE","NUMBER","ADD","SUBTRACT","MULTIPLY","DIVIDE"].includes(op)) && fieldInput(ar ? "الحقل الناتج" : "Output field", "field")}
-        {["COPY_VALUE","CONCAT","LOWERCASE","UPPERCASE","NUMBER","ADD","SUBTRACT","MULTIPLY","DIVIDE"].includes(op) && <label className="workflow-action-field"><span>{ar ? "القيمة الأولى" : "Left value"}</span>{dynamicInput("left", "{{file.name}} or {{workflow.field}}")}</label>}
-        {op === "SET_FIELD" && <label className="workflow-action-field"><span>{ar ? "القيمة" : "Value"}</span>{dynamicInput("value", "{{file.name}}")}</label>}
-        {["CONCAT","ADD","SUBTRACT","MULTIPLY","DIVIDE"].includes(op) && <label className="workflow-action-field"><span>{ar ? "القيمة الثانية" : "Right value"}</span>{dynamicInput("right", "{{workflow.amount}}")}</label>}
-        {op === "CONCAT" && <label className="workflow-action-field"><span>{ar ? "الفاصل" : "Separator"}</span>{dynamicInput("separator", " ")}</label>}
-        {op === "IF" && <>
-          <div className="sm:col-span-2 rounded-xl border border-indigo-100 bg-indigo-50/60 p-3 text-[9px] leading-4 text-indigo-900">
-            {ar ? "الشرط يُقيّم كقيمة صحيحة/خاطئة. كل فرع يعيّن حقلاً واحداً فقط؛ استخدم {{inputKey}} أو {{fields.fieldName}} للوصول إلى البيانات." : "The condition is evaluated as true/false. Each branch sets one field. Use {{inputKey}} or {{fields.fieldName}} to read data."}
-          </div>
-          <label className="workflow-action-field sm:col-span-2"><span>{ar ? "القيمة التي يتم اختبارها" : "Condition value"}</span>{dynamicInput("condition", "{{fields.approved}}")}</label>
-          {(["then", "else"] as const).map((branch) => {
-            const raw = operation[branch] && typeof operation[branch] === "object" ? operation[branch] as Record<string, unknown> : {};
-            const updateBranch = (key: "field" | "value", value: string) => set(branch, { op: "SET_FIELD", field: String(raw.field ?? "result"), value: raw.value ?? "", [key]: value });
-            return <div key={branch} className={`rounded-xl border p-3 ${branch === "then" ? "border-emerald-200 bg-emerald-50/50" : "border-amber-200 bg-amber-50/50"}`}>
-              <div className={`mb-2 text-[10px] font-semibold ${branch === "then" ? "text-emerald-800" : "text-amber-800"}`}>{branch === "then" ? (ar ? "إذا تحقق الشرط (Then)" : "If true (Then)") : (ar ? "إذا لم يتحقق (Else)" : "If false (Else)")}</div>
-              <label className="workflow-action-field"><span>{ar ? "اكتب النتيجة في الحقل" : "Write result to field"}</span><input className="wf-input" value={String(raw.field ?? "result")} onChange={(e) => updateBranch("field", e.target.value)} /></label>
-              <label className="workflow-action-field mt-2"><span>{ar ? "القيمة التي سيتم تعيينها" : "Value to set"}</span><input className="wf-input" value={String(raw.value ?? "")} onChange={(e) => updateBranch("value", e.target.value)} placeholder={ar ? "مثال: approved" : "Example: approved"} /></label>
-            </div>;
-          })}
-        </>}
-        {op === "HTTP_REQUEST" && <>
-          <label className="workflow-action-field sm:col-span-2"><span>{ar ? "Connection" : "Connection"}</span><ImkanOptionPicker value={String(operation.connectionId ?? "")} onChange={(v) => set("connectionId", v)} options={connections.map(c => ({ value: c.id, label: c.name }))} ariaLabel={ar ? "الاتصال" : "Connection"} fullWidth allowEmpty emptyLabel={ar ? "اختر اتصالاً" : "Select connection"} placeholder={ar ? "اختر اتصالاً" : "Select connection"} /></label>
-          {fieldInput(ar ? "المسار" : "Path", "path", "/v1/resource")}
-          <label className="workflow-action-field"><span>{ar ? "الطريقة" : "Method"}</span><ImkanOptionPicker value={String(operation.method ?? "GET")} onChange={(v) => set("method", v)} options={toImkanPickerOptions(["GET","POST","PUT","PATCH","DELETE","HEAD"])} ariaLabel={ar ? "الطريقة" : "Method"} fullWidth /></label>
-          {fieldInput(ar ? "حقل الإخراج" : "Output field", "outputField", "http_response")}
-          <label className="workflow-action-field sm:col-span-2"><span>{ar ? "Headers JSON" : "Headers JSON"}</span>{dynamicInput("headers", '{"Content-Type":"application/json"}')}</label>
-          <label className="workflow-action-field sm:col-span-2"><span>{ar ? "Body JSON" : "Body JSON"}</span><textarea className="wf-input min-h-20" value={String(operation.body ?? "")} onChange={(e) => set("body", e.target.value)} placeholder='{"fileId":"{{file.id}}"}' /></label>
-        </>}
-        {op === "CONNECTION_READ" && <>
-          <label className="workflow-action-field sm:col-span-2"><span>{ar ? "Connection" : "Connection"}</span><ImkanOptionPicker value={String(operation.connectionId ?? "")} onChange={(v) => set("connectionId", v)} options={connections.map(c => ({ value: c.id, label: c.name }))} ariaLabel={ar ? "الاتصال" : "Connection"} fullWidth /></label>
-          {fieldInput(ar ? "معرّف المورد" : "Resource ID", "resourceId", "{{file.id}}")}
-          {fieldInput(ar ? "حقل الإخراج" : "Output field", "outputField", "connection_resource")}
-        </>}
-        {op === "NOTIFY_OWNER" && <>
-          {fieldInput(ar ? "العنوان" : "Title", "title", "Workflow update")}
-          <label className="workflow-action-field sm:col-span-2"><span>{ar ? "الرسالة" : "Message"}</span><textarea className="wf-input min-h-20" value={String(operation.body ?? "")} onChange={(e) => set("body", e.target.value)} placeholder="{{file.name}} was processed." /></label>
-        </>}
-        {op === "ADD_TAG" && fieldInput(ar ? "الوسم" : "Tag", "tag", "processed")}
+      <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-4 py-4">
+        {operation.op === "SET_FIELD" && (
+          <>
+            <div className="flex flex-wrap items-center gap-2 text-[12px] text-[#5b8def]">
+              <span className="rounded border border-dashed border-[#9bb8ef] px-2 py-1">variable</span>
+              <span>=</span>
+              <span className="rounded border border-dashed border-[#9bb8ef] px-2 py-1">expression</span>
+              <span>;</span>
+            </div>
+            <Field label={ar ? "تعريف أو اختيار المتغير" : "Declare or select variable"} required>
+              <ZohoInput value={String(operation.field ?? "")} onChange={(e) => set({ field: e.target.value })} placeholder="Eg: name" />
+            </Field>
+            <Field label={ar ? "التعبير" : "Specify Expression"} required>
+              <ZohoInput value={String(operation.value ?? "")} onChange={(e) => set({ value: e.target.value })} placeholder="<expression>" />
+            </Field>
+          </>
+        )}
+        {operation.op === "COPY_VALUE" && (
+          <>
+            <Field label={ar ? "المتغير" : "Variable"} required>
+              <ZohoInput value={String(operation.field ?? "")} onChange={(e) => set({ field: e.target.value })} />
+            </Field>
+            <Field label={ar ? "القيمة" : "Expression"} required>
+              <ZohoInput value={String(operation.left ?? "")} onChange={(e) => set({ left: e.target.value })} />
+            </Field>
+          </>
+        )}
+        {(operation.op === "LOWERCASE" || operation.op === "UPPERCASE" || operation.op === "NUMBER") && (
+          <>
+            <Field label={ar ? "المتغير" : "Variable"} required>
+              <ZohoInput value={String(operation.field ?? "")} onChange={(e) => set({ field: e.target.value })} />
+            </Field>
+            <Field label={ar ? "التعبير" : "Specify expression"} required>
+              <ZohoInput value={String(operation.left ?? "")} onChange={(e) => set({ left: e.target.value })} placeholder="<expression>" />
+            </Field>
+          </>
+        )}
+        {(operation.op === "ADD" || operation.op === "SUBTRACT" || operation.op === "MULTIPLY" || operation.op === "DIVIDE" || operation.op === "CONCAT") && (
+          <>
+            <Field label={ar ? "المتغير الناتج" : "Result variable"} required>
+              <ZohoInput value={String(operation.field ?? "")} onChange={(e) => set({ field: e.target.value })} />
+            </Field>
+            <Field label={ar ? "اليسار" : "Left"} required>
+              <ZohoInput value={String(operation.left ?? "")} onChange={(e) => set({ left: e.target.value })} />
+            </Field>
+            {operation.op === "CONCAT" && (
+              <Field label={ar ? "الفاصل" : "Separator"}>
+                <ZohoInput value={String(operation.separator ?? "")} onChange={(e) => set({ separator: e.target.value })} />
+              </Field>
+            )}
+            <Field label={ar ? "اليمين" : "Right"} required>
+              <ZohoInput value={String(operation.right ?? "")} onChange={(e) => set({ right: e.target.value })} />
+            </Field>
+          </>
+        )}
+        {operation.op === "IF" && (
+          <>
+            <div className="flex flex-wrap items-center gap-2 text-[12px] text-[#5b8def]">
+              <span>if (</span>
+              <span className="rounded border border-dashed border-[#9bb8ef] px-2 py-1">condition</span>
+              <span>)</span>
+            </div>
+            <Field label={ar ? "تحديد الشرط" : "Specify Condition"} required>
+              <ZohoInput value={String(operation.condition ?? "")} onChange={(e) => set({ condition: e.target.value })} placeholder="<variable> <opr> <expression>" />
+            </Field>
+            <Field label={ar ? "حقل عند التحقق" : "Then field"}>
+              <ZohoInput
+                value={String((operation.then as Record<string, unknown> | undefined)?.field ?? "result")}
+                onChange={(e) => set({ then: { ...(operation.then as object), op: "SET_FIELD", field: e.target.value, value: (operation.then as Record<string, unknown> | undefined)?.value ?? "" } })}
+              />
+            </Field>
+            <Field label={ar ? "قيمة عند التحقق" : "Then value"}>
+              <ZohoInput
+                value={String((operation.then as Record<string, unknown> | undefined)?.value ?? "")}
+                onChange={(e) => set({ then: { ...(operation.then as object), op: "SET_FIELD", field: (operation.then as Record<string, unknown> | undefined)?.field ?? "result", value: e.target.value } })}
+              />
+            </Field>
+            <Field label={ar ? "حقل وإلا" : "Else field"}>
+              <ZohoInput
+                value={String((operation.else as Record<string, unknown> | undefined)?.field ?? "result")}
+                onChange={(e) => set({ else: { ...(operation.else as object), op: "SET_FIELD", field: e.target.value, value: (operation.else as Record<string, unknown> | undefined)?.value ?? "" } })}
+              />
+            </Field>
+            <Field label={ar ? "قيمة وإلا" : "Else value"}>
+              <ZohoInput
+                value={String((operation.else as Record<string, unknown> | undefined)?.value ?? "")}
+                onChange={(e) => set({ else: { ...(operation.else as object), op: "SET_FIELD", field: (operation.else as Record<string, unknown> | undefined)?.field ?? "result", value: e.target.value } })}
+              />
+            </Field>
+          </>
+        )}
+        {operation.op === "NOTIFY_OWNER" && (
+          <>
+            <Field label="From *" required>
+              <ZohoInput placeholder={ar ? "المرسل" : "From"} defaultValue="" disabled title={ar ? "يُرسل كمالك المورد في وقت التشغيل" : "Resolved to resource owner at runtime"} value="owner" readOnly />
+            </Field>
+            <Field label="To *" required>
+              <ZohoInput value="owner" readOnly />
+            </Field>
+            <Field label="Subject *" required>
+              <ZohoInput value={String(operation.title ?? "")} onChange={(e) => set({ title: e.target.value })} placeholder="Subject of the mail" />
+            </Field>
+            <Field label="Message *" required>
+              <ZohoTextarea rows={5} value={String(operation.body ?? "")} onChange={(e) => set({ body: e.target.value })} />
+            </Field>
+          </>
+        )}
+        {operation.op === "ADD_TAG" && (
+          <>
+            <Field label="ChatID / Tag *" required>
+              <ZohoInput value={String(operation.tag ?? "")} onChange={(e) => set({ tag: e.target.value })} placeholder="<chatid> / tag" />
+            </Field>
+            <Field label="Message">
+              <ZohoInput value={String(operation.tag ?? "")} onChange={(e) => set({ tag: e.target.value })} placeholder="<message>" />
+            </Field>
+          </>
+        )}
+        {operation.op === "HTTP_REQUEST" && (
+          <>
+            <Field label={ar ? "تخزين الاستجابة في" : "Store Response in"}>
+              <ZohoInput value={String(operation.outputField ?? "")} onChange={(e) => set({ outputField: e.target.value })} />
+            </Field>
+            <Field label={ar ? "الاتصال" : "Connection"} required>
+              <ImkanOptionPicker value={String(operation.connectionId ?? "")} onChange={(v) => set({ connectionId: v })} options={connOpts} placeholder={ar ? "اختر اتصالاً" : "Select Connection"} />
+            </Field>
+            <Field label={ar ? "المسار النسبي" : "Relative Path URL String"} required>
+              <ZohoInput value={String(operation.path ?? "")} onChange={(e) => set({ path: e.target.value })} placeholder="/v1/resource" />
+            </Field>
+            <Field label={ar ? "نوع الطلب" : "Request Type"} required>
+              <div className="flex flex-wrap gap-3 text-[12px]">
+                {["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"].map((m) => (
+                  <label key={m} className="inline-flex items-center gap-1.5">
+                    <input type="radio" name="http-method" checked={String(operation.method ?? "GET") === m} onChange={() => set({ method: m })} />
+                    {m}
+                  </label>
+                ))}
+              </div>
+            </Field>
+          </>
+        )}
+        {operation.op === "CONNECTION_READ" && (
+          <>
+            <Field label={ar ? "تخزين في" : "Store Response in"}>
+              <ZohoInput value={String(operation.outputField ?? "")} onChange={(e) => set({ outputField: e.target.value })} />
+            </Field>
+            <Field label={ar ? "الاتصال" : "Connection"} required>
+              <ImkanOptionPicker value={String(operation.connectionId ?? "")} onChange={(v) => set({ connectionId: v })} options={connOpts} placeholder={ar ? "اختر اتصالاً" : "Select Connection"} />
+            </Field>
+            <Field label={ar ? "معرف المورد" : "Resource ID"} required>
+              <ZohoInput value={String(operation.resourceId ?? "")} onChange={(e) => set({ resourceId: e.target.value })} />
+            </Field>
+          </>
+        )}
+      </div>
+      <div className="flex justify-end gap-2 border-t border-[#eee] px-4 py-3">
+        <button type="button" className="rounded border border-[#ccc] bg-white px-4 py-1.5 text-[12px] text-[#444] hover:bg-[#f5f5f5]" onClick={onClose}>{ar ? "إلغاء" : "Cancel"}</button>
+        <button type="button" className="rounded bg-[#3b4a5a] px-4 py-1.5 text-[12px] font-medium text-white hover:bg-[#2f3c4a]" onClick={onClose}>{ar ? "إدراج" : "Insert"}</button>
       </div>
     </div>
   );
 }
 
 function FunctionBuilder({ draft, setDraft, ar, connections, onSave, onSaveAndTest, onCancel, busy }: {
-  draft: Draft; setDraft: (d: Draft) => void; ar: boolean; connections: Connection[]; onSave: () => void; onSaveAndTest: () => void; onCancel: () => void; busy: boolean;
+  draft: Draft;
+  setDraft: (d: Draft | ((prev: Draft) => Draft)) => void;
+  ar: boolean;
+  connections: Connection[];
+  onSave: () => void;
+  onSaveAndTest: () => void;
+  onCancel: () => void;
+  busy: boolean;
 }) {
-  const [dragIndex, setDragIndex] = useState<number | null>(null);
-  const [dragOperation, setDragOperation] = useState<string | null>(null);
-  // Keep the dragged operation outside React state as well: browsers may clear
-  // DataTransfer before drop (notably in touch/mobile webviews).
-  const dragOperationRef = useRef<string | null>(null);
-  const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
-  const [panel, setPanel] = useState<"blocks" | "inputs" | "outputs" | "details">("blocks");
-  const [advanced, setAdvanced] = useState(false);
   const definition = draft.definition;
-  const updateDef = (patch: Partial<FunctionDefinition>) => setDraft({ ...draft, definition: { ...definition, ...patch } });
-  const updatePort = (kind: "inputs" | "outputs", index: number, port: Port) => {
-    const next = [...definition[kind]]; next[index] = port; updateDef({ [kind]: next });
+  const [selectedIndex, setSelectedIndex] = useState<number | null>(definition.operations.length ? 0 : null);
+  const [paletteOpen, setPaletteOpen] = useState(true);
+  const [configOpen, setConfigOpen] = useState(false);
+  const [dragOp, setDragOp] = useState<string | null>(null);
+  const dragOpRef = useRef<string | null>(null);
+  const [dragIndex, setDragIndex] = useState<number | null>(null);
+
+  const updateDef = (patch: Partial<FunctionDefinition>) => {
+    setDraft((prev) => ({ ...prev, definition: { ...prev.definition, ...patch } }));
   };
-  const addPort = (kind: "inputs" | "outputs") => updateDef({ [kind]: [...definition[kind], { key: kind === "inputs" ? `input_${definition.inputs.length + 1}` : `output_${definition.outputs.length + 1}`, label: kind === "inputs" ? `Input ${definition.inputs.length + 1}` : `Output ${definition.outputs.length + 1}`, type: "text", required: false }] });
-  const removePort = (kind: "inputs" | "outputs", index: number) => updateDef({ [kind]: definition[kind].filter((_, i) => i !== index) });
+
   const addOperation = (op: string) => {
     const next = [...definition.operations, emptyOperation(op)];
-    const nextIndex = next.length - 1;
     updateDef({ operations: next });
-    // Open the configuration form immediately after either click or drop.
-    setSelectedIndex(nextIndex);
-    setPanel("blocks");
+    setSelectedIndex(next.length - 1);
+    setConfigOpen(true);
+    setPaletteOpen(false);
   };
-  const beginOperationDrag = (op: string, event: DragEvent<HTMLButtonElement>) => {
-    dragOperationRef.current = op;
-    setDragOperation(op);
-    event.dataTransfer.effectAllowed = "copy";
-    event.dataTransfer.setData("text/plain", op);
+
+  const beginDrag = (op: string, e: DragEvent) => {
+    dragOpRef.current = op;
+    setDragOp(op);
+    e.dataTransfer.effectAllowed = "copy";
+    e.dataTransfer.setData("text/plain", op);
   };
-  const finishOperationDrop = (event: DragEvent<HTMLDivElement>) => {
-    event.preventDefault();
-    const op = event.dataTransfer.getData("text/plain") || dragOperationRef.current || dragOperation;
-    if (op && OPERATION_ITEMS.some((item) => item[0] === op)) addOperation(op);
-    dragOperationRef.current = null;
-    setDragOperation(null);
+
+  const onDropCanvas = (e: DragEvent) => {
+    e.preventDefault();
+    const op = e.dataTransfer.getData("text/plain") || dragOpRef.current || dragOp;
+    if (op) addOperation(op);
+    dragOpRef.current = null;
+    setDragOp(null);
   };
+
   const reorder = (from: number, to: number) => {
     if (from === to || from < 0 || to < 0) return;
     const next = [...definition.operations];
-    const [item] = next.splice(from, 1); next.splice(to, 0, item); updateDef({ operations: next });
+    const [item] = next.splice(from, 1);
+    next.splice(to, 0, item);
+    updateDef({ operations: next });
     setSelectedIndex(to);
   };
-  const codeFor = (op: Operation, index: number) => {
-    const name = OPERATION_ITEMS.find(x => x[0] === op.op)?.[1] ?? op.op;
-    const field = String(op.field ?? op.outputField ?? `step_${index + 1}`);
-    if (op.op === "IF") return [`if (${String(op.condition ?? "condition")}) {`, `    ${String((op.then as Record<string, unknown> | undefined)?.field ?? "result")} = ${JSON.stringify((op.then as Record<string, unknown> | undefined)?.value ?? "")};`, `} else {`, `    ${String((op.else as Record<string, unknown> | undefined)?.field ?? "result")} = ${JSON.stringify((op.else as Record<string, unknown> | undefined)?.value ?? "")};`, `}`];
-    if (op.op === "HTTP_REQUEST") return [`${field} = invokeAPI(${JSON.stringify(op.connectionId || "<connection>")}, ${JSON.stringify(op.method ?? "GET")}, ${JSON.stringify(op.path ?? "/")});`];
-    if (op.op === "CONNECTION_READ") return [`${field} = connection.get(${JSON.stringify(op.resourceId ?? "")});`];
-    if (op.op === "SET_FIELD") return [`${field} = ${JSON.stringify(op.value ?? "")};`];
-    if (["ADD", "SUBTRACT", "MULTIPLY", "DIVIDE"].includes(op.op)) {
-      const symbols: Record<string,string> = { ADD: "+", SUBTRACT: "-", MULTIPLY: "*", DIVIDE: "/" };
-      return [`${field} = ${String(op.left ?? "0")} ${symbols[op.op]} ${String(op.right ?? "0")};`];
+
+  const script = useMemo(() => buildScript(definition.operations), [definition.operations]);
+  const selected = selectedIndex != null ? definition.operations[selectedIndex] : null;
+
+  const selectedMeta = useMemo(() => {
+    if (!selected) return { title: "", description: "" };
+    for (const g of ZOHO_PALETTE) {
+      for (const it of g.items) {
+        if (it.op === selected.op) return { title: ar ? it.ar : it.en, description: it.desc };
+      }
     }
-    if (op.op === "CONCAT") return [`${field} = ${String(op.left ?? "")}.toString() + ${JSON.stringify(op.separator ?? " ")} + ${String(op.right ?? "")}.toString();`];
-    if (op.op === "LOWERCASE") return [`${field} = ${String(op.left ?? "value")}.toLowerCase();`];
-    if (op.op === "UPPERCASE") return [`${field} = ${String(op.left ?? "value")}.toUpperCase();`];
-    if (op.op === "NUMBER") return [`${field} = toNumber(${String(op.left ?? "value")});`];
-    if (op.op === "NOTIFY_OWNER") return [`notifyOwner(${JSON.stringify(op.title ?? "")}, ${JSON.stringify(op.body ?? "")});`];
-    if (op.op === "ADD_TAG") return [`addTag(${JSON.stringify(op.tag ?? "")});`];
-    return [`// ${name}`];
-  };
-  const codeRows: Array<{ line: string; operationIndex: number | null }> = [
-    { line: `void ${draft.key || "automation.Data"}()`, operationIndex: null },
-    { line: "{", operationIndex: null },
-    ...definition.operations.flatMap((op, i) => codeFor(op, i).map(line => ({ line: `    ${line}`, operationIndex: i }))),
-    { line: "}", operationIndex: null },
-  ];
-  const keyOk = !draft.key.trim() || /^[A-Za-z_][A-Za-z0-9_]*$/.test(draft.key.trim());
-  const portsOk = definition.inputs.every(p => /^[A-Za-z_][A-Za-z0-9_]*$/.test(p.key)) && definition.outputs.every(p => /^[A-Za-z_][A-Za-z0-9_]*$/.test(p.key));
-  const valid = Boolean(draft.name.trim()) && keyOk && portsOk && definition.operations.length > 0 && definition.operations.length <= 30;
-  const saveHint = !draft.name.trim() ? (ar ? "أدخل اسم الدالة أولاً" : "Enter a function name first") : definition.operations.length < 1 ? (ar ? "أضف إجراءً واحداً على الأقل" : "Add at least one action") : !keyOk || !portsOk ? (ar ? "معرّفات المدخلات والمخرجات يجب أن تكون أحرفاً إنجليزية" : "Input and output keys must be English identifiers") : "";
-  const selected = selectedIndex !== null ? definition.operations[selectedIndex] : null;
-  const nav = [
-    ["blocks", "▣", ar ? "الإجراءات" : "Blocks"], ["inputs", "⇥", ar ? "المدخلات" : "Inputs"],
-    ["outputs", "⇤", ar ? "المخرجات" : "Outputs"], ["details", "⚙", ar ? "التفاصيل" : "Details"],
-  ] as const;
+    return { title: selected.op, description: "" };
+  }, [selected, ar]);
+
+  const scriptLines = script.text.split("\n");
+
   return (
-    <div className="fixed inset-0 z-[260] bg-white">
-      <div className="flex h-full min-h-0 flex-col text-[#333]" dir={ar ? "rtl" : "ltr"}>
-        <header className="flex h-[54px] shrink-0 items-center gap-3 border-b border-[#dedede] bg-white px-3">
-          <span className="text-[18px] font-semibold">ƒx</span><span className="h-5 w-px bg-slate-200" />
-          <input aria-label={ar ? "اسم الدالة" : "Function name"} className="h-8 w-48 border-0 bg-transparent text-[13px] font-medium outline-none" value={draft.name} onChange={e => setDraft({ ...draft, name: e.target.value })} placeholder={ar ? "اسم الدالة" : "Function name"} />
-          <span className="hidden min-w-0 flex-1 truncate text-[11px] text-slate-400 sm:block">{draft.key || functionKeyFromName(draft.name) || (ar ? "يُولَّد المعرّف عند الحفظ" : "Identifier is created on save")}</span>
-          <div className="ml-auto flex shrink-0 items-center gap-2">{saveHint ? <span className="max-w-[220px] truncate text-[11px] text-slate-500">{saveHint}</span> : null}
-            <button type="button" className="rounded-full border border-slate-300 px-3 py-1.5 text-[11px]" onClick={onCancel}>{ar ? "إلغاء" : "Cancel"}</button>
-            <button type="button" className="rounded-full border border-blue-300 px-3 py-1.5 text-[11px] text-blue-700" disabled={!valid || busy} onClick={onSaveAndTest}>{busy ? (ar ? "جارٍ الحفظ…" : "Saving…") : (ar ? "حفظ واختبار" : "Save and test")}</button>
-            <button type="button" className="rounded-full bg-[#2875d7] px-4 py-1.5 text-[11px] font-semibold text-white disabled:opacity-40" disabled={!valid || busy} onClick={onSave}>{ar ? "حفظ" : "Save"}</button>
-          </div>
-        </header>
-        <div className="flex min-h-0 flex-1">
-          <nav className="flex w-[48px] shrink-0 flex-col items-center gap-2 border-e border-[#dedede] bg-[#f7f7f7] py-3">
-            {nav.map(([key, glyph, label]) => <button key={key} type="button" title={label} onClick={() => { setPanel(key); if (key !== "blocks") setSelectedIndex(null); }} className={`grid h-9 w-9 place-items-center rounded-md text-[17px] ${panel === key ? "bg-[#e7e7e7] text-[#333]" : "text-slate-500 hover:bg-slate-100"}`}>{glyph}</button>)}
-          </nav>
-          <aside className="flex w-[min(42%,390px)] min-w-[250px] shrink-0 flex-col border-e border-[#dedede] bg-white">
-            <div className="flex h-[50px] shrink-0 items-center justify-between border-b border-[#e6e6e6] px-4">
-              <div className="min-w-0"><div className="truncate text-[14px] font-medium">{selected && panel === "blocks" ? (OPERATION_ITEMS.find(x => x[0] === selected.op)?.[1] ?? selected.op) : nav.find(x => x[0] === panel)?.[2]}</div><div className="text-[10px] text-slate-500">{selected && panel === "blocks" ? (OPERATION_ITEMS.find(x => x[0] === selected.op)?.[3] ?? "") : ""}</div></div>
-              {selected && panel === "blocks" && <button type="button" className="text-xl text-slate-400" title={ar ? "إغلاق" : "Close"} onClick={() => setSelectedIndex(null)}>×</button>}
-            </div>
-            <div className="min-h-0 flex-1 overflow-y-auto p-3">
-              {panel === "blocks" && selected && selectedIndex !== null ? <OperationEditor operation={selected} index={selectedIndex} ar={ar} connections={connections}
-                onChange={next => { const operations = [...definition.operations]; operations[selectedIndex ?? 0] = next; updateDef({ operations }); }}
-                onRemove={() => { updateDef({ operations: definition.operations.filter((_, i) => i !== (selectedIndex ?? 0)) }); setSelectedIndex(null); }}
-                onDragStart={() => setDragIndex(selectedIndex)} onDrop={(event) => { event.preventDefault(); event.stopPropagation(); if (dragIndex !== null) reorder(dragIndex, selectedIndex ?? 0); setDragIndex(null); }} /> : null}
-              {panel === "blocks" && !selected && <>
-                <p className="mb-3 text-[11px] leading-5 text-slate-500">{ar ? "اسحب الإجراء إلى محرر الكود لإضافته، أو اضغط عليه في الأجهزة اللمسية. ستظهر حقول إدخاله هنا مباشرة." : "Drag an action into the code editor (or tap it on touch devices). Its input fields will open here."}</p>
-                {OP_GROUPS.map(group => <section key={group.label} className="mb-4">
-                  <div className="mb-2 text-[9px] font-semibold uppercase tracking-wider text-slate-500">{ar ? group.arLabel : group.label}</div>
-                  <div className="grid grid-cols-1 gap-1.5">{group.items.map(item => <button key={item[0]} type="button" draggable onDragStart={e => beginOperationDrag(item[0], e)} onDragEnd={() => { /* clear after drop has had a chance to read the payload */ window.setTimeout(() => { dragOperationRef.current = null; setDragOperation(null); }, 300); }} onClick={() => addOperation(item[0])} className="flex items-center gap-2 border border-[#e2e2e2] bg-[#fafafa] px-3 py-2 text-start text-[11px] hover:border-[#b6c9e8] hover:bg-[#f3f7fc]"><span className="text-slate-400">⠿</span><span>{ar ? item[2] : item[1]}</span><span className="ms-auto text-[10px] text-slate-400">＋</span></button>)}</div>
-                </section>)}
-              </>}
-              {panel === "inputs" && <><p className="mb-3 text-[11px] text-slate-500">{ar ? "القيم التي تستقبلها الدالة من الـ Workflow." : "Values passed into this function by a workflow."}</p><div className="space-y-2">{definition.inputs.map((p, i) => <PortEditor key={`input-${i}`} port={p} ar={ar} onChange={v => updatePort("inputs", i, v)} onRemove={() => removePort("inputs", i)} />)}</div><button type="button" className="mt-3 rounded border border-slate-300 px-3 py-2 text-[11px]" onClick={() => addPort("inputs")}>＋ {ar ? "إضافة مدخل" : "Add input"}</button></>}
-              {panel === "outputs" && <><p className="mb-3 text-[11px] text-slate-500">{ar ? "القيم التي ستعيدها الدالة إلى الـ Workflow." : "Values returned from this function to the workflow."}</p><div className="space-y-2">{definition.outputs.map((p, i) => <PortEditor key={`output-${i}`} port={p} ar={ar} onChange={v => updatePort("outputs", i, v)} onRemove={() => removePort("outputs", i)} />)}</div><button type="button" className="mt-3 rounded border border-slate-300 px-3 py-2 text-[11px]" onClick={() => addPort("outputs")}>＋ {ar ? "إضافة مخرج" : "Add output"}</button></>}
-              {panel === "details" && <div className="space-y-3"><label className="block text-[11px]">{ar ? "اسم العرض" : "Display name"}<input className="wf-input mt-1" value={draft.name} onChange={e => setDraft({ ...draft, name: e.target.value })} /></label><label className="block text-[11px]">{ar ? "معرّف الدالة" : "Function identifier"}<input className="wf-input mt-1" value={draft.key} onChange={e => setDraft({ ...draft, key: e.target.value })} /></label><label className="block text-[11px]">{ar ? "الوصف" : "Description"}<textarea className="wf-input mt-1 min-h-20" value={draft.description} onChange={e => setDraft({ ...draft, description: e.target.value })} /></label><button type="button" className="text-[11px] text-blue-700" onClick={() => setAdvanced(v => !v)}>{ar ? "التعريف المتقدم JSON" : "Advanced JSON definition"}</button>{advanced && <textarea className="wf-input min-h-56 font-mono text-[10px]" value={JSON.stringify(definition, null, 2)} onChange={e => { try { updateDef(cloneDefinition(JSON.parse(e.target.value))); } catch { /* retain last valid definition */ } }} />}</div>}
-            </div>
-          </aside>
-          <main className="flex min-w-0 flex-1 flex-col bg-white">
-            <div className="flex h-[50px] shrink-0 items-center justify-between border-b border-[#e6e6e6] px-4"><div className="text-[12px] font-medium">{ar ? "محرر البرنامج النصي" : "Script Editor"}</div><div className="text-[10px] text-slate-400">{ar ? "اسحب إجراءً إلى هنا" : "Drag an action here"}</div></div>
-            <div className="min-h-0 flex-1 overflow-auto bg-white" onDragOver={e => { e.preventDefault(); e.dataTransfer.dropEffect = "copy"; }} onDrop={finishOperationDrop} onMouseDown={(event) => { if (event.target === event.currentTarget) setSelectedIndex(null); }}>
-              <div className="min-h-full font-mono text-[12px] leading-[22px]">
-                {codeRows.map((row, lineIndex) => {
-                  const operationIndex = row.operationIndex;
-                  const belongsToOperation = operationIndex !== null;
-                  const isSelected = belongsToOperation && selectedIndex === operationIndex;
-                  return <button key={`${lineIndex}-${row.line}`} type="button" onClick={() => { if (operationIndex !== null) { setSelectedIndex(operationIndex); setPanel("blocks"); } }} className={`flex w-full min-h-[22px] items-start text-start ${isSelected ? "bg-[#e8f1ff]" : belongsToOperation ? "hover:bg-slate-50" : ""}`}><span className="sticky left-0 w-10 shrink-0 select-none pe-3 text-right text-[10px] text-slate-400">{lineIndex + 1}</span><span className="min-w-0 whitespace-pre-wrap break-words px-2 text-[#77649a]">{row.line}</span></button>;
-                })}
-                {definition.operations.length === 0 && <div className="mx-12 mt-5 border border-dashed border-[#c9c9c9] p-5 text-[11px] text-slate-400">{ar ? "اسحب إجراءً من اللوحة اليسرى وأفلته هنا. ستظهر حقول إدخال البيانات في اللوحة اليسرى." : "Drag an action from the left panel and drop it here. Its data-entry fields will open in the left panel."}</div>}
-              </div>
-            </div>
-            <div className="flex h-8 shrink-0 items-center justify-between border-t border-[#e6e6e6] bg-[#fafafa] px-3 text-[10px] text-slate-500"><span>{ar ? `${definition.operations.length} إجراء` : `${definition.operations.length} actions`}</span><span>{ar ? "SAFE Runtime" : "SAFE Runtime"}</span></div>
-          </main>
+    <div className="fixed inset-0 z-[260] flex flex-col bg-white" dir={ar ? "rtl" : "ltr"}>
+      {/* Top bar — Zoho style */}
+      <header className="flex h-12 shrink-0 items-center gap-3 border-b border-[#e6e6e6] bg-white px-3">
+        <div className="flex items-center gap-2 text-[#666]">
+          <span className="inline-flex h-7 w-7 items-center justify-center rounded bg-[#f0f0f0] text-[12px] font-bold text-[#556]">fx</span>
         </div>
+        <input
+          className="min-w-0 flex-1 border-0 bg-transparent text-[14px] font-medium text-[#333] outline-none"
+          value={draft.name}
+          onChange={(e) => setDraft((p) => ({ ...p, name: e.target.value, key: functionKeyFromName(e.target.value) || p.key }))}
+          placeholder={ar ? "اسم الدالة" : "Function name"}
+        />
+        <div className="flex items-center gap-2">
+          <button type="button" disabled={busy} onClick={onCancel} className="rounded border border-[#d0d0d0] bg-white px-3 py-1.5 text-[12px] text-[#555] hover:bg-[#f7f7f7]">{ar ? "إلغاء" : "Cancel"}</button>
+          <button type="button" disabled={busy || script.errors.size > 0} onClick={onSaveAndTest} className="rounded border border-[#d0d0d0] bg-white px-3 py-1.5 text-[12px] text-[#555] hover:bg-[#f7f7f7] disabled:opacity-50">{ar ? "حفظ وتجربة" : "Save and test"}</button>
+          <button type="button" disabled={busy || script.errors.size > 0} onClick={onSave} className="rounded bg-[#2f6fed] px-4 py-1.5 text-[12px] font-medium text-white hover:bg-[#2558c7] disabled:opacity-50">{ar ? "حفظ" : "Save"}</button>
+        </div>
+      </header>
+
+      <div className="flex min-h-0 flex-1">
+        {/* Left rail icons */}
+        <div className="flex w-11 shrink-0 flex-col items-center gap-2 border-e border-[#e8e8e8] bg-[#fafafa] py-3">
+          <button type="button" title={ar ? "الكتل" : "Blocks"} onClick={() => { setPaletteOpen(true); setConfigOpen(false); }} className={`flex h-8 w-8 items-center justify-center rounded ${paletteOpen && !configOpen ? "bg-[#e8eefc] text-[#2f6fed]" : "text-[#777] hover:bg-[#eee]"}`}>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><rect x="3" y="3" width="7" height="7" rx="1" stroke="currentColor" strokeWidth="1.6"/><rect x="14" y="3" width="7" height="7" rx="1" stroke="currentColor" strokeWidth="1.6"/><rect x="3" y="14" width="7" height="7" rx="1" stroke="currentColor" strokeWidth="1.6"/><rect x="14" y="14" width="7" height="7" rx="1" stroke="currentColor" strokeWidth="1.6"/></svg>
+          </button>
+          <button type="button" title={ar ? "السكربت" : "Script"} onClick={() => { setPaletteOpen(false); setConfigOpen(false); }} className={`flex h-8 w-8 items-center justify-center rounded ${!paletteOpen && !configOpen ? "bg-[#e8eefc] text-[#2f6fed]" : "text-[#777] hover:bg-[#eee]"}`}>
+            <span className="font-mono text-[11px] font-bold">{"</>"}</span>
+          </button>
+        </div>
+
+        {/* Palette OR Config drawer */}
+        {(paletteOpen || (configOpen && selected)) && (
+          <div className="flex w-[min(360px,40vw)] shrink-0 flex-col bg-white">
+            {configOpen && selected && selectedIndex != null ? (
+              <OperationConfigForm
+                operation={selected}
+                ar={ar}
+                connections={connections}
+                title={selectedMeta.title}
+                description={selectedMeta.description}
+                onClose={() => setConfigOpen(false)}
+                onChange={(next) => {
+                  const ops = [...definition.operations];
+                  ops[selectedIndex] = next;
+                  updateDef({ operations: ops });
+                }}
+              />
+            ) : (
+              <div className="min-h-0 flex-1 overflow-y-auto px-2 py-2">
+                {ZOHO_PALETTE.map((group) => (
+                  <div key={group.id} className="mb-3">
+                    <div className="px-2 py-1 text-[10px] font-bold tracking-wide text-[#888]">{ar ? group.arLabel : group.label}</div>
+                    <div className="flex flex-col gap-0.5">
+                      {group.items.map((item, idx) => (
+                        <button
+                          key={`${group.id}-${item.en}-${idx}`}
+                          type="button"
+                          draggable
+                          onDragStart={(e) => beginDrag(item.op, e)}
+                          onDragEnd={() => { window.setTimeout(() => { dragOpRef.current = null; setDragOp(null); }, 200); }}
+                          onClick={() => addOperation(item.op)}
+                          className="rounded px-3 py-2 text-start text-[12px] text-[#333] hover:bg-[#f0f4fa]"
+                        >
+                          {ar ? item.ar : item.en}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Script editor — Zoho style */}
+        <main
+          className="relative min-h-0 min-w-0 flex-1 bg-white"
+          onDragOver={(e) => e.preventDefault()}
+          onDrop={onDropCanvas}
+        >
+          <div className="flex h-full min-h-0 font-mono text-[13px] leading-6">
+            {/* gutter: errors + line numbers */}
+            <div className="w-14 shrink-0 select-none border-e border-[#f0f0f0] bg-[#fafafa] py-4 text-end">
+              {scriptLines.map((_, i) => {
+                const n = i + 1;
+                const err = script.errors.get(n);
+                return (
+                  <div key={n} className="flex h-6 items-center justify-end gap-1 px-1">
+                    {err ? (
+                      <span className="inline-flex h-4 w-4 items-center justify-center rounded-full bg-red-500 text-[9px] font-bold text-white" title={err}>×</span>
+                    ) : (
+                      <span className="w-4" />
+                    )}
+                    <span className="w-6 text-[11px] text-[#aaa]">{n}</span>
+                  </div>
+                );
+              })}
+            </div>
+            <div className="min-h-0 flex-1 overflow-auto py-4 pe-4 ps-3">
+              {scriptLines.map((line, i) => {
+                const n = i + 1;
+                const err = script.errors.get(n);
+                // highlight selected operation lines
+                let opIndex = -1;
+                let cursor = 2; // after header
+                for (let oi = 0; oi < definition.operations.length; oi++) {
+                  const { lines } = operationToScriptLines(definition.operations[oi], oi);
+                  if (n > cursor && n <= cursor + lines.length) {
+                    opIndex = oi;
+                    break;
+                  }
+                  cursor += lines.length;
+                }
+                const isSelected = opIndex === selectedIndex;
+                return (
+                  <div
+                    key={n}
+                    role="button"
+                    tabIndex={0}
+                    onClick={() => {
+                      if (opIndex >= 0) {
+                        setSelectedIndex(opIndex);
+                        setConfigOpen(true);
+                        setPaletteOpen(false);
+                      }
+                    }}
+                    className={`h-6 whitespace-pre ${err ? "bg-red-50" : isSelected ? "bg-[#fff8e6]" : "hover:bg-[#f7f9fc]"} ${err ? "text-red-700" : "text-[#222]"}`}
+                    title={err}
+                  >
+                    {line || " "}
+                  </div>
+                );
+              })}
+              {definition.operations.length === 0 && (
+                <div className="mt-8 rounded-lg border border-dashed border-[#c5d4ef] bg-[#f7faff] p-6 text-center text-[12px] text-[#5a7ab0]">
+                  {ar
+                    ? "اسحب كتلة من اللوحة اليسرى وأفلتها هنا، أو انقر على كتلة لفتح نموذج الإدخال."
+                    : "Drag a block from the left panel and drop it here, or click a block to open its data-entry form."}
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Bottom strip: operation chips for reorder */}
+          {definition.operations.length > 0 && (
+            <div className="absolute bottom-0 inset-x-0 flex flex-wrap gap-1 border-t border-[#eee] bg-[#fafafa] px-3 py-2">
+              {definition.operations.map((op, index) => (
+                <div
+                  key={index}
+                  draggable
+                  onDragStart={() => setDragIndex(index)}
+                  onDragOver={(e) => e.preventDefault()}
+                  onDrop={(e) => { e.preventDefault(); if (dragIndex != null) reorder(dragIndex, index); setDragIndex(null); }}
+                  onClick={() => { setSelectedIndex(index); setConfigOpen(true); setPaletteOpen(false); }}
+                  className={`cursor-pointer rounded-full border px-2.5 py-0.5 text-[10px] ${selectedIndex === index ? "border-[#2f6fed] bg-[#e8eefc] text-[#2f6fed]" : "border-[#ddd] bg-white text-[#555]"}`}
+                >
+                  {index + 1}. {op.op}
+                  <button
+                    type="button"
+                    className="ms-1 text-[#999] hover:text-red-500"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      const next = definition.operations.filter((_, i) => i !== index);
+                      updateDef({ operations: next });
+                      setSelectedIndex(next.length ? Math.min(index, next.length - 1) : null);
+                    }}
+                  >×</button>
+                </div>
+              ))}
+            </div>
+          )}
+        </main>
       </div>
     </div>
   );
