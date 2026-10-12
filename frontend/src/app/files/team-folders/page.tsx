@@ -338,9 +338,16 @@ export default function TeamFoldersPage() {
                     </div>
                   )}
 
-                  {tf.isMember ? <button type="button" className="team-folder-members" onClick={() => goToTeamFolderMembers(tf)} title={locale === "ar" ? "الأعضاء" : "Members"}>
-                    <MembersIcon /><span>{tf.memberCount} {locale === "ar" ? "عضو" : tf.memberCount === 1 ? "Member" : "Members"}</button>
-                  </span> : <button type="button" className="team-folder-members" disabled={actionBusy} onClick={() => void join(tf)} title={locale === "ar" ? "الانضمام إلى مجلد الفريق العام" : "Join public Team Folder"}><span className="text-[11px] font-semibold text-blue-600">{locale === "ar" ? "انضمام" : "Join"}</span></button>}
+                  {tf.isMember ? (
+                    <button type="button" className="team-folder-members" onClick={() => goToTeamFolderMembers(tf)} title={locale === "ar" ? "الأعضاء" : "Members"}>
+                      <MembersIcon />
+                      <span>{tf.memberCount} {locale === "ar" ? "عضو" : tf.memberCount === 1 ? "Member" : "Members"}</span>
+                    </button>
+                  ) : (
+                    <button type="button" className="team-folder-members" disabled={actionBusy} onClick={() => void join(tf)} title={locale === "ar" ? "الانضمام إلى مجلد الفريق العام" : "Join public Team Folder"}>
+                      <span className="text-[11px] font-semibold text-blue-600">{locale === "ar" ? "انضمام" : "Join"}</span>
+                    </button>
+                  )}
 
                   <div className="team-folder-row-actions" data-team-folder-menu>
                     <button type="button" className={`team-folder-pin ${pinned ? "is-pinned" : ""}`} aria-pressed={pinned} disabled={actionBusy || !tf.rootFolderId} onClick={(e) => { e.preventDefault(); e.stopPropagation(); void togglePin(tf); }} title={pinned ? (locale === "ar" ? "إلغاء التثبيت" : "Unpin") : (locale === "ar" ? "تثبيت" : "Pin")}>
