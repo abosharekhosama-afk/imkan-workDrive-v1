@@ -276,14 +276,15 @@ export default function FileDetailsPage() {
           <div className="zoho-fd-loading">{ar ? "جارٍ التحميل…" : "Loading…"}</div>
         ) : error ? (
           <div className="zoho-fd-error" role="alert">{error}</div>
-      {toast ? (
-        <div className="fixed bottom-6 start-1/2 z-[300] max-w-md -translate-x-1/2 rounded-xl border border-slate-200 bg-white px-4 py-3 text-[13px] shadow-xl" role="status">
-          <div className="flex items-start gap-3">
-            <span className="min-w-0 flex-1 text-slate-800">{toast}</span>
-            <button type="button" className="text-slate-400 hover:text-slate-700" onClick={() => setToast(null)} aria-label="Close">×</button>
+        ) : null}
+
+        {toast ? (
+          <div className="fixed bottom-6 start-1/2 z-[300] max-w-md -translate-x-1/2 rounded-xl border border-slate-200 bg-white px-4 py-3 text-[13px] shadow-xl" role="status">
+            <div className="flex items-start gap-3">
+              <span className="min-w-0 flex-1 text-slate-800">{toast}</span>
+              <button type="button" className="text-slate-400 hover:text-slate-700" onClick={() => setToast(null)} aria-label="Close">×</button>
+            </div>
           </div>
-        </div>
-      ) : null}
         ) : null}
 
         {!loading && !error && tab === "general" ? (
