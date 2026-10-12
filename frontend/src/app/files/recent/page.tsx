@@ -54,8 +54,8 @@ export default function RecentPage() {
   };
 
   return (
-    <div className="wd-page">
-      <header className="wd-page-head">
+    <div className="wd-page recent-page flex h-full min-h-0 w-full min-w-0 flex-1 flex-col overflow-hidden !p-0 wd-list-page">
+      <header className="wd-page-head shrink-0 px-4 pt-4 md:px-6">
         <div className="wd-page-head-titles">
           <h1>{label("nav.recent")}</h1>
           <p>{label("files.recentDescription")}</p>
@@ -72,6 +72,7 @@ export default function RecentPage() {
         </div>
       </header>
 
+      <div className="recent-scroll min-h-0 min-w-0 flex-1 overflow-x-auto overflow-y-auto px-4 pb-6 md:px-6">
       {error ? (
         <div className="wd-alert" role="alert">{error}</div>
       ) : null}
@@ -97,13 +98,13 @@ export default function RecentPage() {
           </div>
         </div>
       ) : (
-        <div className="wd-card workflow-like-list w-full max-w-full overflow-x-auto">
-          <table className="wd-table workflow-like-table borderless min-w-[46rem]">
+        <div className="wd-card workflow-like-list wd-list-table-card w-full max-w-full">
+          <table className="wd-table workflow-like-table borderless wd-list-table min-w-[48rem]">
             <thead>
               <tr>
-                <th>{label("files.column.name")}</th>
+                <th className="wd-col-name">{label("files.column.name")}</th>
                 <th className="num">{label("files.column.size")}</th>
-                <th>{label("trash.location")}</th>
+                <th className="wd-col-location">{label("trash.location")}</th>
                 <th>{label("files.recentAccessed")}</th>
                 <th className="num"><span className="sr-only">{label("files.actions")}</span></th>
               </tr>
@@ -149,6 +150,7 @@ export default function RecentPage() {
           </table>
         </div>
       )}
+      </div>
     </div>
   );
 }
