@@ -9,6 +9,7 @@ import { useLocale } from "./locale-provider";
 import { FileIcon } from "./file-icon";
 import { FileActionsMenu } from "./file-actions-menu";
 import { FileRowMarks } from "./file-row-marks";
+import { loadPrefs, patchPrefs, PREFS_EVENT } from "../lib/preferences-store";
 import { FileContextMenu } from "./file-context-menu";
 import { EmptyState } from "./empty-state";
 import type { FileRecord, FolderRecord } from "../lib/api/types";
@@ -173,6 +174,48 @@ export function FileTable({
   const controlled = sortField !== undefined && sortDir !== undefined;
   const [internalSort, setInternalSort] = useState<{ key: ColumnKey; direction: SortDir }>({ key: "name", direction: "asc" });
   const sort = controlled ? { key: sortField, direction: sortDir } : internalSort;
+  const [columnOrder, setColumnOrder] = useState<ColumnKey[]>(() => {
+    const order = loadPrefs().columnOrder as ColumnKey[];
+    const base: ColumnKey[] = ["name", "lastModified", "size", "type", "extension", "timeCreated"];
+    return base.sort((a, b) => {
+      const ia = order.indexOf(a); const ib = order.indexOf(b);
+      return (ia < 0 ? 99 : ia) - (ib < 0 ? 99 : ib);
+    });
+  });
+  useEffect(() => {
+    const onPrefs = () => {
+      const order = loadPrefs().columnOrder as ColumnKey[];
+      const base: ColumnKey[] = ["name", "lastModified", "size", "type", "extension", "timeCreated"];
+      setColumnOrder(base.sort((a, b) => {
+        const ia = order.indexOf(a); const ib = order.indexOf(b);
+        return (ia < 0 ? 99 : ia) - (ib < 0 ? 99 : ib);
+      }));
+    };
+    window.addEventListener(PREFS_EVENT, onPrefs);
+    return () => window.removeEventListener(PREFS_EVENT, onPrefs);
+  }, []);
+  const dragColRef = useRef<ColumnKey | null>(null);
+  const onColDragStart = (key: ColumnKey) => (e: React.DragEvent) => {
+    dragColRef.current = key;
+    e.dataTransfer.effectAllowed = "move";
+    try { e.dataTransfer.setData("text/plain", key); } catch { /* ignore */ }
+  };
+  const onColDragOver = (e: React.DragEvent) => { e.preventDefault(); e.dataTransfer.dropEffect = "move"; };
+  const onColDrop = (target: ColumnKey) => (e: React.DragEvent) => {
+    e.preventDefault();
+    const from = dragColRef.current;
+    dragColRef.current = null;
+    if (!from || from === target) return;
+    setColumnOrder((prev) => {
+      const next = [...prev];
+      const fi = next.indexOf(from); const ti = next.indexOf(target);
+      if (fi < 0 || ti < 0) return prev;
+      next.splice(fi, 1);
+      next.splice(ti, 0, from);
+      patchPrefs({ columnOrder: next });
+      return next;
+    });
+  };
   const toggleSort = (key: ColumnKey, dir?: SortDir) => {
     const direction = dir ?? (sort.key === key ? (sort.direction === "asc" ? "desc" : "asc") : "asc");
     if (!controlled) setInternalSort({ key, direction });
@@ -181,7 +224,7 @@ export function FileTable({
   };
   const extOf = (name: string) => { const i = name.lastIndexOf("."); return i > 0 && i < name.length - 1 ? name.slice(i + 1).toLowerCase() : ""; };
   const folderDate = (id: string) => latestOf(folders.find((f) => f.id === id)?.updatedAt, folderUpdatedAt?.get(id) ?? undefined);
-  const colOn = (k: ColumnKey) => columns?.[k] ?? (k === "lastModified" || k === "size" || k === "name");
+  const colOn = (k: ColumnKey) => columns?.[k] ?? (k === "name" || k === "lastModified");
   const inspectFromRowClick = (
     event: MouseEvent,
     resourceType: "FILE" | "FOLDER",
@@ -307,8 +350,19 @@ export function FileTable({
   const workflowBadge = (resourceId: string, resourceName: string) => {
     const status = workflowStatuses?.get(resourceId);
     if (!status) return null;
-    const label = status.pending ? `${status.state?.name ?? 'Action'} pending` : (status.status === 'COMPLETED' || status.state?.terminal ? (status.state?.name ?? 'Completed') : (status.state?.name ?? status.status));
-    return <button type="button" className="zoho-workflow-status-badge" title={`${status.workflowName} · ${label}`} onClick={() => onWorkflowStatusClick?.(status, resourceName)}>{label}</button>;
+    const lbl = status.pending ? `${status.state?.name ?? "Action"} pending` : (status.status === "COMPLETED" || status.state?.terminal ? (status.state?.name ?? "Completed") : (status.state?.name ?? status.status));
+    return (
+      <button
+        type="button"
+        className="wd-file-status-icon"
+        data-kind="workflow"
+        title={`${status.workflowName} · ${lbl}`}
+        aria-label={`${status.workflowName} · ${lbl}`}
+        onClick={(e) => { e.preventDefault(); e.stopPropagation(); onWorkflowStatusClick?.(status, resourceName); }}
+      >
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><path d="M6 3v12" /><circle cx="18" cy="6" r="3" /><circle cx="6" cy="18" r="3" /><path d="M18 9a9 9 0 0 1-9 9" /></svg>
+      </button>
+    );
   };
 
   /** Zoho-style status icons beside the file/folder name (checkout, final, workflow, expired). */
@@ -370,18 +424,47 @@ export function FileTable({
           <thead>
           <tr className="wd-list-head">
             <th scope="col" className="w-10 ps-[13px] text-start font-medium">
-              <input
-                type="checkbox"
-                className="wd-check"
-                onChange={(e) => onSelectAll?.(e.target.checked)}
-              />
+              <input type="checkbox" className="wd-check" onChange={(e) => onSelectAll?.(e.target.checked)} />
             </th>
-            <th scope="col" className="px-3 text-start font-medium"><button type="button" className="imkan-focusable rounded-[16px] px-3 py-2.5" onClick={() => toggleSort("name")}>{label("files.column.name")} {sort.key === "name" ? (sort.direction === "asc" ? "↑" : "↓") : "↑"}</button></th>
-            <th scope="col" className="px-3 text-start font-medium"><button type="button" className="imkan-focusable rounded-[16px] px-3 py-2.5" onClick={() => toggleSort("lastModified")}>{label("files.column.modified")} {sort.key === "lastModified" ? (sort.direction === "asc" ? "↑" : "↓") : "↓"}</button></th>
-            {colOn("timeCreated") ? <th scope="col" className="px-3 text-start font-medium">{label("column.timeCreated")}</th> : null}
-            <th scope="col" className="px-3 text-start font-medium"><button type="button" className="imkan-focusable rounded-[16px] px-3 py-2.5" onClick={() => toggleSort("size")}>{label("files.column.size")} {sort.key === "size" ? (sort.direction === "asc" ? "↑" : "↓") : ""}</button></th>
-            {colOn("type") ? <th scope="col" className="px-3 text-start font-medium">{label("files.column.type")}</th> : null}
-            {colOn("extension") ? <th scope="col" className="px-3 text-start font-medium">{label("files.column.extension")}</th> : null}
+            {columnOrder.map((colKey) => {
+              if (colKey === "name") {
+                return (
+                  <th key={colKey} scope="col" className="px-3 text-start font-medium wd-col-draggable" draggable onDragStart={onColDragStart("name")} onDragOver={onColDragOver} onDrop={onColDrop("name")}>
+                    <button type="button" className="imkan-focusable rounded px-2 py-1.5" onClick={() => toggleSort("name")}>{label("files.column.name")} {sort.key === "name" ? (sort.direction === "asc" ? "↑" : "↓") : ""}</button>
+                  </th>
+                );
+              }
+              if (colKey === "lastModified") {
+                if (!(colOn("lastModified") || true)) return null;
+                return (
+                  <th key={colKey} scope="col" className="px-3 text-start font-medium wd-col-draggable" draggable onDragStart={onColDragStart("lastModified")} onDragOver={onColDragOver} onDrop={onColDrop("lastModified")}>
+                    <button type="button" className="imkan-focusable rounded px-2 py-1.5" onClick={() => toggleSort("lastModified")}>{label("files.column.modified")} {sort.key === "lastModified" ? (sort.direction === "asc" ? "↑" : "↓") : ""}</button>
+                  </th>
+                );
+              }
+              if (colKey === "size") {
+                if (!colOn("size") && !compact) { /* still show size by default when not overridden */ }
+                // size visible when colOn or default
+                const showSize = columns?.size !== false && (colOn("size") || columns?.size === undefined);
+                // Prefer Zoho compact: hide size unless enabled
+                if (!colOn("size")) return null;
+                return (
+                  <th key={colKey} scope="col" className="px-3 text-start font-medium wd-col-draggable" draggable onDragStart={onColDragStart("size")} onDragOver={onColDragOver} onDrop={onColDrop("size")}>
+                    <button type="button" className="imkan-focusable rounded px-2 py-1.5" onClick={() => toggleSort("size")}>{label("files.column.size")} {sort.key === "size" ? (sort.direction === "asc" ? "↑" : "↓") : ""}</button>
+                  </th>
+                );
+              }
+              if (colKey === "type" && colOn("type")) {
+                return <th key={colKey} scope="col" className="px-3 text-start font-medium wd-col-draggable" draggable onDragStart={onColDragStart("type")} onDragOver={onColDragOver} onDrop={onColDrop("type")}>{label("files.column.type")}</th>;
+              }
+              if (colKey === "extension" && colOn("extension")) {
+                return <th key={colKey} scope="col" className="px-3 text-start font-medium wd-col-draggable" draggable onDragStart={onColDragStart("extension")} onDragOver={onColDragOver} onDrop={onColDrop("extension")}>{label("files.column.extension")}</th>;
+              }
+              if (colKey === "timeCreated" && colOn("timeCreated")) {
+                return <th key={colKey} scope="col" className="px-3 text-start font-medium wd-col-draggable" draggable onDragStart={onColDragStart("timeCreated")} onDragOver={onColDragOver} onDrop={onColDrop("timeCreated")}>{label("column.timeCreated")}</th>;
+              }
+              return null;
+            })}
             <th scope="col" className="px-4 text-end font-medium">
               {onColumns ? <ColumnsPlusBtn columns={columns ?? {}} onChange={onColumns} label={label} /> : <span className="sr-only">{label("files.actions")}</span>}
             </th>
@@ -418,7 +501,7 @@ export function FileTable({
               }}
               onCopyLink={onCopyLink ? () => onCopyLink(folder.id) : undefined}
               x={e.clientX} y={e.clientY} onClose={() => setCtxMenu(null)}
-            />)});             }} onDragStart={(e) => { e.dataTransfer.effectAllowed="move"; e.dataTransfer.setData("application/x-workdrive", JSON.stringify({type:"FOLDER",id:folder.id,name:folder.name})); }} className="wd-list-row group cursor-grab" data-compact={compact || undefined} data-selected={selectedIds.has(folder.id) || undefined} data-following={followIds.has(followResourceKey("FOLDER", folder.id)) || undefined} onClick={(e) => inspectFromRowClick(e, "FOLDER", folder.id, folder.name)} onDragOver={(e) => { e.preventDefault(); e.currentTarget.classList.add("ring-2","ring-[var(--wd-primary)]"); }} onDragLeave={(e) => e.currentTarget.classList.remove("ring-2","ring-[var(--wd-primary)]")} onDrop={(e) => { e.preventDefault(); e.currentTarget.classList.remove("ring-2","ring-[var(--wd-primary)]"); try { const item=JSON.parse(e.dataTransfer.getData("application/x-workdrive")); if(item.id !== folder.id) onDropMove?.(item.type,item.id,folder.id); } catch {} }}>
+            />)});             }} onDragStart={(e) => { e.dataTransfer.effectAllowed="move"; e.dataTransfer.setData("application/x-workdrive", JSON.stringify({type:"FOLDER",id:folder.id,name:folder.name})); }} className="wd-list-row group cursor-grab" data-compact="true" data-selected={selectedIds.has(folder.id) || undefined} data-following={followIds.has(followResourceKey("FOLDER", folder.id)) || undefined} onClick={(e) => inspectFromRowClick(e, "FOLDER", folder.id, folder.name)} onDragOver={(e) => { e.preventDefault(); e.currentTarget.classList.add("ring-2","ring-[var(--wd-primary)]"); }} onDragLeave={(e) => e.currentTarget.classList.remove("ring-2","ring-[var(--wd-primary)]")} onDrop={(e) => { e.preventDefault(); e.currentTarget.classList.remove("ring-2","ring-[var(--wd-primary)]"); try { const item=JSON.parse(e.dataTransfer.getData("application/x-workdrive")); if(item.id !== folder.id) onDropMove?.(item.type,item.id,folder.id); } catch {} }}>
               <td className="ps-[13px]">
                 <input
                   type="checkbox"
@@ -499,7 +582,7 @@ export function FileTable({
                     onCopy: onCopy && canMutate ? () => onCopy("FILE", file.id, file.name) : undefined, onFavoriteToggle: onFavorite ? () => onFavorite("FILE", file.id) : undefined, onVersionHistory: onVersionHistory ? () => onVersionHistory("FILE", file.id, file.name, file.mimeType ?? undefined, file.size ?? undefined) : undefined, onDelete: canMutate ? () => onDelete("FILE", file.id) : undefined, onAssignWorkflow: onAssignWorkflow && canMutate ? () => onAssignWorkflow("FILE", file.id, file.name) : undefined, onOrganize: onOrganize && canMutate ? () => onOrganize("FILE", file.id) : undefined, onFollowUpdates: onFollowUpdates ? () => onFollowUpdates("FILE", file.id, file.name) : undefined, isFollowingUpdates: followIds.has(followResourceKey("FILE", file.id)), isFavorite: favoriteIds.has(file.id) }}
               onCopyLink={onCopyLink ? () => onCopyLink(file.id) : undefined}
               x={e.clientX} y={e.clientY} onClose={() => setCtxMenu(null)}
-            />)}); }} className="wd-list-row group relative cursor-grab active:cursor-grabbing" data-compact={compact || undefined} data-selected={selectedIds.has(file.id) || undefined} data-control={fileControlFromRecord(file) === "ACTIVE" ? undefined : fileControlFromRecord(file).toLowerCase()} data-following={followIds.has(followResourceKey("FILE", file.id)) || undefined} onClick={(e) => inspectFromRowClick(e, "FILE", file.id, file.name)}>
+            />)}); }} className="wd-list-row group relative cursor-grab active:cursor-grabbing" data-compact="true" data-selected={selectedIds.has(file.id) || undefined} data-control={fileControlFromRecord(file) === "ACTIVE" ? undefined : fileControlFromRecord(file).toLowerCase()} data-following={followIds.has(followResourceKey("FILE", file.id)) || undefined} onClick={(e) => inspectFromRowClick(e, "FILE", file.id, file.name)}>
               <td className="ps-[13px]">
                 <input
                   type="checkbox"

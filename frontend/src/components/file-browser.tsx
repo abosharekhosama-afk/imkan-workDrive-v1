@@ -10,6 +10,7 @@ import { FolderEmptyState } from "./layout/folder-empty-state";
 import { ShellScopeSync, useShell } from "./layout/shell-context";
 import { FileGridView } from "./file-grid-view";
 import { FileTable } from "./file-table";
+import { loadPrefs, PREFS_EVENT } from "../lib/preferences-store";
 import { ShareModal } from "./share-modal";
 import { useLocale } from "./locale-provider";
 import { bulkTrashFolders, createFolder, deleteFolder, getFolder, listRootContents, renameFolder, moveFolder, copyFolder } from "../lib/api/folders";
@@ -156,6 +157,28 @@ export function FileBrowser({
   const [sortDir, setSortDir] = useState<SortDir>("desc");
   const [sortField, setSortField] = useState<ColumnKey>("name");
   const [columns, setColumnsState] = useState<Partial<Record<ColumnKey, boolean>>>({ lastModified: true, timeCreated: true, size: true, type: true, extension: true });
+  useEffect(() => {
+    function applyFromPrefs() {
+      const prefs = loadPrefs();
+      if (prefs.defaultView === "thumbnail") setViewMode("grid");
+      else if (prefs.defaultView === "compact") setViewMode("compact");
+      else setViewMode("list");
+      setColumnsState({
+        lastModified: prefs.optionalColumns.lastModified !== false,
+        timeCreated: prefs.optionalColumns.timeCreated,
+        size: prefs.optionalColumns.size,
+        type: prefs.optionalColumns.type,
+        extension: prefs.optionalColumns.extension,
+      });
+      if (prefs.defaultSort === "name") setSortField("name");
+      else if (prefs.defaultSort === "timeCreated") setSortField("timeCreated");
+      else setSortField("lastModified");
+    }
+    applyFromPrefs();
+    window.addEventListener(PREFS_EVENT, applyFromPrefs);
+    return () => window.removeEventListener(PREFS_EVENT, applyFromPrefs);
+  }, []);
+
   const [filter, setFilter] = useState<FilterKey>((searchParams.get("filter") as FilterKey) || "all");
   const [advancedFilter, setAdvancedFilter] = useState<AdvancedFileFilter>({
     type: (searchParams.get("type") as AdvancedFileFilter["type"]) || "all",
