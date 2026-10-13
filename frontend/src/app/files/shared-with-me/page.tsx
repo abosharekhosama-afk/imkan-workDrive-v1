@@ -92,8 +92,8 @@ export default function SharedWithMePage() {
 
   return (
     <div className="flex min-h-0 flex-1 flex-col" style={{ fontFamily: "var(--user-font-family), Arial, system-ui, sans-serif" }}>
-      <div className="flex h-12 shrink-0 items-center justify-between gap-3 border-b border-[color:var(--imkan-color-border)] bg-white px-3">
-        <h1 className="text-[15px] font-semibold text-[#212121]">
+      <div className="sticky top-0 z-[5] flex h-12 shrink-0 items-center justify-between gap-3 border-b border-[color:var(--wd-line,var(--imkan-color-border))] bg-[var(--wd-bg,#fff)] px-3">
+        <h1 className="text-[15px] font-semibold text-[color:var(--wd-text,#212121)]">
           {label("nav.sharedWithMe")}
           {rows.length > 0 ? <span className="ms-2 text-[12px] font-medium text-slate-500">({rows.length})</span> : null}
         </h1>
@@ -101,7 +101,7 @@ export default function SharedWithMePage() {
           ⟳ {label("recent.refresh")}
         </button>
       </div>
-      <div className="min-h-0 flex-1 overflow-y-auto px-3 md:px-5">
+      <div className="min-h-0 flex-1 overflow-auto px-3 md:px-5">
         {error ? <div className="mt-3 rounded-lg bg-red-50 p-3 text-[12px] text-red-700" role="alert">{error}</div> : null}
         {loading ? (
           <div className="p-6 text-center text-[13px] text-slate-400">{label("common.loading")}</div>
@@ -112,7 +112,7 @@ export default function SharedWithMePage() {
             <p className="text-[13px] text-slate-500">{label("shared.empty")}</p>
           </div>
         ) : (
-          <table className="w-full table-fixed border-collapse" style={{ fontFamily: "var(--user-font-family), Arial, system-ui, sans-serif" }}>
+          <div className="w-full overflow-x-auto"><table className="w-full min-w-[920px] border-collapse" style={{ tableLayout: "auto", fontFamily: "var(--user-font-family), Arial, system-ui, sans-serif" }}>
             <thead>
               <tr className="border-b border-[color:var(--imkan-color-border)]">
                 <th className="px-3 py-2 text-start text-[12px] font-medium text-slate-500">{label("shared.name")}</th>
@@ -125,7 +125,7 @@ export default function SharedWithMePage() {
             </thead>
             <tbody>
               {rows.map((r) => (
-                <tr key={r.id} className="border-b border-[color:var(--imkan-color-border)] hover:bg-slate-50" onDoubleClick={() => openSharedRow(r)}>
+                <tr key={r.id} className="border-b border-[color:var(--imkan-color-border)] hover:bg-[var(--wd-hover,#f8fafc)]" onDoubleClick={() => openSharedRow(r)}>
                   <td className="px-3 py-2.5">
                     <div className="flex min-w-0 items-center gap-2">
                       <FileTypeIcon size={18} kind={fileIconKind(r.resourceType === "FOLDER" ? "folder" : "file", r.mimeType ?? undefined, r.name ?? r.resourceId)} />
@@ -165,7 +165,7 @@ export default function SharedWithMePage() {
                 </tr>
               ))}
             </tbody>
-          </table>
+          </table></div>
         )}
       </div>
       {toast ? <Toast message={toast} onDismiss={() => setToast(null)} /> : null}
