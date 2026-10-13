@@ -269,9 +269,9 @@ export default function MembersPage() {
 
       {inviteOpen ? <InviteModal ar={ar} onClose={() => setInviteOpen(false)} onDone={async () => { setInviteOpen(false); await load(); }} setToast={setToast} /> : null}
       {toast ? <Toast message={toast.message} onDismiss={() => setToast(null)} /> : null}
+      {confirmModal}
     </div>
-        {confirmModal}
-    );
+  );
 }
 
 function InviteModal({ ar, onClose, onDone, setToast }: { ar: boolean; onClose: () => void; onDone: () => Promise<void>; setToast: (v: { message: string; tone?: "success" | "error" } | null) => void }) {
