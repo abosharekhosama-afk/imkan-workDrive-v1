@@ -861,7 +861,15 @@ export class TemplatesService {
         const { join: pathJoin } = await import('node:path');
         const tempDir = await mkdtemp(pathJoin(tmpdir(), 'imkan-template-pdf-'));
         try {
-          const source = pathJoin(tempDir, exported.filename);
+          // Harden against path traversal: never use a user-influenced filename as a path segment.
+          const safeBase = String(exported.filename || 'document')
+            .replace(/[\\/\x00-\x1f\x7f]+/g, '_')
+            .replace(/^\.+/, '_')
+            .slice(0, 120) || 'document';
+          const source = pathJoin(tempDir, safeBase);
+          if (!source.startsWith(tempDir)) {
+            throw new Error('Invalid temporary path for PDF conversion');
+          }
           await writeFile(source, Buffer.from(exported.dataBase64, 'base64'));
           await new Promise<void>((resolve, reject) => execFile('libreoffice', ['--headless','--convert-to','pdf','--outdir',tempDir,source], { timeout: 120000 }, (error, _stdout, stderr) => error ? reject(new Error(stderr || error.message)) : resolve()));
           const pdfPath = pathJoin(tempDir, exported.filename.replace(/\.[^.]+$/, '.pdf'));
