@@ -58,7 +58,8 @@ export function NotificationPanel({ open, onClose }: { open: boolean; onClose: (
   };
 
   if (!open) return null;
-  const unread = notes.filter((n) => !n.readAt).length;
+  const unreadNotes = notes.filter((n) => !n.readAt);
+  const unread = unreadNotes.length;
 
   return (
     <div
@@ -90,7 +91,7 @@ export function NotificationPanel({ open, onClose }: { open: boolean; onClose: (
       <div className="max-h-[min(520px,65vh)] overflow-y-auto p-2 bg-[var(--wd-bg,#fff)]">
         {loading ? (
           <div className="px-3 py-10 text-center text-[11px] text-[color:var(--wd-text-muted,#94a3b8)]">{label("common.loading")}</div>
-        ) : notes.length === 0 ? (
+        ) : unreadNotes.length === 0 ? (
           <div className="px-3 py-10 text-center">
             <div className="mx-auto flex h-10 w-10 items-center justify-center rounded-full bg-[var(--wd-panel-2,#F3F6FB)] text-[color:var(--wd-text-muted,#94a3b8)]">
               <Icons.bell size={17} />
@@ -101,7 +102,7 @@ export function NotificationPanel({ open, onClose }: { open: boolean; onClose: (
             </p>
           </div>
         ) : (
-          notes.slice(0, 20).map((n) => (
+          unreadNotes.slice(0, 20).map((n) => (
             <div
               key={n.id}
               className={`mb-1 last:mb-0 rounded-md px-3 py-3 transition hover:bg-[var(--wd-hover,#f8fafc)] ${n.readAt ? "" : "bg-[var(--wd-panel-2,#F5F8FF)]"}`}
