@@ -231,11 +231,11 @@ export default function TeamFoldersPage() {
         <div className="relative shrink-0" data-team-folder-filter>
           <button id={filterButtonId} type="button" onClick={() => setFilterOpen((v) => !v)} className={`team-filter-trigger ${scopeFilter !== "joined" ? "is-active" : ""}`} aria-expanded={filterOpen} aria-haspopup="menu">
             <FilterIcon />
-            <span>{scopeFilter === "joined" ? (locale === "ar" ? "مشترك" : "Joined") : scopeFilter === "public" ? "Public" : scopeFilter === "private" ? "Private" : "All"}</span>
+            <span>{scopeFilter === "joined" ? (locale === "ar" ? "مشترك" : "Joined") : scopeFilter === "public" ? (locale === "ar" ? "عام" : "Public") : scopeFilter === "private" ? (locale === "ar" ? "خاص" : "Private") : (locale === "ar" ? "الكل" : "All")}</span>
             <span className="team-filter-chevron">⌄</span>
           </button>
-          <ToolbarAnchoredPanel open={filterOpen} onClose={() => setFilterOpen(false)} anchorId={filterButtonId} align="start" width={180} className="p-1.5 [&_button]:flex [&_button]:w-full [&_button]:min-h-[34px] [&_button]:items-center [&_button]:justify-between [&_button]:rounded-[7px] [&_button]:border-0 [&_button]:bg-transparent [&_button]:px-[9px] [&_button]:text-[12px] [&_button]:text-[#41474d] [&_button:hover]:bg-[#f5f7f9] [&_button.is-selected]:bg-[#eef4ff] [&_button.is-selected]:font-medium [&_button.is-selected]:text-[#1b66ea]">
-            {([["joined", locale === "ar" ? "مشترك" : "Joined"], ["all", locale === "ar" ? "الكل" : "All"], ["public", "Public"], ["private", "Private"]] as const).map(([key, text]) => (
+          <ToolbarAnchoredPanel open={filterOpen} onClose={() => setFilterOpen(false)} anchorId={filterButtonId} align="start" width={180} className="team-filter-panel p-1.5">
+            {([["joined", locale === "ar" ? "مشترك" : "Joined"], ["all", locale === "ar" ? "الكل" : "All"], ["public", locale === "ar" ? "عام" : "Public"], ["private", locale === "ar" ? "خاص" : "Private"]] as const).map(([key, text]) => (
               <button key={key} type="button" role="menuitem" className={scopeFilter === key ? "is-selected" : ""} onClick={() => { setScopeFilter(key); setFilterOpen(false); }}>
                 <span>{text}</span>{scopeFilter === key ? <span aria-hidden="true">✓</span> : null}
               </button>
