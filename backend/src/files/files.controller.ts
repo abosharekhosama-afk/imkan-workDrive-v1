@@ -196,6 +196,9 @@ export class FilesController {
       contentDispositionAttachment('imkan-files.zip'),
     );
     response.setHeader('Content-Length', String(archive.length));
+    // Prevent intermediate caches from storing ZIP contents that may include sensitive files.
+    response.setHeader('Cache-Control', 'private, no-store');
+    response.setHeader('X-Content-Type-Options', 'nosniff');
     response.send(archive);
   }
 
