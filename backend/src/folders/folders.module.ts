@@ -12,5 +12,6 @@ import { FollowsModule } from '../follows/follows.module';
   imports: [StorageModule, RecentModule, WorkflowsModule, MetadataModule, FollowsModule],
   controllers: [FoldersController],
   providers: [FoldersService],
+  exports: [FoldersService],
 })
 export class FoldersModule {}
