@@ -7942,3 +7942,85 @@ html[data-theme="dark"] .search-overlay-backdrop {
   backdrop-filter: blur(12px) saturate(1.05) !important;
   -webkit-backdrop-filter: blur(12px) saturate(1.05) !important;
 }
+
+
+/* ========== Restore classic dim overlays + team table = My Files (2026-10-13c) ========== */
+/* Classic hover/backdrop behind menus, drawers, side panels */
+.imkan-modal-backdrop,
+.search-overlay-backdrop {
+  background: rgba(15, 23, 42, 0.45) !important;
+  backdrop-filter: blur(2px) !important;
+  -webkit-backdrop-filter: blur(2px) !important;
+}
+html[data-theme="dark"] .imkan-modal-backdrop,
+html[data-theme="dark"] .search-overlay-backdrop {
+  background: rgba(0, 0, 0, 0.55) !important;
+  backdrop-filter: blur(3px) !important;
+  -webkit-backdrop-filter: blur(3px) !important;
+}
+
+/* Mobile nav / inspector drawer scrims */
+.workdrive-frame .fixed.inset-0 > .absolute.inset-0[aria-hidden="true"],
+.fixed.inset-0.z-50 > .absolute.inset-0[aria-hidden="true"],
+.fixed.inset-0.z-\[50\] > .absolute.inset-0 {
+  background: rgba(15, 23, 42, 0.40) !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+html[data-theme="dark"] .workdrive-frame .fixed.inset-0 > .absolute.inset-0[aria-hidden="true"],
+html[data-theme="dark"] .fixed.inset-0.z-50 > .absolute.inset-0[aria-hidden="true"] {
+  background: rgba(0, 0, 0, 0.55) !important;
+}
+
+/* Team folders table — match My Files (wd-table / imkan-table) */
+.team-folders-table-wrap {
+  background: transparent !important;
+}
+.team-folders-table {
+  width: 100%;
+  background: transparent !important;
+  color: var(--wd-text, #333a42) !important;
+}
+.team-folder-row {
+  background: transparent !important;
+  color: var(--wd-text, #333a42) !important;
+  border-bottom: 1px solid var(--wd-line, #f0f2f4) !important;
+}
+.team-folder-row:first-child,
+.team-folder-row.is-pinned {
+  background: transparent !important;
+}
+.team-folder-row:hover {
+  background: #f8fbfa !important; /* same as .wd-table tbody tr:hover / imkan-table-row */
+}
+.team-folder-name,
+.team-folder-copy {
+  color: var(--wd-text, #2d333b) !important;
+}
+.team-folder-meta {
+  color: var(--wd-text-muted, #7a828d) !important;
+}
+
+html[data-theme="dark"] .team-folders-table-wrap,
+html[data-theme="dark"] .team-folders-table {
+  background: transparent !important;
+  color: var(--wd-text) !important;
+}
+html[data-theme="dark"] .team-folder-row {
+  background: transparent !important;
+  border-bottom-color: var(--wd-line) !important;
+  color: var(--wd-text) !important;
+}
+html[data-theme="dark"] .team-folder-row:first-child,
+html[data-theme="dark"] .team-folder-row.is-pinned {
+  background: transparent !important;
+}
+html[data-theme="dark"] .team-folder-row:hover {
+  background: var(--wd-hover) !important; /* same as dark .wd-table tbody tr:hover */
+}
+html[data-theme="dark"] .team-folder-name {
+  color: var(--wd-text) !important;
+}
+html[data-theme="dark"] .team-folder-meta {
+  color: var(--wd-text-muted) !important;
+}
