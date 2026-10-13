@@ -70,16 +70,27 @@ export function PrimarySidebar() {
   return (
     <div className="primary-sidebar flex h-full min-h-0 w-full flex-col overflow-hidden bg-[#282828] text-[#EEEEEE]">
       <div className="flex h-12 shrink-0 items-center gap-2 px-4 shadow-[0_1px_2px_rgba(0,0,0,0.3)]">
-        {orgLogo ? <img src={orgLogo} alt="" className="h-7 max-w-[100px] object-contain" /> : null}
-        <button type="button" className="rounded-[8px] p-1.5 text-[#EEEEEE] hover:bg-white/10" title={label("nav.appSwitcher")} aria-label={label("nav.appSwitcher")}>
-          <Icons.grid size={18} />
-        </button>
         {c ? null : (
-          <Link href="/files" onClick={close} className="flex min-w-0 flex-1 items-center gap-2">
-            <span className="flex h-6 w-6 shrink-0 items-center justify-center text-[#EEEEEE]" aria-hidden="true"><Icons.folder size={20} /></span>
+          <Link href="/files" onClick={close} className="flex min-w-0 flex-1 items-center gap-2.5">
+            {orgLogo ? (
+              <img src={orgLogo} alt="" className="h-7 max-h-7 w-auto max-w-[36px] shrink-0 object-contain" />
+            ) : (
+              <span className="flex h-7 w-7 shrink-0 items-center justify-center text-[#EEEEEE]" aria-hidden="true">
+                <Icons.folder size={22} />
+              </span>
+            )}
             <span className="mt-0.5 truncate text-[17px] font-medium leading-5 text-[#EEEEEE]">{label("app.title")}</span>
           </Link>
         )}
+        {c ? (
+          orgLogo ? (
+            <img src={orgLogo} alt="" className="mx-auto h-7 max-h-7 w-auto max-w-[28px] object-contain" />
+          ) : (
+            <span className="mx-auto flex h-7 w-7 items-center justify-center text-[#EEEEEE]" aria-hidden="true">
+              <Icons.folder size={20} />
+            </span>
+          )
+        ) : null}
       </div>
       <SidebarNav />
       {c ? null : (

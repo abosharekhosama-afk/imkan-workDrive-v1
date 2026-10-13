@@ -402,7 +402,7 @@ export function InspectorPanel() {
       </aside>
       {mobileInspectorOpen ? (
         <div className="fixed inset-0 z-50 lg:hidden" role="dialog" aria-modal="true" aria-label={label("inspector.details")}>
-          <div className="absolute inset-0 bg-[color:color-mix(in_srgb,var(--wd-text,#0f172a)_18%,transparent)]" onClick={() => setMobileInspectorOpen(false)} aria-hidden="true" />
+          <div className="absolute inset-0" style={{ background: "rgba(255,255,255,0.55)", backdropFilter: "blur(8px)" }} onClick={() => setMobileInspectorOpen(false)} aria-hidden="true" />
           <div className="wd-drawer absolute bottom-0 end-0 top-0 flex max-w-[88vw] flex-col bg-white shadow-[0_6px_24px_rgba(0,0,0,0.1)]">
             {inner}
           </div>

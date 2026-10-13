@@ -43,7 +43,7 @@ function Frame({ children }: { children: ReactNode }) {
       </aside>
       {mobileNavOpen ? (
         <div className="fixed inset-0 z-50 md:hidden" role="dialog" aria-modal="true" aria-label="Navigation">
-          <div className="absolute inset-0 bg-[color:color-mix(in_srgb,var(--wd-text,#0f172a)_20%,transparent)]" onClick={() => setMobileNavOpen(false)} aria-hidden="true" />
+          <div className="absolute inset-0" style={{ background: "rgba(255,255,255,0.55)", backdropFilter: "blur(8px)" }} onClick={() => setMobileNavOpen(false)} aria-hidden="true" />
           <div className="wd-mobile-nav-drawer absolute bottom-0 start-0 top-0 flex w-[min(280px,88vw)] max-w-[88vw] flex-col overflow-hidden bg-[var(--wd-sidebar,#282828)] shadow-[0_6px_24px_rgba(0,0,0,0.12)]">
             <PrimarySidebar />
           </div>
