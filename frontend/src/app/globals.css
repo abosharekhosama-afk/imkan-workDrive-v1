@@ -8448,3 +8448,42 @@ html[data-theme="dark"] .zoho-side-backdrop{background:rgba(0,0,0,.45)}
 /* Ensure account drawer itself stays edge-attached (existing) */
 .account-drawer{inset-inline-end:0 !important;inset-block:0 !important;left:auto !important;right:0 !important}
 [dir="rtl"] .account-drawer{left:0 !important;right:auto !important}
+
+
+/* ===== Zoho-like compact file table + official status icons ===== */
+.wd-file-status-icons{display:inline-flex;align-items:center;gap:4px;margin-inline-start:6px;vertical-align:middle}
+.wd-file-status-icon{
+  display:inline-grid;place-items:center;width:18px;height:18px;border-radius:4px;
+  color:var(--wd-text-muted,#64748b);background:transparent;border:0;padding:0;cursor:default;
+}
+.wd-file-status-icon[data-kind="checkout"]{color:#64748b}
+.wd-file-status-icon[data-kind="final"]{color:#64748b}
+.wd-file-status-icon[data-kind="workflow"]{color:#64748b}
+.wd-file-status-icon[data-kind="follow"]{color:#64748b}
+.wd-file-status-icon:hover{background:var(--wd-hover,#f1f5f9);color:var(--wd-text)}
+html[data-theme="dark"] .wd-file-status-icon{color:#94a3b8}
+html[data-theme="dark"] .wd-file-status-icon:hover{background:#2a2a2a;color:#e2e8f0}
+
+/* Hide colorful workflow text badges if any remain */
+.zoho-workflow-status-badge{display:none !important}
+
+/* Row labels (tags) — official subtle style */
+.wd-row-marks{display:inline-flex;align-items:center;gap:4px;margin-inline-start:6px}
+.wd-row-label{
+  display:inline-flex;align-items:center;gap:4px;font-size:11px;line-height:1;
+  padding:2px 6px;border-radius:4px;border:1px solid var(--wd-line,#e2e8f0);
+  color:var(--wd-text-muted,#64748b);background:transparent;font-weight:500;
+}
+.wd-row-label i{width:6px;height:6px;border-radius:50%;background:currentColor !important;opacity:.7}
+html[data-theme="dark"] .wd-row-label{border-color:#333;color:#94a3b8}
+
+/* Compact rows */
+.wd-list-row[data-compact="true"] td{padding-top:6px;padding-bottom:6px}
+.wd-list-row[data-compact="true"] .wd-list-meta{font-size:11px;color:var(--wd-text-muted)}
+.wd-list-row[data-compact="true"] .wd-file-name{font-size:13px;font-weight:500}
+
+/* Draggable column headers */
+.wd-col-draggable{cursor:grab;user-select:none}
+.wd-col-draggable:active{cursor:grabbing}
+.wd-col-draggable.wd-col-dragging{opacity:.55}
+.wd-list-head th{white-space:nowrap;font-size:12px;font-weight:600;color:var(--wd-text-muted)}
