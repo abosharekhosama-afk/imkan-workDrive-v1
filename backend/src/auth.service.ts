@@ -649,7 +649,9 @@ export class AuthService {
   }
 
   private otpPepper(): string {
-    return this.config.get<string>('JWT_SECRET') ?? 'imkan-otp';
+    const secret = this.config.get<string>('JWT_SECRET') || this.config.get<string>('OTP_SECRET');
+    if (!secret || secret.length < 16) throw new UnauthorizedException('OTP/JWT secret is not configured');
+    return secret;
   }
 
   private async issueEmailOtp(input: {
