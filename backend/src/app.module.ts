@@ -4,6 +4,7 @@ import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { AuditModule } from './audit/audit.module';
 import { AuthModule } from './auth/auth.module';
+import { BootstrapModule } from './bootstrap/bootstrap.module';
 import { FilesModule } from './files/files.module';
 import { FoldersModule } from './folders/folders.module';
 import { PermissionsModule } from './permissions/permissions.module';
@@ -40,6 +41,7 @@ import { BackupModule } from './backup/backup.module';
     PrismaModule,
     PermissionsModule,
     AuthModule,
+    BootstrapModule,
     FoldersModule,
     StorageModule,
     FilesModule,
