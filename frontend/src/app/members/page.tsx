@@ -1,5 +1,7 @@
 "use client";
 
+import { useConfirmAction } from "@/components/confirm-action-modal";
+
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { useLocale } from "@/components/locale-provider";
@@ -33,6 +35,7 @@ function bytes(value: string) {
 }
 
 export default function MembersPage() {
+  const { requestConfirm, confirmModal } = useConfirmAction();
   const { locale } = useLocale();
   const ar = locale === "ar";
   const pathname = usePathname();
@@ -79,7 +82,7 @@ export default function MembersPage() {
   const toggleAll = () => setSelected(allSelected ? [] : members.map((m) => m.id));
   const toggleOne = (id: string) => setSelected((current) => current.includes(id) ? current.filter((x) => x !== id) : [...current, id]);
 
-  async function perform(action: "suspend" | "activate" | "remove", rows: ManagedMember[]) {
+  async function runMemberAction(action: "suspend" | "activate" | "remove", rows: ManagedMember[]) {
     if (rows.some((row) => row.status === "PENDING")) return;
     try {
       for (const row of rows) {
@@ -93,6 +96,38 @@ export default function MembersPage() {
     } catch {
       setToast({ message: ar ? "تعذر تنفيذ العملية على أحد الأعضاء." : "The operation could not be completed for one or more members.", tone: "error" });
     }
+  }
+
+  function perform(action: "suspend" | "activate" | "remove", rows: ManagedMember[]) {
+    if (!rows.length) return;
+    if (rows.some((row) => row.status === "PENDING")) return;
+    if (action === "activate") {
+      void runMemberAction(action, rows);
+      return;
+    }
+    const names = rows.map((r) => r.name || r.email).filter(Boolean).slice(0, 3).join(", ");
+    const more = rows.length > 3 ? (ar ? ` و${rows.length - 3} آخرين` : ` and ${rows.length - 3} more`) : "";
+    if (action === "suspend") {
+      requestConfirm({
+        title: ar ? "إيقاف الحساب؟" : "Suspend account?",
+        description: ar
+          ? `سيتم إيقاف وصول ${names}${more}. يمكن إعادة تنشيط الحساب لاحقاً.`
+          : `${names}${more} will lose access until reactivated.`,
+        confirmLabel: ar ? "إيقاف" : "Suspend",
+        tone: "danger",
+        run: async () => { await runMemberAction("suspend", rows); },
+      });
+      return;
+    }
+    requestConfirm({
+      title: ar ? "حذف الحساب؟" : "Delete account?",
+      description: ar
+        ? `سيتم حذف ${names}${more} من المؤسسة. قد تحتاج إلى تعيين خلف للملفات المملوكة.`
+        : `${names}${more} will be removed from the organization. Owned files may require a successor.`,
+      confirmLabel: ar ? "حذف" : "Delete",
+      tone: "danger",
+      run: async () => { await runMemberAction("remove", rows); },
+    });
   }
 
   const roleLabel = (role: OrgRole) => role === "SUPER_ADMIN" ? (ar ? "مسؤول عام" : "Super Admin") : role === "ADMIN" ? (ar ? "مسؤول" : "Admin") : (ar ? "عضو" : "Member");
@@ -235,7 +270,8 @@ export default function MembersPage() {
       {inviteOpen ? <InviteModal ar={ar} onClose={() => setInviteOpen(false)} onDone={async () => { setInviteOpen(false); await load(); }} setToast={setToast} /> : null}
       {toast ? <Toast message={toast.message} onDismiss={() => setToast(null)} /> : null}
     </div>
-  );
+        {confirmModal}
+    );
 }
 
 function InviteModal({ ar, onClose, onDone, setToast }: { ar: boolean; onClose: () => void; onDone: () => Promise<void>; setToast: (v: { message: string; tone?: "success" | "error" } | null) => void }) {
