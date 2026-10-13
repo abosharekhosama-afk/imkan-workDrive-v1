@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useLocale } from "../locale-provider";
 import { Icons } from "./icons";
+import { applyA11ySettings } from "../a11y-bootstrap";
 
 type Props = { open: boolean; onClose: () => void };
 

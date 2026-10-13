@@ -147,50 +147,6 @@ export function AccountMenu({ name, avatarUrl, adminMode = false }: Props) {
                     <p className="account-sub-text">{ar ? "المسؤول العام:" : "Super Admin:"} {current.email || "—"}</p>
                     <button type="button" className="account-upgrade-btn" onClick={() => window.open("https://www.zoho.com/workdrive/pricing.html", "_blank")}>{ar ? "ترقية" : "Upgrade"}</button>
                   </section>
-
-                  <section className="account-section">
-                    <div className="account-section-title">{ar ? "الموارد" : "Resources"}</div>
-                    <div className="account-action-grid">
-                      <a className="account-action" href="https://help.zoho.com/portal/en/kb/workdrive" target="_blank" rel="noreferrer"><span className="account-action-icon account-action-icon-svg"><Icons.help size={16} /></span>{ar ? "مركز المساعدة" : "Help Center"}</a>
-                      <a className="account-action" href="https://www.zoho.com/workdrive/whats-new.html" target="_blank" rel="noreferrer"><span className="account-action-icon account-action-icon-svg"><Icons.spark size={16} /></span>{ar ? "ما الجديد" : "What's New"}</a>
-                      <button type="button" className="account-action"><span className="account-action-icon account-action-icon-svg"><Icons.act size={16} /></span>{ar ? "جولة سريعة" : "Take a Quick Tour"}</button>
-                      <a className="account-action" href="https://help.zoho.com/portal/en/community/workdrive" target="_blank" rel="noreferrer"><span className="account-action-icon account-action-icon-svg"><Icons.users size={16} /></span>{ar ? "المجتمع" : "Community"}</a>
-                      <a className="account-action" href="https://www.zoho.com/workdrive/videos.html" target="_blank" rel="noreferrer"><span className="account-action-icon account-action-icon-svg"><Icons.video size={16} /></span>{ar ? "فيديوهات تعليمية" : "How-to Videos"}</a>
-                      <a className="account-action" href="https://www.zoho.com/workdrive/developer/" target="_blank" rel="noreferrer"><span className="account-action-icon account-action-icon-svg"><Icons.code size={16} /></span>{ar ? "واجهة المطور" : "Developer API"}</a>
-                    </div>
-                  </section>
-
-                  <section className="account-section">
-                    <div className="account-section-title">{ar ? "تحتاج مساعدة؟" : "Need help?"}</div>
-                    <div className="account-action-grid">
-                      <a className="account-action" href="https://www.zoho.com/workdrive/webinar.html" target="_blank" rel="noreferrer"><span className="account-action-icon account-action-icon-svg"><Icons.headset size={16} /></span>{ar ? "حضور ندوة مباشرة" : "Attend a Live Webinar"}</a>
-                      <a className="account-action" href="https://www.zoho.com/contactus.html" target="_blank" rel="noreferrer"><span className="account-action-icon account-action-icon-svg"><Icons.horn size={16} /></span>{ar ? "اتصل بالدعم" : "Contact Support"}</a>
-                      <a className="account-action" href="https://www.zoho.com/workdrive/demo.html" target="_blank" rel="noreferrer"><span className="account-action-icon account-action-icon-svg"><Icons.clock size={16} /></span>{ar ? "حجز عرض توضيحي" : "Book a Demo"}</a>
-                      <button type="button" className="account-action"><span className="account-action-icon account-action-icon-svg"><Icons.share size={16} /></span>{ar ? "مشاركة التسجيل" : "Share recording"}</button>
-                    </div>
-                  </section>
-
-                  <section className="account-section">
-                    <div className="account-section-title">{ar ? "الإضافات" : "Add-ons"}</div>
-                    <div className="account-action-grid">
-                      <a className="account-action" href="https://www.zoho.com/writer/" target="_blank" rel="noreferrer"><span className="account-action-icon account-action-icon-svg"><Icons.doc size={16} /></span> Writer</a>
-                      <a className="account-action" href="#"><span className="account-action-icon account-action-icon-svg"><Icons.inbox size={16} /></span> Gmail</a>
-                      <a className="account-action" href="#"><span className="account-action-icon account-action-icon-svg"><Icons.sheet size={16} /></span> Microsoft Office</a>
-                      <a className="account-action" href="#"><span className="account-action-icon account-action-icon-svg"><Icons.inbox size={16} /></span> Microsoft Outlook</a>
-                      <a className="account-action" href="https://zapier.com/apps/zoho-workdrive/integrations" target="_blank" rel="noreferrer"><span className="account-action-icon account-action-icon-svg"><Icons.flow size={16} /></span> Zapier Integration</a>
-                    </div>
-                  </section>
-
-                  <div className="account-download">
-                    <div className="account-section-title">{ar ? "تحميل التطبيقات" : "Download Apps"}</div>
-                    <div className="account-download-grid">
-                      <div className="account-download-item"><span style={{fontSize:28}}>💻</span>Desktop (Linux)</div>
-                      <div className="account-download-item"><span style={{fontSize:28}}>📱</span>iPhone/iPad</div>
-                      <div className="account-download-item"><span style={{fontSize:28}}>🤖</span>Android</div>
-                      <div className="account-qr" title="QR Code" />
-                    </div>
-                  </div>
-                </div>
                 <button type="button" className="account-signout" onClick={() => void out()}><span>⇱</span>{ar ? "تسجيل الخروج" : "Sign Out"}</button>
               </>
             ) : (

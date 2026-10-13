@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useLocale } from "../locale-provider";
 import { Icons } from "./icons";
+import { loadPrefs, patchPrefs, type WorkdrivePrefs, defaultPrefs } from "../../lib/preferences-store";
 
 type Props = { open: boolean; onClose: () => void };
 
@@ -44,28 +45,24 @@ export function PreferencesModal({ open, onClose }: Props) {
   const { locale } = useLocale();
   const ar = locale === "ar";
   const [tab, setTab] = useState<"general" | "notifications">("general");
-  const [prefs, setPrefs] = useState<Prefs>(defaultPrefs);
+  const [prefs, setPrefs] = useState<WorkdrivePrefs>(defaultPrefs);
 
   useEffect(() => {
     if (!open) return;
-    try {
-      const raw = localStorage.getItem(STORAGE_KEY);
-      if (raw) setPrefs({ ...defaultPrefs, ...JSON.parse(raw) });
-    } catch { /* ignore */ }
+    setPrefs(loadPrefs());
     const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
   }, [open, onClose]);
 
-  function save(next: Prefs) {
+  function patch(p: Partial<WorkdrivePrefs>) {
+    const next = patchPrefs(p);
     setPrefs(next);
-    try { localStorage.setItem(STORAGE_KEY, JSON.stringify(next)); } catch { /* ignore */ }
   }
-  function patch(p: Partial<Prefs>) { save({ ...prefs, ...p }); }
 
   if (!open) return null;
 
-  const notifRows: { key: keyof Prefs["notifications"]; label: string }[] = [
+  const notifRows: { key: keyof WorkdrivePrefs["notifications"]; label: string }[] = [
     { key: "mentions", label: ar ? "@الإشارات" : "@mentions" },
     { key: "sharedWithMe", label: ar ? "ملف أو مجلد تمت مشاركته معي" : "File or folder shared with me" },
     { key: "sharedToGroup", label: ar ? "ملف أو مجلد تمت مشاركته لمجموعة" : "File or folder shared to group" },
@@ -131,7 +128,7 @@ export function PreferencesModal({ open, onClose }: Props) {
                         <strong>{o.title}</strong>
                         <span>{o.desc}</span>
                         {prefs.defaultSort === o.id ? (
-                          <select value={prefs.sortOrder} onChange={(e) => patch({ sortOrder: e.target.value as Prefs["sortOrder"] })} onClick={(e) => e.stopPropagation()}>
+                          <select value={prefs.sortOrder} onChange={(e) => patch({ sortOrder: e.target.value as WorkdrivePrefs["sortOrder"] })} onClick={(e) => e.stopPropagation()}>
                             <option value="newest">{ar ? "الأحدث أولاً" : "Newest first"}</option>
                             <option value="az">A → Z</option>
                           </select>
