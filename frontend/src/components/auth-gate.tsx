@@ -72,12 +72,11 @@ export function AuthGate({ children }: { children: ReactNode }) {
 
     // Keep cookie in sync with localStorage so a new tab always inherits the session.
     try { persistBrowserAccessToken(token); } catch { /* noop */ }
-    // Optimistic ready: show the app immediately while /auth/me confirms in background.
-    // Avoids blank screens and prevents treating network blips as logout.
-    try {
-      const cached = localStorage.getItem("workdrive_user");
-      if (cached) setReady(true);
-    } catch { /* noop */ }
+    // Optimistic ready: as soon as we have a stored token, render the workspace.
+    // /auth/me still validates in the background; only 401 clears the session.
+    // Previously we waited for a cached workdrive_user blob, which left a long
+    // blank screen on first login after token restore / hard refresh.
+    setReady(true);
 
     const validate = (attempt: number) => {
       me(token)

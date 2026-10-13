@@ -164,9 +164,18 @@ export function FileBrowser({
   // Folder aggregate metadata surfaced by the API (size / latest file update).
   const [folderSizes, setFolderSizes] = useState<ReadonlyMap<string, number>>(new Map());
   const [folderUpdatedAt, setFolderUpdatedAt] = useState<ReadonlyMap<string, string | null>>(new Map());
-  useEffect(() => { void listDataTemplates(false).then(setDataTemplates).catch(() => setDataTemplates([])); }, []);
+  // Defer non-critical catalog fetches until after the first listing request has a chance to start.
+  useEffect(() => {
+    const id = window.setTimeout(() => {
+      void listDataTemplates(false).then(setDataTemplates).catch(() => setDataTemplates([]));
+    }, 0);
+    return () => window.clearTimeout(id);
+  }, []);
   const refreshFollows = useCallback(() => { void listFollows().then((rows) => setFollowIds(new Set(rows.map((row) => followResourceKey(row.resourceType, row.resourceId))))).catch(() => setFollowIds(new Set())); }, []);
-  useEffect(() => { refreshFollows(); }, [refreshFollows]);
+  useEffect(() => {
+    const id = window.setTimeout(() => { refreshFollows(); }, 0);
+    return () => window.clearTimeout(id);
+  }, [refreshFollows]);
   useEffect(() => { if (!newFolderOpen) { setNewFolderMandate(null); setNewFolderFields({}); return; } setNewFolderMandateLoading(true); void getTransferDataTemplateMandate(folderId ?? null, "FOLDERS").then((r) => setNewFolderMandate(r.enabled ? r.template : null)).catch(() => setNewFolderMandate(null)).finally(() => setNewFolderMandateLoading(false)); }, [newFolderOpen, folderId]);
   useEffect(() => { const value = searchParams.get("dataTemplate") || ""; setAdvancedFilter((current) => current.dataTemplateId === value ? current : { ...current, dataTemplateId: value }); }, [searchParams]);
   const owners = useMemo(() => { const map = new Map<string,{id:string;name:string|null;email:string}>(); for (const f of files) if (f.ownerId && !map.has(f.ownerId)) map.set(f.ownerId,{id:f.ownerId,name:f.ownerName??null,email:f.ownerEmail??""}); return [...map.values()]; }, [files]);
@@ -336,23 +345,42 @@ export function FileBrowser({
   }, [filter, advancedFilter, router, searchParams]);
 
   const load = useCallback(async () => {
-    await Promise.resolve();
     try {
       setLoading(true);
       setError(null);
-      const favorites = await listFavorites();
-      setFavoriteIds(new Set(favorites.map((favorite) => favorite.resourceId)));
+
+      const filterOpts = {
+        type: advancedFilter.type === "all" ? undefined : advancedFilter.type,
+        status: advancedFilter.status === "all" ? undefined : advancedFilter.status,
+        owner: advancedFilter.owner || undefined,
+        dateField: advancedFilter.dateField,
+        dateFrom: advancedFilter.dateFrom || undefined,
+        dateTo: advancedFilter.dateTo || undefined,
+      } as const;
+
+      // Critical path: folder/root/search contents. Favorites run in parallel so
+      // they never block the first paint of the file list.
+      const favoritesPromise = listFavorites()
+        .then((favorites) => {
+          setFavoriteIds(new Set(favorites.map((favorite) => favorite.resourceId)));
+        })
+        .catch(() => {
+          setFavoriteIds(new Set());
+        });
+
+      let contents: { folders: FolderRecord[]; files: FileRecord[]; folderSizes?: Record<string, number> | null; folderUpdatedAt?: Record<string, string | null> | null; name?: string; teamFolderId?: string | null };
+
       if (routeQuery) {
         const searchTypeMap: Record<string, string> = {
-          documents: 'DOCUMENT',
-          sheets: 'SPREADSHEET',
-          slides: 'PRESENTATION',
-          media: 'IMAGE',
-          audio: 'AUDIO',
-          archives: 'ARCHIVE',
+          documents: "DOCUMENT",
+          sheets: "SPREADSHEET",
+          slides: "PRESENTATION",
+          media: "IMAGE",
+          audio: "AUDIO",
+          archives: "ARCHIVE",
         };
-        const result = await searchNames(routeQuery, filter === 'folders' ? 'folders' : filter === 'all' ? 'all' : 'files', {
-          type: searchTypeMap[advancedFilter.type] ?? (advancedFilter.type === 'all' ? undefined : advancedFilter.type),
+        contents = await searchNames(routeQuery, filter === "folders" ? "folders" : filter === "all" ? "all" : "files", {
+          type: searchTypeMap[advancedFilter.type] ?? (advancedFilter.type === "all" ? undefined : advancedFilter.type),
           owner: advancedFilter.owner || undefined,
           dateField: advancedFilter.dateField,
           dateFrom: advancedFilter.dateFrom || undefined,
@@ -362,41 +390,60 @@ export function FileBrowser({
         });
         setFolderName(undefined);
         setTeamFolderId(null);
-        applyContents(result);
-        await refreshWorkflowStatuses(result);
       } else if (folderId) {
-        const detail = await getFolder(folderId, { type: advancedFilter.type === "all" ? undefined : advancedFilter.type, status: advancedFilter.status === "all" ? undefined : advancedFilter.status, owner: advancedFilter.owner || undefined, dateField: advancedFilter.dateField, dateFrom: advancedFilter.dateFrom || undefined, dateTo: advancedFilter.dateTo || undefined });
+        const detail = await getFolder(folderId, filterOpts);
+        contents = detail;
         setFolderName(detail.name);
         setTeamFolderId(detail.teamFolderId ?? null);
-        applyContents(detail);
-        await refreshWorkflowStatuses(detail);
       } else {
-        const contents = await listRootContents({ type: advancedFilter.type === "all" ? undefined : advancedFilter.type, status: advancedFilter.status === "all" ? undefined : advancedFilter.status, owner: advancedFilter.owner || undefined, dateField: advancedFilter.dateField, dateFrom: advancedFilter.dateFrom || undefined, dateTo: advancedFilter.dateTo || undefined });
+        contents = await listRootContents(filterOpts);
         setFolderName(undefined);
         setTeamFolderId(null);
-        applyContents(contents);
-        await refreshWorkflowStatuses(contents);
       }
+
+      applyContents(contents);
+      // Unlock the UI as soon as the primary listing is on screen.
+      setLoading(false);
+
+      // Secondary enrichment — must not delay first paint.
+      void favoritesPromise;
+      void refreshWorkflowStatuses(contents).catch(() => undefined);
+      setMarksTick((tick) => tick + 1);
     } catch (cause) {
-      setError(errorMessageForStatus(cause instanceof ApiError? cause.status : undefined, {
+      setError(errorMessageForStatus(cause instanceof ApiError ? cause.status : undefined, {
         unauthenticated: label("error.unauthenticated"),
         forbidden: label("error.forbidden"),
         generic: label("error.generic"),
       }));
-    } finally {
       setLoading(false);
-      setMarksTick((tick) => tick + 1);
     }
   }, [folderId, label, routeQuery, advancedFilter, filter]);
 
   useEffect(() => {
     let live = true;
+    // marksTick is bumped after the primary listing; wait a tick so the browser
+    // can paint files before we fan-out label/share enrichment requests.
+    const timer = window.setTimeout(() => {
     void (async () => {
       const [labels, shares] = await Promise.all([
         listWorkspaceLabels().catch(() => []),
         listSharedByMe().catch(() => []),
       ]);
-      const attached = await Promise.all(labels.map((item) => listWorkspaceLabelResources(item.id).then((rows) => ({ item, rows })).catch(() => ({ item, rows: [] }))));
+      // Bound concurrency for label→resource lookups (was unbounded N+1).
+      const attached: Array<{ item: (typeof labels)[number]; rows: Awaited<ReturnType<typeof listWorkspaceLabelResources>> }> = [];
+      const concurrency = 4;
+      for (let i = 0; i < labels.length; i += concurrency) {
+        if (!live) return;
+        const chunk = labels.slice(i, i + concurrency);
+        const part = await Promise.all(
+          chunk.map((item) =>
+            listWorkspaceLabelResources(item.id)
+              .then((rows) => ({ item, rows }))
+              .catch(() => ({ item, rows: [] as Awaited<ReturnType<typeof listWorkspaceLabelResources>> })),
+          ),
+        );
+        attached.push(...part);
+      }
       if (!live) return;
       const nextLabels = new Map<string, { id: string; name: string; color: string }[]>();
       for (const { item, rows } of attached) {
@@ -418,7 +465,8 @@ export function FileBrowser({
       setRowLabels(nextLabels);
       setRowExpiry(nextExpiry);
     })();
-    return () => { live = false; };
+    }, 50);
+    return () => { live = false; window.clearTimeout(timer); };
   }, [marksTick]);
 
   useEffect(() => {
