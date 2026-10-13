@@ -8393,10 +8393,11 @@ html[data-theme="dark"] .prefs-switch.is-on{background:var(--wd-primary)}
   from{transform:translateX(24px);opacity:.6}
   to{transform:translateX(0);opacity:1}
 }
-[dir="rtl"] @keyframes zohoSideIn{
+@keyframes zohoSideInRtl{
   from{transform:translateX(-24px);opacity:.6}
   to{transform:translateX(0);opacity:1}
 }
+[dir="rtl"] .zoho-side-panel{animation-name:zohoSideInRtl}
 .zoho-side-header{
   display:flex;align-items:center;justify-content:space-between;
   padding:12px 16px;border-bottom:1px solid var(--wd-line);flex:none;min-height:52px;
