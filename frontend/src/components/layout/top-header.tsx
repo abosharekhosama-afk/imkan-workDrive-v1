@@ -275,7 +275,7 @@ export function TopHeader({ adminMode = false }: { adminMode?: boolean }) {
   }
 
   return (
-    <header className="wd-default-topbar flex h-12 shrink-0 items-center gap-2 border-b border-[#EDEDED] bg-white px-4">
+    <header className="wd-default-topbar flex h-12 shrink-0 items-center gap-2 border-b border-[color:var(--wd-line,#EDEDED)] bg-[var(--wd-bg,#fff)] px-4">
       <div className="flex min-w-0 items-center gap-2">
         <button
           type="button"
@@ -286,7 +286,7 @@ export function TopHeader({ adminMode = false }: { adminMode?: boolean }) {
         >
           {mobileNavOpen ? <Icons.x size={18} /> : <Icons.menu size={18} />}
         </button>
-        <span className="max-w-[42vw] truncate text-[15px] font-semibold text-[#212121]">{resolveTopHeaderTitle({ pathname, scopeFolderName: scope.folderName, adminMode, locale, label })}</span>
+        <span className="max-w-[42vw] truncate text-[15px] font-semibold text-[color:var(--wd-text,#212121)]">{resolveTopHeaderTitle({ pathname, scopeFolderName: scope.folderName, adminMode, locale, label })}</span>
         {showMyFoldersManage ? (
           <div ref={manageRef} className="relative ms-1">
             <button id="my-folders-manage" type="button" className="wd-my-folders-manage" onClick={() => setManageOpen((v) => !v)} aria-expanded={manageOpen} aria-haspopup="menu">
