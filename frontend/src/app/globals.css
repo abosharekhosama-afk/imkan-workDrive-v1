@@ -7455,3 +7455,118 @@ table.wd-list-table,
 .labels-strip-scroll {
   scrollbar-width: thin;
 }
+
+
+/* ========== IMKAN UI polish: dark theme pickers, search, overlays (2026-10) ========== */
+html[data-theme="dark"] .imkan-option-picker-menu,
+html[data-theme="dark"] .imkan-option-picker-menu-portal,
+html[data-theme="dark"] .member-role-menu {
+  background: var(--wd-bg, #1e1e1e) !important;
+  color: var(--wd-text, #eee) !important;
+  border-color: var(--wd-line, #333) !important;
+  box-shadow: var(--wd-menu-shadow, 0 12px 40px rgba(0,0,0,.55)) !important;
+}
+html[data-theme="dark"] .imkan-option-picker-menu button,
+html[data-theme="dark"] .member-role-menu button {
+  background: transparent !important;
+  color: var(--wd-text, #eee) !important;
+}
+html[data-theme="dark"] .imkan-option-picker-menu button:hover,
+html[data-theme="dark"] .imkan-option-picker-menu button.is-active,
+html[data-theme="dark"] .member-role-menu button:hover,
+html[data-theme="dark"] .member-role-menu button.is-active {
+  background: var(--wd-hover, #2a2a2a) !important;
+}
+html[data-theme="dark"] .imkan-option-picker-trigger,
+html[data-theme="dark"] .imkan-option-picker-trigger.is-audit-card {
+  background: var(--wd-panel-2, #2a2a2a) !important;
+  color: var(--wd-text, #eee) !important;
+  border-color: var(--wd-line, #333) !important;
+}
+html[data-theme="dark"] .imkan-option-picker-menu small,
+html[data-theme="dark"] .member-role-menu small {
+  color: var(--wd-text-muted, #9ca3af) !important;
+}
+
+html[data-theme="dark"] .wd-menu {
+  background: var(--wd-bg, #1e1e1e) !important;
+  border-color: var(--wd-menu-border, #2f2f2f) !important;
+  color: var(--wd-text) !important;
+}
+html[data-theme="dark"] .wd-menu-item:hover {
+  background: var(--wd-menu-hover, #2a2a2a) !important;
+}
+
+/* Search overlay dark */
+html[data-theme="dark"] .search-overlay-panel,
+html[data-theme="dark"] .search-mainbar,
+html[data-theme="dark"] .search-results,
+html[data-theme="dark"] .search-filter-popover {
+  background: var(--wd-bg, #1e1e1e) !important;
+  color: var(--wd-text, #eee) !important;
+  border-color: var(--wd-line, #333) !important;
+}
+html[data-theme="dark"] .search-mainbar > input {
+  background: transparent !important;
+  color: var(--wd-text, #eee) !important;
+}
+html[data-theme="dark"] .search-mainbar > input::placeholder { color: var(--wd-text-muted, #9ca3af) !important; }
+html[data-theme="dark"] .search-filter-chip {
+  background: var(--wd-panel-2, #2a2a2a) !important;
+  border-color: var(--wd-line, #333) !important;
+  color: var(--wd-text, #eee) !important;
+}
+html[data-theme="dark"] .search-filter-chip:hover,
+html[data-theme="dark"] .search-filter-chip.is-open {
+  background: var(--wd-hover, #333) !important;
+}
+html[data-theme="dark"] .search-section-title {
+  background: var(--wd-panel-2, #2a2a2a) !important;
+  color: var(--wd-text-muted, #9ca3af) !important;
+}
+html[data-theme="dark"] .search-result-row:hover { background: var(--wd-hover, #2a2a2a) !important; }
+html[data-theme="dark"] .search-overlay-backdrop { background: rgba(0,0,0,.35) !important; }
+
+/* Soft modal/drawer scrim (avoid harsh black wall) */
+.imkan-modal-backdrop,
+.search-overlay-backdrop {
+  background: rgba(15, 23, 42, 0.28) !important;
+}
+html[data-theme="dark"] .imkan-modal-backdrop {
+  background: rgba(0, 0, 0, 0.45) !important;
+}
+html[data-theme="dark"] .imkan-modal-surface {
+  background: var(--wd-bg, #1e1e1e) !important;
+  color: var(--wd-text) !important;
+  border-color: var(--wd-line) !important;
+}
+
+/* Team folders dark surfaces */
+html[data-theme="dark"] .team-folders-page,
+html[data-theme="dark"] .team-folders-page .bg-white,
+html[data-theme="dark"] .team-folder-card,
+html[data-theme="dark"] .team-folders-toolbar {
+  background: var(--wd-bg, #1e1e1e) !important;
+  color: var(--wd-text, #eee) !important;
+  border-color: var(--wd-line, #333) !important;
+}
+html[data-theme="dark"] .team-folders-page input,
+html[data-theme="dark"] .team-folders-page .team-filter-trigger,
+html[data-theme="dark"] .team-folders-page .team-view-trigger {
+  background: var(--wd-panel-2, #2a2a2a) !important;
+  color: var(--wd-text, #eee) !important;
+  border-color: var(--wd-line, #333) !important;
+}
+
+/* Collections detail uses theme tokens */
+html[data-theme="dark"] [class*="collection"] {
+  color: var(--wd-text);
+}
+
+/* Keep top header fixed visually with content scroll only in main lane */
+.workdrive-frame > .flex.min-w-0.flex-1.flex-col > header,
+.workdrive-frame .wd-default-topbar {
+  position: sticky;
+  top: 0;
+  z-index: 30;
+}
