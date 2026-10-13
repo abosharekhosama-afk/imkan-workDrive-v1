@@ -28,20 +28,7 @@ export function PrimarySidebar() {
         : null;
       if (!token) return;
 
-      try {
-        const result = await listTeamFolders();
-        if (!cancelled) setTeams(result.teamFolders ?? []);
-      } catch {
-        if (!cancelled) setTeams([]);
-      }
-
-      try {
-        const result = await getStorageOverview();
-        if (!cancelled) setQuota(result);
-      } catch {
-        if (!cancelled) setQuota(null);
-      }
-
+      // Role from cache is free — do it first for UI affordances.
       try {
         const raw = window.localStorage.getItem("workdrive_user");
         if (raw && !cancelled) {
@@ -52,12 +39,16 @@ export function PrimarySidebar() {
         if (!cancelled) setRole("");
       }
 
-      try {
-        const policy = await getWorkspacePolicy();
-        if (!cancelled) setOrgLogo(policy?.logoDataUrl ?? null);
-      } catch {
-        if (!cancelled) setOrgLogo(null);
-      }
+      // Parallel network: team folders + quota + policy (previously sequential).
+      const [teamsResult, quotaResult, policyResult] = await Promise.all([
+        listTeamFolders().then((r) => r.teamFolders ?? []).catch(() => [] as TeamFolderListItem[]),
+        getStorageOverview().catch(() => null),
+        getWorkspacePolicy().catch(() => null),
+      ]);
+      if (cancelled) return;
+      setTeams(teamsResult);
+      setQuota(quotaResult);
+      setOrgLogo(policyResult?.logoDataUrl ?? null);
     };
 
     void loadSidebarData();
