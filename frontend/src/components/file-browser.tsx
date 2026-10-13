@@ -16,6 +16,7 @@ import { bulkTrashFolders, createFolder, deleteFolder, getFolder, listRootConten
 import { bulkTrashFiles, downloadFilesArchive, renameFile, requestDownload, trashFile, moveFile, copyFile, getFileDetails, runFileControl, type FileControlAction } from "../lib/api/files";
 import { triggerDownload } from "../lib/api/download";
 import { addFavorite, listFavorites, removeFavorite } from "../lib/api/favorites";
+import { getWorkspaceBootstrap, invalidateWorkspaceBootstrap } from "../lib/api/bootstrap";
 import { ApiError } from "../lib/api/client";
 import type { FileRecord, FolderRecord } from "../lib/api/types";
 import { searchNames } from "../lib/api/search";
@@ -146,6 +147,7 @@ export function FileBrowser({
   const [searchActive, setSearchActive] = useState(false);
   const [loading, setLoading] = useState(true);
   const [favoriteIds, setFavoriteIds] = useState<Set<string>>(new Set());
+  const bootstrapConsumedRef = useRef(false);
   const [rowLabels, setRowLabels] = useState<Map<string, { id: string; name: string; color: string }[]>>(new Map());
   const [rowExpiry, setRowExpiry] = useState<Map<string, string | null>>(new Map());
   const [marksTick, setMarksTick] = useState(0);
@@ -396,7 +398,28 @@ export function FileBrowser({
         setFolderName(detail.name);
         setTeamFolderId(detail.teamFolderId ?? null);
       } else {
-        contents = await listRootContents(filterOpts);
+        // Root view: one bootstrap call covers listing + favorites when no filters.
+        const hasActiveFilter = Boolean(
+          filterOpts.type ||
+            filterOpts.status ||
+            filterOpts.owner ||
+            filterOpts.dateFrom ||
+            filterOpts.dateTo,
+        );
+        if (!hasActiveFilter && !bootstrapConsumedRef.current) {
+          try {
+            const boot = await getWorkspaceBootstrap();
+            bootstrapConsumedRef.current = true;
+            contents = boot.root;
+            setFavoriteIds(new Set((boot.favorites ?? []).map((f) => f.resourceId)));
+          } catch {
+            contents = await listRootContents(filterOpts);
+          }
+        } else {
+          // Subsequent reloads / filtered views: live listing + drop bootstrap cache.
+          invalidateWorkspaceBootstrap();
+          contents = await listRootContents(filterOpts);
+        }
         setFolderName(undefined);
         setTeamFolderId(null);
       }

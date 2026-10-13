@@ -2,6 +2,7 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { clearSession, me, redeemOAuthResume, refreshSession, saveSession, SessionCheckError } from "../lib/api/auth";
+import { getWorkspaceBootstrap } from "../lib/api/bootstrap";
 import {
   authCheckRetryDelayMs,
   buildAuthGateDiagnostic,
@@ -79,7 +80,14 @@ export function AuthGate({ children }: { children: ReactNode }) {
     setReady(true);
 
     const validate = (attempt: number) => {
-      me(token)
+      // Prefer /bootstrap (user + root + favorites + quota + teams + policy in one RTT).
+      // Fall back to /auth/me when bootstrap is unavailable.
+      const loadUser = () =>
+        getWorkspaceBootstrap()
+          .then((boot) => boot.user)
+          .catch(() => me(token));
+
+      loadUser()
         .then((user) => {
           if (cancelled) return;
           localStorage.setItem("workdrive_user", JSON.stringify(user));
