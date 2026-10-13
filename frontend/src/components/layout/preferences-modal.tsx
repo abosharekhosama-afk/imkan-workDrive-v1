@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useLocale } from "../locale-provider";
+import { Icons } from "./icons";
 
 type Props = { open: boolean; onClose: () => void };
 
@@ -51,16 +52,16 @@ export function PreferencesModal({ open, onClose }: Props) {
       const raw = localStorage.getItem(STORAGE_KEY);
       if (raw) setPrefs({ ...defaultPrefs, ...JSON.parse(raw) });
     } catch { /* ignore */ }
-  }, [open]);
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [open, onClose]);
 
   function save(next: Prefs) {
     setPrefs(next);
     try { localStorage.setItem(STORAGE_KEY, JSON.stringify(next)); } catch { /* ignore */ }
   }
-
-  function patch(p: Partial<Prefs>) {
-    save({ ...prefs, ...p });
-  }
+  function patch(p: Partial<Prefs>) { save({ ...prefs, ...p }); }
 
   if (!open) return null;
 
@@ -75,22 +76,25 @@ export function PreferencesModal({ open, onClose }: Props) {
   ];
 
   return (
-    <div className="prefs-overlay" role="dialog" aria-modal="true" aria-label={ar ? "تفضيلاتي" : "My Preferences"}>
-      <div className="prefs-panel" dir={ar ? "rtl" : "ltr"}>
-        <div className="prefs-header">
-          <div className="prefs-title-row">
-            <span className="prefs-title-icon">⚙</span>
+    <div className="zoho-side-overlay" role="dialog" aria-modal="true" aria-label={ar ? "تفضيلاتي" : "My Preferences"}>
+      <div className="zoho-side-backdrop" onClick={onClose} />
+      <div className="zoho-side-panel zoho-side-panel--wide" dir={ar ? "rtl" : "ltr"}>
+        <div className="zoho-side-header">
+          <div className="zoho-side-title">
+            <Icons.gear size={18} />
             <h2>{ar ? "تفضيلاتي" : "My Preferences"}</h2>
           </div>
-          <button type="button" className="prefs-close" onClick={onClose} aria-label={ar ? "إغلاق" : "Close"}>×</button>
+          <button type="button" className="zoho-side-close" onClick={onClose} aria-label={ar ? "إغلاق" : "Close"}>
+            <Icons.x size={18} />
+          </button>
         </div>
-        <div className="prefs-body">
+        <div className="zoho-side-body prefs-layout">
           <nav className="prefs-nav">
             <button type="button" className={tab === "general" ? "is-active" : ""} onClick={() => setTab("general")}>
-              <span>⚙</span> {ar ? "عام" : "General"}
+              <Icons.gear size={16} /> {ar ? "عام" : "General"}
             </button>
             <button type="button" className={tab === "notifications" ? "is-active" : ""} onClick={() => setTab("notifications")}>
-              <span>🔔</span> {ar ? "الإشعارات" : "Notifications"}
+              <Icons.bell size={16} /> {ar ? "الإشعارات" : "Notifications"}
             </button>
           </nav>
           <div className="prefs-content">
@@ -101,13 +105,13 @@ export function PreferencesModal({ open, onClose }: Props) {
                   <p className="prefs-desc">{ar ? "اختر التخطيط الافتراضي للعناصر عبر المجلدات والعروض." : "Choose a default layout for items across your folders and views."}</p>
                   <div className="prefs-radio-group">
                     {([
-                      { id: "thumbnail" as const, label: ar ? "مصغرات" : "Thumbnail" },
-                      { id: "list" as const, label: ar ? "قائمة" : "List" },
-                      { id: "compact" as const, label: ar ? "مضغوط" : "Compact" },
+                      { id: "thumbnail" as const, label: ar ? "مصغرات" : "Thumbnail", Icon: Icons.grid },
+                      { id: "list" as const, label: ar ? "قائمة" : "List", Icon: Icons.list },
+                      { id: "compact" as const, label: ar ? "مضغوط" : "Compact", Icon: Icons.compact },
                     ]).map((o) => (
                       <label key={o.id} className={`prefs-radio ${prefs.defaultView === o.id ? "is-active" : ""}`}>
                         <input type="radio" name="defaultView" checked={prefs.defaultView === o.id} onChange={() => patch({ defaultView: o.id })} />
-                        {o.label}
+                        <o.Icon size={16} /> {o.label}
                       </label>
                     ))}
                   </div>
@@ -158,15 +162,15 @@ export function PreferencesModal({ open, onClose }: Props) {
                   <h3>{ar ? "موقع الهبوط الافتراضي" : "Default Landing Location"}</h3>
                   <p className="prefs-desc">{ar ? "اختر الموقع الافتراضي عند تسجيل الدخول." : "Choose a default location to open when you sign in."}</p>
                   {([
-                    { id: "suggestions" as const, label: ar ? "اقتراحات الملفات" : "File Suggestions" },
-                    { id: "recent" as const, label: ar ? "الملفات الأخيرة" : "Recent Files" },
-                    { id: "favorites" as const, label: ar ? "المفضلة" : "Favorites" },
-                    { id: "myFolders" as const, label: ar ? "مجلداتي" : "My Folders" },
-                    { id: "lastOpened" as const, label: ar ? "آخر مجلد مفتوح" : "Last Opened Folder" },
+                    { id: "suggestions" as const, label: ar ? "اقتراحات الملفات" : "File Suggestions", Icon: Icons.spark },
+                    { id: "recent" as const, label: ar ? "الملفات الأخيرة" : "Recent Files", Icon: Icons.clock },
+                    { id: "favorites" as const, label: ar ? "المفضلة" : "Favorites", Icon: Icons.star },
+                    { id: "myFolders" as const, label: ar ? "مجلداتي" : "My Folders", Icon: Icons.folder },
+                    { id: "lastOpened" as const, label: ar ? "آخر مجلد مفتوح" : "Last Opened Folder", Icon: Icons.history },
                   ]).map((o) => (
                     <label key={o.id} className="prefs-check-row">
                       <input type="radio" name="landing" checked={prefs.defaultLanding === o.id} onChange={() => patch({ defaultLanding: o.id })} />
-                      {o.label}
+                      <o.Icon size={15} /> {o.label}
                     </label>
                   ))}
                 </section>
@@ -205,7 +209,7 @@ export function PreferencesModal({ open, onClose }: Props) {
             ) : (
               <section className="prefs-card">
                 <h3>{ar ? "الإشعارات" : "Notifications"}</h3>
-                <p className="prefs-desc">{ar ? "اختر تفضيلاتك للبريد والويب والجوال." : "Select your preferences for email, web, and mobile notifications."}</p>
+                <p className="prefs-desc">{ar ? "اختر تفضيلاتك للبريد والويب والجوال." : "Select your preferences for email, web, and mobile notifications for various actions in WorkDrive."}</p>
                 <table className="prefs-notif-table">
                   <thead>
                     <tr>

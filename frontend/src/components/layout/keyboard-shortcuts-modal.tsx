@@ -1,13 +1,14 @@
 "use client";
 
+import { useEffect } from "react";
 import { useLocale } from "../locale-provider";
+import { Icons } from "./icons";
 
 type Props = { open: boolean; onClose: () => void };
 
 const sections: { title: string; titleAr: string; items: { action: string; actionAr: string; keys: string }[] }[] = [
   {
-    title: "Selection",
-    titleAr: "التحديد",
+    title: "Selection", titleAr: "التحديد",
     items: [
       { action: "Select all items", actionAr: "تحديد كل العناصر", keys: "Ctrl A" },
       { action: "Select down item", actionAr: "تحديد العنصر للأسفل", keys: "↓" },
@@ -19,8 +20,7 @@ const sections: { title: string; titleAr: string; items: { action: string; actio
     ],
   },
   {
-    title: "Create and Upload",
-    titleAr: "إنشاء ورفع",
+    title: "Create and Upload", titleAr: "إنشاء ورفع",
     items: [
       { action: "Create Team Folder", actionAr: "إنشاء مجلد فريق", keys: "Ctrl K" },
       { action: "Create New Folder", actionAr: "إنشاء مجلد جديد", keys: "Shift F" },
@@ -34,8 +34,7 @@ const sections: { title: string; titleAr: string; items: { action: string; actio
     ],
   },
   {
-    title: "Preview",
-    titleAr: "المعاينة",
+    title: "Preview", titleAr: "المعاينة",
     items: [
       { action: "Open preview", actionAr: "فتح المعاينة", keys: "Enter" },
       { action: "Close preview", actionAr: "إغلاق المعاينة", keys: "Esc" },
@@ -45,8 +44,7 @@ const sections: { title: string; titleAr: string; items: { action: string; actio
     ],
   },
   {
-    title: "Video/Audio",
-    titleAr: "فيديو/صوت",
+    title: "Video/Audio", titleAr: "فيديو/صوت",
     items: [
       { action: "Seek forward 5 seconds", actionAr: "تقديم 5 ثوانٍ", keys: "Shift →" },
       { action: "Seek backward 5 seconds", actionAr: "ترجيع 5 ثوانٍ", keys: "Shift ←" },
@@ -56,8 +54,7 @@ const sections: { title: string; titleAr: string; items: { action: string; actio
     ],
   },
   {
-    title: "Actions",
-    titleAr: "الإجراءات",
+    title: "Actions", titleAr: "الإجراءات",
     items: [
       { action: "Copy to", actionAr: "نسخ إلى", keys: "C" },
       { action: "Move to", actionAr: "نقل إلى", keys: "Z" },
@@ -81,19 +78,31 @@ export function KeyboardShortcutsModal({ open, onClose }: Props) {
   const { locale } = useLocale();
   const ar = locale === "ar";
 
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [open, onClose]);
+
   if (!open) return null;
 
   return (
-    <div className="prefs-overlay" role="dialog" aria-modal="true" aria-label={ar ? "اختصارات لوحة المفاتيح" : "Keyboard shortcuts"}>
-      <div className="kb-panel" dir={ar ? "rtl" : "ltr"}>
-        <div className="prefs-header">
-          <div className="prefs-title-row">
-            <button type="button" className="prefs-back" onClick={onClose} aria-label={ar ? "رجوع" : "Back"}>‹</button>
+    <div className="zoho-side-overlay" role="dialog" aria-modal="true" aria-label={ar ? "اختصارات لوحة المفاتيح" : "Keyboard shortcuts"}>
+      <div className="zoho-side-backdrop" onClick={onClose} />
+      <div className="zoho-side-panel zoho-side-panel--narrow" dir={ar ? "rtl" : "ltr"}>
+        <div className="zoho-side-header">
+          <div className="zoho-side-title">
+            <button type="button" className="zoho-side-back" onClick={onClose} aria-label={ar ? "رجوع" : "Back"}>
+              <Icons.chevR size={18} style={{ transform: ar ? "none" : "rotate(180deg)" }} />
+            </button>
             <h2>{ar ? "اختصارات لوحة المفاتيح" : "Keyboard shortcuts"}</h2>
           </div>
-          <button type="button" className="prefs-close" onClick={onClose} aria-label={ar ? "إغلاق" : "Close"}>×</button>
+          <button type="button" className="zoho-side-close" onClick={onClose} aria-label={ar ? "إغلاق" : "Close"}>
+            <Icons.x size={18} />
+          </button>
         </div>
-        <div className="kb-scroll">
+        <div className="zoho-side-scroll">
           {sections.map((sec) => (
             <section key={sec.title} className="kb-section">
               <h3 className="kb-section-title">{ar ? sec.titleAr : sec.title}</h3>

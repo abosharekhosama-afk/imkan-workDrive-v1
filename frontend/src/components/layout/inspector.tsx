@@ -61,7 +61,7 @@ export function InspectorDock() {
               }
               activateTab(i.tab);
             }}
-            className={`flex min-h-[65px] w-full flex-col items-center justify-center gap-1 rounded-[16px] px-[7px] py-[7px] text-[13px] transition-colors duration-150 ease-in-out ${pressed ? "bg-[#F0F4FF] text-[#254993]" : "text-[#212121] hover:bg-[#F3F5F7]"}`}
+            className={`wd-rail-btn flex min-h-[64px] w-full flex-col items-center justify-center gap-1.5 rounded-lg px-1.5 py-2 text-[12px] transition-colors duration-150 ease-in-out ${pressed ? "bg-[color:var(--wd-primary-light)] text-[color:var(--wd-primary)]" : "text-[color:var(--wd-text-muted)] hover:bg-[color:var(--wd-hover)] hover:text-[color:var(--wd-text)]"}`}
           >
             {(() => { const I = Icons[i.icon]; return <I size={18} />; })()}
             <span className="text-center text-[11px] leading-4">{label(i.textKey)}</span>
