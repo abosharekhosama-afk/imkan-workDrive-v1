@@ -515,15 +515,38 @@ export function FileBrowser({
   }
 
   async function onDownloadMany(items: Array<{ type: "FILE" | "FOLDER"; id: string }>) {
-    if (items.length === 0) return;
-    if (items.length === 1 && items[0].type === "FILE") {
-      await onDownload(items[0].id).catch(() => setToast(locale === "ar" ? "تعذر تنزيل الملف" : "Could not download the file"));
+    if (items.length === 0) {
+      setToast(label("sel.noFilesSelected"));
       return;
     }
+    // Single file: direct signed URL (faster, no ZIP overhead).
+    if (items.length === 1 && items[0].type === "FILE") {
+      try {
+        await onDownload(items[0].id);
+      } catch {
+        setToast(locale === "ar" ? "تعذر تنزيل الملف" : "Could not download the file");
+      }
+      return;
+    }
+    // Multiple files and/or folders: server builds one ZIP archive.
     try {
       await downloadFilesArchive(items);
-    } catch {
-      setToast(locale === "ar" ? "تعذر إنشاء ملف التنزيل أو التحقق من سلامته" : "Could not create or verify the download archive");
+      setToast(
+        locale === "ar"
+          ? "بدأ تنزيل الأرشيف"
+          : "Archive download started",
+      );
+    } catch (err) {
+      const message =
+        err && typeof err === "object" && "message" in err && typeof (err as { message: unknown }).message === "string"
+          ? (err as { message: string }).message
+          : null;
+      setToast(
+        message ||
+          (locale === "ar"
+            ? "تعذر إنشاء ملف التنزيل أو التحقق من سلامته"
+            : "Could not create or verify the download archive"),
+      );
     }
   }
 
