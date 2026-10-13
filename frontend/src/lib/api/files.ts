@@ -74,6 +74,10 @@ export function requestDownload(fileId: string): Promise<{ download_url: string 
 }
 
 export async function downloadFilesArchive(items: Array<{ type: "FILE" | "FOLDER"; id: string }>): Promise<void> {
+  if (!items.length) {
+    throw new ApiError(400, "No items selected for download");
+  }
+
   const token = await getAccessToken();
   if (!token) throw new ApiError(401, "UNAUTHENTICATED");
 
@@ -82,6 +86,7 @@ export async function downloadFilesArchive(items: Array<{ type: "FILE" | "FOLDER
     headers: {
       Authorization: `Bearer ${token}`,
       "Content-Type": "application/json",
+      Accept: "application/zip, application/octet-stream, */*",
     },
     body: JSON.stringify({ items }),
   });
@@ -100,18 +105,46 @@ export async function downloadFilesArchive(items: Array<{ type: "FILE" | "FOLDER
   }
 
   const blob = await response.blob();
+  if (blob.size < 22) {
+    // Minimum valid ZIP (empty archive EOCD) is 22 bytes.
+    throw new ApiError(502, "The server returned an empty or invalid ZIP archive");
+  }
+
+  // Validate by ZIP magic bytes only. Do NOT reject based on blob.type:
+  // proxies, CDNs, and some browsers report application/octet-stream (or empty)
+  // even when Content-Type was application/zip. Rejecting on MIME was breaking
+  // multi-file / multi-folder downloads in production.
   const signature = new Uint8Array(await blob.slice(0, 4).arrayBuffer());
-  const validZipHeader = signature[0] === 0x50 && signature[1] === 0x4b &&
-    ((signature[2] === 0x03 && signature[3] === 0x04) ||
-      (signature[2] === 0x05 && signature[3] === 0x06));
-  if (!validZipHeader || blob.type && !blob.type.toLowerCase().includes("zip")) {
+  const validZipHeader =
+    signature[0] === 0x50 &&
+    signature[1] === 0x4b &&
+    ((signature[2] === 0x03 && signature[3] === 0x04) || // local file header
+      (signature[2] === 0x05 && signature[3] === 0x06) || // empty archive EOCD
+      (signature[2] === 0x07 && signature[3] === 0x08)); // spanned archive
+  if (!validZipHeader) {
     throw new ApiError(502, "The server returned an invalid ZIP archive");
+  }
+
+  // Prefer filename from Content-Disposition when present.
+  let filename = "imkan-files.zip";
+  const disposition = response.headers.get("Content-Disposition") || response.headers.get("content-disposition");
+  if (disposition) {
+    const utf8Match = /filename\*=UTF-8''([^;]+)/i.exec(disposition);
+    const plainMatch = /filename="?([^";]+)"?/i.exec(disposition);
+    const raw = utf8Match?.[1] || plainMatch?.[1];
+    if (raw) {
+      try {
+        filename = decodeURIComponent(raw.trim());
+      } catch {
+        filename = raw.trim();
+      }
+    }
   }
 
   const url = URL.createObjectURL(blob);
   const link = document.createElement("a");
   link.href = url;
-  link.download = "imkan-files.zip";
+  link.download = filename;
   link.rel = "noopener";
   document.body.appendChild(link);
   link.click();
