@@ -7563,10 +7563,185 @@ html[data-theme="dark"] [class*="collection"] {
   color: var(--wd-text);
 }
 
-/* Keep top header fixed visually with content scroll only in main lane */
-.workdrive-frame > .flex.min-w-0.flex-1.flex-col > header,
-.workdrive-frame .wd-default-topbar {
-  position: sticky;
-  top: 0;
-  z-index: 30;
+
+
+/* ========== Strong theme + unified scroll (2026-10-13) ========== */
+html, body {
+  height: 100%;
+  max-height: 100%;
+  overflow: hidden;
+}
+html {
+  font-family: var(--user-font-family), Arial, "IBM Plex Sans Arabic", system-ui, sans-serif;
+}
+.workdrive-frame {
+  height: 100dvh !important;
+  max-height: 100dvh !important;
+  overflow: hidden !important;
+  background: var(--wd-canvas, #fff) !important;
+}
+.workdrive-topbar-slot {
+  flex-shrink: 0;
+  position: relative;
+  z-index: 40;
+  background: var(--wd-bg, #fff);
+  border-bottom: 1px solid var(--wd-line, #ededed);
+}
+.workdrive-topbar-slot .wd-default-topbar,
+.workdrive-topbar-slot header {
+  position: relative !important;
+  top: auto !important;
+  background: var(--wd-bg, #fff) !important;
+  border-color: var(--wd-line, #ededed) !important;
+  color: var(--wd-text, #212121) !important;
+}
+.workdrive-main-scroll {
+  min-height: 0 !important;
+  overflow-x: hidden !important;
+  overflow-y: auto !important;
+  overscroll-behavior: contain;
+  background: var(--wd-canvas, #fff);
+  color: var(--wd-text, #212121);
+  font-family: var(--user-font-family), Arial, system-ui, sans-serif;
+}
+
+/* Force theme tokens on collections */
+.collections-page,
+.collections-page * {
+  font-family: inherit;
+}
+.collections-page {
+  background: var(--wd-canvas, #fff) !important;
+  color: var(--wd-text, #212121) !important;
+}
+.collections-page .wd-page-head,
+.collections-page .wd-card,
+.collections-page header,
+.collections-detail,
+.collections-detail header,
+.collections-detail aside {
+  background: var(--wd-bg, #fff) !important;
+  color: var(--wd-text, #212121) !important;
+  border-color: var(--wd-line, #e5e7eb) !important;
+}
+.collections-page .wd-primary-button,
+.collections-detail .wd-primary-button,
+.collections-page button.bg-\[var\(--wd-primary\,\#1B66EA\)\],
+.collections-detail button[class*="bg-"] {
+  /* primary already via vars */
+}
+.collections-page a,
+.collections-detail a,
+.collections-detail button.text-\[color\:var\(--wd-primary\,\#1B66EA\)\] {
+  color: var(--wd-primary, #1B66EA);
+}
+.collections-page .wd-primary-button {
+  background: var(--wd-primary, #1B66EA) !important;
+  color: #fff !important;
+  border-color: var(--wd-primary, #1B66EA) !important;
+}
+
+/* Visible hover (never pure black) */
+.imkan-option-picker-menu button:hover,
+.imkan-option-picker-menu button.is-active,
+.member-role-menu button:hover,
+.member-role-menu button.is-active,
+.wd-menu-item:hover,
+.wd-menu-item[data-active="true"],
+.search-filter-popover button:hover,
+.search-result-row:hover {
+  background: var(--wd-primary-light, #eff6ff) !important;
+  color: var(--wd-primary-ink, #1e3a8a) !important;
+}
+html[data-theme="dark"] .imkan-option-picker-menu button:hover,
+html[data-theme="dark"] .imkan-option-picker-menu button.is-active,
+html[data-theme="dark"] .member-role-menu button:hover,
+html[data-theme="dark"] .wd-menu-item:hover,
+html[data-theme="dark"] .search-filter-popover button:hover,
+html[data-theme="dark"] .search-result-row:hover {
+  background: color-mix(in srgb, var(--wd-primary, #6b8afd) 22%, var(--wd-bg, #1c1c1c)) !important;
+  color: var(--wd-text, #ececec) !important;
+}
+
+/* Soft scrims — content behind stays readable */
+.imkan-modal-backdrop,
+.search-overlay-backdrop,
+.wd-drawer-scrim,
+[data-overlay-scrim] {
+  background: color-mix(in srgb, var(--wd-text, #0f172a) 18%, transparent) !important;
+  backdrop-filter: blur(2px);
+}
+html[data-theme="dark"] .imkan-modal-backdrop,
+html[data-theme="dark"] .search-overlay-backdrop {
+  background: color-mix(in srgb, #000 40%, transparent) !important;
+}
+
+/* Search surfaces follow theme */
+.search-overlay-panel,
+.search-mainbar,
+.search-results,
+.search-filter-popover,
+.zoho-global-search {
+  background: var(--wd-bg, #fff) !important;
+  color: var(--wd-text, #212121) !important;
+  border-color: var(--wd-line, #e5e7eb) !important;
+}
+.search-mainbar > input,
+.zoho-global-search input {
+  background: transparent !important;
+  color: var(--wd-text, #212121) !important;
+  font-family: var(--user-font-family), Arial, system-ui, sans-serif !important;
+}
+.search-filter-chip {
+  background: var(--wd-panel-2, #f7f9fb) !important;
+  border-color: var(--wd-line, #cfd5da) !important;
+  color: var(--wd-text, #343a42) !important;
+}
+.search-section-title {
+  background: var(--wd-panel-2, #f5f5f5) !important;
+  color: var(--wd-text-muted, #485057) !important;
+}
+
+/* Option pickers always theme-aware */
+.imkan-option-picker-menu,
+.imkan-option-picker-menu-portal,
+.member-role-menu,
+.wd-menu {
+  background: var(--wd-bg, #fff) !important;
+  color: var(--wd-text, #212121) !important;
+  border-color: var(--wd-line, #e5e5e5) !important;
+}
+.imkan-option-picker-menu button,
+.member-role-menu button {
+  background: transparent !important;
+  color: var(--wd-text, #212121) !important;
+}
+.imkan-option-picker-trigger {
+  background: var(--wd-btn-pill, #e9e9ea) !important;
+  color: var(--wd-text, #202124) !important;
+}
+
+/* Team folders */
+.team-folders-page {
+  background: var(--wd-canvas, #fff) !important;
+  color: var(--wd-text, #212121) !important;
+  font-family: var(--user-font-family), Arial, system-ui, sans-serif !important;
+}
+.team-folders-page input,
+.team-folders-page .team-filter-trigger {
+  background: var(--wd-bg, #fff) !important;
+  color: var(--wd-text, #212121) !important;
+  border-color: var(--wd-line, #e2e8f0) !important;
+}
+
+html[data-theme="dark"] .workdrive-topbar-slot,
+html[data-theme="dark"] .workdrive-topbar-slot .wd-default-topbar,
+html[data-theme="dark"] .workdrive-topbar-slot header {
+  background: var(--wd-bg, #1c1c1c) !important;
+  border-color: var(--wd-line, #2f2f2f) !important;
+  color: var(--wd-text, #ececec) !important;
+}
+html[data-theme="dark"] .wd-default-topbar span,
+html[data-theme="dark"] .wd-default-topbar h1 {
+  color: var(--wd-text, #ececec) !important;
 }
