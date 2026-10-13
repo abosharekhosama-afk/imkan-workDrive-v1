@@ -6,6 +6,7 @@ import { useLocale } from "../locale-provider";
 import { getStorageOverview, type QuotaOverview } from "../../lib/api/quota";
 import { listTeamFolders, type TeamFolderListItem } from "../../lib/api/team-folders";
 import { getWorkspacePolicy } from "../../lib/api/organization";
+import { getWorkspaceBootstrap, peekWorkspaceBootstrap } from "../../lib/api/bootstrap";
 import { useShell } from "./shell-context";
 import { Icons } from "./icons";
 import { SidebarNav } from "./sidebar-nav";
@@ -28,7 +29,6 @@ export function PrimarySidebar() {
         : null;
       if (!token) return;
 
-      // Role from cache is free — do it first for UI affordances.
       try {
         const raw = window.localStorage.getItem("workdrive_user");
         if (raw && !cancelled) {
@@ -39,7 +39,30 @@ export function PrimarySidebar() {
         if (!cancelled) setRole("");
       }
 
-      // Parallel network: team folders + quota + policy (previously sequential).
+      // Prefer bootstrap cache / single round-trip when AuthGate already fetched it.
+      const cached = peekWorkspaceBootstrap();
+      if (cached) {
+        if (!cancelled) {
+          setTeams(cached.teamFolders ?? []);
+          setQuota(cached.quota);
+          setOrgLogo(cached.workspacePolicy?.logoDataUrl ?? null);
+          if (cached.user?.role) setRole(cached.user.role);
+        }
+        return;
+      }
+
+      try {
+        const boot = await getWorkspaceBootstrap();
+        if (cancelled) return;
+        setTeams(boot.teamFolders ?? []);
+        setQuota(boot.quota);
+        setOrgLogo(boot.workspacePolicy?.logoDataUrl ?? null);
+        if (boot.user?.role) setRole(boot.user.role);
+        return;
+      } catch {
+        // Fall through to legacy parallel fetches.
+      }
+
       const [teamsResult, quotaResult, policyResult] = await Promise.all([
         listTeamFolders().then((r) => r.teamFolders ?? []).catch(() => [] as TeamFolderListItem[]),
         getStorageOverview().catch(() => null),
