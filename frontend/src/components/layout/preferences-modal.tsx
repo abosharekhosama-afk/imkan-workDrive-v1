@@ -7,40 +7,6 @@ import { loadPrefs, patchPrefs, type WorkdrivePrefs, defaultPrefs } from "../../
 
 type Props = { open: boolean; onClose: () => void };
 
-type Prefs = {
-  defaultView: "thumbnail" | "list" | "compact";
-  defaultSort: "lastModified" | "name" | "timeCreated";
-  sortOrder: "newest" | "az";
-  defaultLanding: "suggestions" | "recent" | "favorites" | "myFolders" | "lastOpened";
-  teamFolderListing: "all" | "integrated" | "pinned" | "none";
-  includeMyFoldersInSuggestions: boolean;
-  convertOnUpload: boolean;
-  optionalColumns: { lastModified: boolean; timeCreated: boolean; size: boolean; type: boolean; extension: boolean };
-  notifications: Record<string, { email: boolean; web: boolean; mobile: boolean }>;
-};
-
-const defaultPrefs: Prefs = {
-  defaultView: "list",
-  defaultSort: "lastModified",
-  sortOrder: "newest",
-  defaultLanding: "myFolders",
-  teamFolderListing: "integrated",
-  includeMyFoldersInSuggestions: true,
-  convertOnUpload: false,
-  optionalColumns: { lastModified: false, timeCreated: false, size: false, type: false, extension: false },
-  notifications: {
-    mentions: { email: true, web: true, mobile: true },
-    sharedWithMe: { email: true, web: true, mobile: true },
-    sharedToGroup: { email: true, web: true, mobile: true },
-    addedToTeam: { email: false, web: true, mobile: true },
-    roleChanges: { email: false, web: true, mobile: true },
-    accessRequests: { email: true, web: true, mobile: true },
-    newPublicTeam: { email: false, web: true, mobile: true },
-  },
-};
-
-const STORAGE_KEY = "imkan_workdrive_preferences_v1";
-
 export function PreferencesModal({ open, onClose }: Props) {
   const { locale } = useLocale();
   const ar = locale === "ar";

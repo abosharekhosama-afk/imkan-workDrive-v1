@@ -147,6 +147,7 @@ export function AccountMenu({ name, avatarUrl, adminMode = false }: Props) {
                     <p className="account-sub-text">{ar ? "المسؤول العام:" : "Super Admin:"} {current.email || "—"}</p>
                     <button type="button" className="account-upgrade-btn" onClick={() => window.open("https://www.zoho.com/workdrive/pricing.html", "_blank")}>{ar ? "ترقية" : "Upgrade"}</button>
                   </section>
+                </div>
                 <button type="button" className="account-signout" onClick={() => void out()}><span>⇱</span>{ar ? "تسجيل الخروج" : "Sign Out"}</button>
               </>
             ) : (
