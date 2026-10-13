@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import { useLocale } from "../locale-provider";
 import { getStorageOverview, type QuotaOverview } from "../../lib/api/quota";
 import { listTeamFolders, type TeamFolderListItem } from "../../lib/api/team-folders";
+import { getWorkspacePolicy } from "../../lib/api/organization";
 import { useShell } from "./shell-context";
 import { Icons } from "./icons";
 import { SidebarNav } from "./sidebar-nav";
@@ -18,6 +19,7 @@ export function PrimarySidebar() {
   const [teams, setTeams] = useState<TeamFolderListItem[]>([]);
   const [quota, setQuota] = useState<QuotaOverview | null>(null);
   const [role, setRole] = useState("");
+  const [orgLogo, setOrgLogo] = useState<string | null>(null);
   useEffect(() => {
     let cancelled = false;
     const loadSidebarData = async () => {
@@ -49,6 +51,13 @@ export function PrimarySidebar() {
       } catch {
         if (!cancelled) setRole("");
       }
+
+      try {
+        const policy = await getWorkspacePolicy();
+        if (!cancelled) setOrgLogo(policy?.logoDataUrl ?? null);
+      } catch {
+        if (!cancelled) setOrgLogo(null);
+      }
     };
 
     void loadSidebarData();
@@ -61,6 +70,7 @@ export function PrimarySidebar() {
   return (
     <div className="primary-sidebar flex h-full min-h-0 w-full flex-col overflow-hidden bg-[#282828] text-[#EEEEEE]">
       <div className="flex h-12 shrink-0 items-center gap-2 px-4 shadow-[0_1px_2px_rgba(0,0,0,0.3)]">
+        {orgLogo ? <img src={orgLogo} alt="" className="h-7 max-w-[100px] object-contain" /> : null}
         <button type="button" className="rounded-[8px] p-1.5 text-[#EEEEEE] hover:bg-white/10" title={label("nav.appSwitcher")} aria-label={label("nav.appSwitcher")}>
           <Icons.grid size={18} />
         </button>

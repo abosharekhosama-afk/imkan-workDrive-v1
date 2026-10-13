@@ -10,9 +10,14 @@ export function SidebarFooter({ quota: _quota, role, onNav }: { quota: QuotaOver
   return (
     <div className="shrink-0 px-2 pb-2">
       <div className="flex flex-col gap-1 text-[12px]">
-        <a href="https://www.zoho.com/crm/" target="_blank" rel="noreferrer" className="flex h-10 items-center gap-4 rounded-[16px] px-[15px] text-[14px] font-medium text-[#EEEEEE] hover:bg-white/[0.08]" title={label("nav.section.integratedApps")}>
-          <Icons.ext size={18} /> {label("nav.zohoCrm")}
-        </a>
+        <Link
+          href="/organization"
+          onClick={onNav}
+          className="flex h-10 items-center gap-4 rounded-[16px] px-[15px] text-[14px] font-medium text-[#EEEEEE] hover:bg-white/[0.08]"
+          title={locale === "ar" ? "المؤسسة" : "Organization"}
+        >
+          <Icons.users size={18} /> {locale === "ar" ? "المؤسسة" : "Organization"}
+        </Link>
         <Link href="/settings" onClick={onNav} className="mt-1 flex h-[42px] items-center justify-between rounded-[16px] bg-[#3E3E3E] px-3 text-[13px] font-bold text-white hover:bg-[#4A4A4A]">
           <span className="inline-flex items-center gap-1.5"><Icons.spark size={16} /> {locale === "ar" ? "حسابي" : "My Account"}</span> <Icons.chevR size={16} />
         </Link>
