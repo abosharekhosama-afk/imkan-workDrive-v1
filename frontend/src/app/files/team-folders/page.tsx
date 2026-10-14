@@ -250,7 +250,7 @@ export default function TeamFoldersPage() {
         </label>
 
         <div className="ms-auto flex items-center gap-2">
-          <Link href={createHref} className="team-create-button"><span aria-hidden="true">+</span>{locale === "ar" ? "إنشاء مجلد فريق" : "Create Team Folder"}</Link>
+          <Link href={createHref} className="team-create-button" aria-label={locale === "ar" ? "إنشاء مجلد فريق" : "Create Team Folder"} title={locale === "ar" ? "إنشاء مجلد فريق" : "Create Team Folder"}><span aria-hidden="true">+</span><span className="team-create-label">{locale === "ar" ? "إنشاء مجلد فريق" : "Create Team Folder"}</span></Link>
           <ViewModePicker
             view={viewMode}
             onView={(next) => {
