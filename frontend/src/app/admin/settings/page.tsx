@@ -66,6 +66,7 @@ export default function AdminSettingsPage() {
   const params = useSearchParams();
   const requested = params.get("settingtab") || "profile";
   const tab = (TABS.some((x) => x[0] === requested) ? requested : "profile") as TabKey;
+  const [settingsNavOpen, setSettingsNavOpen] = useState(false);
   const [settings, setSettings] = useState<AdminConsoleSettings | null>(null);
   const [policy, setPolicy] = useState<any>(null);
   const [retention, setRetention] = useState<any>(null);
@@ -139,12 +140,38 @@ export default function AdminSettingsPage() {
   if (!settings || !org) return <div className="flex h-full flex-col items-center justify-center gap-3 bg-[#f7f7f7] text-[13px] text-[#6b6f76]"><div>{text(ar, "Loading settings…", "جارٍ تحميل الإعدادات…")}</div>{error ? <div className="flex max-w-[520px] flex-col items-center gap-3 rounded-[12px] border border-[#f1c5c5] bg-white px-5 py-4 text-center text-[11px] text-[#a52a2a]"><div>{error}</div><button type="button" onClick={() => { setError(""); setSettings(null); setOrg(null); setReloadKey((v) => v + 1); }} className="rounded-full bg-[#2f6ee5] px-4 py-2 text-[11px] font-semibold text-white">{text(ar, "Retry", "إعادة المحاولة")}</button></div> : null}</div>;
 
   return <div className="flex h-full min-h-0 bg-[#f7f7f7]" dir={ar ? "rtl" : "ltr"}>
+    {settingsNavOpen ? (
+      <div className="settings-mobile-drawer lg:hidden" role="dialog" aria-modal="true">
+        <div className="settings-mobile-drawer-backdrop" onClick={() => setSettingsNavOpen(false)} />
+        <div className="settings-mobile-drawer-panel">
+          <div className="mb-3 flex items-center justify-between px-2">
+            <span className="text-[13px] font-semibold">{text(ar, "Settings", "الإعدادات")}</span>
+            <button type="button" className="settings-mobile-nav-btn" onClick={() => setSettingsNavOpen(false)} aria-label={text(ar, "Close", "إغلاق")}>×</button>
+          </div>
+          {[["Identity & Appearance", ["profile", "branding", "custom-domain", "viewpreferences"]], ["Files & Sharing", ["content", "sharing", "storage", "dataretention"]], ["Access & Apps", ["roles", "workdrive-apps"]], ["Automation & AI", ["workflows", "zia", "file-suggestions"]]].map(([section, keys]) => (
+            <div key={section as string} className="mb-4">
+              <div className="px-3 pb-2 text-[10px] font-semibold text-[#8b8f95]">{text(ar, section as string, section === "Identity & Appearance" ? "الهوية والمظهر" : section === "Files & Sharing" ? "الملفات والمشاركة" : section === "Access & Apps" ? "الوصول والتطبيقات" : "الأتمتة والذكاء الاصطناعي")}</div>
+              {(keys as string[]).map((key) => {
+                const item = TABS.find((x) => x[0] === key)!;
+                const active = tab === key;
+                return (
+                  <button key={key} type="button" onClick={() => { navigate(key as TabKey); setSettingsNavOpen(false); }} className={`mb-0.5 flex w-full items-center gap-2 rounded-lg px-3 py-2.5 text-start text-[12px] ${active ? "bg-[#edf3ff] font-semibold text-[#2c66dd]" : "text-[#3c4043] hover:bg-[#f5f5f5]"}`}>
+                    {text(ar, item[1], item[2])}
+                  </button>
+                );
+              })}
+            </div>
+          ))}
+        </div>
+      </div>
+    ) : null}
+
     <aside className="hidden w-[350px] shrink-0 overflow-y-auto border-e border-[#e7e7e7] bg-white px-4 py-5 lg:block">
       <div className="px-2 pb-3 text-[12px] font-semibold text-[#202124]">{text(ar, "Settings", "الإعدادات")}</div>
       {[["Identity & Appearance", ["profile", "branding", "custom-domain", "viewpreferences"]], ["Files & Sharing", ["content", "sharing", "storage", "dataretention"]], ["Access & Apps", ["roles", "workdrive-apps"]], ["Automation & AI", ["workflows", "zia", "file-suggestions"]]].map(([section, keys]) => <div key={section as string} className="mb-5"><div className="px-3 pb-2 text-[10px] font-semibold text-[#8b8f95]">{text(ar, section as string, section === "Identity & Appearance" ? "الهوية والمظهر" : section === "Files & Sharing" ? "الملفات والمشاركة" : section === "Access & Apps" ? "الوصول والتطبيقات" : "الأتمتة والذكاء الاصطناعي")}</div>{(keys as string[]).map((key) => { const item = TABS.find((x) => x[0] === key)!; const active = tab === key; const Icon = (Icons as any)[item[3]]; return <button key={key} type="button" onClick={() => navigate(key as TabKey)} className={`mb-0.5 flex w-full items-center gap-3 rounded-[12px] px-3 py-2.5 text-start text-[12px] font-medium ${active ? "bg-[#e8efff] text-[#2f61b7]" : "text-[#33373c] hover:bg-[#f5f6f7]"}`}><Icon size={15} /><span>{text(ar, item[1], item[2])}</span></button>; })}</div>)}
     </aside>
 
-    <main className="min-w-0 flex-1 overflow-y-auto bg-[#f7f7f7]">
+    <div className="lg:hidden sticky top-0 z-20 flex items-center gap-2 border-b border-[#e7e7e7] bg-white px-3 py-2"><button type="button" className="settings-mobile-nav-btn" aria-label={text(ar, "Open settings menu", "فتح قائمة الإعدادات")} onClick={() => setSettingsNavOpen(true)}><Icons.menu size={18} /></button><span className="text-[13px] font-semibold text-[#202124]">{text(ar, "Settings", "الإعدادات")}</span></div><main className="min-w-0 flex-1 overflow-y-auto bg-[#f7f7f7]">
       <div className="flex h-[52px] items-center justify-between border-b border-[#e7e7e7] bg-white px-6"><span className="text-[15px] font-semibold text-[#202124]">{text(ar, "Settings", "الإعدادات")}</span><div className="flex items-center gap-3 text-[11px] font-semibold text-[#202124]"><span>IMKAN</span><span className="grid h-7 w-7 place-items-center rounded-full bg-[#e7efff] text-[9px] text-[#315da8]">IM</span></div></div>
       <div className="mx-auto w-full max-w-[1050px] px-6 py-7 lg:px-8">
         {message ? <div className="mb-4 rounded-[10px] border border-[#b8e2d6] bg-[#effaf6] px-4 py-3 text-[12px] text-[#176a55]">{message}</div> : null}
