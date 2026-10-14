@@ -4,7 +4,6 @@ import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { WorkflowShell } from "@/components/workflow-shell";
-import { WorkflowHelp } from "@/components/workflow-help";
 import { WorkflowConceptGuide } from "@/components/workflow-concept-guide";
 import { useLocale } from "@/components/locale-provider";
 import { useConfirmAction } from "@/components/confirm-action-modal";
@@ -167,9 +166,7 @@ export default function WorkflowsPage() {
               <Icons.search size={15} className="text-slate-400" />
               <input value={q} onChange={(e) => setQ(e.target.value)} placeholder={ar ? "البحث باسم سير العمل" : "Search by workflow name"} className="min-w-0 flex-1 text-[11px] outline-none" />
             </div>
-            <WorkflowHelp compact helpKey="workflow.list" />
           </div>
-          {access?.canCreate ? <button type="button" onClick={() => setCreateOpen(true)} className="wd-pill wd-pill-new">＋ {ar ? "سير عمل جديد" : "New workflow"}</button> : null}
         </div>
 
         <div className="mt-4"><WorkflowConceptGuide ar={ar} /></div>
