@@ -95,7 +95,7 @@ export default function AdminDlpPage() {
             ))}
           </div>
         </div>
-        <button type="button" className="mt-1 rounded-full bg-[#2c66dd] px-4 py-2 text-[12px] font-semibold text-white" onClick={() => tab === "policies" ? setChooser(true) : setLabelOpen("new")}>+ {tab === "policies" ? t("New Policy", "سياسة جديدة") : t("New Classification Label", "تصنيف جديد")}</button>
+        <button type="button" className="admin-mobile-icon-action dlp-new-action mt-1 rounded-full bg-[#2c66dd] px-4 py-2 text-[12px] font-semibold text-white" onClick={() => tab === "policies" ? setChooser(true) : setLabelOpen("new")} aria-label={tab === "policies" ? t("New Policy", "سياسة جديدة") : t("New Classification Label", "تصنيف جديد")}><span className="admin-mobile-icon-action__icon" aria-hidden="true">+</span><span className="admin-mobile-icon-action__label">{tab === "policies" ? t("New Policy", "سياسة جديدة") : t("New Classification Label", "تصنيف جديد")}</span></button>
       </header>
       {error && <div className="mx-7 mt-4 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-[12px] text-red-700">{error}</div>}
       {(tab === "policies" ? policies.length : labels.length) > 0 && <div className="px-7 pt-4"><div className="flex h-10 max-w-sm items-center gap-2 rounded-lg border border-[#dadce0] px-3"><Icons.search size={15} /><input value={query} onChange={(event) => setQuery(event.target.value)} className="min-w-0 flex-1 text-[13px] outline-none" placeholder={tab === "policies" ? t("Search policies", "البحث في السياسات") : t("Search labels", "البحث في التصنيفات")} /></div></div>}
