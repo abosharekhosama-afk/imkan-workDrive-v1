@@ -2559,6 +2559,9 @@ html[data-theme="dark"] .workflow-ui .wd-card {
 .workflow-ui .workflow-create-modal,
 .workflow-ui .workflow-edit-modal{
   width:min(720px,96vw);
+  max-height:min(92vh, 900px);
+  display:flex;
+  flex-direction:column;
   overflow:hidden;
   border:1px solid #dfe3e8;
   border-radius:16px;
@@ -2590,7 +2593,19 @@ html[data-theme="dark"] .workflow-ui .wd-card {
   background:transparent;
 }
 .workflow-ui .workflow-modal-close:hover{background:#f3f4f6}
-.workflow-ui .workflow-create-body{padding:0 26px 24px}
+.workflow-ui .workflow-create-body{
+  padding:0 26px 24px;
+  min-height:0;
+  flex:1 1 auto;
+  overflow-y:auto;
+  -webkit-overflow-scrolling:touch;
+  overscroll-behavior:contain;
+}
+.workflow-ui .workflow-create-header,
+.workflow-ui .workflow-create-footer,
+.workflow-ui .workflow-edit-modal > .workflow-create-header{
+  flex:none;
+}
 .workflow-ui .workflow-mode-switch{
   display:inline-flex;
   align-items:stretch;
@@ -8506,16 +8521,17 @@ html[data-theme="dark"] .wd-file-status-icon[data-kind]{
   color: #94a3b8 !important;
 }
 
-/* Audit reports: filters on one row (including mobile) */
+/* Audit reports: filters on one row, dropdowns float (no clip) */
 .admin-audit-filters-row{
   display: flex !important;
   flex-direction: row !important;
   flex-wrap: nowrap !important;
   gap: 8px !important;
-  align-items: stretch;
-  overflow-x: auto;
-  -webkit-overflow-scrolling: touch;
+  align-items: flex-start;
+  overflow: visible !important;
   padding-bottom: 2px;
+  position: relative;
+  z-index: 20;
 }
 .admin-audit-filters-row > *{
   flex: 1 1 0;
@@ -8725,13 +8741,16 @@ html[data-theme="dark"] .wd-secondary-panel-backdrop{
 .admin-audit-filter-field:focus-within{ z-index:50; }
 .admin-audit-filter-popover{
   position:absolute !important;
-  top:100% !important;
-  margin-top:4px !important;
-  z-index:120 !important;
+  top:calc(100% + 4px) !important;
+  inset-inline-start:0 !important;
+  margin-top:0 !important;
+  z-index:300 !important;
   max-height:min(360px, 50vh);
   overflow-y:auto;
+  overflow-x:hidden;
   background:#fff !important;
   box-shadow:0 16px 40px rgba(0,0,0,.18) !important;
+  pointer-events:auto;
 }
 html[data-theme="dark"] .admin-audit-filter-popover{
   background:var(--wd-bg,#1a1f26) !important;
@@ -8877,4 +8896,52 @@ html[data-a11y-spacing="widen"] body{ letter-spacing:0.06em; word-spacing:0.12em
 
 html{
   font-size: calc(16px * var(--a11y-font-scale, 1));
+}
+
+
+/* ========== FINAL: unified search-style backdrop + workflow modal scroll + audit float ========== */
+.imkan-modal-backdrop,
+.search-overlay-backdrop,
+.account-drawer-backdrop,
+.zoho-side-backdrop,
+.connections-mobile-drawer-backdrop,
+.settings-mobile-drawer-backdrop,
+.inspector-mobile-backdrop,
+.wd-secondary-panel-backdrop,
+.workflow-ui .workflow-modal-backdrop{
+  background: rgba(255, 255, 255, 0.58) !important;
+  backdrop-filter: blur(10px) saturate(1.15) !important;
+  -webkit-backdrop-filter: blur(10px) saturate(1.15) !important;
+}
+html[data-theme="dark"] .imkan-modal-backdrop,
+html[data-theme="dark"] .search-overlay-backdrop,
+html[data-theme="dark"] .account-drawer-backdrop,
+html[data-theme="dark"] .zoho-side-backdrop,
+html[data-theme="dark"] .connections-mobile-drawer-backdrop,
+html[data-theme="dark"] .settings-mobile-drawer-backdrop,
+html[data-theme="dark"] .inspector-mobile-backdrop,
+html[data-theme="dark"] .wd-secondary-panel-backdrop,
+html[data-theme="dark"] .workflow-ui .workflow-modal-backdrop{
+  background: rgba(30, 30, 30, 0.42) !important;
+  backdrop-filter: blur(12px) saturate(1.05) !important;
+  -webkit-backdrop-filter: blur(12px) saturate(1.05) !important;
+}
+
+.admin-audit-filters-row{
+  overflow: visible !important;
+}
+.admin-audit-filter-field{
+  position: relative !important;
+  z-index: 1;
+  overflow: visible !important;
+}
+.admin-audit-filter-field.is-open,
+.admin-audit-filter-field:has(.admin-audit-filter-popover){
+  z-index: 250 !important;
+}
+/* Prevent parent page scroll containers from clipping filter dropdowns */
+.admin-audit-page,
+.admin-audit-page main,
+.admin-theme-content:has(.admin-audit-filters-row){
+  overflow-x: visible !important;
 }
