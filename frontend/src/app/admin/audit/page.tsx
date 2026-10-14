@@ -59,7 +59,7 @@ function Popover({ children, open, className = "", dir }: { children: React.Reac
 }
 
 function SelectButton({ icon, value, onClick, open }: { icon?: React.ReactNode; value: string; onClick: () => void; open: boolean }) {
-  return <button type="button" onClick={onClick} className={`flex h-[42px] w-full items-center gap-2 rounded-[9px] border bg-white px-3 text-start text-[14px] text-[#202124] transition ${open ? "border-[#9ab9f3] shadow-[0_0_0_2px_rgba(47,110,229,.08)]" : "border-[#d7d9dc] hover:border-[#b8bdc5]"}`}><span className="text-[#30343a]">{icon}</span><span className="min-w-0 flex-1 truncate">{value}</span><span className="text-[#5f6368]">⌄</span></button>;
+  return <button type="button" aria-expanded={open} onClick={onClick} className={`flex h-[42px] w-full items-center gap-2 rounded-[9px] border bg-white px-3 text-start text-[14px] text-[#202124] transition ${open ? "border-[#9ab9f3] shadow-[0_0_0_2px_rgba(47,110,229,.08)]" : "border-[#d7d9dc] hover:border-[#b8bdc5]"}`}><span className="text-[#30343a]">{icon}</span><span className="min-w-0 flex-1 truncate">{value}</span><span className="text-[#5f6368]">⌄</span></button>;
 }
 
 function CategoryBlock({ category, selected, setSelected, ar }: { category: ActivityCategory; selected: Set<string>; setSelected: (next: Set<string>) => void; ar: boolean }) {
@@ -163,10 +163,10 @@ export default function AdminAuditPage() {
 
 function FilterSelect({ label, value, open, onClick, icon, children, rtl }: { label: string; value: string; open: boolean; onClick: () => void; icon?: React.ReactNode; children: React.ReactNode; rtl?: boolean }) {
   return (
-    <div className="admin-audit-filter-field relative isolate">
+    <div className={`admin-audit-filter-field relative${open ? " is-open" : ""}`}>
       <div className="mb-2 text-[12px] font-medium text-[#30343a]">{label}</div>
       <SelectButton icon={icon} value={value} onClick={onClick} open={open} />
-      <Popover open={open} className="inset-inline-start-0 top-full w-full max-h-[min(360px,50vh)] overflow-y-auto" dir={rtl ? "rtl" : "ltr"}>{children}</Popover>
+      <Popover open={open} className="w-full" dir={rtl ? "rtl" : "ltr"}>{children}</Popover>
     </div>
   );
 }
