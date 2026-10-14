@@ -15,6 +15,11 @@ type A11y = {
   emphasizeFocus?: boolean;
   customCursor?: boolean;
   highlightCritical?: boolean;
+  toggleLabelStatus?: boolean;
+  toastStyle?: string;
+  successToast?: string;
+  warningToast?: string;
+  timeoutDuration?: number;
 };
 
 export function applyA11ySettings(a: A11y) {
@@ -29,6 +34,11 @@ export function applyA11ySettings(a: A11y) {
   if (a.textSpacing) root.dataset.a11ySpacing = a.textSpacing;
   if (a.contrastLevel != null) root.dataset.a11yContrastLevel = String(a.contrastLevel);
   if (a.zoomLevel != null) document.body.style.zoom = a.zoomLevel !== 100 ? `${a.zoomLevel}%` : "";
+  if (a.toggleLabelStatus != null) root.classList.toggle("a11y-toggle-labels", a.toggleLabelStatus);
+  if (a.toastStyle) root.dataset.a11yToastStyle = a.toastStyle;
+  if (a.successToast) root.dataset.a11ySuccessToast = a.successToast;
+  if (a.warningToast) root.dataset.a11yWarningToast = a.warningToast;
+  if (a.timeoutDuration != null) root.dataset.a11yTimeout = String(a.timeoutDuration);
 }
 
 export function A11yBootstrap() {

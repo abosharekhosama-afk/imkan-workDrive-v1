@@ -35,7 +35,10 @@ export function WorkflowShell({ children, title, subtitle, active }: { children:
           <div className="flex items-center gap-2">
             <WorkflowHelp compact helpKey={contextualHelpKey} />
             {access?.canCreate ? (
-              <Link href={createHref} className="wd-pill wd-pill-new">＋ {ar ? "سير عمل جديد" : "New workflow"}</Link>
+              <Link href={createHref} className="wd-pill wd-pill-new admin-mobile-icon-action" aria-label={ar ? "سير عمل جديد" : "New workflow"}>
+                <span className="admin-mobile-icon-action__icon" aria-hidden="true">＋</span>
+                <span className="admin-mobile-icon-action__label">{ar ? "سير عمل جديد" : "New workflow"}</span>
+              </Link>
             ) : null}
           </div>
         </div>
