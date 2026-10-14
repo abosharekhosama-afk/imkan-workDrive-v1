@@ -34,17 +34,24 @@ const defaults: A11y = {
 };
 
 function applyA11y(a: A11y) {
+  applyA11ySettings({
+    increasedContrast: a.increasedContrast,
+    contrastLevel: a.contrastLevel,
+    underlineActions: a.underlineActions,
+    readingMask: a.readingMask,
+    zoomLevel: a.zoomLevel,
+    displayFontSize: a.displayFontSize,
+    textSpacing: a.textSpacing,
+    emphasizeFocus: a.emphasizeFocus,
+    customCursor: a.customCursor,
+    highlightCritical: a.highlightCritical,
+  });
   const root = document.documentElement;
-  root.style.setProperty("--a11y-font-scale", `${a.displayFontSize / 100}`);
-  root.classList.toggle("a11y-contrast", a.increasedContrast);
-  root.classList.toggle("a11y-underline-actions", a.underlineActions);
-  root.classList.toggle("a11y-reading-mask", a.readingMask);
-  root.classList.toggle("a11y-focus-ring", a.emphasizeFocus);
-  root.classList.toggle("a11y-custom-cursor", a.customCursor);
-  root.classList.toggle("a11y-highlight-critical", a.highlightCritical);
-  root.dataset.a11ySpacing = a.textSpacing;
-  root.dataset.a11yContrastLevel = String(a.contrastLevel);
-  document.body.style.zoom = a.zoomLevel !== 100 ? `${a.zoomLevel}%` : "";
+  root.classList.toggle("a11y-toggle-labels", a.toggleLabelStatus);
+  root.dataset.a11yToastStyle = a.toastStyle;
+  root.dataset.a11ySuccessToast = a.successToast;
+  root.dataset.a11yWarningToast = a.warningToast;
+  root.dataset.a11yTimeout = String(a.timeoutDuration);
 }
 
 export function AccessibilityControlsModal({ open, onClose }: Props) {

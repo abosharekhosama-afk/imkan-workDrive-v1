@@ -20,6 +20,7 @@ function Frame({ children }: { children: ReactNode }) {
     setSidebarCollapsed,
     mobileNavOpen,
     setMobileNavOpen,
+    mobileInspectorOpen,
     setInspectorOpen,
     setMobileInspectorOpen,
     select,
@@ -43,7 +44,7 @@ function Frame({ children }: { children: ReactNode }) {
       </aside>
       {mobileNavOpen ? (
         <div className="fixed inset-0 z-50 md:hidden" role="dialog" aria-modal="true" aria-label="Navigation">
-          <div className="absolute inset-0 bg-black/40" onClick={() => setMobileNavOpen(false)} aria-hidden="true" />
+          <div className="wd-secondary-panel-backdrop absolute inset-0" onClick={() => setMobileNavOpen(false)} aria-hidden="true" />
           <div className="wd-mobile-nav-drawer absolute bottom-0 start-0 top-0 flex w-[min(280px,88vw)] max-w-[88vw] flex-col overflow-hidden bg-[var(--wd-sidebar,#282828)] shadow-[0_6px_24px_rgba(0,0,0,0.12)]">
             <PrimarySidebar />
           </div>
@@ -57,6 +58,13 @@ function Frame({ children }: { children: ReactNode }) {
           <div className="workdrive-main-scroll flex min-h-0 min-w-0 flex-1 flex-col overflow-y-auto overscroll-y-contain">{children}</div>
           {showInspector ? (
             <>
+              {mobileInspectorOpen ? (
+                <div
+                  className="inspector-mobile-backdrop fixed inset-0 z-[45] md:hidden"
+                  onClick={() => setMobileInspectorOpen(false)}
+                  aria-hidden="true"
+                />
+              ) : null}
               <InspectorPanel />
               <InspectorDock />
             </>
