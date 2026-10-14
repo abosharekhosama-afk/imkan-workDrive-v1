@@ -1,0 +1,286 @@
+"use client";
+
+import { useEffect, useMemo, useRef, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { useLocale } from "@/components/locale-provider";
+import { Icons } from "@/components/layout/icons";
+import { ImkanOptionPicker, toImkanPickerOptions } from "@/components/imkan-option-picker";
+import { me } from "@/lib/api/auth";
+import { getToken } from "@/lib/api/jwt";
+import { getOrganization, updateOrganization } from "@/lib/api/organization";
+import {
+  getAdminConsoleSettings,
+  updateAdminConsoleSettings,
+  getSecurityPolicy,
+  updateSecurityPolicy,
+  getRetentionPolicy,
+  updateRetentionPolicy,
+  type AdminConsoleSettings,
+} from "@/lib/api/enterprise";
+
+const TABS = [
+  ["profile", "Profile", "الملف الشخصي", "users"],
+  ["branding", "Branding", "الهوية والعلامة", "spark"],
+  ["custom-domain", "Custom Domain", "النطاق المخصص", "globe"],
+  ["viewpreferences", "View Preferences", "تفضيلات العرض", "compact"],
+  ["content", "Content", "المحتوى", "doc"],
+  ["sharing", "Sharing", "المشاركة", "share"],
+  ["storage", "Storage", "التخزين", "cloudUp"],
+  ["dataretention", "Data Retention", "الاحتفاظ بالبيانات", "trash"],
+  ["roles", "Roles and Permissions", "الأدوار والصلاحيات", "gear"],
+  ["workdrive-apps", "WorkDrive Apps", "تطبيقات WorkDrive", "grid"],
+  ["workflows", "Workflows", "سير العمل", "flow"],
+  ["zia", "Zia", "Zia", "bot"],
+  ["file-suggestions", "File Suggestions", "اقتراحات الملفات", "spark"],
+] as const;
+type TabKey = typeof TABS[number][0];
+
+function text(ar: boolean, en: string, arText: string) { return ar ? arText : en; }
+function sectionFor(tab: TabKey) {
+  if (["profile", "branding", "custom-domain", "viewpreferences"].includes(tab)) return "Identity & Appearance";
+  if (["content", "sharing", "storage", "dataretention"].includes(tab)) return "Files & Sharing";
+  if (["roles", "workdrive-apps"].includes(tab)) return "Access & Apps";
+  return "Automation & AI";
+}
+
+function Toggle({ checked, onChange, disabled }: { checked: boolean; onChange: (v: boolean) => void; disabled?: boolean }) {
+  return <button type="button" disabled={disabled} onClick={() => onChange(!checked)} aria-pressed={checked} className={`relative h-5 w-9 shrink-0 rounded-full transition ${checked ? "bg-[#2f6ee5]" : "bg-[#d7d9dc]"} ${disabled ? "opacity-50" : ""}`}><span className={`absolute top-[3px] h-[14px] w-[14px] rounded-full bg-white shadow-sm transition ${checked ? "end-[3px]" : "start-[3px]"}`} /></button>;
+}
+
+function SettingCard({ title, children, className = "" }: { title?: string; children: React.ReactNode; className?: string }) {
+  return <section className={`rounded-[16px] border border-[#e8e8e8] bg-white shadow-[0_1px_2px_rgba(0,0,0,.03)] ${className}`}>{title ? <div className="px-6 pb-2 pt-5"><h2 className="text-[15px] font-semibold text-[#202124]">{title}</h2></div> : null}{children}</section>;
+}
+
+function Choice({ checked, label, description, onClick }: { checked: boolean; label: string; description?: string; onClick: () => void }) {
+  return <button type="button" onClick={onClick} className={`flex w-full items-start gap-3 rounded-[12px] border p-3 text-start transition ${checked ? "border-[#6c9bf2] bg-[#f7faff]" : "border-transparent hover:bg-[#fafafa]"}`}><span className={`mt-[2px] grid h-4 w-4 place-items-center rounded-full border ${checked ? "border-[#2f6ee5]" : "border-[#b8bcc3]"}`}><span className={`h-2 w-2 rounded-full ${checked ? "bg-[#2f6ee5]" : "bg-transparent"}`} /></span><span><span className="block text-[13px] font-medium text-[#202124]">{label}</span>{description ? <span className="mt-1 block text-[11px] leading-5 text-[#6b6f76]">{description}</span> : null}</span></button>;
+}
+
+function SwitchRow({ title, description, checked, onChange }: { title: string; description?: string; checked: boolean; onChange: (v: boolean) => void }) {
+  return <div className="flex items-start justify-between gap-6 py-4"><div className="min-w-0"><div className="text-[13px] font-medium text-[#202124]">{title}</div>{description ? <div className="mt-1 max-w-[760px] text-[11px] leading-5 text-[#6b6f76]">{description}</div> : null}</div><Toggle checked={checked} onChange={onChange} /></div>;
+}
+
+export default function AdminSettingsPage() {
+  const { locale } = useLocale();
+  const ar = locale === "ar";
+  const router = useRouter();
+  const params = useSearchParams();
+  const requested = params.get("settingtab") || "profile";
+  const tab = (TABS.some((x) => x[0] === requested) ? requested : "profile") as TabKey;
+  const [settingsNavOpen, setSettingsNavOpen] = useState(false);
+  const [settings, setSettings] = useState<AdminConsoleSettings | null>(null);
+  const [policy, setPolicy] = useState<any>(null);
+  const [retention, setRetention] = useState<any>(null);
+  const [policyLoading, setPolicyLoading] = useState(false);
+  const [retentionLoading, setRetentionLoading] = useState(false);
+  const [org, setOrg] = useState<any>(null);
+  const [profileName, setProfileName] = useState("");
+  const [ownerEmail, setOwnerEmail] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [message, setMessage] = useState("");
+  const [error, setError] = useState("");
+  const [reloadKey, setReloadKey] = useState(0);
+  const logoInput = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    let live = true;
+    (async () => {
+      const token = getToken();
+      if (!token) throw new Error("Missing token");
+      const [s, o, u] = await Promise.all([getAdminConsoleSettings(), getOrganization(), me(token)]);
+      if (!live) return;
+      setSettings(s);
+      setOrg(o);
+      setProfileName(o.name);
+      setOwnerEmail(u.email);
+    })().catch((cause) => {
+      if (live) setError(cause instanceof Error ? cause.message : text(ar, "Unable to load organization settings.", "تعذر تحميل إعدادات المؤسسة."));
+    });
+    return () => { live = false; };
+  }, [ar, reloadKey]);
+
+  useEffect(() => {
+    let live = true;
+    if (tab === "sharing" && !policy && !policyLoading) {
+      setPolicyLoading(true);
+      getSecurityPolicy().then((value) => { if (live) setPolicy(value); }).catch((cause) => { if (live) setError(cause instanceof Error ? cause.message : text(ar, "Unable to load sharing policy.", "تعذر تحميل سياسة المشاركة.")); }).finally(() => { if (live) setPolicyLoading(false); });
+    }
+    if ((tab === "storage" || tab === "dataretention") && !retention && !retentionLoading) {
+      setRetentionLoading(true);
+      getRetentionPolicy().then((value) => { if (live) setRetention(value); }).catch((cause) => { if (live) setError(cause instanceof Error ? cause.message : text(ar, "Unable to load retention policy.", "تعذر تحميل سياسة الاحتفاظ.")); }).finally(() => { if (live) setRetentionLoading(false); });
+    }
+    return () => { live = false; };
+  }, [tab, policy, retention, ar]);
+
+  const update = async (patch: Partial<AdminConsoleSettings>) => {
+    setSaving(true); setError(""); setMessage("");
+    try { const next = await updateAdminConsoleSettings(patch); setSettings(next); window.dispatchEvent(new Event("workdrive:workspace-policy")); setMessage(text(ar, "Settings saved successfully.", "تم حفظ الإعدادات بنجاح.")); }
+    catch (e) { setError(e instanceof Error ? e.message : text(ar, "Unable to save settings.", "تعذر حفظ الإعدادات.")); }
+    finally { setSaving(false); }
+  };
+  const updatePolicy = async (patch: any) => {
+    setSaving(true); setError(""); setMessage("");
+    try { const next = await updateSecurityPolicy(patch); setPolicy(next); setMessage(text(ar, "Sharing policy saved.", "تم حفظ سياسة المشاركة.")); }
+    catch (e) { setError(e instanceof Error ? e.message : text(ar, "Unable to save policy.", "تعذر حفظ السياسة.")); }
+    finally { setSaving(false); }
+  };
+  const updateRetention = async (patch: any) => {
+    setSaving(true); setError(""); setMessage("");
+    try { const next = await updateRetentionPolicy(patch); setRetention(next); setMessage(text(ar, "Retention settings saved.", "تم حفظ إعدادات الاحتفاظ.")); }
+    catch (e) { setError(e instanceof Error ? e.message : text(ar, "Unable to save retention.", "تعذر حفظ إعدادات الاحتفاظ.")); }
+    finally { setSaving(false); }
+  };
+  const saveProfile = async () => {
+    setSaving(true); setError(""); setMessage("");
+    try { const next = await updateOrganization(profileName.trim()); setOrg(next); setMessage(text(ar, "Team details saved.", "تم حفظ بيانات الفريق.")); }
+    catch (e) { setError(e instanceof Error ? e.message : text(ar, "Unable to save team details.", "تعذر حفظ بيانات الفريق.")); }
+    finally { setSaving(false); }
+  };
+  const navigate = (key: TabKey) => { router.push(`/admin/settings?settingtab=${key}`); };
+
+  if (!settings || !org) return <div className="flex h-full flex-col items-center justify-center gap-3 bg-[#f7f7f7] text-[13px] text-[#6b6f76]"><div>{text(ar, "Loading settings…", "جارٍ تحميل الإعدادات…")}</div>{error ? <div className="flex max-w-[520px] flex-col items-center gap-3 rounded-[12px] border border-[#f1c5c5] bg-white px-5 py-4 text-center text-[11px] text-[#a52a2a]"><div>{error}</div><button type="button" onClick={() => { setError(""); setSettings(null); setOrg(null); setReloadKey((v) => v + 1); }} className="rounded-full bg-[#2f6ee5] px-4 py-2 text-[11px] font-semibold text-white">{text(ar, "Retry", "إعادة المحاولة")}</button></div> : null}</div>;
+
+  return <div className="flex h-full min-h-0 bg-[#f7f7f7]" dir={ar ? "rtl" : "ltr"}>
+    {settingsNavOpen ? (
+      <div className="settings-mobile-drawer lg:hidden" role="dialog" aria-modal="true">
+        <div className="settings-mobile-drawer-backdrop" onClick={() => setSettingsNavOpen(false)} />
+        <div className="settings-mobile-drawer-panel">
+          <div className="mb-3 flex items-center justify-between px-2">
+            <span className="text-[13px] font-semibold">{text(ar, "Settings", "الإعدادات")}</span>
+            <button type="button" className="settings-mobile-nav-btn" onClick={() => setSettingsNavOpen(false)} aria-label={text(ar, "Close", "إغلاق")}>×</button>
+          </div>
+          {[["Identity & Appearance", ["profile", "branding", "custom-domain", "viewpreferences"]], ["Files & Sharing", ["content", "sharing", "storage", "dataretention"]], ["Access & Apps", ["roles", "workdrive-apps"]], ["Automation & AI", ["workflows", "zia", "file-suggestions"]]].map(([section, keys]) => (
+            <div key={section as string} className="mb-4">
+              <div className="px-3 pb-2 text-[10px] font-semibold text-[#8b8f95]">{text(ar, section as string, section === "Identity & Appearance" ? "الهوية والمظهر" : section === "Files & Sharing" ? "الملفات والمشاركة" : section === "Access & Apps" ? "الوصول والتطبيقات" : "الأتمتة والذكاء الاصطناعي")}</div>
+              {(keys as string[]).map((key) => {
+                const item = TABS.find((x) => x[0] === key)!;
+                const active = tab === key;
+                return (
+                  <button key={key} type="button" onClick={() => { navigate(key as TabKey); setSettingsNavOpen(false); }} className={`mb-0.5 flex w-full items-center gap-2 rounded-lg px-3 py-2.5 text-start text-[12px] ${active ? "bg-[#edf3ff] font-semibold text-[#2c66dd]" : "text-[#3c4043] hover:bg-[#f5f5f5]"}`}>
+                    {text(ar, item[1], item[2])}
+                  </button>
+                );
+              })}
+            </div>
+          ))}
+        </div>
+      </div>
+    ) : null}
+
+    <aside className="hidden w-[350px] shrink-0 overflow-y-auto border-e border-[#e7e7e7] bg-white px-4 py-5 lg:block">
+      <div className="px-2 pb-3 text-[12px] font-semibold text-[#202124]">{text(ar, "Settings", "الإعدادات")}</div>
+      {[["Identity & Appearance", ["profile", "branding", "custom-domain", "viewpreferences"]], ["Files & Sharing", ["content", "sharing", "storage", "dataretention"]], ["Access & Apps", ["roles", "workdrive-apps"]], ["Automation & AI", ["workflows", "zia", "file-suggestions"]]].map(([section, keys]) => <div key={section as string} className="mb-5"><div className="px-3 pb-2 text-[10px] font-semibold text-[#8b8f95]">{text(ar, section as string, section === "Identity & Appearance" ? "الهوية والمظهر" : section === "Files & Sharing" ? "الملفات والمشاركة" : section === "Access & Apps" ? "الوصول والتطبيقات" : "الأتمتة والذكاء الاصطناعي")}</div>{(keys as string[]).map((key) => { const item = TABS.find((x) => x[0] === key)!; const active = tab === key; const Icon = (Icons as any)[item[3]]; return <button key={key} type="button" onClick={() => navigate(key as TabKey)} className={`mb-0.5 flex w-full items-center gap-3 rounded-[12px] px-3 py-2.5 text-start text-[12px] font-medium ${active ? "bg-[#e8efff] text-[#2f61b7]" : "text-[#33373c] hover:bg-[#f5f6f7]"}`}><Icon size={15} /><span>{text(ar, item[1], item[2])}</span></button>; })}</div>)}
+    </aside>
+
+    <div className="lg:hidden sticky top-0 z-20 flex items-center gap-2 border-b border-[#e7e7e7] bg-white px-3 py-2"><button type="button" className="settings-mobile-nav-btn" aria-label={text(ar, "Open settings menu", "فتح قائمة الإعدادات")} onClick={() => setSettingsNavOpen(true)}><Icons.menu size={18} /></button><span className="text-[13px] font-semibold text-[#202124]">{text(ar, "Settings", "الإعدادات")}</span></div><main className="min-w-0 flex-1 overflow-y-auto bg-[#f7f7f7]">
+      <div className="flex h-[52px] items-center justify-between border-b border-[#e7e7e7] bg-white px-6"><span className="text-[15px] font-semibold text-[#202124]">{text(ar, "Settings", "الإعدادات")}</span><div className="flex items-center gap-3 text-[11px] font-semibold text-[#202124]"><span>IMKAN</span><span className="grid h-7 w-7 place-items-center rounded-full bg-[#e7efff] text-[9px] text-[#315da8]">IM</span></div></div>
+      <div className="mx-auto w-full max-w-[1050px] px-6 py-7 lg:px-8">
+        {message ? <div className="mb-4 rounded-[10px] border border-[#b8e2d6] bg-[#effaf6] px-4 py-3 text-[12px] text-[#176a55]">{message}</div> : null}
+        {error ? <div className="mb-4 rounded-[10px] border border-[#f1c5c5] bg-[#fff5f5] px-4 py-3 text-[12px] text-[#a52a2a]">{error}</div> : null}
+        <div className="mb-5 rounded-[16px] border border-[#e8e8e8] bg-white px-6 py-5 shadow-[0_1px_2px_rgba(0,0,0,.03)]"><h1 className="text-[20px] font-semibold text-[#202124]">{text(ar, TABS.find((x) => x[0] === tab)?.[1] ?? "Settings", TABS.find((x) => x[0] === tab)?.[2] ?? "الإعدادات")}</h1></div>
+
+        {tab === "profile" ? <ProfileTab ar={ar} org={org} profileName={profileName} setProfileName={setProfileName} ownerEmail={ownerEmail} saving={saving} save={saveProfile} /> : null}
+        {tab === "branding" ? <BrandingTab ar={ar} settings={settings} inputRef={logoInput} onUpload={(logoDataUrl) => void update({ logoDataUrl })} saving={saving} /> : null}
+        {tab === "custom-domain" ? <CustomDomainTab ar={ar} settings={settings} saving={saving} onSave={(customDomain) => void update({ customDomain })} /> : null}
+        {tab === "viewpreferences" ? <ViewPreferencesTab ar={ar} settings={settings} saving={saving} onUpdate={update} /> : null}
+        {tab === "content" ? <ContentTab ar={ar} settings={settings} saving={saving} onUpdate={update} /> : null}
+        {tab === "sharing" ? (policy ? <SharingTab ar={ar} settings={settings} policy={policy} saving={saving} onUpdate={update} onPolicy={updatePolicy} /> : <InfoTab ar title="Sharing" body={policyLoading ? "Loading the real organization sharing policy…" : (error || "The organization sharing policy could not be loaded.")} />) : null}
+        {tab === "storage" ? (retention ? <StorageTab ar={ar} settings={settings} retention={retention} saving={saving} onUpdate={update} onRetention={updateRetention} /> : <InfoTab ar title="Storage" body={retentionLoading ? "Loading the real organization retention policy…" : (error || "The organization retention policy could not be loaded.")} />) : null}
+        {tab === "dataretention" ? (retention ? <RetentionTab ar={ar} retention={retention} saving={saving} onSave={updateRetention} /> : <InfoTab ar title="Data Retention" body={retentionLoading ? "Loading the real organization retention policy…" : (error || "The organization retention policy could not be loaded.")} />) : null}
+        {tab === "roles" ? <RolesTab ar={ar} settings={settings} saving={saving} onUpdate={update} /> : null}
+        {tab === "workdrive-apps" ? <InfoTab ar title="WorkDrive Apps" body="Administer the applications exposed to this organization. Existing application surfaces remain available from the Admin Console sidebar." /> : null}
+        {tab === "workflows" ? <InfoTab ar title="Workflows" body="Workflow administration remains available from the dedicated Admin Console page and uses the existing runtime." href="/admin/workflows" /> : null}
+        {tab === "zia" ? <InfoTab ar title="Zia" body="Zia is intentionally not enabled in this IMKAN build. No synthetic AI controls are presented here." /> : null}
+        {tab === "file-suggestions" ? <InfoTab ar title="File Suggestions" body="File suggestion controls can be added when the corresponding runtime is enabled; this page does not expose fake controls." /> : null}
+      </div>
+    </main>
+  </div>;
+}
+
+function ProfileTab({ ar, org, profileName, setProfileName, ownerEmail, saving, save }: any) {
+  return <div className="space-y-5"><SettingCard title={text(ar, "Team details", "بيانات الفريق")}><div className="space-y-5 px-6 pb-6 pt-3"><Field label={text(ar, "Team Name", "اسم الفريق")}><input className="zoho-admin-input" value={profileName} onChange={(e) => setProfileName(e.target.value)} /></Field><Field label={text(ar, "Plan Details", "تفاصيل الخطة")}><div className="zoho-admin-input flex items-center justify-between text-[#70747a]"><span>IMKAN WorkDrive</span><span className="text-[11px]">{text(ar, "Self-hosted", "مستضاف ذاتياً")}</span></div></Field><Field label={text(ar, "Super Admin Contact", "جهة اتصال المسؤول العام")}><div className="flex"><input className="zoho-admin-input rounded-e-none" value={ownerEmail} disabled /><span className="inline-flex items-center border border-s-0 border-[#d8dadd] bg-[#fafafa] px-4 text-[11px] text-[#6b6f76]">{text(ar, "Owner", "المالك")}</span></div></Field><div className="rounded-[10px] bg-[#edf4ff] px-4 py-3 text-[11px] leading-5 text-[#315da8]">{text(ar, "The organization owner is protected by the backend authorization rules. Only authorized administrators can change organization settings.", "مالك المؤسسة محمي بقواعد التفويض في الخادم، ولا يمكن تغيير الإعدادات إلا للمسؤولين المصرح لهم.")}</div><div className="flex justify-end"><button type="button" disabled={saving} onClick={save} className="zoho-admin-primary">{saving ? text(ar, "Saving…", "جارٍ الحفظ…") : text(ar, "Save", "حفظ")}</button></div></div></SettingCard><SettingCard title={text(ar, "Delete Team", "حذف الفريق")}><div className="px-6 pb-6 pt-3 text-[12px] leading-6 text-[#6b6f76]">{text(ar, "Team deletion is intentionally not exposed as a destructive one-click operation. It must follow the organization lifecycle and ownership controls already enforced by the backend.", "حذف الفريق ليس عملية تدميرية مباشرة؛ يجب أن يخضع لدورة حياة المؤسسة وضوابط الملكية المطبقة في الخادم.")}</div></SettingCard></div>;
+}
+
+function BrandingTab({ ar, settings, inputRef, onUpload, saving }: any) {
+  return <SettingCard title={text(ar, "Team logo", "شعار الفريق")}><div className="grid gap-6 px-6 pb-6 pt-3 lg:grid-cols-[1fr_1fr]"><div><button type="button" disabled={saving} onClick={() => inputRef.current?.click()} className="flex h-[110px] w-full items-center justify-center rounded-[4px] border border-dashed border-[#cfd2d6] bg-white hover:bg-[#fafafa]">{settings.logoDataUrl ? <img src={settings.logoDataUrl} alt="" className="max-h-[70px] max-w-[260px] object-contain" /> : <div className="grid place-items-center text-[#2f78c9]"><Icons.upload size={28} /><span className="mt-2 text-[11px]">{text(ar, "Upload logo", "رفع الشعار")}</span></div>}</button><input ref={inputRef} hidden type="file" accept="image/png,image/jpeg,image/jpg" onChange={(e) => { const file = e.target.files?.[0]; if (!file) return; if (file.size > 5 * 1024 * 1024) { window.alert(text(ar, "Maximum logo size is 5 MB.", "الحد الأقصى للشعار 5 ميجابايت.")); return; } const reader = new FileReader(); reader.onload = () => onUpload(String(reader.result)); reader.readAsDataURL(file); e.currentTarget.value = ""; }} /><div className="mt-3 rounded-[10px] bg-[#f6f6f6] px-3 py-3 text-[10px] leading-5 text-[#666b72]"><b>{text(ar, "Specifications", "المواصفات")}</b><br />• PNG, JPEG, JPG<br />• {text(ar, "Recommended: 256 × 48 px", "المقاس الموصى به: 256 × 48 بكسل")}<br />• {text(ar, "Maximum size: 5 MB", "الحد الأقصى: 5 ميجابايت")}</div></div><div><div className="text-[12px] font-semibold text-[#33373c]">{text(ar, "Preview", "المعاينة")}</div><div className="mt-3 overflow-hidden rounded-[12px] border border-[#dedfe1]"><div className="h-[18px] bg-[#f5f5f5] px-2"><span className="me-1 inline-block h-2 w-2 rounded-full bg-[#aaa]" /><span className="me-1 inline-block h-2 w-2 rounded-full bg-[#bbb]" /><span className="inline-block h-2 w-2 rounded-full bg-[#ccc]" /></div><div className="flex h-[125px]"><div className="w-[38%] bg-[#252525] p-4">{settings.logoDataUrl ? <img src={settings.logoDataUrl} alt="" className="max-h-8 max-w-full object-contain object-left" /> : <div className="text-[11px] font-semibold text-white">IMKAN WorkDrive</div>}<div className="mt-5 h-1.5 w-4/5 bg-white/20" /><div className="mt-3 h-1.5 w-3/5 bg-white/20" /></div><div className="flex-1 bg-[#fafafa]" /></div></div><div className="mt-3 rounded-[10px] bg-[#edf4ff] px-3 py-3 text-[10px] leading-5 text-[#315da8]">{text(ar, "This logo will appear on user accounts, externally shared files and folders, and WorkDrive emails.", "سيظهر هذا الشعار في حسابات المستخدمين والملفات والمجلدات المشتركة خارجياً ورسائل WorkDrive البريدية.")}</div></div></div></SettingCard>;
+}
+
+function CustomDomainTab({ ar, settings, saving, onSave }: any) {
+  const [domain, setDomain] = useState(settings.customDomain ?? "");
+  return <SettingCard title={text(ar, "Custom Domain", "النطاق المخصص")}><div className="px-6 pb-6 pt-3"><p className="text-[12px] leading-6 text-[#6b6f76]">{text(ar, "Configure the organization domain used for future WorkDrive entry points. Saving stores the domain in the organization configuration; DNS/TLS activation still depends on the deployment infrastructure.", "قم بإعداد نطاق المؤسسة لنقاط دخول WorkDrive المستقبلية. حفظ النطاق يتم فعلياً في إعدادات المؤسسة، بينما تفعيل DNS/TLS يعتمد على بنية النشر.")}</p><div className="mt-5 flex max-w-[720px]"><input className="zoho-admin-input rounded-e-none" value={domain} onChange={(e) => setDomain(e.target.value)} placeholder="drive.example.com" /><button type="button" disabled={saving} onClick={() => void onSave(domain.trim() || null)} className="zoho-admin-primary rounded-s-none">{text(ar, "Save", "حفظ")}</button></div>{domain ? <div className="mt-3 text-[11px] text-[#2b6e58]">● {text(ar, "Configured", "مُكوّن")}</div> : null}</div></SettingCard>;
+}
+
+function ViewPreferencesTab({ ar, settings, onUpdate }: any) {
+  const viewOptions = ([
+    ["THUMBNAIL", "Thumbnail", "مصغرات"],
+    ["LIST", "List", "قائمة"],
+    ["COMPACT", "Compact", "مضغوط"],
+  ] as const);
+  const panelOptions = ([
+    ["PREVIEW", "Only Preview", "المعاينة فقط"],
+    ["DETAILS", "File Details", "تفاصيل الملف"],
+    ["COMMENTS", "Comments", "التعليقات"],
+    ["DATA_TEMPLATE", "Data Template", "قالب البيانات"],
+  ] as const);
+  return <div className="space-y-5">
+    <SettingCard>
+      <div className="px-6 pb-6 pt-5">
+        <h2 className="text-[15px] font-semibold text-[#202124]">{text(ar, "Set a default view for your Team", "تعيين العرض الافتراضي لفريقك")}</h2>
+        <p className="mt-2 max-w-[760px] text-[11px] leading-5 text-[#6b6f76]">{text(ar, "This default applies to all Team Folders and views for team members. Members can still change their personal view or a specific folder view.", "يطبق هذا الإعداد افتراضياً على مجلدات الفريق وعروضها. ويمكن للأعضاء تغيير العرض الشخصي أو عرض مجلد محدد.")}</p>
+        <div className="mt-6 grid gap-6 lg:grid-cols-[minmax(0,1fr)_210px]">
+          <div>
+            <div className="mb-3 text-[12px] font-semibold text-[#33373c]">{text(ar, "Choose a default view", "اختر العرض الافتراضي")}</div>
+            <div className="space-y-1">{viewOptions.map(([v, label, arLabel]) => <Choice key={v} checked={settings.defaultView === v} label={text(ar, label, arLabel)} onClick={() => void onUpdate({ defaultView: v })} />)}</div>
+          </div>
+          <ViewPreview mode={settings.defaultView} />
+        </div>
+        <div className="mt-6 border-t border-[#ededed] pt-5">
+          <div className="mb-2 text-[12px] font-semibold text-[#33373c]">{text(ar, "Set a default thumbnail size for your Team", "تعيين حجم المصغرات الافتراضي لفريقك")}</div>
+          <p className="mb-4 text-[11px] leading-5 text-[#6b6f76]">{text(ar, "This default applies to Team Folders and views for all team members.", "يطبق هذا الحجم افتراضياً على مجلدات الفريق وعروضها لجميع أعضاء الفريق.")}</p>
+          <div className="flex items-center gap-3">
+            <span className="grid h-7 w-7 place-items-center rounded-full border border-[#d7d9dc] text-[#7b7f85]">−</span>
+            <input aria-label={text(ar, "Thumbnail size", "حجم المصغرات")} type="range" min="1" max="5" value={settings.thumbnailSize} onChange={(e) => void onUpdate({ thumbnailSize: Number(e.target.value) })} className="w-full accent-[#2f6ee5]" />
+            <span className="grid h-7 w-7 place-items-center rounded-full border border-[#d7d9dc] text-[#7b7f85]">+</span>
+          </div>
+        </div>
+      </div>
+    </SettingCard>
+    <SettingCard>
+      <div className="px-6 pb-6 pt-5">
+        <h2 className="text-[15px] font-semibold text-[#202124]">{text(ar, "Default right panel view for file preview", "العرض الافتراضي للوحة الجانبية لمعاينة الملفات")}</h2>
+        <p className="mt-2 text-[11px] leading-5 text-[#6b6f76]">{text(ar, "Choose what the right panel should display by default when team members preview files.", "حدد ما الذي يجب أن تعرضه اللوحة الجانبية افتراضياً عند معاينة أعضاء الفريق للملفات.")}</p>
+        <div className="mt-4 space-y-1">{panelOptions.map(([v, label, arLabel]) => <Choice key={v} checked={settings.previewPanel === v} label={text(ar, label, arLabel)} onClick={() => void onUpdate({ previewPanel: v })} />)}</div>
+      </div>
+    </SettingCard>
+  </div>;
+}
+
+function ViewPreview({ mode }: { mode: "THUMBNAIL" | "LIST" | "COMPACT" }) {
+  if (mode === "THUMBNAIL") return <div className="rounded-[14px] border border-[#dfe2e6] bg-white p-3"><div className="mb-3 h-2 w-20 rounded bg-[#d9dce0]" /><div className="grid grid-cols-3 gap-2">{Array.from({ length: 6 }).map((_, i) => <div key={i} className="h-10 rounded border border-[#e2e4e7] bg-[#f6f7f8]" />)}</div></div>;
+  if (mode === "LIST") return <div className="rounded-[14px] border border-[#dfe2e6] bg-white p-3"><div className="mb-3 h-2 w-20 rounded bg-[#d9dce0]" />{Array.from({ length: 4 }).map((_, i) => <div key={i} className="mb-2 flex items-center gap-2"><span className="h-4 w-4 rounded bg-[#e7e9ec]" /><span className="h-2 flex-1 rounded bg-[#e7e9ec]" /></div>)}</div>;
+  return <div className="rounded-[14px] border border-[#dfe2e6] bg-white p-3"><div className="mb-3 h-2 w-20 rounded bg-[#d9dce0]" />{Array.from({ length: 4 }).map((_, i) => <div key={i} className="mb-2 flex items-center gap-2"><span className="h-3 w-3 rounded bg-[#e7e9ec]" /><span className="h-1.5 flex-1 rounded bg-[#e7e9ec]" /></div>)}</div>;
+}
+
+function ContentTab({ ar, settings, onUpdate }: any) {
+  return <div className="space-y-5"><SettingCard title={text(ar, "Content", "المحتوى")}><div className="divide-y divide-[#ededed] px-6"><SwitchRow title={text(ar, "Convert files to IMKAN WorkDrive format on upload", "تحويل الملفات إلى صيغة IMKAN عند الرفع")} description={text(ar, "The setting is organization-scoped and can be used by upload/conversion flows.", "الإعداد على مستوى المؤسسة ويمكن لعمليات الرفع والتحويل استخدامه.")} checked={settings.convertOnUpload} onChange={(v) => void onUpdate({ convertOnUpload: v })} /></div></SettingCard><SettingCard title={text(ar, "Edit non-IMKAN files in Office Suite", "تحرير الملفات غير التابعة لـ IMKAN داخل Office")}><div className="divide-y divide-[#ededed] px-6"><SwitchRow title="Writer" description="DOC/DOCX and supported text documents." checked={settings.allowNonZohoWriter} onChange={(v) => void onUpdate({ allowNonZohoWriter: v })} /><SwitchRow title="Sheet" description="XLS/XLSX/CSV and supported spreadsheets." checked={settings.allowNonZohoSheet} onChange={(v) => void onUpdate({ allowNonZohoSheet: v })} /><SwitchRow title="Show" description="PPT/PPTX and supported presentations." checked={settings.allowNonZohoShow} onChange={(v) => void onUpdate({ allowNonZohoShow: v })} /></div></SettingCard><SettingCard><div className="px-6"><SwitchRow title={text(ar, "Save newly created Team Folder Office files as drafts", "حفظ ملفات Office الجديدة في مجلدات الفريق كمسودات")} checked={settings.saveNewFilesAsDrafts} onChange={(v) => void onUpdate({ saveNewFilesAsDrafts: v })} /></div><div className="border-t border-[#ededed] px-6 pb-5 pt-4"><label className="text-[12px] font-medium">{text(ar, "Additional OCR search language", "لغة OCR إضافية")}</label><div className="mt-2 max-w-[430px]"><ImkanOptionPicker value={settings.ocrLanguage} onChange={(next) => { if (next) void onUpdate({ ocrLanguage: next }); }} options={[{ value: "NONE", label: "None" }, { value: "AR", label: "Arabic" }, { value: "EN", label: "English" }, { value: "FR", label: "French" }, { value: "TR", label: "Turkish" }]} ariaLabel={text(ar, "Additional OCR search language", "لغة OCR إضافية")} fullWidth /></div></div></SettingCard></div>;
+}
+
+function SharingTab({ ar, settings, policy, onUpdate, onPolicy }: any) {
+  return <div className="space-y-5"><SettingCard><div className="px-6"><SwitchRow title={text(ar, "Allow files and folders to be shared outside this team", "السماح بمشاركة الملفات والمجلدات خارج الفريق")} description={text(ar, "This is enforced by the sharing backend and Team Folder ACLs.", "يتم فرض هذا الخيار فعلياً من خلال خادم المشاركة وصلاحيات مجلدات الفريق.")} checked={policy.allowExternalSharing} onChange={(v) => void onPolicy({ allowExternalSharing: v })} /></div></SettingCard><SettingCard><div className="px-6"><SwitchRow title={text(ar, "Allow direct sharing via email addresses", "السماح بالمشاركة المباشرة عبر البريد الإلكتروني")} checked={settings.allowDirectEmailSharing} onChange={(v) => void onUpdate({ allowDirectEmailSharing: v })} />{settings.allowDirectEmailSharing ? <div className="border-t border-[#ededed] py-4"><div className="mb-2 text-[12px] font-medium">{text(ar, "Allow direct sharing to", "السماح بالمشاركة إلى")}</div><div className="grid gap-2 md:grid-cols-2"><Choice checked={settings.directSharingScope === "ANY_EXTERNAL_USER"} label={text(ar, "Any external users", "أي مستخدمين خارجيين")} onClick={() => void onUpdate({ directSharingScope: "ANY_EXTERNAL_USER" })} /><Choice checked={settings.directSharingScope === "SPECIFIC_DOMAINS"} label={text(ar, "Specific domains and external users", "نطاقات ومستخدمون خارجيون محددون")} onClick={() => void onUpdate({ directSharingScope: "SPECIFIC_DOMAINS" })} /></div></div> : null}</div></SettingCard><SettingCard><div className="px-6"><SwitchRow title={text(ar, "Allow sharing via external share links", "السماح بروابط المشاركة الخارجية")} checked={settings.allowExternalShareLinks && policy.allowPublicLinks} onChange={(v) => void Promise.all([onUpdate({ allowExternalShareLinks: v }), onPolicy({ allowPublicLinks: v })])} /><SwitchRow title={text(ar, "Enforce passwords", "فرض كلمات مرور")} checked={settings.enforceSharePasswords} onChange={(v) => void onUpdate({ enforceSharePasswords: v })} /><SwitchRow title={text(ar, "Set a default expiration period", "تعيين مدة انتهاء افتراضية")} checked={settings.defaultShareExpiryDays != null} onChange={(v) => void onUpdate({ defaultShareExpiryDays: v ? 30 : null })} />{settings.defaultShareExpiryDays != null ? <div className="mb-3 max-w-[220px]"><ImkanOptionPicker value={String(settings.defaultShareExpiryDays)} onChange={(next) => { if (next) void onUpdate({ defaultShareExpiryDays: Number(next) }); }} options={toImkanPickerOptions(["7", "30", "90", "120"], (v) => `${v} days`)} ariaLabel={text(ar, "Default expiration period", "مدة انتهاء افتراضية")} fullWidth /></div> : null}<SwitchRow title={text(ar, "Set default user info collection", "جمع معلومات المستخدم الخارجي افتراضياً")} checked={settings.collectExternalUserInfo} onChange={(v) => void onUpdate({ collectExternalUserInfo: v })} /></div></SettingCard><SettingCard><div className="px-6"><SwitchRow title={text(ar, "Allow sharing via download links", "السماح بروابط التنزيل")} checked={settings.allowDownloadLinks} onChange={(v) => void onUpdate({ allowDownloadLinks: v })} />{settings.allowDownloadLinks ? <div className="border-t border-[#ededed] py-4"><SwitchRow title={text(ar, "Allow download links to expire by default", "انتهاء روابط التنزيل افتراضياً")} checked={settings.downloadLinkExpiryDays != null} onChange={(v) => void onUpdate({ downloadLinkExpiryDays: v ? 30 : null })} /></div> : null}</div></SettingCard><SettingCard><div className="px-6"><SwitchRow title={text(ar, "Allow permalink settings and embed codes", "السماح بإعدادات الروابط الدائمة والتضمين")} checked={settings.allowPermalinkEmbeds} onChange={(v) => void onUpdate({ allowPermalinkEmbeds: v })} /><SwitchRow title={text(ar, "Allow download and print for embedded files and folders", "السماح بالتنزيل والطباعة للمحتوى المضمّن")} checked={settings.allowEmbedDownloadPrint} onChange={(v) => void onUpdate({ allowEmbedDownloadPrint: v })} /></div></SettingCard><SettingCard title={text(ar, "Enable collections", "تمكين المجموعات")}><div className="px-6"><SwitchRow title={text(ar, "Enable collections", "تمكين المجموعات")} checked={settings.allowCollections} onChange={(v) => void onUpdate({ allowCollections: v })} />{settings.allowCollections ? <><div className="border-t border-[#ededed] py-4"><div className="mb-2 text-[12px] font-medium">{text(ar, "Set who can create and manage collections", "تحديد من يمكنه إنشاء وإدارة المجموعات")}</div><div className="grid gap-2 md:grid-cols-2"><Choice checked={settings.collectionManagerScope === "ANYONE_ON_TEAM"} label={text(ar, "Anyone on the Team", "أي شخص في الفريق")} onClick={() => void onUpdate({ collectionManagerScope: "ANYONE_ON_TEAM" })} /><Choice checked={settings.collectionManagerScope === "TEAM_ADMINS_ONLY"} label={text(ar, "Team Admins only", "مسؤولو الفريق فقط")} onClick={() => void onUpdate({ collectionManagerScope: "TEAM_ADMINS_ONLY" })} /></div></div></> : null}</div></SettingCard></div>;
+}
+
+function StorageTab({ ar, settings, retention, onUpdate, onRetention }: any) {
+  return <div className="space-y-5"><SettingCard><div className="px-6"><SwitchRow title={text(ar, "Set storage limit in My Folders", "تحديد حد التخزين في مجلداتي")} checked={settings.myFoldersLimitBytes != null} onChange={(v) => void onUpdate({ myFoldersLimitBytes: v ? String(10737418240) : null })} />{settings.myFoldersLimitBytes != null ? <div className="pb-4"><div className="flex max-w-[420px] items-center gap-2"><input className="zoho-admin-input" type="number" min="0" value={Math.round(Number(settings.myFoldersLimitBytes) / 1073741824)} onChange={(e) => void onUpdate({ myFoldersLimitBytes: String(Math.max(0, Number(e.target.value)) * 1073741824) })} /><span className="text-[12px] text-[#6b6f76]">GB</span></div></div> : null}</div></SettingCard><SettingCard title={text(ar, "Manage file versions", "إدارة إصدارات الملفات")}><div className="space-y-2 px-6 pb-6 pt-3"><Choice checked={settings.versionMode === "ALL"} label={text(ar, "Retain all versions", "الاحتفاظ بكل الإصدارات")} description={text(ar, "No automatic version count limit is applied.", "لا يتم تطبيق حد تلقائي لعدد الإصدارات.")} onClick={() => { void onUpdate({ versionMode: "ALL", versionLimit: null }); void onRetention({ versionLimit: null }); }} /><Choice checked={settings.versionMode === "LIMITED"} label={text(ar, "Retain latest versions up to a particular number", "الاحتفاظ بأحدث الإصدارات حتى عدد محدد")} onClick={() => { if (settings.versionMode !== "LIMITED") { void onUpdate({ versionMode: "LIMITED", versionLimit: 10 }); void onRetention({ versionLimit: 10 }); } }} />{settings.versionMode === "LIMITED" ? <div className="flex items-center gap-2 ps-8"><input className="zoho-admin-input max-w-[180px]" type="number" min="1" value={settings.versionLimit ?? 10} onChange={(e) => { const n = Math.max(1, Number(e.target.value)); void onUpdate({ versionLimit: n }); void onRetention({ versionLimit: n }); }} /><span className="text-[11px] text-[#6b6f76]">versions</span></div> : null}</div></SettingCard></div>;
+}
+
+function RetentionTab({ ar, retention, saving, onSave }: any) {
+  return <SettingCard><div className="px-6 pb-6 pt-3"><p className="text-[12px] leading-6 text-[#6b6f76]">{text(ar, "Set how often files and folders are automatically deleted from Trash and Deleted Items. These values are persisted in the organization retention policy.", "حدد متى يتم حذف الملفات والمجلدات تلقائياً من سلة المهملات والعناصر المحذوفة. يتم حفظ هذه القيم فعلياً في سياسة احتفاظ المؤسسة.")}</p><div className="mt-6 grid gap-7 md:grid-cols-2"><Field label={text(ar, "Trash in My Folders and Team Folders", "سلة المهملات في مجلداتي ومجلدات الفريق")}><ImkanOptionPicker value={String(retention.trashDays)} onChange={(next) => { if (next) void onSave({ trashDays: Number(next) }); }} disabled={saving} options={toImkanPickerOptions(["7", "15", "30", "90", "120"], (v) => `${v} days`)} ariaLabel={text(ar, "Trash retention", "احتفاظ سلة المهملات")} fullWidth /></Field><Field label={text(ar, "Deleted Items in Admin Console", "العناصر المحذوفة في وحدة الإدارة")}><ImkanOptionPicker value={String(retention.deletedItemsDays)} onChange={(next) => { if (next) void onSave({ deletedItemsDays: Number(next) }); }} disabled={saving} options={[{ value: "30", label: "30 days" }, { value: "90", label: "90 days" }, { value: "120", label: "120 days" }, { value: "365", label: "365 days" }, { value: "730", label: "2 years" }, { value: "3650", label: "10 years" }]} ariaLabel={text(ar, "Deleted items retention", "احتفاظ العناصر المحذوفة")} fullWidth /></Field></div><div className="mt-6 rounded-[12px] bg-[#eaf2ff] px-4 py-3 text-[11px] leading-5 text-[#315da8]">{text(ar, `Current policy: ${retention.trashDays} days in Trash · ${retention.deletedItemsDays} days in Deleted Items.`, `السياسة الحالية: ${retention.trashDays} يوماً في السلة · ${retention.deletedItemsDays} يوماً في العناصر المحذوفة.`)}</div></div></SettingCard>;
+}
+
+function RolesTab({ ar, settings, onUpdate }: any) {
+  return <div className="space-y-5"><SettingCard><div className="px-6 pb-6 pt-3"><Field label={text(ar, "Set who can create Public Team Folders on your team", "تحديد من يمكنه إنشاء مجلدات فريق عامة")}><div className="grid gap-2 md:grid-cols-2"><Choice checked={settings.publicTeamFolderCreator === "ADMINS_ONLY"} label={text(ar, "Team Admins Only", "مسؤولو الفريق فقط")} onClick={() => void onUpdate({ publicTeamFolderCreator: "ADMINS_ONLY" })} /><Choice checked={settings.publicTeamFolderCreator === "ANYONE"} label={text(ar, "Anyone on the Team", "أي شخص في الفريق")} onClick={() => void onUpdate({ publicTeamFolderCreator: "ANYONE" })} /></div></Field><div className="my-6 border-t border-[#ededed]" /><Field label={text(ar, "Set who can create Private Team Folders on your team", "تحديد من يمكنه إنشاء مجلدات فريق خاصة")}><div className="grid gap-2 md:grid-cols-2"><Choice checked={settings.privateTeamFolderCreator === "ADMINS_ONLY"} label={text(ar, "Team Admins Only", "مسؤولو الفريق فقط")} onClick={() => void onUpdate({ privateTeamFolderCreator: "ADMINS_ONLY" })} /><Choice checked={settings.privateTeamFolderCreator === "ANYONE"} label={text(ar, "Anyone on the Team", "أي شخص في الفريق")} onClick={() => void onUpdate({ privateTeamFolderCreator: "ANYONE" })} /></div></Field></div></SettingCard><SettingCard><div className="px-6"><SwitchRow title={text(ar, "Allow users with the same domain name to join this team", "السماح لمستخدمي نفس النطاق بالانضمام للفريق")} description={text(ar, "When enabled, matching domains can be used by the organization onboarding flow.", "عند التمكين يمكن لتدفق انضمام المؤسسة استخدام النطاق المطابق.")} checked={settings.sameDomainJoinEnabled} onChange={(v) => void onUpdate({ sameDomainJoinEnabled: v })} /></div></SettingCard><SettingCard title={text(ar, "Team Folder roles and permissions", "أدوار وصلاحيات مجلدات الفريق")}><div className="grid gap-3 px-6 pb-6 pt-3 md:grid-cols-5">{[["Viewer", "View access + extra permissions"], ["Commenter", "Comment access + extra permissions"], ["Editor", "Edit access + extra permissions"], ["Organizer", "Organize access + extra permissions"], ["Admin", "Full access + extra permissions"]].map(([role, desc]) => <div key={role} className="rounded-[12px] border border-[#e7e7e7] p-3"><div className="text-[12px] font-semibold">{role}</div><div className="mt-2 rounded-lg bg-[#eaf7ef] px-2 py-2 text-[9px] leading-4 text-[#267044]">{desc}</div></div>)}</div></SettingCard></div>;
+}
+
+function InfoTab({ ar, title, body, href }: { ar: boolean; title: string; body: string; href?: string }) {
+  return <SettingCard title={text(ar, title, title)}><div className="px-6 pb-7 pt-3"><p className="max-w-[760px] text-[12px] leading-6 text-[#6b6f76]">{text(ar, body, body)}</p>{href ? <a href={href} className="mt-5 inline-flex rounded-full bg-[#2f6ee5] px-4 py-2 text-[11px] font-semibold text-white">{text(ar, "Open Admin surface", "فتح واجهة الإدارة")}</a> : null}</div></SettingCard>;
+}
+function Field({ label, children }: { label: string; children: React.ReactNode }) { return <label className="block"><span className="mb-2 block text-[12px] font-medium text-[#33373c]">{label}</span>{children}</label>; }
