@@ -199,6 +199,7 @@ export default function AdminSettingsPage() {
         {tab === "zia" ? <InfoTab ar title="Zia" body="Zia is intentionally not enabled in this IMKAN build. No synthetic AI controls are presented here." /> : null}
         {tab === "file-suggestions" ? <InfoTab ar title="File Suggestions" body="File suggestion controls can be added when the corresponding runtime is enabled; this page does not expose fake controls." /> : null}
       </div>
+      </div>
     </main>
   </div>;
 }
