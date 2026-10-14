@@ -171,8 +171,15 @@ export default function AdminSettingsPage() {
       {[["Identity & Appearance", ["profile", "branding", "custom-domain", "viewpreferences"]], ["Files & Sharing", ["content", "sharing", "storage", "dataretention"]], ["Access & Apps", ["roles", "workdrive-apps"]], ["Automation & AI", ["workflows", "zia", "file-suggestions"]]].map(([section, keys]) => <div key={section as string} className="mb-5"><div className="px-3 pb-2 text-[10px] font-semibold text-[#8b8f95]">{text(ar, section as string, section === "Identity & Appearance" ? "الهوية والمظهر" : section === "Files & Sharing" ? "الملفات والمشاركة" : section === "Access & Apps" ? "الوصول والتطبيقات" : "الأتمتة والذكاء الاصطناعي")}</div>{(keys as string[]).map((key) => { const item = TABS.find((x) => x[0] === key)!; const active = tab === key; const Icon = (Icons as any)[item[3]]; return <button key={key} type="button" onClick={() => navigate(key as TabKey)} className={`mb-0.5 flex w-full items-center gap-3 rounded-[12px] px-3 py-2.5 text-start text-[12px] font-medium ${active ? "bg-[#e8efff] text-[#2f61b7]" : "text-[#33373c] hover:bg-[#f5f6f7]"}`}><Icon size={15} /><span>{text(ar, item[1], item[2])}</span></button>; })}</div>)}
     </aside>
 
-    <div className="lg:hidden sticky top-0 z-20 flex items-center gap-2 border-b border-[#e7e7e7] bg-white px-3 py-2"><button type="button" className="settings-mobile-nav-btn" aria-label={text(ar, "Open settings menu", "فتح قائمة الإعدادات")} onClick={() => setSettingsNavOpen(true)}><Icons.menu size={18} /></button><span className="text-[13px] font-semibold text-[#202124]">{text(ar, "Settings", "الإعدادات")}</span></div><main className="min-w-0 flex-1 overflow-y-auto bg-[#f7f7f7]">
-      <div className="flex h-[52px] items-center justify-between border-b border-[#e7e7e7] bg-white px-6"><span className="text-[15px] font-semibold text-[#202124]">{text(ar, "Settings", "الإعدادات")}</span><div className="flex items-center gap-3 text-[11px] font-semibold text-[#202124]"><span>IMKAN</span><span className="grid h-7 w-7 place-items-center rounded-full bg-[#e7efff] text-[9px] text-[#315da8]">IM</span></div></div>
+    <main className="min-w-0 flex-1">
+      <div className="min-w-0 flex-1 overflow-y-auto bg-[#f7f7f7]">
+      <div className="flex h-[52px] items-center justify-between border-b border-[#e7e7e7] bg-white px-4 sm:px-6">
+        <div className="flex items-center gap-2 min-w-0">
+          <button type="button" className="settings-mobile-nav-btn settings-header-menu-btn lg:hidden" aria-label={text(ar, "Open settings menu", "فتح قائمة الإعدادات")} onClick={() => setSettingsNavOpen(true)}>
+            <Icons.menu size={18} />
+          </button>
+          <span className="text-[15px] font-semibold text-[#202124]">{text(ar, "Settings", "الإعدادات")}</span>
+        </div><div className="flex items-center gap-3 text-[11px] font-semibold text-[#202124]"><span>IMKAN</span><span className="grid h-7 w-7 place-items-center rounded-full bg-[#e7efff] text-[9px] text-[#315da8]">IM</span></div></div>
       <div className="mx-auto w-full max-w-[1050px] px-6 py-7 lg:px-8">
         {message ? <div className="mb-4 rounded-[10px] border border-[#b8e2d6] bg-[#effaf6] px-4 py-3 text-[12px] text-[#176a55]">{message}</div> : null}
         {error ? <div className="mb-4 rounded-[10px] border border-[#f1c5c5] bg-[#fff5f5] px-4 py-3 text-[12px] text-[#a52a2a]">{error}</div> : null}
