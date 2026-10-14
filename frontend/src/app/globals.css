@@ -4717,13 +4717,13 @@ html[data-theme="dark"] .zoho-admin-input{background:var(--wd-bg);color:var(--wd
 .workflow-like-table.borderless tbody tr+tr td{border-top:1px solid #f3f5f8;}
 /* Zoho-style status indicators on file/folder rows */
 .wd-file-status-icons{display:inline-flex;align-items:center;gap:3px;margin-inline-start:6px;flex-shrink:0;vertical-align:middle;}
-.wd-file-status-icon{display:inline-flex;align-items:center;justify-content:center;width:16px;height:16px;border-radius:4px;font-size:10px;line-height:1;color:#5b6570;background:#f1f4f6;border:1px solid #e2e6ea;}
-.wd-file-status-icon[data-kind="checkout"]{color:#b45309;background:#fff7ed;border-color:#fed7aa;}
-.wd-file-status-icon[data-kind="final"]{color:#1d4ed8;background:#eff6ff;border-color:#bfdbfe;}
-.wd-file-status-icon[data-kind="workflow"]{color:#0f766e;background:#f0fdfa;border-color:#99f6e4;}
-.wd-file-status-icon[data-kind="label"]{color:#7c3aed;background:#f5f3ff;border-color:#ddd6fe;}
-.wd-file-status-icon[data-kind="expired"]{color:#b91c1c;background:#fef2f2;border-color:#fecaca;}
-.wd-file-status-icon[data-kind="follow"]{color:#0f766e;background:#f0fdfa;border-color:#99f6e4;}
+.wd-file-status-icon{display:inline-flex;align-items:center;justify-content:center;width:16px;height:16px;border-radius:0;font-size:10px;line-height:1;color:#64748b;background:transparent !important;border:0 !important;padding:0;}
+.wd-file-status-icon[data-kind="checkout"],
+.wd-file-status-icon[data-kind="final"],
+.wd-file-status-icon[data-kind="workflow"],
+.wd-file-status-icon[data-kind="label"],
+.wd-file-status-icon[data-kind="expired"],
+.wd-file-status-icon[data-kind="follow"]{color:#64748b;background:transparent !important;border:0 !important;}
 .wd-list-row[data-control="checked_out"]{background:#fff8f1;}
 .wd-list-row[data-control="final"]{background:#f5f8ff;}
 .zoho-grid-card[data-control="checked_out"]{box-shadow:inset 0 0 0 1px #fed7aa;}
@@ -4731,13 +4731,13 @@ html[data-theme="dark"] .zoho-admin-input{background:var(--wd-bg);color:var(--wd
 .wd-list-row:hover .wd-list-name,
 .wd-list-row:hover a{color:var(--wd-text);}
 .wd-list-row:hover .wd-list-meta{color:#3f4b5a;}
-html[data-theme="dark"] .wd-file-status-icon{background:#1f2933;border-color:#374151;color:#cbd5e1;}
-html[data-theme="dark"] .wd-file-status-icon[data-kind="checkout"]{color:#fdba74;background:#431407;border-color:#9a3412;}
-html[data-theme="dark"] .wd-file-status-icon[data-kind="final"]{color:#93c5fd;background:#1e3a5f;border-color:#1d4ed8;}
-html[data-theme="dark"] .wd-file-status-icon[data-kind="workflow"]{color:#5eead4;background:#134e4a;border-color:#0f766e;}
-html[data-theme="dark"] .wd-file-status-icon[data-kind="label"]{color:#c4b5fd;background:#2e1065;border-color:#6d28d9;}
-html[data-theme="dark"] .wd-file-status-icon[data-kind="expired"]{color:#fca5a5;background:#450a0a;border-color:#b91c1c;}
-html[data-theme="dark"] .wd-file-status-icon[data-kind="follow"]{color:#5eead4;background:#134e4a;border-color:#0f766e;}
+html[data-theme="dark"] .wd-file-status-icon{background:transparent !important;border:0 !important;color:#94a3b8;}
+html[data-theme="dark"] .wd-file-status-icon[data-kind="checkout"],
+html[data-theme="dark"] .wd-file-status-icon[data-kind="final"],
+html[data-theme="dark"] .wd-file-status-icon[data-kind="workflow"],
+html[data-theme="dark"] .wd-file-status-icon[data-kind="label"],
+html[data-theme="dark"] .wd-file-status-icon[data-kind="expired"],
+html[data-theme="dark"] .wd-file-status-icon[data-kind="follow"]{background:transparent !important;border:0 !important;color:#94a3b8;}
 html[data-theme="dark"] .wd-list-row[data-control="checked_out"]{background:#3a2a1c;}
 html[data-theme="dark"] .wd-list-row[data-control="final"]{background:#1a2740;}
 html[data-theme="dark"] .wd-list-row[data-control="checked_out"]:hover,
@@ -8488,3 +8488,185 @@ html[data-theme="dark"] .wd-row-label{border-color:#333;color:#94a3b8}
 .wd-col-draggable:active{cursor:grabbing}
 .wd-col-draggable.wd-col-dragging{opacity:.55}
 .wd-list-head th{white-space:nowrap;font-size:12px;font-weight:600;color:var(--wd-text-muted)}
+
+
+/* ===== 2026-10-14 UI polish: status icons, reports filters, groups, team folder, settings ===== */
+.wd-file-status-icon,
+.wd-file-status-icon[data-kind]{
+  background: transparent !important;
+  border: 0 !important;
+  box-shadow: none !important;
+  border-radius: 0 !important;
+  color: #64748b !important;
+}
+html[data-theme="dark"] .wd-file-status-icon,
+html[data-theme="dark"] .wd-file-status-icon[data-kind]{
+  background: transparent !important;
+  border: 0 !important;
+  color: #94a3b8 !important;
+}
+
+/* Audit reports: filters on one row (including mobile) */
+.admin-audit-filters-row{
+  display: flex !important;
+  flex-direction: row !important;
+  flex-wrap: nowrap !important;
+  gap: 8px !important;
+  align-items: stretch;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  padding-bottom: 2px;
+}
+.admin-audit-filters-row > *{
+  flex: 1 1 0;
+  min-width: 140px;
+}
+@media (max-width: 640px){
+  .admin-audit-filters-row > *{ min-width: 128px; }
+  .admin-audit-filters-row .admin-filter-select-btn,
+  .admin-audit-filters-row button.flex.h-\[42px\]{ height: 38px !important; font-size: 12px !important; padding-inline: 8px !important; }
+}
+
+/* New Report button — project pill style, not oversized */
+.admin-audit-new-report{
+  display: inline-flex !important;
+  align-items: center;
+  justify-content: center;
+  height: 32px !important;
+  min-height: 32px !important;
+  padding: 0 14px !important;
+  border-radius: var(--wd-pill-radius, 16px) !important;
+  font-size: 12px !important;
+  font-weight: 700 !important;
+  line-height: 1 !important;
+  box-shadow: none !important;
+  white-space: nowrap;
+}
+@media (max-width: 1023px){
+  .admin-audit-new-report{ display: inline-flex !important; }
+}
+
+/* Groups: ensure mobile can scroll content; Create Group single line */
+.admin-groups-page{
+  overflow: hidden;
+}
+@media (max-width: 1023px){
+  .admin-groups-page{
+    overflow-y: auto !important;
+    -webkit-overflow-scrolling: touch;
+  }
+  .admin-groups-page .grid{
+    overflow: visible !important;
+    min-height: auto !important;
+  }
+  .admin-groups-page aside,
+  .admin-groups-page section{
+    overflow: visible !important;
+    max-height: none !important;
+  }
+}
+.admin-groups-create-btn{
+  white-space: nowrap !important;
+  flex-shrink: 0;
+  display: inline-flex !important;
+  align-items: center;
+  gap: 6px;
+}
+
+/* Team folder create: icon-only on mobile, no pill text */
+@media (max-width: 680px){
+  .team-create-button{
+    font-size: 0 !important;
+    width: 36px !important;
+    min-width: 36px !important;
+    height: 36px !important;
+    padding: 0 !important;
+    gap: 0 !important;
+    border-radius: 50% !important;
+    justify-content: center !important;
+  }
+  .team-create-button > span{
+    font-size: 20px !important;
+    line-height: 1 !important;
+  }
+}
+
+/* Connections mobile side nav drawer */
+.connections-mobile-nav-btn{
+  display: none;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
+  border: 1px solid var(--wd-line, #e5e7eb);
+  background: var(--wd-bg, #fff);
+  color: var(--wd-text, #334155);
+  flex-shrink: 0;
+}
+@media (max-width: 1023px){
+  .connections-mobile-nav-btn{ display: inline-grid; place-items: center; }
+}
+.connections-mobile-drawer{
+  position: fixed;
+  inset: 0;
+  z-index: 400;
+}
+.connections-mobile-drawer-backdrop{
+  position: absolute;
+  inset: 0;
+  background: rgba(15,23,42,.45);
+}
+.connections-mobile-drawer-panel{
+  position: absolute;
+  inset-block: 0;
+  inset-inline-start: 0;
+  width: min(280px, 88vw);
+  background: #F7FAFE;
+  border-inline-end: 1px solid #E5EAF0;
+  box-shadow: 8px 0 24px rgba(15,23,42,.12);
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+}
+html[data-theme="dark"] .connections-mobile-drawer-panel{
+  background: #1a1f26;
+  border-color: #333;
+}
+
+/* Settings mobile tabs menu */
+.settings-mobile-nav-btn{
+  display: none;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
+  border: 1px solid #e7e7e7;
+  background: #fff;
+  color: #334155;
+  flex-shrink: 0;
+}
+@media (max-width: 1023px){
+  .settings-mobile-nav-btn{ display: inline-grid; place-items: center; }
+}
+.settings-mobile-drawer{
+  position: fixed;
+  inset: 0;
+  z-index: 400;
+}
+.settings-mobile-drawer-backdrop{ position: absolute; inset: 0; background: rgba(15,23,42,.45); }
+.settings-mobile-drawer-panel{
+  position: absolute;
+  inset-block: 0;
+  inset-inline-start: 0;
+  width: min(300px, 90vw);
+  background: #fff;
+  overflow-y: auto;
+  box-shadow: 8px 0 24px rgba(15,23,42,.12);
+  padding: 12px;
+}
+
+@media (max-width: 680px){
+  .team-create-button .team-create-label{ display: none !important; }
+}
