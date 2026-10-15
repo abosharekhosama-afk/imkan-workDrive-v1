@@ -99,8 +99,8 @@ export function SelectionBar({
           ]} />
         <button type="button" onClick={onCopyLink} title={label("menu.copyLink")} aria-label={label("menu.copyLink")}
           className="flex h-7 w-7 items-center justify-center rounded-full text-[color:var(--wd-primary-ink)] hover:bg-[var(--wd-active)]"><Icons.link size={14} /></button>
-        <button type="button" onClick={onDownload} title={label("sel.download")} aria-label={label("sel.download")}
-          className="flex h-7 w-7 items-center justify-center rounded-full text-[color:var(--wd-primary-ink)] hover:bg-[var(--wd-active)]"><Icons.download size={14} /></button>
+        <button type="button" onClick={(e) => { e.preventDefault(); e.stopPropagation(); onDownload(); }} title={label("sel.download")} aria-label={label("sel.download")}
+          className="flex h-9 w-9 touch-manipulation items-center justify-center rounded-full text-[color:var(--wd-primary-ink)] hover:bg-[var(--wd-active)] active:bg-[var(--wd-active)]"><Icons.download size={16} /></button>
         <FileActionsMenu
           context={{
             resourceType: menuResourceType ?? (folderCount > 0 && fileCount === 0 ? "FOLDER" : "FILE"),
