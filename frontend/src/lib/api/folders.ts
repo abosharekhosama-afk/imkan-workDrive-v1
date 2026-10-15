@@ -2,11 +2,33 @@ import { apiRequest } from "./client";
 import { emitGlobalToast } from "../global-toast";
 import type { FolderContents, FolderDetail, FolderRecord } from "./types";
 
-export type ContentFilters = { type?: string; status?: string; owner?: string; date?: string; dateField?: string; dateFrom?: string; dateTo?: string; query?: string };
+export type ContentFilters = {
+  type?: string;
+  status?: string;
+  owner?: string;
+  date?: string;
+  dateField?: string;
+  dateFrom?: string;
+  dateTo?: string;
+  query?: string;
+  dataTemplateId?: string;
+  criteria?: Array<{ key: string; op: string; value: string; join: "AND" | "OR" }>;
+};
 function withFilters(path: string, filters?: ContentFilters) {
   if (!filters) return path;
   const q = new URLSearchParams();
-  for (const [key, value] of Object.entries(filters)) if (value) q.set(key, value);
+  for (const [key, value] of Object.entries(filters)) {
+    if (value == null || value === "") continue;
+    if (key === "criteria" && Array.isArray(value)) {
+      if (value.length) q.set("criteria", JSON.stringify(value.slice(0, 5)));
+      continue;
+    }
+    if (key === "dataTemplateId") {
+      q.set("dataTemplate", String(value));
+      continue;
+    }
+    q.set(key, String(value));
+  }
   return q.toString() ? `${path}?${q.toString()}` : path;
 }
 export function listRootContents(filters?: ContentFilters): Promise<FolderContents> {
