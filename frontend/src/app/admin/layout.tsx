@@ -11,7 +11,7 @@ function AdminFrame({ children }: { children: ReactNode }) {
   const width = sidebarCollapsed ? "md:w-16" : "md:w-[255px]";
   return (
     <div
-      className="admin-console-shell admin-theme-root flex h-screen min-h-0 w-full overflow-hidden bg-[var(--wd-canvas,#f7f7f7)] text-[var(--wd-text,#212121)]"
+      className="admin-console-shell admin-theme-root flex h-[100dvh] min-h-0 w-full overflow-hidden bg-[var(--wd-canvas,#f7f7f7)] text-[var(--wd-text,#212121)]"
       style={{ fontFamily: "var(--user-font-family), Arial, system-ui, sans-serif" }}
     >
       <aside className={`hidden shrink-0 md:block ${width}`} aria-label="admin">
@@ -27,7 +27,7 @@ function AdminFrame({ children }: { children: ReactNode }) {
       ) : null}
       <div className="flex min-w-0 flex-1 flex-col overflow-hidden bg-[var(--wd-canvas,#f7f7f7)]">
         <TopHeader adminMode />
-        <div className="admin-theme-content flex min-h-0 min-w-0 flex-1 flex-col overflow-y-auto overflow-x-hidden bg-[var(--wd-canvas,#f7f7f7)] text-[var(--wd-text,#212121)]" style={{ fontFamily: "var(--user-font-family), Arial, system-ui, sans-serif" }}>
+        <div className="admin-theme-content flex min-h-0 min-w-0 flex-1 flex-col overflow-y-auto overflow-x-hidden bg-[var(--wd-canvas,#f7f7f7)] text-[var(--wd-text,#212121)] pb-[max(16px,env(safe-area-inset-bottom,0px))]" style={{ fontFamily: "var(--user-font-family), Arial, system-ui, sans-serif" }}>
           {children}
         </div>
       </div>
