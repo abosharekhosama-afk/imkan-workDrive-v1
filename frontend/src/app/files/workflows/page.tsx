@@ -27,7 +27,10 @@ export default function WorkflowsPage() {
   const [createOpen, setCreateOpen] = useState(false);
   const [rows, setRows] = useState<Workflow[]>([]);
   const [q, setQ] = useState("");
-  const [scope, setScope] = useState("all");
+  const [scope, setScope] = useState(() => {
+    const s = searchParams.get("scope");
+    return s === "drafts" || s === "mine" ? s : "all";
+  });
   const [busy, setBusy] = useState<string | null>(null);
   const [mode, setMode] = useState<CreateMode>("MANUAL");
   const [resourceType, setResourceType] = useState<ResourceType>("FILE");
@@ -40,6 +43,11 @@ export default function WorkflowsPage() {
 
   const load = () => void listWorkflows(scope === "all" ? undefined : scope).then(setRows).catch(() => setRows([]));
   useEffect(load, [scope]);
+  useEffect(() => {
+    const s = searchParams.get("scope");
+    const next = s === "drafts" || s === "mine" ? s : "all";
+    setScope((prev) => (prev === next ? prev : next));
+  }, [searchParams]);
   useEffect(() => {
     if (searchParams.get("create") === "1" && access?.canCreate) setCreateOpen(true);
   }, [searchParams, access]);
