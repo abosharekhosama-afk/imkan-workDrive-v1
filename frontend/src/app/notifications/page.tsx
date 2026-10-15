@@ -48,8 +48,8 @@ export default function NotificationsPage() {
   const unread = items.filter((n) => !n.readAt).length;
 
   return (
-    <main className="flex min-h-0 flex-1 flex-col bg-white" dir={ar ? "rtl" : "ltr"}>
-      <div className="min-h-0 flex-1 overflow-y-auto px-3 md:px-5 py-4">
+    <main className="flex min-h-[100dvh] w-full flex-1 flex-col bg-white md:min-h-0" dir={ar ? "rtl" : "ltr"}>
+      <div className="min-h-0 w-full flex-1 overflow-y-auto px-3 md:px-5 py-4">
         <div className="mb-5 flex flex-wrap items-end justify-between gap-3">
           <div>
             <p className="text-[9px] font-semibold uppercase tracking-[.16em] text-[#1B66EA]">IMKAN WorkDrive</p>
@@ -113,7 +113,7 @@ export default function NotificationsPage() {
             </div>
           ) : (
             <div className="workflow-like-list w-full max-w-full overflow-x-auto">
-              <table className="wd-table workflow-like-table borderless min-w-[36rem]">
+              <table className="wd-table workflow-like-table borderless w-full min-w-0 md:min-w-[36rem]">
                 <thead>
                   <tr>
                     <th style={{ width: 48 }}></th>
