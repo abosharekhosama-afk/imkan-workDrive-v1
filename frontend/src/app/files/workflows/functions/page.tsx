@@ -872,7 +872,7 @@ export default function WorkflowFunctionsPage({ standalone = false }: { standalo
       <div className="flex min-h-full w-full flex-col">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-2">
-            <WorkflowHelp compact helpKey="workflow.functions" title={ar ? "ما هي الدوال المخصصة؟" : "What are Custom Functions?"} description={ar ? "منطق قابل لإعادة الاستخدام يُبنى بصرياً، ثم يُربط بمدخلات ومخرجات داخل Workflow." : "Reusable logic built visually, then connected to workflow inputs and outputs."} />
+            <WorkflowHelp compact helpKey="workflow.functions" />
             <span className="text-[10px] text-slate-500">{rows.length} {ar ? "دوال" : "functions"}</span>
           </div>
           <button className="wd-pill wd-pill-new" onClick={() => { setEditingFunctionId(null); setDraft({ ...STARTER, name: "", key: "", description: "", definition: { inputs: [], operations: [], outputs: [] } }); setOpen(true); }}>＋ {ar ? "دالة جديدة" : "New function"}</button>
