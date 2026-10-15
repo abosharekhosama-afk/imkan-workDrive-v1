@@ -898,5 +898,23 @@
   "settings.securityLog": "سجل الحماية",
   "settings.securityNavHint": "راجع الجلسات النشطة وسجل الحماية.",
   "settings.thisDevice": "هذه الجلسة",
-  "settings.noSecurityEvents": "لا توجد أحداث حماية بعد."
+  "settings.noSecurityEvents": "لا توجد أحداث حماية بعد.",
+  "search": {
+    "placeholder": "ابحث في الملفات والمجلدات",
+    "filters": "عوامل التصفية",
+    "filter": {
+      "all": "الكل",
+      "files": "ملفات",
+      "folders": "مجلدات"
+    },
+    "empty": "لا توجد نتائج",
+    "group": {
+      "folders": "المجلدات",
+      "files": "الملفات"
+    },
+    "viewAll": "عرض كل النتائج",
+    "createdBy": "أنشئ بواسطة",
+    "anyone": "أي شخص",
+    "me": "أنا"
+  }
 }

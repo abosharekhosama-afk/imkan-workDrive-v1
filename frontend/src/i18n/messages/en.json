@@ -898,5 +898,23 @@
   "settings.securityLog": "Security log",
   "settings.securityNavHint": "Review active sessions and the security log.",
   "settings.thisDevice": "This device",
-  "settings.noSecurityEvents": "No security events yet."
+  "settings.noSecurityEvents": "No security events yet.",
+  "search": {
+    "placeholder": "Search files and folders",
+    "filters": "Filters",
+    "filter": {
+      "all": "All",
+      "files": "Files",
+      "folders": "Folders"
+    },
+    "empty": "No results",
+    "group": {
+      "folders": "Folders",
+      "files": "Files"
+    },
+    "viewAll": "View all results",
+    "createdBy": "Created by",
+    "anyone": "Anyone",
+    "me": "Me"
+  }
 }
