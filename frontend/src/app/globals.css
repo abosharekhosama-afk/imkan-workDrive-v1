@@ -8963,3 +8963,21 @@ html[data-theme="dark"] .workflow-ui .workflow-modal-backdrop{
 .admin-theme-content:has(.admin-audit-filters-row){
   overflow-x: visible !important;
 }
+
+
+/* Admin console: ensure full content is scrollable on all viewports */
+.admin-console-shell {
+  height: 100dvh !important;
+  max-height: 100dvh !important;
+}
+.admin-theme-content {
+  overflow-y: auto !important;
+  overscroll-behavior: contain;
+  padding-bottom: max(20px, env(safe-area-inset-bottom, 0px)) !important;
+}
+@media (max-width: 768px) {
+  .admin-console-shell {
+    height: 100svh !important;
+    max-height: 100svh !important;
+  }
+}
