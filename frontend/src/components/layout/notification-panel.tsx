@@ -65,7 +65,7 @@ export function NotificationPanel({ open, onClose }: { open: boolean; onClose: (
     <div
       ref={ref}
       dir={locale === "ar" ? "rtl" : "ltr"}
-      className="wd-menu fixed end-3 top-[52px] z-[120] w-[min(390px,calc(100vw-24px))] !p-0 overflow-hidden bg-[var(--wd-bg,#fff)] border border-[color:var(--wd-line,#e5e7eb)] text-[color:var(--wd-text,#212121)]"
+      className="wd-menu fixed inset-x-0 bottom-0 top-[48px] z-[120] w-full !p-0 overflow-hidden bg-[var(--wd-bg,#fff)] border border-[color:var(--wd-line,#e5e7eb)] text-[color:var(--wd-text,#212121)] sm:inset-x-auto sm:bottom-auto sm:end-3 sm:top-[52px] sm:w-[min(390px,calc(100vw-24px))] sm:rounded-lg"
       role="dialog"
       aria-label={label("nav.notifications")}
     >
@@ -88,7 +88,7 @@ export function NotificationPanel({ open, onClose }: { open: boolean; onClose: (
         </div>
       </div>
 
-      <div className="max-h-[min(520px,65vh)] overflow-y-auto p-2 bg-[var(--wd-bg,#fff)]">
+      <div className="max-h-[min(520px,calc(100dvh-140px))] overflow-y-auto p-2 bg-[var(--wd-bg,#fff)] sm:max-h-[min(520px,65vh)]">
         {loading ? (
           <div className="px-3 py-10 text-center text-[11px] text-[color:var(--wd-text-muted,#94a3b8)]">{label("common.loading")}</div>
         ) : unreadNotes.length === 0 ? (
