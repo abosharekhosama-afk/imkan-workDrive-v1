@@ -525,7 +525,7 @@ export default function TemplatesPage() {
         </div>
 
         <div className="flex min-h-0 flex-col lg:flex-row">
-            <aside className="w-full shrink-0 border-b border-slate-200 bg-[var(--wd-bg,#fff)] p-3 lg:w-56 lg:border-b-0 lg:border-r">
+            <aside className="hidden w-full shrink-0 border-b border-slate-200 bg-[var(--wd-bg,#fff)] p-3 lg:block lg:w-56 lg:border-b-0 lg:border-r">
               <div className="flex items-center justify-between px-2 pb-2">
                 <div className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">{text(ar, "Category", "التصنيف")}</div>
                 {libraryCapabilities?.canCreateCategory && library !== "PUBLIC" && <button type="button" onClick={() => document.getElementById("new-template-category")?.focus()} className="rounded-md px-2 py-1 text-[15px] leading-none text-slate-500 hover:bg-[var(--wd-hover,#f1f5f9)]" aria-label={text(ar, "Create category", "إنشاء تصنيف")}>+</button>}
