@@ -381,6 +381,8 @@ export function FileBrowser({
         dateField: advancedFilter.dateField,
         dateFrom: advancedFilter.dateFrom || undefined,
         dateTo: advancedFilter.dateTo || undefined,
+        dataTemplateId: advancedFilter.dataTemplateId || undefined,
+        criteria: advancedFilter.dataTemplateCriteria?.filter((c) => c.value !== "") || undefined,
       } as const;
 
       // Critical path: folder/root/search contents. Favorites run in parallel so
@@ -427,7 +429,9 @@ export function FileBrowser({
             filterOpts.status ||
             filterOpts.owner ||
             filterOpts.dateFrom ||
-            filterOpts.dateTo,
+            filterOpts.dateTo ||
+            filterOpts.dataTemplateId ||
+            (filterOpts.criteria && filterOpts.criteria.length > 0),
         );
         if (!hasActiveFilter && !bootstrapConsumedRef.current) {
           try {
