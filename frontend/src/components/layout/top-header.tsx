@@ -289,8 +289,10 @@ export function TopHeader({ adminMode = false }: { adminMode?: boolean }) {
         <span className="max-w-[42vw] truncate text-[15px] font-semibold text-[color:var(--wd-text,#212121)]">{resolveTopHeaderTitle({ pathname, scopeFolderName: scope.folderName, adminMode, locale, label })}</span>
         {showMyFoldersManage ? (
           <div ref={manageRef} className="relative ms-1">
-            <button id="my-folders-manage" type="button" className="wd-my-folders-manage wd-icon-btn inline-flex h-9 w-9 items-center justify-center rounded-full border border-[color:var(--wd-line,#e2e8f0)] bg-[var(--wd-bg,#fff)] text-[color:var(--wd-text-muted,#475569)] hover:bg-[var(--wd-hover,#f8fafc)]" onClick={() => setManageOpen((v) => !v)} aria-expanded={manageOpen} aria-haspopup="menu" aria-label={locale === "ar" ? "إدارة" : "Manage"} title={locale === "ar" ? "إدارة" : "Manage"}>
-              <Icons.gear size={16} />
+            <button id="my-folders-manage" type="button" className="wd-my-folders-manage inline-flex h-9 items-center gap-1.5 rounded-full border border-[color:var(--wd-line,#e2e8f0)] bg-[var(--wd-bg,#fff)] px-3 text-[12.5px] font-medium text-[color:var(--wd-text,#334155)] hover:bg-[var(--wd-hover,#f8fafc)]" onClick={() => setManageOpen((v) => !v)} aria-expanded={manageOpen} aria-haspopup="menu" aria-label={locale === "ar" ? "إدارة" : "Manage"} title={locale === "ar" ? "إدارة" : "Manage"}>
+              <Icons.gear size={15} />
+              <span>{locale === "ar" ? "إدارة" : "Manage"}</span>
+              <Icons.chevD size={12} />
             </button>
             {manageOpen ? (
               <div className="wd-manage-menu" role="menu" aria-label={locale === "ar" ? "إدارة مجلداتي" : "Manage My Folders"}>

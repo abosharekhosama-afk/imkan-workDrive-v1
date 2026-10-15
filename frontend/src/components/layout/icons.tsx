@@ -45,7 +45,7 @@ function check(p: P) { return (<Svg {...p}><path d="M20 6 9 17l-5-5" /></Svg>); 
 function sort(p: P) { return (<Svg {...p}><path d="m7 15 5 5 5-5M7 9l5-5 5 5" /></Svg>); }
 function funnel(p: P) { return (<Svg {...p}><path d="M3 5h18l-7 8v5.5l-4 2V13Z" /></Svg>); }
 function compact(p: P) { return (<Svg {...p}><path d="M4 6h16M4 10h16M4 14h16M4 18h16" /></Svg>); }
-function gear(p: P) { return (<Svg {...p}><circle cx="12" cy="12" r="6" /><path d="M4 12h16M12 4v16M6.3 6.3l1.4 1.4M17.7 17.7l1.4 1.4M6.3 17.7l-1.4 1.4M17.7 6.3l-1.4 1.4" /></Svg>); }
+function gear(p: P) { return (<Svg {...p}><path d="M12 15.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7Z" /><path d="M19.4 13a7.8 7.8 0 0 0 .05-2l2.05-1.55-2-3.45-2.45.95a7.6 7.6 0 0 0-1.75-1L15 3.5h-4l-.3 2.45a7.6 7.6 0 0 0-1.75 1L6.5 6l-2 3.45L6.55 11a7.8 7.8 0 0 0 0 2L4.5 14.55 6.5 18l2.45-.95a7.6 7.6 0 0 0 1.75 1L11 20.5h4l.3-2.45a7.6 7.6 0 0 0 1.75-1l2.45.95 2-3.45L19.4 13Z" /></Svg>); }
 function horn(p: P) { return (<Svg {...p}><path d="m3 11 18-5v12L3 14v-3Z" /><path d="M11.6 16.8a3 3 0 1 1-5.8-1.6" /></Svg>); }
 function tree(p: P) { return (<Svg {...p}><circle cx="6" cy="5" r="2.2" /><circle cx="6" cy="19" r="2.2" /><circle cx="18" cy="12" r="2.2" /><path d="M6 7v10M7.8 6.2 16 10.8M7.8 17.8 16 13.2" /></Svg>); }
 function upload(p: P) { return (<Svg {...p}><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12" /></Svg>); }
