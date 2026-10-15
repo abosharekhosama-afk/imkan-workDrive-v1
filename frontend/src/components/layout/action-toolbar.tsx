@@ -230,7 +230,6 @@ export function ActionToolbar({
             else if (k === "uploadFolder") WorkdriveEvents.uploadFolder(currentFolderId ?? null);
             else if (k === "workflow") { close(); router.push("/files/workflows?create=1"); }
             else if (k === "templates") { close(); window.dispatchEvent(new CustomEvent("workdrive:template-picker", { detail: { folderId: currentFolderId ?? null } })); }
-            else if (k === "externalApps") WorkdriveEvents.externalApps();
             else if (k === "record") dispatchRecord("video");
             else if (["doc", "sheet", "slide", "link", "code"].includes(k)) window.dispatchEvent(new CustomEvent("workdrive:new-file", { detail: { kind: k, folderId: currentFolderId ?? null } }));
             else if (k === "cloud") window.dispatchEvent(new CustomEvent("workdrive:cloud-import", { detail: { folderId: currentFolderId ?? null } }));
@@ -242,7 +241,6 @@ export function ActionToolbar({
             { key: "uploadFolder", labelKey: "menu.uploadFolder", icon: <Icons.folder size={16} /> },
             ...(canCreateWorkflow ? [{ key: "workflow", labelKey: "workflows.create", icon: <Icons.flow size={16} /> } as const] : []),
             { key: "templates", labelKey: "menu.templates", icon: <Icons.doc size={16} /> },
-            { key: "externalApps", labelKey: "menu.externalApps", icon: <Icons.globe size={16} /> },
             { key: "cloud", labelKey: "menu.importCloud", icon: <Icons.globe size={16} /> },
             "sep",
             { key: "doc", labelKey: "menu.newDoc", icon: <Icons.doc size={16} />, descKey: "menu.newDocDesc" },
@@ -319,8 +317,10 @@ export function ActionToolbar({
             <label className="text-[11px] text-slate-500">{locale==="ar"?"حقل التاريخ":"Date field"}<ImkanOptionPicker fullWidth value={af.dateField} onChange={(value) => onAdvancedFilter?.({ ...af, dateField: (value === "created" ? "created" : "modified") })} ariaLabel={locale==="ar"?"حقل التاريخ":"Date field"} options={[{ value: "modified", label: locale==="ar"?"تاريخ التعديل":"Date modified" }, { value: "created", label: locale==="ar"?"تاريخ الإنشاء":"Date created" }]} /></label>
             <label className="text-[11px] text-slate-500">Data Template<ImkanOptionPicker fullWidth allowEmpty emptyLabel="All Data Templates" value={af.dataTemplateId} onChange={(value) => onAdvancedFilter?.({ ...af, dataTemplateId: value, dataTemplateCriteria: [] })} ariaLabel="Data Template" options={(dataTemplates ?? []).filter((template) => template.active).map((template) => ({ value: template.id, label: template.name }))} /></label>
             <label className="text-[11px] text-slate-500">Owner/author<ImkanOptionPicker fullWidth allowEmpty emptyLabel="All owners" value={af.owner} onChange={(value) => onAdvancedFilter?.({ ...af, owner: value })} ariaLabel="Owner" options={(owners ?? []).map((owner) => ({ value: owner.id, label: owner.name ?? owner.email }))} /></label>
-            <label className="col-span-2 text-[11px] text-slate-500">From<input type="date" value={af.dateFrom} onChange={e=>onAdvancedFilter?.({...af,dateFrom:e.target.value})} className="mt-1 w-full rounded-md border border-slate-200 px-2 py-1.5 text-[12px]" /></label>
-            <label className="col-span-2 text-[11px] text-slate-500">To<input type="date" value={af.dateTo} onChange={e=>onAdvancedFilter?.({...af,dateTo:e.target.value})} className="mt-1 w-full rounded-md border border-slate-200 px-2 py-1.5 text-[12px]" /></label>
+            <div className="col-span-2 grid grid-cols-2 gap-2">
+              <label className="text-[11px] text-slate-500">{locale==="ar"?"من":"From"}<input type="date" value={af.dateFrom} onChange={e=>onAdvancedFilter?.({...af,dateFrom:e.target.value})} className="mt-1 w-full rounded-md border border-slate-200 px-2 py-1.5 text-[12px]" /></label>
+              <label className="text-[11px] text-slate-500">{locale==="ar"?"إلى":"To"}<input type="date" value={af.dateTo} onChange={e=>onAdvancedFilter?.({...af,dateTo:e.target.value})} className="mt-1 w-full rounded-md border border-slate-200 px-2 py-1.5 text-[12px]" /></label>
+            </div>
           </div>
           {af.dataTemplateId ? (() => {
             const template = (dataTemplates ?? []).find((t) => t.id === af.dataTemplateId);
