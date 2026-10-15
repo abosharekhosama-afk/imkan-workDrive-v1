@@ -4,7 +4,7 @@ export type WorkflowShellTabKey =
   | "all"
   | "mine"
   | "drafts"
-  | "templates"
+  | "functions"
   | "connections"
   | "waiting"
   | "runs"
@@ -21,7 +21,7 @@ export type WorkflowShellTab = {
   capability: keyof WorkflowCapabilities;
 };
 
-const WORKSPACE_TAB_KEYS = new Set<WorkflowShellTabKey>(["all", "drafts", "runs"]);
+const WORKSPACE_TAB_KEYS = new Set<WorkflowShellTabKey>(["all", "drafts", "runs", "functions"]);
 
 export function workflowShellBase(adminConsole: boolean): string {
   return adminConsole ? "/admin/workflows" : "/files/workflows";
@@ -33,7 +33,7 @@ export function buildWorkflowShellTabs(adminConsole: boolean): WorkflowShellTab[
     { key: "all", href: base, labelEn: "All workflows", labelAr: "كل سير العمل", capability: "canViewWorkspace" },
     { key: "mine", href: `${base}?scope=mine`, labelEn: "My workflows", labelAr: "سير العمل الخاص بي", capability: "canViewMy" },
     { key: "drafts", href: `${base}?scope=drafts`, labelEn: "Drafts", labelAr: "المسودات", capability: "canViewDrafts" },
-    { key: "templates", href: `${base}/templates`, labelEn: "Data templates", labelAr: "قوالب البيانات", capability: "canViewTemplates" },
+    { key: "functions", href: `${base}/functions`, labelEn: "Custom functions", labelAr: "الدوال المخصصة", capability: "canViewFunctions" },
     { key: "connections", href: `${base}/connections`, labelEn: "Connections", labelAr: "الاتصالات", capability: "canViewFunctions" },
     { key: "waiting", href: `${base}/tasks`, labelEn: "Waiting for my action", labelAr: "بانتظار إجراءاتي", capability: "canViewWaiting" },
     { key: "runs", href: `${base}/runs`, labelEn: "Run history", labelAr: "سجل التشغيل", capability: "canViewRuns" },

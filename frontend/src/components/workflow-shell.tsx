@@ -15,7 +15,7 @@ export function WorkflowShell({ children, title, subtitle, active }: { children:
   const adminConsole = pathname.startsWith("/admin/workflows");
   const access = useWorkflowAccess();
   const helpKeyByActive = {
-    all: "workflow.workspace", mine: "workflow.workspace", drafts: "workflow.workspace", templates: "workflow.templates", functions: "workflow.functions", waiting: "workflow.tasks", runs: "workflow.runs", diagnostics: "workflow.diagnostics", queue: "workflow.queue", audit: "workflow.audit", "dynamic-values": "workflow.dynamic-values", connections: "workflow.connections",
+    all: "workflow.workspace", mine: "workflow.workspace", drafts: "workflow.workspace", functions: "workflow.functions", waiting: "workflow.tasks", runs: "workflow.runs", diagnostics: "workflow.diagnostics", queue: "workflow.queue", audit: "workflow.audit", "dynamic-values": "workflow.dynamic-values", connections: "workflow.connections",
   } as const;
   const contextualHelpKey = helpKeyByActive[active ?? "all"];
   const visibleItems = filterWorkflowShellTabs(buildWorkflowShellTabs(adminConsole), adminConsole, access);

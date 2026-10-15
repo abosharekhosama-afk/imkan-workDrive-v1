@@ -84,21 +84,21 @@ export function GlobalSearchPanel({
               ))}
               {loading ? <span className="zoho-spinner" aria-hidden="true">…</span> : null}
             </div>
-            <div className="zoho-search-owner-filters" role="group" aria-label={ar ? "أنشئ بواسطة" : "Created by"}>
-              <span className="zoho-search-owner-label">{ar ? "أنشئ بواسطة" : "Created by"}</span>
+            <div className="zoho-search-owner-filters" role="group" aria-label={label("search.createdBy" as never) || (ar ? "أنشئ بواسطة" : "Created by")}>
+              <span className="zoho-search-owner-label">{label("search.createdBy" as never) || (ar ? "أنشئ بواسطة" : "Created by")}</span>
               <button
                 type="button"
                 className={`zoho-filter-chip${ownerFilter === "anyone" ? " active" : ""}`}
                 onClick={() => onOwnerFilterChange("anyone")}
               >
-                {ar ? "أي شخص" : "Anyone"}
+                {label("search.anyone" as never) || (ar ? "أي شخص" : "Anyone")}
               </button>
               <button
                 type="button"
                 className={`zoho-filter-chip${ownerFilter === "me" ? " active" : ""}`}
                 onClick={() => onOwnerFilterChange("me")}
               >
-                {ar ? "أنا" : "Me"}
+                {label("search.me" as never) || (ar ? "أنا" : "Me")}
               </button>
             </div>
           </div>
