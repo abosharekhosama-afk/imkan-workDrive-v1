@@ -7594,6 +7594,24 @@ html {
   max-height: 100dvh !important;
   overflow: hidden !important;
   background: var(--wd-canvas, #fff) !important;
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+/* Mobile: prevent bottom UI clip under browser chrome / home indicator */
+@media (max-width: 768px) {
+  .workdrive-frame {
+    height: 100svh !important;
+    max-height: 100svh !important;
+  }
+  .imkan-workspace-content,
+  .imkan-workspace-layout,
+  .wd-page,
+  .theme-aware-page,
+  main.flex.flex-1 {
+    padding-bottom: max(12px, env(safe-area-inset-bottom, 0px));
+  }
+  .wd-selbar {
+    padding-bottom: max(8px, env(safe-area-inset-bottom, 0px));
+  }
 }
 .workdrive-topbar-slot {
   flex-shrink: 0;
