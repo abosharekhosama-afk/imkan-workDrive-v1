@@ -205,6 +205,8 @@ export class FoldersService {
   }
 
   async listContents(user: AccessTokenPayload, parentId?: string, filters: {
+    dataTemplateId?: string;
+    criteria?: string;
     type?: string;
     status?: string;
     ownerId?: string;
@@ -272,6 +274,73 @@ export class FoldersService {
     for (const file of files) {
       if (await this.canReadFile(user, file) && (!pendingApprovalIds || pendingApprovalIds.has(file.id))) visibleFiles.push(file);
     }
+    // Data template filter (bindings)
+    if (filters.dataTemplateId) {
+      const templateId = filters.dataTemplateId;
+      const fileIds = visibleFiles.map((f) => f.id);
+      const folderIds = visibleFolders.map((f) => f.id);
+      const bound = fileIds.length || folderIds.length
+        ? await this.prisma.fileDataTemplateBinding.findMany({
+            where: {
+              orgId: user.org_id,
+              templateId,
+              OR: [
+                ...(fileIds.length ? [{ fileId: { in: fileIds } }] : []),
+                ...(folderIds.length ? [{ folderId: { in: folderIds } }] : []),
+              ],
+            },
+            select: { fileId: true, folderId: true, customFields: true },
+          })
+        : [];
+      const boundFileIds = new Set(bound.map((b) => b.fileId).filter(Boolean) as string[]);
+      const boundFolderIds = new Set(bound.map((b) => b.folderId).filter(Boolean) as string[]);
+      visibleFiles.splice(0, visibleFiles.length, ...visibleFiles.filter((f) => boundFileIds.has(f.id)));
+      visibleFolders.splice(0, visibleFolders.length, ...visibleFolders.filter((f) => boundFolderIds.has(f.id)));
+
+      if (filters.criteria) {
+        try {
+          const criteria = JSON.parse(filters.criteria) as Array<{ key: string; op: string; value: string; join?: string }>;
+          if (Array.isArray(criteria) && criteria.length) {
+            const fieldsByResource = new Map<string, any>();
+            for (const b of bound) {
+              const id = b.fileId || b.folderId;
+              if (id) fieldsByResource.set(id, (b.customFields as any) ?? {});
+            }
+            const matchOne = (fields: any, c: { key: string; op: string; value: string }) => {
+              const raw = fields?.[c.key];
+              const val = raw == null ? "" : String(raw);
+              const target = c.value ?? "";
+              switch (c.op) {
+                case "eq": return val === target;
+                case "neq": return val !== target;
+                case "contains": return val.toLowerCase().includes(target.toLowerCase());
+                case "not_contains": return !val.toLowerCase().includes(target.toLowerCase());
+                case "lt": return Number(val) < Number(target);
+                case "gt": return Number(val) > Number(target);
+                case "before": return Date.parse(val) < Date.parse(target);
+                case "after": return Date.parse(val) > Date.parse(target);
+                default: return val === target;
+              }
+            };
+            const matchesCriteria = (id: string) => {
+              const fields = fieldsByResource.get(id) ?? {};
+              let ok = true;
+              for (let i = 0; i < criteria.length; i++) {
+                const c = criteria[i];
+                const hit = matchOne(fields, c);
+                if (i === 0) ok = hit;
+                else if ((c.join || "AND") === "OR") ok = ok || hit;
+                else ok = ok && hit;
+              }
+              return ok;
+            };
+            visibleFiles.splice(0, visibleFiles.length, ...visibleFiles.filter((f) => matchesCriteria(f.id)));
+            visibleFolders.splice(0, visibleFolders.length, ...visibleFolders.filter((f) => matchesCriteria(f.id)));
+          }
+        } catch { /* ignore bad criteria */ }
+      }
+    }
+
     const roots = visibleFolders.map((folder) => folder.id);
     const aggregates = await this.folderTreeAggregates(roots);
     return { folders: visibleFolders, files: visibleFiles, ...aggregates };
