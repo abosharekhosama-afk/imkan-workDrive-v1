@@ -12,6 +12,10 @@ import { IS_PUBLIC_KEY } from './public.decorator';
 import { AccessTokenPayload, JWT_SECRET_ENV } from './jwt.types';
 import { PrismaService } from '../prisma/prisma.service';
 import { OrgRole } from '@prisma/client';
+import { Optional } from '@nestjs/common';
+import { IntegrationKeysService } from '../integration-keys/integration-keys.service';
+import { INTEGRATION_KEY_ACCESS, IntegrationKeyAccessRule } from '../integration-keys/integration-key-access.decorator';
+import { isIntegrationKeyToken } from '../integration-keys/integration-key.crypto';
 
 export type AuthenticatedRequest = Request & {
   user?: AccessTokenPayload;
@@ -23,6 +27,7 @@ export class JwtAuthGuard implements CanActivate {
     private readonly config: ConfigService,
     private readonly reflector: Reflector,
     private readonly prisma: PrismaService,
+    @Optional() private readonly integrationKeys?: IntegrationKeysService,
   ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
@@ -38,6 +43,17 @@ export class JwtAuthGuard implements CanActivate {
     const header = request.headers.authorization;
     if (!header?.startsWith('Bearer ')) {
       throw new UnauthorizedException('Missing bearer token');
+    }
+
+    const bearer = header.slice('Bearer '.length).trim();
+    if (isIntegrationKeyToken(bearer)) {
+      if (!this.integrationKeys) throw new UnauthorizedException('Integration keys are not enabled');
+      const rule = this.reflector.getAllAndOverride<IntegrationKeyAccessRule | undefined>(INTEGRATION_KEY_ACCESS, [
+        context.getHandler(),
+        context.getClass(),
+      ]);
+      request.user = await this.integrationKeys.authenticate(bearer, rule, request);
+      return true;
     }
 
     const secret = this.config.get<string>(JWT_SECRET_ENV);

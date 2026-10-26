@@ -310,6 +310,7 @@ model Organization {
   createdAt DateTime @default(now()) @map("created_at")
 
   owner User? @relation("OrganizationOwner", fields: [ownerId], references: [id])
+  integrationApiKeys IntegrationApiKey[]
   uploadSessions UploadSession[]
   currentUsers User[] @relation("UserCurrentOrganization")
   officeSecurityPolicies OfficeSecurityPolicy[]
@@ -422,6 +423,7 @@ model User {
   ownedFiles             File[]                 @relation("FileOwner")
   uploadedVersions       FileVersion[]          @relation("VersionUploader")
   auditLogs              AuditLog[]
+  integrationApiKeysCreated IntegrationApiKey[] @relation("IntegrationApiKeyCreator")
   officeAuditPoliciesUpdated OfficeAuditPolicy[] @relation("OfficeAuditPolicyUpdater")
   favorites              Favorite[]
   resourceFollows        ResourceFollow[]
@@ -2922,4 +2924,28 @@ model BackupPurgeRequest {
   @@index([orgId, status, createdAt])
   @@index([runId])
   @@map("backup_purge_requests")
+}
+
+/// Inbound integration credential (e.g. OMA). The secret is never stored:
+/// only its SHA-256 hash. `prefix` is the non-secret lookup id shown in the UI.
+model IntegrationApiKey {
+  id           String    @id @default(uuid()) @db.Char(36)
+  orgId        String    @map("org_id") @db.Char(36)
+  name         String    @db.VarChar(120)
+  prefix       String    @unique @db.VarChar(32)
+  secretHash   String    @map("secret_hash") @db.Char(64)
+  scopes       Json
+  rootFolderId String?   @map("root_folder_id") @db.Char(36)
+  createdById  String    @map("created_by_id") @db.Char(36)
+  createdAt    DateTime  @default(now()) @map("created_at")
+  lastUsedAt   DateTime? @map("last_used_at")
+  revokedAt    DateTime? @map("revoked_at")
+  expiresAt    DateTime? @map("expires_at")
+
+  organization Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  createdBy    User         @relation("IntegrationApiKeyCreator", fields: [createdById], references: [id])
+
+  @@index([orgId, revokedAt])
+  @@index([createdById])
+  @@map("integration_api_keys")
 }

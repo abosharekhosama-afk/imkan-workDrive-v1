@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ConflictException,
   ForbiddenException,
   Injectable,
   NotFoundException,
@@ -15,6 +16,8 @@ import { PrismaService } from '../prisma/prisma.service';
 import { Inject } from '@nestjs/common';
 import { STORAGE_SERVICE, type StorageService } from '../storage/storage.types';
 import { CreateFolderInput } from './create-folder.schema';
+import type { EnsurePathInput } from './ensure-path.schema';
+import { createHash } from 'node:crypto';
 import type { BulkFolderOperationInput, FolderMoveCopyInput } from './operation.schema';
 import { randomUUID } from 'node:crypto';
 import { WorkflowEngineService } from '../workflows/workflow-engine.service';
@@ -169,6 +172,76 @@ export class FoldersService {
     this.dispatchWorkflowFolderEvent(user, 'create', created);
     void this.follows.notifyResourceEvent({ orgId: user.org_id, resourceType: ResourceType.FOLDER, resourceId: created.id, actorUserId: user.sub, action: AuditAction.CREATE, resourceName: created.name }).catch(() => undefined);
     return created;
+  }
+
+  /**
+   * Idempotently resolves a nested folder path, creating missing segments.
+   * Integration keys with a root folder resolve the path under that root
+   * (an explicit parentId must lie inside the root). Concurrent callers are
+   * serialised per parent with a MySQL named lock so the same path never
+   * produces duplicate folders.
+   */
+  async ensurePath(user: AccessTokenPayload, input: EnsurePathInput) {
+    const keyRoot = user.integrationKey?.rootFolderId ?? null;
+    let parentId: string | null = input.parentId ?? keyRoot;
+    if (parentId) {
+      const base = await this.prisma.folder.findFirst({ where: { id: parentId, orgId: user.org_id }, select: { id: true } });
+      if (!base) throw new NotFoundException('Folder not found');
+      if (keyRoot && parentId !== keyRoot && !(await this.isDescendantOf(user.org_id, parentId, keyRoot))) {
+        throw new NotFoundException('Folder not found');
+      }
+      if (!(await this.effective.canRead(user, ResourceType.FOLDER, parentId))) throw new NotFoundException('Folder not found');
+    }
+    const created: string[] = [];
+    const path: Array<{ id: string; name: string }> = [];
+    for (const name of input.segments) {
+      const resolved = await this.findOrCreateChild(user, parentId, name);
+      if (resolved.created) created.push(resolved.id);
+      path.push({ id: resolved.id, name });
+      parentId = resolved.id;
+    }
+    const leaf = path[path.length - 1];
+    return { folderId: leaf.id, name: leaf.name, path, created: created.length > 0, createdFolderIds: created };
+  }
+
+  private async isDescendantOf(orgId: string, folderId: string, ancestorId: string): Promise<boolean> {
+    let current: string | null = folderId;
+    for (let depth = 0; current && depth <= 64; depth++) {
+      if (current === ancestorId) return true;
+      const row: { parentId: string | null; orgId: string } | null = await this.prisma.folder.findFirst({ where: { id: current }, select: { parentId: true, orgId: true } });
+      if (!row || row.orgId !== orgId) return false;
+      current = row.parentId;
+    }
+    return false;
+  }
+
+  private findChildByName(user: AccessTokenPayload, parentId: string | null, name: string) {
+    return this.prisma.folder.findFirst({
+      where: { orgId: user.org_id, parentId, name, trashEntries: { none: { restoredAt: null } }, ...(parentId ? {} : { ownerId: user.sub }) },
+      orderBy: { id: 'asc' },
+      select: { id: true },
+    });
+  }
+
+  private async findOrCreateChild(user: AccessTokenPayload, parentId: string | null, name: string): Promise<{ id: string; created: boolean }> {
+    const existing = await this.findChildByName(user, parentId, name);
+    if (existing) return { id: existing.id, created: false };
+    const lockName = `wd_ensure_${createHash('sha256').update(`${user.org_id}:${parentId ?? `root:${user.sub}`}:${name.toLowerCase()}`).digest('hex').slice(0, 48)}`;
+    return this.prisma.$transaction(
+      async (tx) => {
+        const lock = await tx.$queryRawUnsafe<Array<{ l: number | bigint | null }>>('SELECT GET_LOCK(?, 10) AS l', lockName);
+        if (Number(lock[0]?.l ?? 0) !== 1) throw new ConflictException('Folder path is busy, please retry');
+        try {
+          const again = await this.findChildByName(user, parentId, name);
+          if (again) return { id: again.id, created: false };
+          const folder = await this.create(user, { name, parentId: parentId ?? undefined });
+          return { id: folder.id, created: true };
+        } finally {
+          await tx.$queryRawUnsafe('SELECT RELEASE_LOCK(?)', lockName);
+        }
+      },
+      { timeout: 30_000, maxWait: 10_000 },
+    );
   }
 
   async getMyFolder(user: AccessTokenPayload) {

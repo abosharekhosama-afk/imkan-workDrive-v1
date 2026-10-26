@@ -23,3 +23,7 @@ accounts-state-*.png
 login-*.log
 ui-check.mjs
 ui-mini.mjs
+
+# Browser session exports must never be committed
+workdrive.zoho.com_cookies.txt
+*_cookies.txt

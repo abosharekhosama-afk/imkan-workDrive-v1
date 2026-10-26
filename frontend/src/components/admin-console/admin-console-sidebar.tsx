@@ -25,6 +25,7 @@ const items: AdminItem[] = [
   { href: "/admin/workflows", en: "Workflows", ar: "سير العمل", icon: "flow", section: "Automation" },
   { href: "/admin/custom-functions", en: "Custom Functions", ar: "الدوال المخصصة", icon: "code" },
   { href: "/admin/connections", en: "Connections", ar: "الاتصالات", icon: "link" },
+  { href: "/admin/integration-keys", en: "App Access Keys", ar: "مفاتيح وصول التطبيقات", icon: "shield" },
   { href: "/admin/data-templates", en: "Data Templates", ar: "قوالب البيانات", icon: "layout", section: "Data & Policy" },
   { href: "/admin/dlp", en: "Data Loss Prevention", ar: "منع فقدان البيانات", icon: "shield" },
   { href: "/admin/settings", en: "Settings", ar: "الإعدادات", icon: "gear", section: "Security & Control" },
