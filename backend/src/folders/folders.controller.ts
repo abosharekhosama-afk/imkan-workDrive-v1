@@ -13,8 +13,10 @@ import { AccessAction, ResourceType } from '@prisma/client';
 import { CurrentUser } from '../auth/current-user.decorator';
 import type { AccessTokenPayload } from '../auth/jwt.types';
 import { parseResourceName } from '../common/parse-resource-name';
+import { IntegrationKeyAccess } from '../integration-keys/integration-key-access.decorator';
 import { RecentService } from '../recent/recent.service';
 import { parseCreateFolder } from './create-folder.schema';
+import { parseEnsurePath } from './ensure-path.schema';
 import { FoldersService } from './folders.service';
 import { parseBulkFolderOperation, parseFolderMoveCopy } from './operation.schema';
 
@@ -25,11 +27,24 @@ export class FoldersController {
     private readonly recent: RecentService,
   ) {}
 
+  @IntegrationKeyAccess('folders:write', { kind: 'bodyFolder', fields: ['parentId'] })
   @Post()
   create(@CurrentUser() user: AccessTokenPayload, @Body() body: unknown) {
     return this.folders.create(user, parseCreateFolder(body));
   }
 
+  /**
+   * Idempotently resolves (and creates when missing) a nested folder path such
+   * as `OMA/tenant/brand/posts`. With a rooted integration key the path is
+   * resolved under the key's root folder.
+   */
+  @IntegrationKeyAccess('folders:write', { kind: 'none' })
+  @Post('ensure-path')
+  ensurePath(@CurrentUser() user: AccessTokenPayload, @Body() body: unknown) {
+    return this.folders.ensurePath(user, parseEnsurePath(body));
+  }
+
+  @IntegrationKeyAccess('folders:read', { kind: 'unrootedOnly' })
   @Get()
   listRoots(
     @CurrentUser() user: AccessTokenPayload,
@@ -52,6 +67,7 @@ export class FoldersController {
     return this.folders.listAccessibleTree(user);
   }
 
+  @IntegrationKeyAccess('folders:read', { kind: 'folderParam', param: 'id' })
   @Get(':id')
   async getById(
     @CurrentUser() user: AccessTokenPayload,
@@ -98,6 +114,7 @@ export class FoldersController {
   @Post('bulk/trash')
   bulkTrash(@CurrentUser() user: AccessTokenPayload, @Body() body: unknown) { return this.folders.bulkTrash(user, parseBulkFolderOperation(body)); }
 
+  @IntegrationKeyAccess('folders:write', { kind: 'folderParam', param: 'id', excludeRoot: true })
   @Delete(':id')
   remove(
     @CurrentUser() user: AccessTokenPayload,

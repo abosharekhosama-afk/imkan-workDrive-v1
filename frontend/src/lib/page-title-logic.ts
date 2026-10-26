@@ -13,6 +13,7 @@ const ADMIN_TITLES: Array<[prefix: string, en: string, ar: string, exact?: boole
   ["/admin/client-users", "Client Users", "مستخدمو العملاء"],
   ["/admin/custom-functions", "Custom Functions", "الدوال المخصصة"],
   ["/admin/connections", "Connections", "الاتصالات"],
+  ["/admin/integration-keys", "App Access Keys", "مفاتيح وصول التطبيقات"],
   ["/admin/workflows", "Workflows", "سير العمل"],
   ["/admin/data-templates", "Data Templates", "قوالب البيانات"],
   ["/admin/dlp", "Data Loss Prevention", "منع فقدان البيانات"],

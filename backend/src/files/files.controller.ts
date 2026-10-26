@@ -21,6 +21,7 @@ import { CurrentUser } from '../auth/current-user.decorator';
 import type { AccessTokenPayload } from '../auth/jwt.types';
 import { parseResourceName } from '../common/parse-resource-name';
 import { contentDispositionAttachment } from '../common/content-disposition';
+import { IntegrationKeyAccess } from '../integration-keys/integration-key-access.decorator';
 import { RecentService } from '../recent/recent.service';
 import { FilesService } from './files.service';
 import { parseUploadComplete } from './upload-complete.schema';
@@ -45,6 +46,7 @@ export class FilesController {
   private static readonly UUID_REF_RE =
     /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
+  @IntegrationKeyAccess('files:write', { kind: 'bodyFolder', fields: ['folderId', 'folder_id'] })
   @Post('upload-request')
   requestUpload(
     @CurrentUser() user: AccessTokenPayload,
@@ -53,6 +55,7 @@ export class FilesController {
     return this.files.requestUpload(user, parseUploadRequest(body));
   }
 
+  @IntegrationKeyAccess('files:write', { kind: 'bodyFolder', fields: ['folderId', 'folder_id'] })
   @Post('upload-sessions')
   startResumableUpload(@CurrentUser() user: AccessTokenPayload, @Body() body: any) {
     return this.files.startResumableUpload(user, {
@@ -65,11 +68,13 @@ export class FilesController {
     });
   }
 
+  @IntegrationKeyAccess('files:write', { kind: 'uploadSessionParam', param: 'sessionId' })
   @Get('upload-sessions/:sessionId')
   getResumableUpload(@CurrentUser() user: AccessTokenPayload, @Param('sessionId', new ParseUUIDPipe({ version: '4' })) sessionId: string) {
     return this.files.getResumableUpload(user, sessionId);
   }
 
+  @IntegrationKeyAccess('files:write', { kind: 'uploadSessionParam', param: 'sessionId' })
   @Post('upload-sessions/:sessionId/parts/:partNumber')
   @UseInterceptors(FileInterceptor('chunk'))
   uploadResumablePart(
@@ -82,11 +87,13 @@ export class FilesController {
     return this.files.uploadResumablePart(user, sessionId, Number(partNumber), chunk, checksum);
   }
 
+  @IntegrationKeyAccess('files:write', { kind: 'uploadSessionParam', param: 'sessionId' })
   @Post('upload-sessions/:sessionId/complete')
   completeResumableUpload(@CurrentUser() user: AccessTokenPayload, @Param('sessionId', new ParseUUIDPipe({ version: '4' })) sessionId: string) {
     return this.files.completeResumableUpload(user, sessionId);
   }
 
+  @IntegrationKeyAccess('files:write', { kind: 'uploadSessionParam', param: 'sessionId' })
   @Delete('upload-sessions/:sessionId')
   abortResumableUpload(@CurrentUser() user: AccessTokenPayload, @Param('sessionId', new ParseUUIDPipe({ version: '4' })) sessionId: string) {
     return this.files.abortResumableUpload(user, sessionId);
@@ -97,6 +104,7 @@ export class FilesController {
     return this.files.cleanupExpiredResumableUploads(user);
   }
 
+  @IntegrationKeyAccess('files:write', { kind: 'uploadVersionBody', field: 'upload_id' })
   @Post('upload-complete')
   completeUpload(
     @CurrentUser() user: AccessTokenPayload,
@@ -120,6 +128,7 @@ export class FilesController {
   @Post(':id/dlp/labels/:labelId') addDlpLabel(@CurrentUser() user: AccessTokenPayload, @Param('id', new ParseUUIDPipe({ version: '4' })) id: string, @Param('labelId', new ParseUUIDPipe({ version: '4' })) labelId: string) { return this.dlpService.associateLabel(user, id, labelId); }
   @Delete(':id/dlp/labels/:labelId') removeDlpLabel(@CurrentUser() user: AccessTokenPayload, @Param('id', new ParseUUIDPipe({ version: '4' })) id: string, @Param('labelId', new ParseUUIDPipe({ version: '4' })) labelId: string) { return this.dlpService.removeLabel(user, id, labelId); }
 
+  @IntegrationKeyAccess('files:read', { kind: 'fileParam', param: 'id' })
   @Get(':id/details')
   getDetails(
     @CurrentUser() user: AccessTokenPayload,
@@ -129,6 +138,7 @@ export class FilesController {
   }
 
 
+  @IntegrationKeyAccess('files:read', { kind: 'fileParam', param: 'id' })
   @Get(':id/preview-url')
   async getPreviewUrl(
     @CurrentUser() user: AccessTokenPayload,
@@ -158,6 +168,7 @@ export class FilesController {
     return this.files.listActivities(user, id, Number.isFinite(parsed) ? parsed : 20);
   }
 
+  @IntegrationKeyAccess('files:read', { kind: 'fileParam', param: 'id' })
   @Get(':id/stream')
   async stream(
     @CurrentUser() user: AccessTokenPayload,
@@ -171,6 +182,7 @@ export class FilesController {
       .catch(() => undefined);
   }
 
+  @IntegrationKeyAccess('files:read', { kind: 'fileParam', param: 'id' })
   @Get(':id/download')
   async download(
     @CurrentUser() user: AccessTokenPayload,
@@ -340,6 +352,7 @@ export class FilesController {
     return this.files.rename(user, id, parseResourceName(body).name);
   }
 
+  @IntegrationKeyAccess('files:write', { kind: 'fileParam', param: 'id' })
   @Delete(':id')
   trash(
     @CurrentUser() user: AccessTokenPayload,

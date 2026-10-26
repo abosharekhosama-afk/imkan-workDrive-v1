@@ -1,3 +1,4 @@
+import { IntegrationKeysModule } from './integration-keys/integration-keys.module';
 import { Module } from '@nestjs/common';
 import './common/bigint-serialization';
 import { AppController } from './app.controller';
@@ -41,6 +42,7 @@ import { BackupModule } from './backup/backup.module';
     PrismaModule,
     PermissionsModule,
     AuthModule,
+    IntegrationKeysModule,
     BootstrapModule,
     FoldersModule,
     StorageModule,
