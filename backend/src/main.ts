@@ -45,11 +45,11 @@ async function bootstrap() {
   http.use(express.json({ limit: jsonLimit }));
   http.use(express.urlencoded({ limit: jsonLimit, extended: true }));
 
-  // CORS: prefer explicit allow-list in production
+    // CORS: prefer explicit allow-list in production
   const corsOriginsEnv = process.env.CORS_ORIGINS || process.env.FRONTEND_ORIGIN || process.env.FRONTEND_URL || '';
   const corsOrigins = corsOriginsEnv
     .split(',')
-    .map((o) => o.trim())
+    .map((o) => o.trim().replace(/\/$/, '')) // إزالة أي slash زائدة في النهاية
     .filter(Boolean);
 
   if (isProd && corsOrigins.length === 0) {
@@ -60,13 +60,41 @@ async function bootstrap() {
   }
 
   app.enableCors({
-    origin: corsOrigins.length > 0 ? corsOrigins : isProd ? false : true,
+    origin: (origin, callback) => {
+      // 1. السماح بطلبات السيرفر للسيرفر (Postman, Mobile apps, or same-origin) التي لا ترسل Origin header
+      if (!origin) {
+        return callback(null, true);
+      }
+
+      // إزالة الـ trailing slash لتفادي مشاكل المطابقة
+      const cleanOrigin = origin.replace(/\/$/, '');
+
+      // 2. التحقق مما إذا كان الـ Origin مسموحاً به في المتغيرات
+      const isAllowed = corsOrigins.some((allowed) => {
+        // دعم المطابقة المباشرة
+        if (cleanOrigin === allowed) return true;
+        // دعم النجوم (Wildcards) مثل https://*.vercel.app
+        if (allowed.includes('*')) {
+          const regex = new RegExp('^' + allowed.replace(/\./g, '\\.').replace(/\*/g, '.*') + '$');
+          return regex.test(cleanOrigin);
+        }
+        return false;
+      });
+
+      if (isAllowed || !isProd) {
+        callback(null, true);
+      } else {
+        // في حالة التطوير أو الرابط غير المسموح
+        callback(new Error(`CORS Error: Origin ${origin} is not allowed`));
+      }
+    },
     credentials: true,
     methods: ['GET', 'HEAD', 'PUT', 'POST', 'PATCH', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Accept', 'Authorization', 'X-Requested-With'],
-    exposedHeaders: ['X-RateLimit-Limit', 'X-RateLimit-Remaining', 'Retry-After'],
+    allowedHeaders: ['Content-Type', 'Accept', 'Authorization', 'X-Requested-With', 'Range', 'Origin'],
+    exposedHeaders: ['X-RateLimit-Limit', 'X-RateLimit-Remaining', 'Retry-After', 'Content-Range', 'ETag'],
     maxAge: 600,
   });
+
 
   await app.listen(process.env.PORT ?? 3001);
 }
