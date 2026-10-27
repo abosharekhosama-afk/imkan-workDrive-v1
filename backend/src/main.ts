@@ -59,9 +59,9 @@ async function bootstrap() {
     );
   }
 
-  app.enableCors({
-    origin: (origin, callback) => {
-      // 1. السماح بطلبات السيرفر للسيرفر (Postman, Mobile apps, or same-origin) التي لا ترسل Origin header
+    app.enableCors({
+    origin: (origin: string | undefined, callback: (err: Error | null, allow?: boolean) => void) => {
+      // 1. السماح بطلبات السيرفر للسيرفر (Postman, Mobile apps) التي لا ترسل Origin header
       if (!origin) {
         return callback(null, true);
       }
@@ -84,8 +84,7 @@ async function bootstrap() {
       if (isAllowed || !isProd) {
         callback(null, true);
       } else {
-        // في حالة التطوير أو الرابط غير المسموح
-        callback(new Error(`CORS Error: Origin ${origin} is not allowed`));
+        callback(new Error(`CORS Error: Origin ${origin} is not allowed`), false);
       }
     },
     credentials: true,
@@ -94,6 +93,7 @@ async function bootstrap() {
     exposedHeaders: ['X-RateLimit-Limit', 'X-RateLimit-Remaining', 'Retry-After', 'Content-Range', 'ETag'],
     maxAge: 600,
   });
+
 
 
   await app.listen(process.env.PORT ?? 3001);
