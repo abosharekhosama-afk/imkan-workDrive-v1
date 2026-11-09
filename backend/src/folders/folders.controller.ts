@@ -58,8 +58,11 @@ export class FoldersController {
     @Query('query') query?: string,
     @Query('dataTemplate') dataTemplateId?: string,
     @Query('criteria') criteria?: string,
+    @Query('cursor') cursor?: string,
+    @Query('limit') limit?: string,
+    @Query('offset') offset?: string,
   ) {
-    return this.folders.listContents(user, undefined, { type, status, ownerId, date, dateField, dateFrom, dateTo, query, dataTemplateId, criteria });
+    return this.folders.listContents(user, undefined, { type, status, ownerId, date, dateField, dateFrom, dateTo, query, dataTemplateId, criteria, cursor, limit, offset });
   }
 
   @Get('tree')
@@ -82,8 +85,11 @@ export class FoldersController {
     @Query('query') query?: string,
     @Query('dataTemplate') dataTemplateId?: string,
     @Query('criteria') criteria?: string,
+    @Query('cursor') cursor?: string,
+    @Query('limit') limit?: string,
+    @Query('offset') offset?: string,
   ) {
-    const result = await this.folders.getById(user, id, { type, status, ownerId, date, dateField, dateFrom, dateTo, query, dataTemplateId, criteria });
+    const result = await this.folders.getById(user, id, { type, status, ownerId, date, dateField, dateFrom, dateTo, query, dataTemplateId, criteria, cursor, limit, offset });
     void this.recent
       .record(user, ResourceType.FOLDER, id, AccessAction.VIEW)
       .catch(() => undefined);

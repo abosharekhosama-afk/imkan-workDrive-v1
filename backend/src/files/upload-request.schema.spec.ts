@@ -29,9 +29,20 @@ describe('parseUploadRequest', () => {
     ).toThrow(ForbiddenException);
   });
 
-  it('rejects a disallowed mime type', () => {
-    expect(() =>
-      parseUploadRequest({ ...valid, mime_type: 'application/x-msdownload' }),
-    ).toThrow();
+  it('allows omitting sha256 so the server can hash after the streamed PUT', () => {
+    const rest = {
+      name: valid.name,
+      folder_id: valid.folder_id,
+      size: valid.size,
+      mime_type: valid.mime_type,
+    };
+    expect(parseUploadRequest(rest).sha256).toBeNull();
+  });
+
+  it('accepts any well-formed MIME type', () => {
+    expect(
+      parseUploadRequest({ ...valid, mime_type: 'application/x-msdownload' })
+        .mimeType,
+    ).toBe('application/x-msdownload');
   });
 });

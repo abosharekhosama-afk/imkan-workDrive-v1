@@ -3,7 +3,19 @@ import { createHash, randomBytes, timingSafeEqual } from 'node:crypto';
 /** Public token prefix for inbound integration keys. */
 export const INTEGRATION_KEY_TOKEN_PREFIX = 'wdk_';
 
-export const INTEGRATION_KEY_SCOPES = ['files:read', 'files:write', 'folders:read', 'folders:write'] as const;
+export const INTEGRATION_KEY_SCOPES = [
+  'files:read',
+  'files:write',
+  'folders:read',
+  'folders:write',
+  'keys:manage',
+] as const;
+export const CHILD_KEY_SCOPES = [
+  'files:read',
+  'files:write',
+  'folders:read',
+  'folders:write',
+] as const;
 export type IntegrationKeyScope = (typeof INTEGRATION_KEY_SCOPES)[number];
 
 export type GeneratedIntegrationKey = {
@@ -27,8 +39,12 @@ export function generateIntegrationKey(): GeneratedIntegrationKey {
   return { token, prefix, secretHash: hashIntegrationKey(token) };
 }
 
-export function isIntegrationKeyToken(token: string | undefined | null): token is string {
-  return typeof token === 'string' && token.startsWith(INTEGRATION_KEY_TOKEN_PREFIX);
+export function isIntegrationKeyToken(
+  token: string | undefined | null,
+): token is string {
+  return (
+    typeof token === 'string' && token.startsWith(INTEGRATION_KEY_TOKEN_PREFIX)
+  );
 }
 
 /** Returns the lookup prefix (`wdk_<12 hex>`) or null when the token is malformed. */
@@ -37,7 +53,10 @@ export function parseIntegrationKeyPrefix(token: string): string | null {
   return match ? match[1] : null;
 }
 
-export function verifyIntegrationKeyHash(token: string, expectedHash: string): boolean {
+export function verifyIntegrationKeyHash(
+  token: string,
+  expectedHash: string,
+): boolean {
   const actual = Buffer.from(hashIntegrationKey(token), 'hex');
   const expected = Buffer.from(expectedHash, 'hex');
   return actual.length === expected.length && timingSafeEqual(actual, expected);
@@ -46,5 +65,12 @@ export function verifyIntegrationKeyHash(token: string, expectedHash: string): b
 export function normalizeScopes(value: unknown): IntegrationKeyScope[] {
   if (!Array.isArray(value)) return [];
   const allowed = new Set<string>(INTEGRATION_KEY_SCOPES);
-  return [...new Set(value.filter((v): v is IntegrationKeyScope => typeof v === 'string' && allowed.has(v)))];
+  return [
+    ...new Set(
+      value.filter(
+        (v): v is IntegrationKeyScope =>
+          typeof v === 'string' && allowed.has(v),
+      ),
+    ),
+  ];
 }
