@@ -24,6 +24,7 @@ import { WorkflowEngineService } from '../workflows/workflow-engine.service';
 import { MetadataService } from '../metadata/metadata.service';
 import { FollowsService } from '../follows/follows.service';
 import { AuditAction } from '@prisma/client';
+import { applyListingPage, type ListingPageQuery } from './folder-listing-pagination';
 
 @Injectable()
 export class FoldersService {
@@ -288,7 +289,7 @@ export class FoldersService {
     dateFrom?: string;
     dateTo?: string;
     query?: string;
-  } = {}) {
+  } & ListingPageQuery = {}) {
     if (parentId) {
       const parent = await this.prisma.folder.findFirst({
         where: { id: parentId },
@@ -416,7 +417,8 @@ export class FoldersService {
 
     const roots = visibleFolders.map((folder) => folder.id);
     const aggregates = await this.folderTreeAggregates(roots);
-    return { folders: visibleFolders, files: visibleFiles, ...aggregates };
+    const page = applyListingPage(visibleFolders, visibleFiles, filters);
+    return { ...page, ...aggregates };
   }
 
   async getById(user: AccessTokenPayload, id: string, filters: Parameters<FoldersService['listContents']>[2] = {}) {

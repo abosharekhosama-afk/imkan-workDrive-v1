@@ -13,6 +13,7 @@ export type AccessTokenPayload = {
     prefix: string;
     scopes: string[];
     rootFolderId: string | null;
+    quotaBytes?: string | null;
   };
 };
 

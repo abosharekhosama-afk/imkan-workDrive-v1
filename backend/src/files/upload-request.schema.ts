@@ -7,15 +7,18 @@ import { BadRequestException, ForbiddenException } from '@nestjs/common';
  * content-type correctness is resolved later by `resolveMimeType` on the
  * client and by magic-byte checks in the storage pipeline.
  */
-const MIME_TYPE_RE = /^[a-zA-Z0-9][a-zA-Z0-9!#$&^_.+-]{0,126}\/[a-zA-Z0-9][a-zA-Z0-9!#$&^_.+-]{0,126}$/;
+const MIME_TYPE_RE =
+  /^[a-zA-Z0-9][a-zA-Z0-9!#$&^_.+-]{0,126}\/[a-zA-Z0-9][a-zA-Z0-9!#$&^_.+-]{0,126}$/;
 
 export type UploadRequestInput = {
   name: string;
   folderId: string | null;
   size: number;
   mimeType: string;
-  sha256: string;
+  sha256: string | null;
 };
+
+export const UNSPECIFIED_SHA256 = '0'.repeat(64);
 
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -37,7 +40,13 @@ export function parseUploadRequest(body: unknown): UploadRequestInput {
     throw new BadRequestException('Invalid name');
   }
   const folderId = record.folder_id;
-  if (folderId !== null && folderId !== undefined && (typeof folderId !== 'string' || !UUID_RE.test(folderId))) { throw new BadRequestException('Invalid folder_id'); }
+  if (
+    folderId !== null &&
+    folderId !== undefined &&
+    (typeof folderId !== 'string' || !UUID_RE.test(folderId))
+  ) {
+    throw new BadRequestException('Invalid folder_id');
+  }
   const size = record.size;
   if (typeof size !== 'number' || !Number.isInteger(size) || size < 1) {
     throw new BadRequestException('Invalid size');
@@ -48,17 +57,25 @@ export function parseUploadRequest(body: unknown): UploadRequestInput {
   ) {
     throw new BadRequestException('Invalid mime_type');
   }
+  let sha256: string | null = null;
   if (
-    typeof record.sha256 !== 'string' ||
-    !SHA256_RE.test(record.sha256.toLowerCase())
+    record.sha256 !== undefined &&
+    record.sha256 !== null &&
+    record.sha256 !== ''
   ) {
-    throw new BadRequestException('Invalid sha256');
+    if (
+      typeof record.sha256 !== 'string' ||
+      !SHA256_RE.test(record.sha256.toLowerCase())
+    ) {
+      throw new BadRequestException('Invalid sha256');
+    }
+    sha256 = record.sha256.toLowerCase();
   }
   return {
-  name,
-  folderId: folderId ?? null,
-  size,
-  mimeType: record.mime_type,
-  sha256: record.sha256.toLowerCase(),
-};
+    name,
+    folderId: folderId ?? null,
+    size,
+    mimeType: record.mime_type,
+    sha256,
+  };
 }

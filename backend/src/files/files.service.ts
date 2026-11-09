@@ -8,7 +8,7 @@ import {
   ForbiddenException,
   Inject,
   HttpException,
-  Injectable,
+  Injectable, Optional,
   Logger,
   forwardRef,
   NotFoundException,
@@ -41,6 +41,8 @@ import {
   parseVersionUploadFile,
 } from './version-upload.schema';
 import { QuotaService } from '../quota/quota.service';
+import { UNSPECIFIED_SHA256 } from './upload-request.schema';
+import { IntegrationWebhooksService } from '../integration-keys/integration-webhooks';
 import { classifyFileType, extractExtension } from '../common/file-classification';
 import { WorkflowEngineService } from '../workflows/workflow-engine.service';
 import { MetadataService } from '../metadata/metadata.service';
@@ -57,6 +59,7 @@ export type UploadCompleteResponse = {
   file_id: string;
   upload_id: string;
   status: 'complete';
+  sha256?: string;
 };
 
 export type ResumableUploadStartResponse = {
@@ -167,6 +170,7 @@ export class FilesService {
     private readonly dlp: DlpService,
     private readonly metadata: MetadataService,
     private readonly follows: FollowsService,
+    @Optional() private readonly webhooks?: IntegrationWebhooksService,
   ) {}
 
   async requestUpload(
@@ -209,7 +213,7 @@ export class FilesService {
           mimeType: input.mimeType,
           fileType: classifyFileType(input.mimeType),
           size,
-          sha256Hash: input.sha256,
+          sha256Hash: input.sha256 ?? UNSPECIFIED_SHA256,
           status: FileStatus.ACTIVE,
           ownerId: user.sub,
         },
@@ -223,7 +227,7 @@ export class FilesService {
           bucket,
           region,
           size,
-          checksum: input.sha256,
+          checksum: input.sha256 ?? UNSPECIFIED_SHA256,
         },
       });
       await tx.fileVersion.create({
@@ -235,7 +239,7 @@ export class FilesService {
           storageObjectId,
           size,
           mimeType: input.mimeType,
-          sha256Hash: input.sha256,
+          sha256Hash: input.sha256 ?? UNSPECIFIED_SHA256,
           uploadedById: user.sub,
           status: VersionStatus.ACTIVE,
           uploadStatus: UploadStatus.PENDING,
@@ -257,7 +261,7 @@ export class FilesService {
       versionId,
       ownerOrgId: user.org_id,
       contentType: input.mimeType,
-      checksum: input.sha256,
+      checksum: input.sha256 ?? UNSPECIFIED_SHA256,
     });
 
     return {
@@ -453,13 +457,14 @@ export class FilesService {
 
   async startResumableUpload(
     user: AccessTokenPayload,
-    input: { folderId?: string | null; name: string; mimeType: string; size: number; sha256: string; partSize?: number },
+    input: { folderId?: string | null; name: string; mimeType: string; size: number; sha256?: string; partSize?: number },
   ): Promise<ResumableUploadStartResponse> {
     const size = BigInt(input.size);
     if (!Number.isSafeInteger(input.size) || input.size <= 0) throw new BadRequestException('Invalid upload size');
     if (typeof input.name !== 'string' || typeof input.mimeType !== 'string') throw new BadRequestException('Invalid upload manifest');
     if (!/^[a-zA-Z0-9][a-zA-Z0-9!#$&^_.+-]{0,126}\/[a-zA-Z0-9][a-zA-Z0-9!#$&^_.+-]{0,126}$/.test(input.mimeType)) throw new BadRequestException('Invalid mime_type');
-    if (!/^[a-f0-9]{64}$/i.test(input.sha256)) throw new BadRequestException('Invalid SHA-256 checksum');
+    if (input.sha256 && !/^[a-f0-9]{64}$/i.test(input.sha256)) throw new BadRequestException('Invalid SHA-256 checksum');
+    const sessionSha = input.sha256 ? input.sha256.toLowerCase() : UNSPECIFIED_SHA256;
     const partSize = input.partSize ?? 16 * 1024 * 1024;
     if (!Number.isInteger(partSize) || partSize < 5 * 1024 * 1024 || partSize > 100 * 1024 * 1024) {
       throw new BadRequestException('partSize must be between 5 MiB and 100 MiB');
@@ -484,13 +489,13 @@ export class FilesService {
     const { bucket, region } = this.storageLocation();
     let multipart: { uploadId: string; objectKey: string } | null = null;
     try {
-      multipart = await this.storage.createMultipartUpload({ fileId, versionId, ownerOrgId: user.org_id, contentType: input.mimeType, checksum: input.sha256, storageKey: objectKey });
+      multipart = await this.storage.createMultipartUpload({ fileId, versionId, ownerOrgId: user.org_id, contentType: input.mimeType, checksum: input.sha256 ?? UNSPECIFIED_SHA256, storageKey: objectKey });
       const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
       await this.prisma.$transaction(async (tx) => {
-        await tx.file.create({ data: { id: fileId, orgId: user.org_id, folderId: folder?.id ?? null, name: cleanName, originalName: cleanName, extension: extractExtension(cleanName), mimeType: input.mimeType, fileType: classifyFileType(input.mimeType), size, sha256Hash: input.sha256.toLowerCase(), status: FileStatus.ACTIVE, ownerId: user.sub } });
-        await tx.storageObject.create({ data: { id: storageObjectId, orgId: user.org_id, fileId, storageKey: objectKey, bucket, region, size, checksum: input.sha256.toLowerCase() } });
-        await tx.fileVersion.create({ data: { id: versionId, orgId: user.org_id, fileId, versionNumber: 1, storageObjectId, size, mimeType: input.mimeType, extension: extractExtension(cleanName), sha256Hash: input.sha256.toLowerCase(), uploadedById: user.sub, status: VersionStatus.ACTIVE, uploadStatus: UploadStatus.PENDING } });
-        await tx.uploadSession.create({ data: { id: sessionId, orgId: user.org_id, fileId, versionId, storageUploadId: multipart!.uploadId, objectKey: multipart!.objectKey, expectedSize: size, expectedSha256: input.sha256.toLowerCase(), partSize, totalParts, status: UploadSessionStatus.PENDING, expiresAt, createdById: user.sub } });
+        await tx.file.create({ data: { id: fileId, orgId: user.org_id, folderId: folder?.id ?? null, name: cleanName, originalName: cleanName, extension: extractExtension(cleanName), mimeType: input.mimeType, fileType: classifyFileType(input.mimeType), size, sha256Hash: sessionSha, status: FileStatus.ACTIVE, ownerId: user.sub } });
+        await tx.storageObject.create({ data: { id: storageObjectId, orgId: user.org_id, fileId, storageKey: objectKey, bucket, region, size, checksum: sessionSha } });
+        await tx.fileVersion.create({ data: { id: versionId, orgId: user.org_id, fileId, versionNumber: 1, storageObjectId, size, mimeType: input.mimeType, extension: extractExtension(cleanName), sha256Hash: sessionSha, uploadedById: user.sub, status: VersionStatus.ACTIVE, uploadStatus: UploadStatus.PENDING } });
+        await tx.uploadSession.create({ data: { id: sessionId, orgId: user.org_id, fileId, versionId, storageUploadId: multipart!.uploadId, objectKey: multipart!.objectKey, expectedSize: size, expectedSha256: sessionSha, partSize, totalParts, status: UploadSessionStatus.PENDING, expiresAt, createdById: user.sub } });
         await tx.fileActivity.create({ data: { orgId: user.org_id, fileId, userId: user.sub, action: AuditAction.CREATE, metadata: { uploadSessionId: sessionId, pending: true, name: cleanName, mimeType: input.mimeType, totalParts } } });
       });
       return { session_id: sessionId, file_id: fileId, version_id: versionId, part_size: partSize, total_parts: totalParts, expires_at: expiresAt.toISOString() };
@@ -543,12 +548,14 @@ export class FilesService {
         // Crash-safe retry: the storage provider may have completed the
         // multipart operation immediately before the process lost the DB write.
         const existing = await this.storage.inspectObject({ fileId: session.fileId, versionId: session.versionId, ownerOrgId: user.org_id, contentType: session.version.mimeType, checksum: session.expectedSha256, storageKey: session.objectKey }).catch(() => null);
-        if (!existing || existing.size !== Number(session.expectedSize) || existing.checksum?.toLowerCase() !== session.expectedSha256.toLowerCase()) throw error;
+        const expectedSession = session.expectedSha256 !== UNSPECIFIED_SHA256 ? session.expectedSha256.toLowerCase() : null;
+        if (!existing || existing.size !== Number(session.expectedSize) || (expectedSession && existing.checksum?.toLowerCase() !== expectedSession)) throw error;
       }
       await this.prisma.uploadSession.update({ where: { id: session.id }, data: { storageCompletedAt: new Date() } });
     }
     const inspected = await this.storage.inspectObject({ fileId: session.fileId, versionId: session.versionId, ownerOrgId: user.org_id, contentType: session.version.mimeType, checksum: session.expectedSha256, storageKey: session.objectKey });
-    if (inspected.size !== Number(session.expectedSize) || inspected.checksum?.toLowerCase() !== session.expectedSha256.toLowerCase()) {
+    const expectedSessionHash = session.expectedSha256 !== UNSPECIFIED_SHA256 ? session.expectedSha256.toLowerCase() : null;
+    if (inspected.size !== Number(session.expectedSize) || (expectedSessionHash && inspected.checksum?.toLowerCase() !== expectedSessionHash)) {
       await this.storage.deleteStoredObject(session.objectKey).catch(() => undefined);
       await this.prisma.$transaction(async tx => {
         await tx.uploadSession.updateMany({ where: { id: session.id, status: UploadSessionStatus.PENDING }, data: { status: UploadSessionStatus.ABORTED } });
@@ -568,7 +575,7 @@ export class FilesService {
         const quotaUpdated = await tx.$executeRaw`UPDATE storage_quotas SET used_bytes = used_bytes + ${session.expectedSize} WHERE org_id = ${user.org_id} AND used_bytes + ${session.expectedSize} <= quota_bytes`;
         if (quotaUpdated !== 1) throw new ForbiddenException('Storage quota exceeded');
         await tx.fileVersion.update({ where: { id: session.versionId }, data: { uploadStatus: UploadStatus.COMPLETE, status: VersionStatus.ACTIVE } });
-        await tx.file.update({ where: { id: session.fileId }, data: { size: session.expectedSize, sha256Hash: session.expectedSha256, mimeType: session.version.mimeType, fileType: classifyFileType(session.version.mimeType) } });
+        await tx.file.update({ where: { id: session.fileId }, data: { size: session.expectedSize, sha256Hash: inspected.checksum?.toLowerCase() || session.expectedSha256, mimeType: session.version.mimeType, fileType: classifyFileType(session.version.mimeType) } });
         await tx.fileActivity.create({ data: { orgId: user.org_id, fileId: session.fileId, userId: user.sub, action: AuditAction.UPLOAD_VERSION, metadata: { resumable: true, versionNumber: session.version.versionNumber, size: session.expectedSize.toString(), checksum: session.expectedSha256 } } });
         await tx.auditLog.create({ data: { orgId: user.org_id, actorId: user.sub, action: 'FILE_UPLOAD_COMPLETE', resourceType: 'FILE', resourceId: session.fileId, metadata: { resumable: true, sessionId: session.id } } });
       });
@@ -594,7 +601,7 @@ export class FilesService {
     await this.metadata.assertFileMandateSatisfied(user, session.fileId);
     void this.dlp.classifyFile(user, session.fileId).catch(() => undefined);
     this.dispatchFollowFileEvent(user, session.fileId, AuditAction.UPLOAD_VERSION);
-    return { file_id: session.fileId, upload_id: session.versionId, status: 'complete' };
+    return { file_id: session.fileId, upload_id: session.versionId, status: 'complete', sha256: inspected.checksum ?? session.expectedSha256 };
   }
 
   async abortResumableUpload(user: AccessTokenPayload, sessionId: string) {
@@ -644,7 +651,7 @@ export class FilesService {
     // Completion is idempotent: a client retry must never double-count quota
     // or emit duplicate completion side effects.
     if (version.uploadStatus === UploadStatus.COMPLETE) {
-      return { file_id: version.fileId, upload_id: version.id, status: 'complete' };
+      return { file_id: version.fileId, upload_id: version.id, status: 'complete', sha256: version.sha256Hash };
     }
     if (version.uploadStatus !== UploadStatus.PENDING) {
       throw new BadRequestException('Upload is no longer completable');
@@ -668,9 +675,11 @@ export class FilesService {
     if (inspected.size !== Number(version.size)) {
       throw new BadRequestException('Uploaded object size does not match the upload manifest');
     }
-    if (!inspected.checksum || inspected.checksum !== version.sha256Hash.toLowerCase()) {
+    const expectedHash = version.sha256Hash && version.sha256Hash !== UNSPECIFIED_SHA256 ? version.sha256Hash.toLowerCase() : null;
+    if (expectedHash && (!inspected.checksum || inspected.checksum.toLowerCase() !== expectedHash)) {
       throw new BadRequestException('Uploaded object checksum does not match the upload manifest');
     }
+    const finalHash = (inspected.checksum || expectedHash || UNSPECIFIED_SHA256).toLowerCase();
 
     await this.prisma.$transaction(async (tx) => {
       // Claim completion atomically. Only the request that changes PENDING →
@@ -691,7 +700,7 @@ export class FilesService {
         data: {
           size: version.size,
           mimeType: version.mimeType,
-          sha256Hash: version.sha256Hash,
+          sha256Hash: finalHash,
           fileType: classifyFileType(version.mimeType),
         },
       });
@@ -770,6 +779,7 @@ export class FilesService {
       file_id: version.fileId,
       upload_id: version.id,
       status: 'complete',
+      sha256: finalHash,
     };
   }
 
@@ -1937,6 +1947,7 @@ export class FilesService {
     await this.purgeFileVersionObjects(user, file.id, file.versions);
     await this.prisma.file.delete({ where: { id: file.id } });
     await this.prisma.auditLog.create({ data: { orgId: user.org_id, actorId: user.sub, action: 'FILE_PERMANENTLY_DELETED', resourceType: 'FILE', resourceId: id } });
+    void this.webhooks?.enqueue({ orgId: user.org_id, type: 'file.deleted', keyId: user.integrationKey?.id, data: { fileId: id } });
     return { id, deleted: true, permanent: true };
   }
 
@@ -2174,6 +2185,7 @@ export class FilesService {
       return updated;
     });
     this.dispatchFollowFileEvent(user, id, AuditAction.RESTORE);
+    void this.webhooks?.enqueue({ orgId: user.org_id, type: 'file.restored', keyId: user.integrationKey?.id, data: { fileId: id } });
     return { id: restored.id, restored: true };
   }
 
@@ -2199,6 +2211,7 @@ export class FilesService {
       await tx.auditLog.create({ data: { orgId: user.org_id, actorId: user.sub, action: 'FILE_TRASHED', resourceType: 'FILE', resourceId: id } });
     });
     this.dispatchFollowFileEvent(user, id, AuditAction.DELETE);
+    void this.webhooks?.enqueue({ orgId: user.org_id, type: 'file.trashed', keyId: user.integrationKey?.id, data: { fileId: id } });
     return { id, trashed: true, expiresAt: expiresAt.toISOString() };
   }
 
